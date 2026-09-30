@@ -3909,46 +3909,66 @@ export async function addServiceEvent(
     }
   }
 
-  const events = (booking.serviceEvents as any[]) || [];
-  events.push({
+  // FIX (auditoría 2026-09-29): antes esto era un read-modify-write completo
+  // sobre `serviceEvents` (leer el array, hacer .push en JS, reescribir el
+  // array entero) — dos eventos casi simultáneos (ej. una foto del cuidador y
+  // un SOS del dueño, o dos fotos seguidas) pisaban la escritura del otro bajo
+  // Read Committed: ambos leían el mismo array, cada uno le sumaba SU evento,
+  // y el que escribía último ganaba, borrando el evento del otro sin dejar
+  // rastro. El guard atómico existente (`pausedAt: pausedAtSnapshot`) solo
+  // protegía contra la doble-resolución de una emergencia — no evitaba que un
+  // evento cualquiera (PHOTO, NOTE) se perdiera si llegaba en el medio. Mismo
+  // patrón atómico (`jsonb ||`) ya usado en addPlacePhotoAtomic
+  // (caregiver-profile.service.ts): el UPDATE arma y concatena el evento
+  // dentro del propio SQL, así que el array nunca se lee-modifica-escribe
+  // completo en JS — dos escrituras concurrentes se serializan y ambos
+  // eventos quedan, en vez de que uno pise al otro.
+  const newEvent = {
     type,
     description,
     photoUrl: photoUrl ?? null,
     videoUrl: videoUrl ?? null,
     incidentType: incidentType ?? null,
     timestamp: new Date().toISOString(),
-  });
-
-  // Datos de pausa a persistir junto al evento — única excepción donde el
-  // tiempo del servicio se congela (ver calcOvertimeMinutes).
-  const pauseData: { pausedAt?: Date | null; totalPausedMinutes?: number } = {};
-  const pausedAtSnapshot = booking.pausedAt;
-  if ((type === 'INCIDENT' || type === 'ACCIDENT') && !booking.pausedAt) {
-    pauseData.pausedAt = new Date();
-  } else if (type === 'INCIDENT_RESOLVED' && booking.pausedAt) {
-    const pausedMinutes = Math.round((Date.now() - booking.pausedAt.getTime()) / 60000);
-    pauseData.pausedAt = null;
-    pauseData.totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
-  }
+  };
+  const eventJson = JSON.stringify(newEvent);
 
   let updated: typeof booking;
   if (type === 'INCIDENT_RESOLVED') {
+    // booking.pausedAt ya se validó no-null más arriba (línea ~3897).
+    const pausedAtSnapshot = booking.pausedAt!;
+    const pausedMinutes = Math.round((Date.now() - pausedAtSnapshot.getTime()) / 60000);
     // Claim atómico — evita resolver dos veces la misma emergencia si el admin
     // la resuelve (resolveIncidentAdmin) casi al mismo tiempo que el cuidador:
     // solo se aplica si pausedAt sigue siendo el mismo que acabamos de leer.
-    const claimed = await prisma.booking.updateMany({
-      where: { id: bookingId, pausedAt: pausedAtSnapshot },
-      data: { serviceEvents: events, ...pauseData },
-    });
-    if (claimed.count === 0) {
+    const claimed = await prisma.$executeRaw`
+      UPDATE "bookings"
+      SET "serviceEvents" = COALESCE("serviceEvents", '[]'::jsonb) || ${eventJson}::jsonb,
+          "pausedAt" = NULL,
+          "totalPausedMinutes" = "totalPausedMinutes" + ${pausedMinutes}
+      WHERE id = ${bookingId} AND "pausedAt" = ${pausedAtSnapshot}
+    `;
+    if (claimed === 0) {
       throw new BadRequestError('Esta emergencia ya fue resuelta (probablemente por un administrador) justo antes de esta acción.');
     }
     updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
+  } else if (type === 'INCIDENT' || type === 'ACCIDENT') {
+    // COALESCE("pausedAt", ...) en vez de un `if (!booking.pausedAt)` en JS —
+    // si ya estaba pausado (por otro evento que llegó primero), no lo pisa.
+    await prisma.$executeRaw`
+      UPDATE "bookings"
+      SET "serviceEvents" = COALESCE("serviceEvents", '[]'::jsonb) || ${eventJson}::jsonb,
+          "pausedAt" = COALESCE("pausedAt", ${new Date()})
+      WHERE id = ${bookingId}
+    `;
+    updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
   } else {
-    updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: { serviceEvents: events, ...pauseData },
-    });
+    await prisma.$executeRaw`
+      UPDATE "bookings"
+      SET "serviceEvents" = COALESCE("serviceEvents", '[]'::jsonb) || ${eventJson}::jsonb
+      WHERE id = ${bookingId}
+    `;
+    updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
   }
 
   // Si es un incidente o accidente: notificar de URGENCIA al admin (quien
@@ -4023,7 +4043,7 @@ export async function addServiceEvent(
       'La novedad ya quedó resuelta y el servicio sigue su curso normal.',
       { type: 'SERVICE_STARTED', bookingId }
     ).catch(() => {});
-    logger.info('Incident resolved — service timer resumed', { bookingId, totalPausedMinutes: pauseData.totalPausedMinutes });
+    logger.info('Incident resolved — service timer resumed', { bookingId, totalPausedMinutes: updated.totalPausedMinutes });
   }
 
   return bookingToResponse(updated);
@@ -4060,8 +4080,12 @@ export async function reportClientSos(
     throw new BadRequestError('Solo se puede reportar durante un servicio en curso');
   }
 
-  const events = (booking.serviceEvents as any[]) || [];
-  events.push({
+  // FIX (auditoría 2026-09-29): mismo problema de lost-update que
+  // addServiceEvent (ver comentario ahí) — un SOS del dueño y un evento del
+  // cuidador casi simultáneos podían pisarse. UPDATE atómico (jsonb ||) en vez
+  // de leer-modificar-escribir el array completo en JS; COALESCE evita pisar
+  // pausedAt si ya estaba pausado por otro evento que llegó primero.
+  const eventJson = JSON.stringify({
     type: 'CLIENT_SOS',
     description,
     incidentType: incidentType ?? null,
@@ -4070,13 +4094,13 @@ export async function reportClientSos(
     timestamp: new Date().toISOString(),
   });
 
-  const pauseData: { pausedAt?: Date } = {};
-  if (!booking.pausedAt) pauseData.pausedAt = new Date();
-
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: { serviceEvents: events, ...pauseData },
-  });
+  await prisma.$executeRaw`
+    UPDATE "bookings"
+    SET "serviceEvents" = COALESCE("serviceEvents", '[]'::jsonb) || ${eventJson}::jsonb,
+        "pausedAt" = COALESCE("pausedAt", ${new Date()})
+    WHERE id = ${bookingId}
+  `;
+  const updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
 
   await prisma.adminNotification.create({
     data: { type: 'CLIENT_SOS_URGENT', caregiverId: booking.caregiverId, bookingId: booking.id },

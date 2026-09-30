@@ -1565,7 +1565,7 @@ export async function resolveIncidentAdmin(
     (e) => e.type === 'CLIENT_SOS' || e.type === 'INCIDENT' || e.type === 'ACCIDENT'
   )?.type === 'CLIENT_SOS';
 
-  events.push({
+  const eventJson = JSON.stringify({
     type: 'INCIDENT_RESOLVED',
     description: wasClientSos
       ? 'Alerta del dueño marcada como resuelta por un administrador'
@@ -1576,14 +1576,21 @@ export async function resolveIncidentAdmin(
     timestamp: new Date().toISOString(),
   });
 
-  // Claim atómico — evita que esto se aplique dos veces si el cuidador resuelve
-  // la misma emergencia (addServiceEvent INCIDENT_RESOLVED) casi al mismo tiempo:
-  // solo gana quien encuentre pausedAt todavía igual al que acabamos de leer.
-  const claimed = await prisma.booking.updateMany({
-    where: { id: bookingId, pausedAt: pausedAtSnapshot },
-    data: { pausedAt: null, totalPausedMinutes, serviceEvents: events },
-  });
-  if (claimed.count === 0) {
+  // FIX (auditoría 2026-09-29): el `updateMany` de abajo ya protegía contra
+  // resolver dos veces la misma emergencia (guard en pausedAt), pero
+  // `serviceEvents: events` reescribía el array ENTERO leído más arriba en
+  // JS — si el cuidador subió una foto (addServiceEvent tipo PHOTO, que no
+  // toca pausedAt) entre ese read y este write, este UPDATE la pisaba sin
+  // dejar rastro. UPDATE atómico (jsonb ||) en vez de leer-modificar-escribir
+  // el array completo — mismo patrón que addServiceEvent/reportClientSos.
+  const claimed = await prisma.$executeRaw`
+    UPDATE "bookings"
+    SET "serviceEvents" = COALESCE("serviceEvents", '[]'::jsonb) || ${eventJson}::jsonb,
+        "pausedAt" = NULL,
+        "totalPausedMinutes" = "totalPausedMinutes" + ${pausedMinutes}
+    WHERE id = ${bookingId} AND "pausedAt" = ${pausedAtSnapshot}
+  `;
+  if (claimed === 0) {
     throw new BadRequestError('Esta emergencia ya fue resuelta (probablemente por el cuidador) justo antes de esta acción.');
   }
 

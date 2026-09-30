@@ -931,3 +931,56 @@ esta auditoría.
 No quedan hallazgos de alto riesgo sin resolver de corridas anteriores a esta — las 5 corridas del
 2026-09-24 al 2026-09-28 se resolvieron el 2026-09-28 (más tarde) y 2026-09-29 (ver entradas
 arriba). Los únicos pendientes activos ahora son D1 y D2 de esta corrida.
+
+---
+
+## 2026-09-29 (más tarde) — Emergencias SOS durante el servicio y tracking GPS
+
+**Commit de referencia al iniciar la auditoría:** `8eba792` (fix: carrera en check-in/check-out
+del CRM walk-in + auditoría diaria, corrida en paralelo — ver entrada anterior).
+
+**Área auditada:** `reportClientSos`/`addServiceEvent` (`booking.service.ts`),
+`resolveIncidentAdmin` (`admin.service.ts`), `sos-retry.job.ts`, y el tracking GPS
+(`trackServiceLocation`/`recordHospedajeLocationPing`, `booking.service.ts`). Elegida por
+profundidad: es la primera corrida enfocada en seguridad física (emergencias durante un servicio
+activo) en vez de dinero/disputas/verificación — las 6 corridas anteriores no la habían tocado.
+
+### Hallazgo (BAJO RIESGO — aplicado y pusheado hoy)
+
+**Lost-update en `serviceEvents` (bitácora de incidentes/SOS de una reserva).**
+`addServiceEvent`, `reportClientSos` y `resolveIncidentAdmin` leían el array JSONB completo,
+le hacían `.push()` en JS, y reescribían el array entero — un read-modify-write clásico. Dos
+eventos casi simultáneos (ej. el cuidador sube una foto de check-in justo cuando el dueño aprieta
+SOS, o dos fotos seguidas) se pisaban bajo Read Committed: ambos leían el mismo array, cada uno
+sumaba su propio evento, y el que escribía último ganaba — el evento del otro se perdía sin dejar
+rastro, ni siquiera un error. El guard atómico que ya existía (`pausedAt: pausedAtSnapshot`) solo
+protegía la doble-resolución de una emergencia, no este caso general — un evento que no toca
+`pausedAt` (PHOTO, NOTE, WALK_UPDATE) igual podía perderse. Dado que `serviceEvents` alimenta la
+evidencia que ve la IA al resolver una disputa (`dispute.routes.ts`), un evento perdido podía
+significar evidencia real perdida en un caso disputado — y en el peor caso, la alerta SOS de un
+dueño podía desaparecer de la bitácora si coincidía con otro evento.
+
+**Fix aplicado:** UPDATE atómico (`COALESCE("serviceEvents", '[]'::jsonb) || evento::jsonb`) en
+vez de leer-modificar-escribir el array completo — mismo patrón ya establecido en el proyecto
+(`addPlacePhotoAtomic`, `caregiver-profile.service.ts`) pero no replicado acá. Los guards de
+`pausedAt` que sí hacían falta (evitar doble-resolución, no pisar una pausa ya activa) se
+preservaron dentro del mismo UPDATE atómico vía `COALESCE`/condición en el `WHERE`. Aplicado en
+los 3 call sites: `addServiceEvent`, `reportClientSos` (ambos en `booking.service.ts`) y
+`resolveIncidentAdmin` (`admin.service.ts`).
+
+### Observación relacionada (sin acción — no es alto riesgo, pero tampoco se aplicó fix hoy)
+
+**El mismo patrón de lost-update existe en el tracking GPS** (`trackServiceLocation`,
+`recordHospedajeLocationPing` — `serviceTrackingData`, otro array JSONB). Severidad menor que
+`serviceEvents`: normalmente un solo dispositivo (el celular del cuidador) escribe puntos GPS de
+forma secuencial durante un paseo, así que la ventana de carrera real es angosta (un reintento de
+red superpuesto, dos requests casi simultáneas) y perder un punto de entre cientos no cambia la
+ruta ni la distancia calculada de forma perceptible — a diferencia de un evento de incidente/SOS,
+donde cada uno importa individualmente. Además, estas dos funciones tienen lógica de subsampling
+al llegar al tope (`GPS_MAX_POINTS`) que complica expresar el fix como un `||` atómico simple (haría
+falta un `CASE` con `jsonb_agg`/`jsonb_array_elements` condicional) — no se aplicó sin poder
+probar esa consulta más compleja contra una base real primero (no hay entorno de staging). Queda
+documentado para una próxima corrida, con menor prioridad que `serviceEvents`.
+
+**Verificación antes de commitear:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente
+`phoneVerified`). `npm run test:unit` — 158/158 tests, 14/14 suites.
