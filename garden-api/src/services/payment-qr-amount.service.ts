@@ -48,13 +48,32 @@ async function readMap(): Promise<Record<string, string>> {
   return map;
 }
 
-async function writeMap(map: Record<string, string>, adminUserId: string): Promise<void> {
-  await prisma.appSettings.upsert({
-    where: { key: SETTING_KEY },
-    update: { value: JSON.stringify(map), updatedBy: adminUserId },
-    create: { key: SETTING_KEY, value: JSON.stringify(map), updatedBy: adminUserId },
-  });
-  _cache = { map, ts: Date.now() };
+/**
+ * UPDATE atómico de una sola clave del mapa {monto: url} — evita el
+ * read-modify-write que pisaba la subida de otro admin si dos QRs se
+ * suben/borran casi al mismo tiempo (mismo patrón que addPlacePhotoAtomic
+ * en caregiver-profile.service.ts, adaptado a que acá "value" es texto
+ * JSON-stringificado en vez de una columna jsonb nativa).
+ */
+async function setMapKeyAtomic(amountKey: string, url: string | null, adminUserId: string): Promise<void> {
+  if (url === null) {
+    await prisma.$executeRaw`
+      UPDATE "app_settings"
+      SET "value" = (COALESCE("value"::jsonb, '{}'::jsonb) - ${amountKey}::text)::text,
+          "updatedBy" = ${adminUserId}
+      WHERE "key" = ${SETTING_KEY}
+    `;
+  } else {
+    await prisma.$executeRaw`
+      INSERT INTO "app_settings" ("key", "value", "updatedAt", "updatedBy")
+      VALUES (${SETTING_KEY}, jsonb_build_object(${amountKey}::text, ${url}::text)::text, now(), ${adminUserId})
+      ON CONFLICT ("key") DO UPDATE
+      SET "value" = (COALESCE("app_settings"."value"::jsonb, '{}'::jsonb) || jsonb_build_object(${amountKey}::text, ${url}::text))::text,
+          "updatedAt" = now(),
+          "updatedBy" = ${adminUserId}
+    `;
+  }
+  _cache = null;
 }
 
 /** Redondea al boliviano más cercano (los totales de reserva ya vienen redondeados,
@@ -86,13 +105,9 @@ export async function setPaymentQrImageUrlForAmount(
   if (!isValidAmount(amount)) {
     throw new Error(`Monto inválido: debe ser un entero entre ${MIN_AMOUNT} y ${MAX_AMOUNT}`);
   }
-  const map = await readMap();
-  map[String(amount)] = url;
-  await writeMap(map, adminUserId);
+  await setMapKeyAtomic(String(amount), url, adminUserId);
 }
 
 export async function deletePaymentQrImageUrlForAmount(amount: number, adminUserId: string): Promise<void> {
-  const map = await readMap();
-  delete map[String(amount)];
-  await writeMap(map, adminUserId);
+  await setMapKeyAtomic(String(amount), null, adminUserId);
 }

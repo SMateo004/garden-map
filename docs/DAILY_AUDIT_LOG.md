@@ -984,3 +984,105 @@ documentado para una próxima corrida, con menor prioridad que `serviceEvents`.
 
 **Verificación antes de commitear:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente
 `phoneVerified`). `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-09-30 — Flujos de dinero: QR por monto exacto y comisión dinámica
+
+**Commit de referencia al iniciar la auditoría:** `095e5e0` (fix: carrera de lost-update en
+eventos de emergencia/SOS del servicio). Local `main` estaba 13 commits detrás de `origin/main`
+(mismo detached-HEAD sincronizado de siempre, sin pérdida de datos) — `git checkout main && git
+merge --ff-only origin/main` antes de tocar nada.
+
+**Área auditada:** dos features de dinero nunca cubiertas por las corridas anteriores — el QR de
+pago por monto exacto (`payment-qr-amount.service.ts`, commit `6f006c5`) y la comisión Garden
+dinámica del panel financiero del admin (commit `c247c5c`) — más una pasada liviana sobre
+propinas. Elegida por eje (b) del CLAUDE.md (flujos de dinero). Delegado a un subagente de
+exploración de solo lectura que trazó cada endpoint hasta el webhook/confirmación real (no solo
+el diff de los dos commits); cada hallazgo se re-verificó leyendo el código fuente directamente
+antes de clasificar riesgo y antes de aplicar el fix de bajo riesgo.
+
+### Hallazgos ALTO RIESGO (no aplicados, solo reportados — ambos tocan dinero/comisión)
+
+**E1 — `approveExtensionPayment` (aprobación manual de extensión por el admin) puede perder un
+incremento completo de `totalAmount`/`commissionAmount` bajo dos aprobaciones concurrentes.**
+`garden-api/src/modules/admin/admin.service.ts:1676-1767`. Lee el booking con un
+`prisma.booking.findUnique` plano **fuera** de cualquier transacción (línea 1681), calcula
+`newTotal`/`newCommission` sumando sobre ese snapshot en memoria (1697-1698, 1707, 1726), y
+después hace un `tx.booking.update` ciego (1743-1744) sin `SELECT ... FOR UPDATE` ni `updateMany`
+condicionado. Como `requestWalkExtensionPayment` (paseo) no tiene el guard "una extensión pendiente
+a la vez" que sí tiene `requestHospedajeExtensionPayment` (`hasPendingExtension`,
+booking.service.ts:2911-2914), un cliente puede generar dos solicitudes de extensión manual antes
+de que un admin apruebe ninguna; si ambas se aprueban casi al mismo tiempo (dos admins, o doble
+click), la segunda escritura pisa por completo el incremento de la primera — el cliente paga y es
+notificado de ambas, pero el booking solo refleja una, y como el payout del cuidador se calcula
+como `totalAmount - commissionAmount` (booking.service.ts:4874, 5069, 5573), el cuidador queda
+mal pagado por la extensión perdida y la comisión de Garden correspondiente desaparece del
+ledger. El mismo tipo de bug ya se encontró y arregló con lock de fila en los 3 hermanos de esta
+función (`confirmWalkExtensionQr:2761-2769`, `confirmHospedajeExtensionQr:2981-2987`,
+`confirmExtensionQrBySip:5619-5638`, cada uno con un comentario explícito "BUG (encontrado en
+auditoría)") — `approveExtensionPayment` es el único que nunca recibió ese fix. **Fix propuesto:**
+mover la lectura del booking dentro de un `$transaction` con `SELECT ... FOR UPDATE` (copiando el
+patrón exacto de los 3 hermanos) antes de calcular y escribir; de paso, agregar el guard
+`hasPendingExtension` también a `requestWalkExtensionPayment` (2651-2680) como defensa adicional.
+
+**E2 — La tasa de comisión puede "correrse" entre la solicitud y la confirmación de una
+extensión, desalineando cuánto le queda al cuidador vs. a Garden de un monto ya cobrado al
+cliente.** Al pedir la extensión se fija `extraTotal`/`extraAmount` con la tasa vigente en ese
+momento (`requestWalkExtensionPayment:2657-2675`, `requestHospedajeExtensionPayment:2892-2906`),
+pero al confirmar (`confirmWalkExtensionQr:2753,2801-2802`,
+`confirmHospedajeExtensionQr:2973,3018-3019`, `confirmExtensionQrBySip:5617,5674,5692/5704`,
+`approveExtensionPayment:1693-1696,1707,1726`) se vuelve a leer la tasa **actual** para partir ese
+mismo monto ya fijo entre cuidador y comisión. Si un admin cambia `platformCommissionPct` entre
+ambos pasos (la ventana del QR de extensión dura 15 min, línea 2681), el cuidador recibe menos o
+más de lo que se le cotizó al pedir la extensión, aunque el total nunca se descuadra en conjunto
+(`extraCommission + parte del cuidador == extraAmount` siempre, por construcción). Confirmado que
+esto **no** afecta el booking original (`commissionAmount` se fija una sola vez al crear la
+reserva, booking.service.ts:616-631, y nunca se recalcula al pagar) — el problema es específico
+del flujo de extensión. **Fix propuesto:** guardar la tasa (o el monto ya partido) en el propio
+evento `EXTENSION_PENDING_PAYMENT` al solicitar la extensión, y que cada confirmación lea ese
+valor guardado en vez de recalcular con `cfg.COMMISSION_RATE` fresco — mismo principio "calcular
+una vez y persistir" ya usado correctamente para el booking original.
+
+**E3 (informativo, no aplicado) — `platformCommissionPct` no tiene validación de rango
+server-side.** `admin.controller.ts:971-1000` (`updateSetting`) valida la *clave* contra
+`ALLOWED_SETTING_KEYS` pero acepta cualquier `value` numérico sin `.min()/.max()`. Blast radius
+acotado (solo afecta bookings nuevos creados mientras la tasa mala esté vigente, por E2 arriba) —
+sugerido agregar el rango si el equipo quiere una red de seguridad, sin urgencia.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+**E4 — Lost-update en el mapa de QRs-por-monto cuando dos admins suben/borran imágenes casi al
+mismo tiempo.** `garden-api/src/services/payment-qr-amount.service.ts` (`readMap`/`writeMap`
+originales) hacían el clásico read-modify-write sobre un único JSON en una fila de `AppSettings`,
+sin lock ni condición — si dos admins subían QRs de montos distintos en la misma ventana, el
+`writeMap` que escribía último pisaba por completo la subida del otro. No toca dinero ni
+autenticación: esta feature solo decide qué imagen de QR mostrar (el monto que alimenta la
+búsqueda siempre es calculado en el servidor, nunca viene del cliente — confirmado en
+`booking.service.ts:1758,1788,2681,2920`); la confirmación real del pago es un flujo totalmente
+aparte que ya usa `updateMany` atómico (`payment.service.ts:223-229,527-533`). **Fix aplicado:**
+reemplazar el read-modify-write por un único `UPDATE`/`INSERT ... ON CONFLICT` atómico sobre la
+columna `value` (casteando texto↔jsonb con `jsonb_build_object`/`||`/`-`, ya que a diferencia de
+`placePhotos` en `caregiver_profiles` acá la columna es texto, no jsonb nativo) — mismo principio
+que `addPlacePhotoAtomic`/`removePlacePhotoAtomic` en `caregiver-profile.service.ts:796-825`, pero
+sin necesitar el helper de sección/array porque acá es un merge/delete de una sola clave de mapa.
+
+**Pasada liviana sobre propinas:** `addTip()` (booking.service.ts:4707-4805) revisado y sin
+hallazgos — ya sigue el patrón correcto: límites server-side (0 < monto ≤ 500), claim atómico
+(`updateMany` + `count`) contra doble propina, lock de fila antes de leer saldo, `increment`/
+`decrement` atómicos solo sobre `User.balance`. Se deja como referencia de buen patrón.
+
+**Verificación antes de commitear:** dependencias reinstaladas en este contenedor (`npm ci`, no
+estaban presentes). `npx tsc --noEmit` sin errores nuevos (solo el preexistente `TS5101` de
+`tsconfig.json`). `npm run test:unit` — con `JWT_REFRESH_SECRET` de ≥32 caracteres seteado en el
+entorno de esta sesión (mismo hueco preexistente de `tests/setup.ts` ya documentado en corridas
+anteriores), 158/158 tests, 14/14 suites.
+
+**Pendiente de decisión del dueño del proyecto:** E1 (race de aprobación manual de extensión —
+recomendado aplicar el mismo lock ya usado en sus 3 funciones hermanas) y E2 (drift de tasa de
+comisión entre solicitud y confirmación de extensión) — ambos tocan dinero/comisión, cambios
+acotados y alineados a patrones ya usados en el proyecto, pero quedan sin aplicar por política
+explícita de esta auditoría. E3 es solo una sugerencia informativa de endurecimiento, sin
+urgencia. D1 y D2 (invitación de staff sin claim atómico, suspensión no bloquea CRM/staff) de la
+corrida del 2026-09-29 siguen pendientes también — no se tocaron hoy por no ser el foco de esta
+corrida.
