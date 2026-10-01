@@ -1086,3 +1086,39 @@ explícita de esta auditoría. E3 es solo una sugerencia informativa de endureci
 urgencia. D1 y D2 (invitación de staff sin claim atómico, suspensión no bloquea CRM/staff) de la
 corrida del 2026-09-29 siguen pendientes también — no se tocaron hoy por no ser el foco de esta
 corrida.
+
+---
+
+## 2026-09-30 — Revisión humana explícita: D1 y D2 (staff/CRM empresa)
+
+El dueño del proyecto pidió explícitamente revisar y arreglar D1 y D2 (corrida del 2026-09-29,
+staff multiusuario/CRM walk-in de cuentas empresa). Se releyó el código real antes de aplicar
+cada fix, confirmando ambos hallazgos tal como se habían reportado.
+
+**D1 — invitación de staff canjeable más de una vez en paralelo.**
+`registerStaffMember` (`caregiver-staff.service.ts`) hacía el chequeo de `status === 'PENDING'`
+fuera de la transacción (lectura que queda obsoleta) y cerraba el invite con un `update` plano sin
+condición de estado. Se movió el claim dentro de la transacción con `updateMany({ where: { id,
+status: 'PENDING' }, data: {...} })` + chequeo de `count === 0` — si pierde la carrera, el throw
+revierte toda la transacción (el `User`/`CaregiverStaffMember` recién creados incluidos). Mismo
+patrón de claim atómico ya usado en el resto del proyecto.
+
+**D2 — cuenta empresa suspendida podía seguir operando staff y CRM walk-in.**
+`assertIsCompanyOwner` (`caregiver-staff.service.ts`) y `resolveCompanyProfile`
+(`caregiver-crm.service.ts`) solo validaban `isCompany`, nunca `suspended`. Se agregó el guard en
+ambas, igual que ya existe para las reservas reales del marketplace. Revisando más a fondo se
+encontró un tercer punto con el mismo hueco, no mencionado explícitamente en el hallazgo original:
+`getStaffContext` (el gate más temprano de *todas* las rutas de staff, vía
+`requireStaffMembership`) tampoco validaba `suspended` — un empleado podía seguir operando aunque
+la empresa ya estuviera bloqueada en `assertIsCompanyOwner`. Se agregó el mismo guard ahí también
+(devuelve `null`, mismo efecto que "no sos parte de ningún equipo" — nota: el mensaje de error en
+ese caso no distingue "nunca fuiste staff" de "tu empresa está suspendida"; queda como posible
+mejora de copy, no afecta la seguridad del bloqueo en sí).
+
+**No se tocó** la decisión de producto que el hallazgo original dejaba abierta (¿debería la
+suspensión NO afectar la operación walk-in interna, solo el marketplace?) — se aplicó el
+comportamiento más conservador (bloquear), consistente con cómo ya funciona la suspensión en el
+resto de la app, en vez de dejarlo ambiguo.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.

@@ -37,6 +37,15 @@ async function assertIsCompanyOwner(ownerUserId: string) {
   if (!profile.isCompany) {
     throw new ForbiddenError('Solo las cuentas empresa pueden tener empleados');
   }
+  // FIX (auditoría 2026-09-29, D2): no validaba `suspended` — a diferencia de
+  // las reservas reales del marketplace, que sí excluyen perfiles suspendidos
+  // (booking.service.ts, `where: { ..., suspended: false }`). Una suspensión
+  // de admin (ej. tras un incidente de seguridad) no frenaba la gestión de
+  // staff de la empresa: el dueño podía seguir generando invitaciones y
+  // sumando empleados nuevos mientras estaba suspendido.
+  if (profile.suspended) {
+    throw new ForbiddenError('Tu cuenta está suspendida — contactá a soporte para más información.');
+  }
   return profile;
 }
 
@@ -225,10 +234,24 @@ export async function registerStaffMember(body: RegisterStaffBody): Promise<Regi
       });
     }
 
-    await tx.caregiverStaffInvite.update({
-      where: { id: invite.id },
+    // FIX (auditoría 2026-09-29, D1): el chequeo de arriba (líneas 162-171) es
+    // una lectura plana FUERA de esta transacción — dos registros casi
+    // simultáneos con el mismo código pasan ambos ese chequeo (ninguno
+    // comiteó todavía) y, con el `update` incondicional que había acá, ambos
+    // terminaban marcando el invite como USED sin error: dos personas quedan
+    // como staff ACTIVO de la empresa con el mismo código de un solo uso.
+    // `updateMany` condicionado a `status: 'PENDING'` + chequeo de `count` —
+    // mismo patrón de claim atómico ya usado en el resto del proyecto
+    // (booking.service.ts, payment.service.ts). Si pierde la carrera, el
+    // throw revierte TODA la transacción (el User y el CaregiverStaffMember
+    // recién creados incluidos).
+    const claimed = await tx.caregiverStaffInvite.updateMany({
+      where: { id: invite.id, status: 'PENDING' },
       data: { status: 'USED', usedAt: now, usedByUserId: user.id },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestError('Código de invitación inválido o ya usado', 'INVALID_STAFF_CODE');
+    }
 
     return { user };
   });
@@ -251,9 +274,16 @@ export async function registerStaffMember(body: RegisterStaffBody): Promise<Regi
 export async function getStaffContext(staffUserId: string): Promise<StaffContext | null> {
   const membership = await prisma.caregiverStaffMember.findUnique({
     where: { userId: staffUserId },
-    include: { caregiverProfile: { select: { id: true, companyName: true, userId: true } } },
+    include: { caregiverProfile: { select: { id: true, companyName: true, userId: true, suspended: true } } },
   });
   if (!membership || membership.status !== 'ACTIVE') return null;
+  // FIX (auditoría 2026-09-29, D2): mismo hueco que assertIsCompanyOwner/
+  // resolveCompanyProfile, pero acá importa más — es el gate más temprano de
+  // TODAS las rutas de staff (requireStaffMembership). Sin esto, un empleado
+  // podía seguir operando el CRM walk-in aunque la cuenta de la empresa
+  // estuviera suspendida, mientras los dueños-sin-staff ya quedaban
+  // bloqueados en assertIsCompanyOwner.
+  if (membership.caregiverProfile.suspended) return null;
   return {
     caregiverProfileId: membership.caregiverProfileId,
     ownerUserId: membership.caregiverProfile.userId,

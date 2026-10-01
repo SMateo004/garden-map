@@ -57,6 +57,14 @@ async function resolveCompanyProfile(ownerUserId: string) {
   if (!profile.isCompany) {
     throw new ForbiddenError('El CRM de mascotas walk-in es solo para cuentas empresa');
   }
+  // FIX (auditoría 2026-09-29, D2): ver comentario equivalente en
+  // assertIsCompanyOwner (caregiver-staff.service.ts) — una cuenta empresa
+  // suspendida podía seguir operando el CRM walk-in completo (check-in/
+  // check-out, cobro en efectivo, bitácora de incidentes) fuera de la vista
+  // del admin.
+  if (profile.suspended) {
+    throw new ForbiddenError('Tu cuenta está suspendida — contactá a soporte para más información.');
+  }
   return profile;
 }
 
