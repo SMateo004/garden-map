@@ -337,6 +337,17 @@ const PUBLIC_SETTING_KEYS = new Set([
   'hospedajeRefund50Horas',
   'paseoRefund100Horas',
   'paseoRefund50Horas',
+  // FIX (auditoría 2026-10-01, F3): el cliente de retiros (wallet_screen.dart)
+  // no validaba el monto mínimo antes de enviar — solo lo rechazaba el
+  // servidor, después de todo el diálogo de confirmación. Pública por el
+  // mismo motivo que las políticas de reembolso de arriba.
+  'montoMinimoRetiro',
+  // FIX (auditoría 2026-10-01, F1): el diálogo de T&C del registro
+  // (register_screen.dart) tenía "20%" hardcodeado, desactualizado respecto
+  // al resto de la app y al default real del backend (10%, configurable).
+  // Pública para que el registro (sin auth todavía) la pueda traer en vivo y
+  // no vuelva a desalinearse si un admin la cambia.
+  'platformCommissionPct',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -378,6 +389,8 @@ app.get('/api/settings', async (_req, res) => {
       hospedajeRefund50Horas: 24,
       paseoRefund100Horas: 12,
       paseoRefund50Horas: 6,
+      montoMinimoRetiro: 50,
+      platformCommissionPct: 10,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

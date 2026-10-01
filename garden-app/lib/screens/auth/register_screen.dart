@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/services.dart' show TextInputFormatter, HapticFeedback;
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/social_auth_service.dart';
@@ -96,9 +98,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get _showBioStep => _showDobStep && _dateOfBirth != null;
   bool get _showTermsStep => _showBioStep && _bioController.text.trim().length >= 20;
 
+  // FIX (auditoría 2026-10-01, F1): antes "20%" hardcodeado en el diálogo de
+  // T&C de abajo, desactualizado respecto al default real del backend (10%).
+  // Se trae en vivo para que no se pueda volver a desalinear.
+  int _platformCommissionPct = 10;
+
+  Future<void> _loadPlatformCommission() async {
+    try {
+      final baseUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+      final res = await http.get(Uri.parse('$baseUrl/settings'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final pct = data['data']?['platformCommissionPct'];
+        if (pct != null && mounted) {
+          setState(() => _platformCommissionPct = (pct as num).round());
+        }
+      }
+    } catch (e) {
+      debugPrint('Register: no se pudo cargar platformCommissionPct, se usa el default: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadPlatformCommission();
     _selectedRole = widget.caregiverOnly ? 'caregiver' : 'owner';
     if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
     if (widget.prefillLastName != null) _lastNameController.text = widget.prefillLastName!;
@@ -190,8 +214,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _termPoint(Icons.storefront_outlined, 'Intermediario tecnológico',
                         'Garden conecta dueños y cuidadores. No somos empleadores ni prestadores directos del servicio. Los cuidadores son independientes — Garden no puede ser demandada por su conducta.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.percent_rounded, 'Comisión del 20%',
-                        'Garden añade un 20% sobre el precio del cuidador. El cliente paga precio + 20%; el cuidador recibe íntegramente su tarifa (no se descuenta nada del cuidador).', textColor, subtextColor),
+                    _termPoint(Icons.percent_rounded, 'Comisión del $_platformCommissionPct%',
+                        'Garden añade un $_platformCommissionPct% sobre el precio del cuidador. El cliente paga precio + $_platformCommissionPct%; el cuidador recibe íntegramente su tarifa (no se descuenta nada del cuidador).', textColor, subtextColor),
                     _termDivider(borderColor),
                     _termPoint(Icons.link_rounded, 'Smart contracts en Polygon',
                         'Cada reserva queda registrada de forma inmutable en blockchain. Los términos acordados no pueden modificarse retroactivamente.', textColor, subtextColor),

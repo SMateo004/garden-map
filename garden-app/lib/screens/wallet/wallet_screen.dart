@@ -38,6 +38,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   bool _showPayoutDetails = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  // FIX (auditoría 2026-10-01, F3): antes la hoja de retiro no validaba el
+  // monto mínimo del lado del cliente — solo lo rechazaba el servidor,
+  // después de que el usuario completara todo el diálogo de confirmación.
+  // Default 50 coincide con el default real del backend (montoMinimoRetiro,
+  // server.ts) por si este fetch falla o todavía no resolvió.
+  double _montoMinimoRetiro = 50;
+
   // Socket liviano solo para escuchar `wallet_updated` (ganancia liberada,
   // reembolso acreditado, retiro aprobado) y refrescar la billetera al
   // instante — antes solo se recargaba en initState o con pull-to-refresh,
@@ -158,8 +165,28 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       await _loadWallet();
       if (_role == 'CLIENT') _loadDonorCard();
       _connectWalletSocket();
+      _loadWithdrawalSettings();
     } else {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Trae el monto mínimo de retiro real (configurable por un admin vía
+  /// AppSettings) para validarlo del lado del cliente antes de enviar — ver
+  /// comentario de _montoMinimoRetiro. Fire-and-forget: si falla, se queda
+  /// con el default (50), que igual coincide con el default del servidor.
+  Future<void> _loadWithdrawalSettings() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final monto = data['data']?['montoMinimoRetiro'];
+        if (monto != null && mounted) {
+          setState(() => _montoMinimoRetiro = (monto as num).toDouble());
+        }
+      }
+    } catch (e) {
+      debugPrint('Wallet: no se pudo cargar montoMinimoRetiro, se usa el default: $e');
     }
   }
 
@@ -1130,6 +1157,10 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   ),
                   const SizedBox(height: 20),
                   Text('Monto a retirar', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  // FIX (auditoría 2026-10-01, F3): antes el mínimo no se
+                  // mostraba en ningún lado de esta hoja.
+                  Text('Mínimo: Bs ${_montoMinimoRetiro.toStringAsFixed(0)}', style: TextStyle(color: subtextColor.withValues(alpha: 0.7), fontSize: 11)),
                   const SizedBox(height: 8),
                   // Monto
                   TextField(
@@ -1173,6 +1204,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       final amount = double.tryParse(amountController.text) ?? 0;
                       if (amount <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido')));
+                        return;
+                      }
+                      // FIX (auditoría 2026-10-01, F3): antes esto solo lo
+                      // rechazaba el servidor, después de pasar por todo el
+                      // diálogo de confirmación de abajo.
+                      if (amount < _montoMinimoRetiro) {
+                        GardenErrorDialog.show(context, 'El monto mínimo de retiro es Bs ${_montoMinimoRetiro.toStringAsFixed(0)}');
                         return;
                       }
                       // availableBalance = balance - retiros ya pendientes. Comparar

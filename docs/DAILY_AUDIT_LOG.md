@@ -1238,3 +1238,42 @@ client-side del mínimo de retiro — fix de UI simple pero clasificado alto rie
 retiros/billetera). Ninguno de los tres se tocó hoy. También siguen pendientes de corridas
 anteriores: E1 y E2 (2026-09-30, carrera de aprobación manual de extensión y drift de comisión
 entre solicitud/confirmación de extensión) — no se tocaron hoy por no ser el foco de esta corrida.
+
+---
+
+## 2026-10-01 (más tarde) — Revisión humana explícita: F1 y F3 (más corrección de F2)
+
+El dueño del proyecto pidió explícitamente seguir con lo pendiente de la corrida anterior. Se
+releyó el código real antes de aplicar cada fix.
+
+**Corrección a F2 (falso positivo) — antes de tocar nada.** El hallazgo decía que no existía
+ningún job de reactivación automática a los 30 días para la suspensión por cancelaciones tardías,
+y que había que decidir entre implementarlo o corregir el copy. Eso es incorrecto: el job **ya
+existe**, implementado el 2026-09-29 (`server.ts`, búsqueda por `LATE_CANCELLATION_SUSPENSION_REASON`,
+corre cada 6 horas junto a `onHoldSlaHoras`). La corrida que reportó F2 dijo explícitamente haber
+revisado "los 17 archivos de `garden-api/src/jobs/*.ts`" — pero este job en particular no vive ahí,
+sigue el mismo patrón que `onHoldSlaHoras`/`autoReleasePayment` (`setInterval` inline dentro de
+`server.ts`, no un archivo de job separado), así que quedó fuera del alcance de esa búsqueda. Se
+verificó en vivo que el job sigue presente y sin cambios. **F2 no necesitaba ningún fix — ya estaba
+resuelto.**
+
+**F1 — comisión "20%" hardcodeada en el diálogo de T&C del registro, vs. 10% real en todo el
+resto de la app.** Se aplicó la opción "mejor" que proponía el hallazgo (no solo corregir el
+número, traerlo dinámico): se agregó `platformCommissionPct` a `PUBLIC_SETTING_KEYS`
+(`app.ts`, endpoint público `/api/settings`, sin auth — el registro corre antes de tener token) y
+`register_screen.dart` ahora lo trae en `initState` con default 10 si el fetch falla. El texto del
+diálogo (`Comisión del $_platformCommissionPct%...`) ya no puede volver a desalinearse si un admin
+cambia la comisión.
+
+**F3 — sin validación client-side del monto mínimo de retiro.** Mismo patrón: se agregó
+`montoMinimoRetiro` a `PUBLIC_SETTING_KEYS` y `wallet_screen.dart` lo trae al abrir la billetera
+(default 50). Se agregaron dos cosas en la hoja de retiro: el mínimo ahora se muestra como texto
+bajo "Monto a retirar" (antes no aparecía en ningún lado), y el botón "Confirmar solicitud" valida
+contra el mínimo real antes de abrir el diálogo de confirmación, en vez de dejar que el usuario
+pase por todo el flujo y recién se entere por el error del servidor.
+
+**Verificación:** `npx tsc --noEmit` en `garden-api` sin errores nuevos (solo el preexistente
+`phoneVerified`). `npm run test:unit` — 158/158 tests, 14/14 suites. `flutter analyze` sobre los 2
+archivos tocados — 0 errores (30 avisos `info`, ninguno en las líneas agregadas hoy).
+
+**Pendiente:** E1 y E2 (2026-09-30) siguen sin tocar — no fueron parte de lo que se pidió hoy.
