@@ -1362,3 +1362,48 @@ mismo criterio: informativo, sin urgencia, no aplicado.
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-01 (más tarde) — Chat cliente-cuidador de una reserva
+
+**Commit de referencia al iniciar la auditoría:** `31ee30e` (fix: carreras en aplicar código
+promocional y código de referido).
+
+**Área auditada:** `chat.routes.ts` (REST) y el handler `send_message`/`mark_read` de
+`socket.service.ts` (WebSocket) — el chat de una reserva entre cliente y cuidador, nunca auditado
+todavía (distinto del chat de soporte, cubierto el 2026-09-27). Relevante también porque alimenta
+la evidencia que ve la IA al resolver una disputa.
+
+**Confirmado sin hallazgos:** bloqueo/reporte de usuarios (`POST /chat/block`, `POST
+/chat/report`) bien scopeado — solo se puede bloquear/reportar a alguien con quien se comparte una
+reserva real, nunca un UUID arbitrario. `mark_read` por socket ya tenía su propio chequeo de
+acceso al booking (fix de una sesión anterior, visible en el propio comentario del código). El
+canal socket `send_message` ya mantenía sincronizados el rate limit (60/min) y el chequeo de
+bloqueo con el endpoint REST (ambos con comentarios explícitos de "esto se podía evadir por acá,
+ya se corrigió").
+
+### Hallazgos de bajo riesgo — aplicados y pusheados hoy
+
+- **El canal socket `send_message` nunca mandaba push notification ni el aviso in-app de "primer
+  mensaje del cuidador"** — solo emitía el evento en tiempo real a quien tuviera esa sala del
+  booking abierta en ese instante. Si el destinatario tenía la app en background o en otra
+  pantalla, el mensaje no generaba ningún aviso. Se confirmó que la app Flutter hoy solo manda
+  mensajes por REST (`grep` de `send_message` en `garden-app/lib`: cero resultados) — no afecta al
+  tráfico actual — pero el propio archivo ya mantiene este handler espejando el resto de
+  validaciones del REST (rate limit, bloqueo), así que se completó el espejo agregando la misma
+  notificación + push que ya manda el endpoint REST, por si otro cliente lo llega a usar.
+- **Detección racy del "primer mensaje del cuidador"** (ambos: REST y, de yapa, el nuevo código
+  del socket). Contaba mensajes del cuidador DESPUÉS de crear el propio — dos mensajes casi
+  simultáneos (dos pestañas, reintento de red) podían crearse ambos antes de que cualquiera
+  contara, y cada uno veía el conteo ya en 2 → ningún aviso de "primer mensaje" se mandaba nunca
+  para esa reserva. Se reemplazó por un chequeo determinístico: comparar el id del mensaje recién
+  creado contra el id real del primer mensaje del cuidador en esa reserva (`findFirst` ordenado),
+  que da el mismo resultado sin importar el orden exacto de llegada.
+- **Rate limiter del chat de reserva por IP en vez de por usuario** (`chat.routes.ts`) — mismo
+  hueco ya encontrado y arreglado en `support-chat.routes.ts` (2026-09-27, B5): sin
+  `keyGenerator`, un usuario autenticado podía rotar de red para saltarse el límite de 60
+  mensajes/minuto. Se agregó `keyGenerator` por `userId`.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.

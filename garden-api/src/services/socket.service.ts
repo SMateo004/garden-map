@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { getRedisClient } from '../config/redis.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
+import { sendPushToUser } from './firebase.service.js';
 
 let io: SocketServer | null = null;
 
@@ -290,6 +291,47 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                     read: savedMessage.read,
                     createdAt: savedMessage.createdAt.toISOString(),
                 });
+
+                // FIX (auditoría 2026-10-01, chat): este handler emitía el mensaje
+                // en tiempo real por el socket, pero nunca mandaba push notification
+                // ni el aviso in-app de "primer mensaje del cuidador" que sí manda
+                // el endpoint REST equivalente (POST /chat/:bookingId/messages) —
+                // el destinatario solo se enteraba si tenía esa sala del booking
+                // abierta en ese instante; si la app estaba en background o en otra
+                // pantalla, el mensaje se perdía silenciosamente de sus avisos. La
+                // app Flutter hoy solo manda mensajes por REST (confirmado: no hay
+                // ningún emit('send_message') en garden-app/lib), así que esto no
+                // afecta al tráfico actual — pero el propio archivo ya mantiene este
+                // handler espejando las otras validaciones del REST (rate limit,
+                // bloqueo, ver comentarios arriba), así que se completa el espejo acá
+                // también por si otro cliente (o un futuro cambio del app) lo usa.
+                try {
+                    const senderName = `${savedMessage.sender.firstName} ${savedMessage.sender.lastName}`;
+                    if (!isClient) {
+                        // Mismo chequeo libre de carrera que chat.routes.ts: en vez de
+                        // contar mensajes (racy si dos llegan casi juntos), se compara
+                        // contra el id del primer mensaje real del cuidador en esta
+                        // reserva — determinístico incluso con escrituras concurrentes.
+                        const firstCaregiverMsg = await prisma.chatMessage.findFirst({
+                            where: { bookingId, senderRole: 'CAREGIVER' },
+                            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                            select: { id: true },
+                        });
+                        if (firstCaregiverMsg?.id === savedMessage.id) {
+                            await prisma.notification.create({
+                                data: {
+                                    userId: recipientId,
+                                    title: `${senderName} te envió un mensaje 💬`,
+                                    message: `Tu cuidador se ha puesto en contacto contigo sobre la reserva de ${booking.petName}. Entra al chat para responder.`,
+                                    type: 'CHAT_MESSAGE',
+                                },
+                            });
+                        }
+                    }
+                    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, savedMessage.message).catch(() => {});
+                } catch (notifErr) {
+                    logger.error('Error notifying chat message (socket path)', { notifErr });
+                }
 
             } catch (err) {
                 logger.error('Error saving message', { err });

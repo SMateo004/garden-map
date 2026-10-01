@@ -10,12 +10,18 @@ const REPORT_REASONS = ['HARASSMENT', 'INAPPROPRIATE_CONTENT', 'SPAM', 'SCAM_OR_
 
 const router = Router();
 
-// 60 messages per minute per IP — prevents chat spam / flooding
+// 60 messages per minute per usuario autenticado — prevents chat spam / flooding.
+// FIX (auditoría 2026-10-01): sin keyGenerator, express-rate-limit usa el IP por
+// defecto — un usuario podía rotar de red para saltarse el límite, o varios
+// usuarios detrás del mismo IP compartido (NAT, wifi) se bloqueaban entre sí.
+// Esta ruta ya vive detrás de authMiddleware, así que se limita por userId real
+// (mismo fix ya aplicado en support-chat.routes.ts).
 const chatMessageLimiter = rateLimit({
   windowMs: 60 * 1_000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => (req as any).user?.userId ?? req.ip,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Demasiados mensajes. Espera un momento.' } },
 });
 
@@ -199,12 +205,20 @@ router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHan
     });
 
     // Si es el PRIMER mensaje del cuidador al cliente → notificación in-app
+    // FIX (auditoría 2026-10-01): contar mensajes DESPUÉS de crear el propio es
+    // racy — dos mensajes del cuidador casi simultáneos (dos pestañas, reintento
+    // de red) podían crearse ambos antes de que cualquiera contara, y cada uno
+    // veía previousMessages=2 → NINGUNO mandaba el aviso de "primer mensaje". Se
+    // reemplaza por un chequeo determinístico: comparar contra el id real del
+    // primer mensaje del cuidador en esta reserva, no contra un conteo tomado en
+    // un instante que puede no reflejar la foto completa.
     if (!isClient) {
-        const previousMessages = await prisma.chatMessage.count({
+        const firstCaregiverMsg = await prisma.chatMessage.findFirst({
             where: { bookingId, senderRole: 'CAREGIVER' },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            select: { id: true },
         });
-        if (previousMessages === 1) {
-            // Es el primer mensaje (acabamos de crear el único)
+        if (firstCaregiverMsg?.id === newMessage.id) {
             const senderName = `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`;
             await prisma.notification.create({
                 data: {
