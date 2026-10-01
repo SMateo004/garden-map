@@ -169,6 +169,39 @@ export async function generateDueOccurrences(): Promise<{ generated: number; ski
   for (const series of due) {
     const walkDate = series.nextRunDate.toISOString().slice(0, 10);
     try {
+      // FIX (auditoría 2026-10-01, jobs): si el proceso se cae/reinicia justo
+      // después de que createBooking() crea la reserva pero ANTES de
+      // advance() (que mueve nextRunDate a la siguiente fecha) unas líneas
+      // más abajo, la próxima corrida del job vuelve a ver esta misma serie
+      // como vencida para la MISMA fecha — generaba una segunda reserva
+      // duplicada para el mismo día (y, si el saldo alcanzaba, un segundo
+      // cobro automático a la billetera del cliente por el mismo paseo). Se
+      // chequea por cliente+cuidador+fecha (no solo por recurringSeriesId,
+      // que recién se linkea DESPUÉS de crear la reserva — un crash entre
+      // esos dos pasos también dejaría una reserva sin el link, invisible a
+      // un chequeo que solo mirara recurringSeriesId) antes de generar una
+      // nueva.
+      const existing = await prisma.booking.findFirst({
+        where: {
+          clientId: series.clientId,
+          caregiverId: series.caregiverId,
+          serviceType: ServiceType.PASEO,
+          walkDate: new Date(walkDate + 'T00:00:00.000Z'),
+          status: { not: 'CANCELLED' },
+        },
+        select: { id: true, recurringSeriesId: true },
+      });
+      if (existing) {
+        logger.warn('recurring-booking-generation: reserva ya existía para esta fecha — se salta la creación (recuperación de corrida previa interrumpida)', {
+          seriesId: series.id, walkDate, bookingId: existing.id,
+        });
+        if (!existing.recurringSeriesId) {
+          await prisma.booking.update({ where: { id: existing.id }, data: { recurringSeriesId: series.id } }).catch(() => {});
+        }
+        await advance(series.id, series.daysOfWeek, walkDate);
+        continue;
+      }
+
       let booking;
       try {
         const bookingBody: CreateBookingBody = {

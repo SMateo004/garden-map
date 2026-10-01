@@ -1407,3 +1407,49 @@ ya se corrigió").
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-01 (más tarde) — Jobs programados (reservas recurrentes, auto-aceptación, vencimientos)
+
+**Commit de referencia al iniciar la auditoría:** `e6d0ff0` (fix: chat de reserva — notificación
+faltante en socket, detección racy y rate limit por IP).
+
+**Área auditada:** `garden-api/src/jobs/*.ts` (17 archivos, ~2300 líneas) — nunca auditados
+individualmente como grupo, salvo `sos-retry.job.ts` (corrida del 2026-09-29) y menciones de paso
+de `no-show-expiry.job.ts`/`slot-conflict-expiry.job.ts` como fuente de patrones en otras
+corridas. Se priorizó por impacto real: `recurring-booking.service.ts` (genera reservas y cobra
+automáticamente), `instant-booking-auto-accept.job.ts`, `qr-expiry.job.ts`, `mg-expiry.job.ts`,
+`caregiver-accept-expiry.job.ts` (los tres últimos con reembolso automático) y una pasada liviana
+sobre `ajuste-precios.job.ts` (el más grande, 347 líneas).
+
+**Confirmado sin hallazgos (bien implementados ya):**
+- `instant-booking-auto-accept.job.ts` — reusa `acceptBooking()` tal cual, hereda su misma
+  transición atómica anti-doble-aceptación sin duplicar lógica.
+- `qr-expiry.job.ts` — orden estricto correcto (invalidar en SIP antes de cancelar en DB) y el
+  reembolso de billetera está dentro de la misma transacción que el guard de estado.
+- `mg-expiry.job.ts` y `caregiver-accept-expiry.job.ts` — ambos usan `updateMany` condicionado al
+  estado + chequeo de `count` ANTES de tocar balance, mismo patrón correcto en los dos.
+- `ajuste-precios.job.ts` — una sola escritura en todo el archivo (`sugerenciaPrecio.create`, un
+  insert puro) — solo genera sugerencias para revisión, nunca aplica cambios de precio ni toca
+  dinero directamente. Sin riesgo de carrera.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+**`generateDueOccurrences()` (`recurring-booking.service.ts`) podía generar una reserva duplicada
+— y cobrarla dos veces — si el proceso se caía en el momento exacto.** El flujo normal es: crear
+la reserva (`createBooking`), auto-pagar con billetera si el saldo alcanza (`initPayment`), y
+recién al final avanzar `nextRunDate` a la siguiente fecha (`advance()`). Si el servidor se
+reiniciaba (deploy, crash) entre la creación exitosa de la reserva y ese último paso, la serie
+quedaba con `nextRunDate` todavía apuntando a la fecha YA procesada — la próxima corrida del job
+(diaria) volvía a verla como vencida y generaba una SEGUNDA reserva para el mismo día, con un
+SEGUNDO cobro automático a la billetera si el saldo alcanzaba. Se agregó un chequeo de
+idempotencia antes de crear: si ya existe una reserva no cancelada para ese cliente+cuidador+fecha
+(buscado por los datos reales, no solo por `recurringSeriesId` — que recién se linkea un paso
+DESPUÉS de crear la reserva, así que un crash todavía más puntual entre esos dos pasos dejaría una
+reserva sin ese link, invisible a un chequeo que solo mirara `recurringSeriesId`), se salta la
+creación, se linkea la reserva existente si le faltaba el link, y se avanza la serie igual —
+recuperación automática de una corrida interrumpida, sin necesitar intervención manual.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.
