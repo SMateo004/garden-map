@@ -10,6 +10,17 @@ import type { CreatePromoCodeBody } from './promo-code.validation.js';
  * si el cuidador hubiera cobrado menos desde el principio. */
 export async function applyPromoCode(bookingId: string, clientId: string, code: string) {
   return prisma.$transaction(async (tx) => {
+    // FIX (auditoría 2026-10-01, promo codes): sin este lock, dos requests
+    // casi simultáneos aplicando DOS códigos distintos a la misma reserva
+    // (doble tap con códigos diferentes, dos pestañas) podían leer el mismo
+    // booking.promoCode=null, pasar ambos el chequeo de abajo, y calcular
+    // cada uno su descuento sobre el mismo totalAmount/commissionAmount
+    // "de lista" — el que escribe último pisa por completo el cálculo del
+    // primero. El primer código igual queda con su usedCount consumido (vía
+    // el claim atómico de más abajo) sin que su descuento haya quedado
+    // aplicado — un cupo de promo gastado sin beneficio real para nadie.
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+
     const booking = await tx.booking.findFirst({ where: { id: bookingId, clientId } });
     if (!booking) throw new NotFoundError('Reserva no encontrada');
     if (booking.status !== 'PENDING_PAYMENT') {

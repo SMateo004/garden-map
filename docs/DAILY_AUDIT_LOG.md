@@ -1310,3 +1310,55 @@ lo que se pidió hoy.
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-01 (más tarde) — Referidos, códigos promocionales y gift codes
+
+**Commit de referencia al iniciar la auditoría:** `e511278` (fix: E1/E2 — lock de fila en
+aprobación manual de extensión + drift de comisión).
+
+**Área auditada:** `referral.service.ts`, `promo-code.service.ts`, y el canje de gift codes
+(`wallet.routes.ts`). Elegida porque la corrida del 2026-09-24 solo les dio una pasada superficial
+("usan el patrón de claim atómico ya establecido... sin hallazgos ahí") sin revisar línea por
+línea — se verificó esa afirmación a fondo hoy.
+
+**Confirmado sin hallazgos:** el canje de gift codes (`wallet.routes.ts`, `POST /wallet/redeem`)
+ya tenía lock de fila (`SELECT ... FOR UPDATE`) y los chequeos de `usedBy`/`maxUses` bien
+guardados dentro de la transacción — no se tocó. El bono de referido
+(`grantReferralRewardIfEligible`) ya usa claim atómico (`updateMany` sobre `referralRewardGiven`)
+y balance/ledger con el patrón correcto (incremento atómico + balance real devuelto). La creación
+de códigos promocionales (admin-only, protegido por `requireRole('ADMIN')` a nivel de router) y el
+cálculo del descuento en `applyPromoCode` (piso en 0, nunca sale del cuidador salvo que el promo
+supere la comisión completa, con warning logueado para ese caso — comentario en el propio código:
+"Bug real encontrado y corregido a pedido del usuario" en una sesión anterior a estas auditorías)
+están bien.
+
+### Hallazgos de bajo riesgo — aplicados y pusheados hoy
+
+- **Carrera en `applyPromoCode`.** El booking se leía con un `findFirst` plano (sin lock) y recién
+  más abajo un claim atómico protegía el `usedCount` del promo — pero no el booking en sí. Dos
+  códigos *distintos* aplicados casi simultáneamente a la misma reserva (doble tap con dos tabs)
+  podían pasar ambos el chequeo `if (booking.promoCode)` antes de que cualquiera comiteara, y el
+  que escribe último pisa el cálculo del primero — ese primer código queda con su `usedCount`
+  consumido (vía el claim atómico, que sí funciona) sin que su descuento haya quedado realmente
+  aplicado. Se agregó `SELECT ... FOR UPDATE` como primera instrucción de la transacción, mismo
+  patrón que el resto del proyecto.
+- **Carrera en `applyReferralCode`.** Dos códigos de referido distintos aplicados casi
+  simultáneamente por el mismo usuario podían pasar ambos el chequeo `if (me?.referredByUserId)` y
+  el que escribe último ganaba en silencio — no rompe dinero (el bono se acredita después, con su
+  propio claim atómico independiente), pero podía asignarle al usuario un referente distinto del
+  que realmente quiso cargar. Se reemplazó el `update` incondicional por un `updateMany`
+  condicionado a `referredByUserId: null` + chequeo de `count`.
+
+### Observación sin acción (no es alto riesgo, ya seguía el mismo criterio de E3)
+
+`createPromoCodeSchema` (`promo-code.validation.ts`) no tiene tope superior en `discountValue`
+para `discountType: 'PERCENT'` — un admin podría crear un código de "500%", aunque
+`applyPromoCode` ya lo capea a `totalAmount` (`Math.min(rawDiscount, totalAmount)`), así que el
+peor caso real es una reserva gratis, no un monto negativo ni una corrupción de datos. Mismo tipo
+de hallazgo que E3 (rango de `platformCommissionPct`) de la corrida del 2026-09-30, tratado con el
+mismo criterio: informativo, sin urgencia, no aplicado.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.

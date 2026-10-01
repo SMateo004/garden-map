@@ -64,7 +64,20 @@ export async function applyReferralCode(userId: string, code: string) {
     throw new BadRequestError('Solo se puede cargar un código de invitación antes de tu primer servicio', 'REFERRAL_TOO_LATE');
   }
 
-  await prisma.user.update({ where: { id: userId }, data: { referredByUserId: referrer.id } });
+  // FIX (auditoría 2026-10-01, referidos): claim atómico — sin esto, dos
+  // códigos de referido distintos aplicados casi simultáneamente por el
+  // mismo usuario podían pasar ambos el chequeo de arriba (ninguno había
+  // comiteado todavía) y el que escribiera último "ganaba" en silencio, sin
+  // error para el primero. No rompe dinero (el bono se acredita después, con
+  // su propio claim atómico en grantReferralRewardIfEligible), pero sí podía
+  // asignarle al usuario un referente distinto del que realmente quiso usar.
+  const claimed = await prisma.user.updateMany({
+    where: { id: userId, referredByUserId: null },
+    data: { referredByUserId: referrer.id },
+  });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Ya aplicaste un código de invitación antes', 'REFERRAL_ALREADY_APPLIED');
+  }
   logger.info('Código de referido aplicado', { userId, referrerId: referrer.id });
   return { applied: true };
 }
