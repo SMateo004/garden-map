@@ -1122,3 +1122,119 @@ resto de la app, en vez de dejarlo ambiguo.
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-01 — Primera auditoría enfocada en la capa UI/Flutter (garden-app)
+
+**Commit de referencia al iniciar la auditoría:** `3209645` (fix: D1/D2 — invitación de staff sin
+claim atómico + suspensión no bloquea CRM/staff). `git status` limpio al empezar.
+
+**Área auditada:** las 9 corridas anteriores de esta auditoría se concentraron siempre en
+`garden-api` (dinero, carreras, auth, disputas). La capa UI/Flutter (`garden-app/lib`, 175
+archivos) nunca había sido el foco dedicado de una corrida — eje (d) del CLAUDE.md. Delegado a un
+subagente de exploración de solo lectura que comparó texto/copy entre pantallas de Flutter y
+contra la lógica real del backend (comisión dinámica, QR por monto exacto, suspensión de
+staff/empresa, flujos de extensión), buscó validaciones desalineadas frontend↔backend, estados de
+error no manejados en llamadas a la API, y código muerto. Cada hallazgo se re-verificó leyendo el
+código fuente real de ambos lados antes de clasificar riesgo.
+
+### Hallazgos ALTO RIESGO (no aplicados, solo reportados — tocan dinero o promesas de política)
+
+**F1 — El diálogo de Términos que se muestra en el registro dice "Comisión del 20%"; todo el
+resto de la app (incluido el default real del backend) dice 10%.**
+`garden-app/lib/screens/auth/register_screen.dart:193-194` — el resumen de T&C que ve *todo*
+usuario antes de registrarse dice textualmente `'Comisión del 20%'` / `'Garden añade un 20% sobre
+el precio del cuidador...'`. En cambio `garden-app/lib/screens/legal/legal_screen.dart:291-297,362,405`
+(T&C completos, con el ejemplo "el Cuidador cobra Bs. 100 → el Cliente paga Bs. 110"),
+`garden-app/lib/screens/caregiver/caregiver_contract_content.dart:46`,
+`garden-app/lib/data/help_center_content.dart:101-102,206-217,421,509` y
+`garden-app/lib/screens/caregiver/caregiver_guide_screen.dart:164,193` dicen todos 10% — que
+coincide con el default real del backend (`getNumericSetting('platformCommissionPct', 10)`,
+`garden-api/src/modules/admin/admin.service.ts:1035,1037,2890`, configurable dinámicamente por un
+admin desde el commit `c247c5c`). Parece copy vieja de un modelo de precios anterior que nunca se
+actualizó cuando la comisión se fijó/cambió a 10%. **Falla concreta:** un usuario nuevo lee "20%"
+en el diálogo de registro y, si toca "Leer términos completos →" en ese mismo diálogo o visita el
+centro de ayuda, lee "10%" — una contradicción visible y directa en copy legalmente relevante,
+justo en el momento en que se le pide aceptar los términos de precio. **Fix propuesto (no
+aplicado):** corregir `register_screen.dart:193-194` a 10%, o mejor, traer
+`platformCommissionPct` dinámicamente (como ya hacen `admin_general_screen.dart:627-652` y
+`admin_reservation_detail_screen.dart:583-627`) para que no pueda volver a desalinearse.
+
+**F2 — Tres textos de cara al usuario prometen "suspensión de 30 días" tras 3 cancelaciones
+tardías en 90 días; el backend solo suspende indefinidamente hasta revisión manual de un admin, sin
+ningún temporizador de 30 días.**
+`garden-app/lib/screens/legal/legal_screen.dart:316` y
+`garden-app/lib/data/help_center_content.dart:147-153` prometen una suspensión de **30 días**
+exactos. El trigger (3+ `LATE_CANCELLATION` en ventana de 90 días) sí está implementado
+correctamente (`booking.service.ts:1949-2037`, arreglado en la auditoría del 2026-09-28), pero
+`suspendCaregiver()` (`admin.service.ts:2400-2445`) solo marca `suspended: true` sin ningún campo
+de expiración, y la única forma de reactivar es el `activateCaregiver()` manual de un admin
+(`admin.service.ts:2502-2531`) — no existe ningún cron en `garden-api/src/jobs/*.ts` (los 17
+archivos revisados) que reactive automáticamente tras 30 días. El propio comentario en
+`admin.service.ts:2291-2296` documenta esta brecha: la promesa de "30 días" viene de los T&C pero
+nunca se implementó como temporizador real — solo se arregló el trigger, no la duración. **Falla
+concreta:** un cuidador suspendido por 3-strikes lee que vuelve en 30 días, pero su suspensión
+nunca se levanta sola — depende de que un admin la revise manualmente, lo cual puede tardar mucho
+más de 30 días o no pasar nunca si el cuidador no sabe que debe reclamar. **Fix propuesto (no
+aplicado):** (a) implementar un job real de auto-reactivación a los 30 días (guardar
+`suspendedAt` + revisar en un cron diario), o (b) si la revisión manual es intencional, corregir
+el copy en `legal_screen.dart:316` y `help_center_content.dart:153` para decir "suspensión hasta
+revisión de Garden" en vez de un número fijo de días. Cualquiera de las dos direcciones es una
+decisión de producto/política, no un simple arreglo de copy.
+
+**F3 (riesgo moderado, no aplicado) — El monto mínimo de retiro no tiene validación client-side en
+la hoja de retiro de la billetera.**
+`garden-api/src/modules/wallet/wallet.routes.ts:220-226` rechaza `POST /wallet/withdraw` con "El
+monto mínimo de retiro es Bs {montoMinimo}" (default Bs 50, dinámico vía AppSettings) si el monto
+es menor. `garden-app/lib/screens/wallet/wallet_screen.dart:1172-1185` solo valida
+`amount <= 0` y `amount > availableBalance` antes de enviar — nunca contra el mínimo, y la hoja de
+retiro no muestra el mínimo en ningún lado. El error del servidor sí se termina mostrando (vía
+`GardenErrorDialog`, no se traga en silencio), pero recién después de pasar por todo el diálogo de
+confirmación — una experiencia de "falla después de enviar" en vez de validación inline. Se
+clasifica como alto riesgo por tocar directamente el flujo de retiros/billetera, aunque el fix en
+sí sería solo de UI. **Fix propuesto (no aplicado):** traer `montoMinimoRetiro` (ya existe el
+patrón de `/settings/price-limits` usado en `onboarding_wizard_screen.dart:209`) y validar
+client-side antes de mostrar el diálogo de confirmación.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+**F4 — El reporte de incidente/emergencia del cuidador durante el servicio se traga en silencio
+cualquier falla; no muestra ningún error al usuario.**
+`garden-app/lib/screens/service/service_execution_screen.dart`, función `_reportIncident` (usada
+por los botones de incidente durante el servicio: "Pelea con otro animal", "Mascota lesionada",
+"Accidente de tráfico", "Mascota perdida", "Otra emergencia"). El código original solo mostraba un
+snackbar si `data['success'] == true`; si el POST fallaba (`catch (_) {}`) o si la respuesta
+parseaba pero `success` era falso, no pasaba nada — ni diálogo ni snackbar. Contrasta con el patrón
+correcto ya usado ~600 líneas antes para el SOS del cliente (`_reportSos`), que sí maneja ambos
+casos con `GardenErrorDialog.show(...)`. **Falla concreta:** un cuidador reporta una mascota
+lesionada o un accidente de tráfico en medio de un servicio, con conexión inestable (plausible —
+es una app usada caminando perros al aire libre), el request falla, y el cuidador no ve nada —
+asume razonablemente que el incidente quedó registrado y el dueño/Garden fueron notificados,
+cuando en realidad no se guardó nada. No toca dinero, autenticación ni verificación de identidad —
+es un bug de manejo de errores en una pantalla ya existente. **Fix aplicado:** se replicó
+exactamente el patrón de `_reportSos` — rama `else if` para `success != true` mostrando el mensaje
+de error del servidor, y `catch` que muestra `GardenErrorDialog.show(context, 'Error de
+conexión.')` en vez de tragarse la excepción.
+
+### Verificación antes de commitear
+
+`npx tsc --noEmit` no aplica (sin cambios en `garden-api` hoy). **`flutter analyze` no se pudo
+correr** — el binario de Flutter/Dart no está instalado en este contenedor de esta corrida (a
+diferencia de corridas anteriores, donde sí estaba disponible). Como sustituto: se verificó
+manualmente que el diff es sintácticamente idéntico en estructura al bloque `_reportSos` ya
+existente ~600 líneas antes en el mismo archivo (mismas llaves, mismo uso de `mounted` y
+`GardenErrorDialog`, ya importado y usado en el resto del archivo), y que el diff es mínimo (8
+líneas agregadas, 1 removida, sin tocar imports ni firmas). Se deja como aviso explícito: la
+próxima corrida debería correr `flutter analyze` sobre este archivo en cuanto Flutter esté
+disponible en el contenedor, para confirmar formalmente que no hay errores nuevos.
+
+### Pendiente de decisión del dueño del proyecto
+
+F1 (copy de comisión 20% vs 10% en el registro — recomendado corregir a 10% y lo ideal es traerlo
+dinámico), F2 (promesa de "30 días" de suspensión que el backend no implementa — decidir entre
+implementar el timer real o corregir el copy a "revisión manual") y F3 (falta validación
+client-side del mínimo de retiro — fix de UI simple pero clasificado alto riesgo por tocar
+retiros/billetera). Ninguno de los tres se tocó hoy. También siguen pendientes de corridas
+anteriores: E1 y E2 (2026-09-30, carrera de aprobación manual de extensión y drift de comisión
+entre solicitud/confirmación de extensión) — no se tocaron hoy por no ser el foco de esta corrida.

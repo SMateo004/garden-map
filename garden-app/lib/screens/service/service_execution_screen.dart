@@ -5253,8 +5253,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true && mounted) {
         // Confirmación, no error — mismo caso que la alerta SOS de arriba.
         GardenSnackBar.warning(context, '🚨 Emergencia reportada. El dueño fue notificado.');
+      } else if (mounted) {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al reportar la emergencia');
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'Error de conexión');
+      }
+    }
   }
 
   bool get _isServicePaused => _booking?['pausedAt'] != null;
