@@ -1277,3 +1277,36 @@ pase por todo el flujo y recién se entere por el error del servidor.
 archivos tocados — 0 errores (30 avisos `info`, ninguno en las líneas agregadas hoy).
 
 **Pendiente:** E1 y E2 (2026-09-30) siguen sin tocar — no fueron parte de lo que se pidió hoy.
+
+---
+
+## 2026-10-01 (más tarde) — Revisión humana explícita: E1 y E2 (extensiones de servicio)
+
+El dueño del proyecto pidió explícitamente seguir con E1 y E2 (corrida del 2026-09-30, flujos de
+dinero). Se releyó el código real antes de aplicar cada fix.
+
+**E1 — `approveExtensionPayment` sin lock de fila.** Se replicó exactamente el patrón ya usado en
+sus 3 funciones hermanas (`confirmWalkExtensionQr`, `confirmHospedajeExtensionQr`,
+`confirmExtensionQrBySip`): todo el read-compute-write (booking, cálculo del nuevo
+totalAmount/commissionAmount, armado de `serviceEvents`) pasó a vivir dentro de la transacción,
+con `SELECT ... FOR UPDATE` como primera instrucción. De paso se agregó el guard
+`hasPendingExtension` a `requestWalkExtensionPayment` (defensa adicional sugerida por el
+hallazgo) — ya lo tenía `requestHospedajeExtensionPayment`, ahora ningún cliente puede apilar
+extensiones de paseo sin pagar.
+
+**E2 — drift de comisión entre solicitud y confirmación de extensión.** Se aplicó el fix
+propuesto: `extraCommission` (la porción de Garden sobre `extraAmount`) ahora se calcula UNA sola
+vez al solicitar la extensión (`requestWalkExtensionPayment`/`requestHospedajeExtensionPayment`)
+y se persiste en el propio evento `EXTENSION_PENDING_PAYMENT`. Las 4 confirmaciones
+(`confirmWalkExtensionQr`, `confirmHospedajeExtensionQr`, `confirmExtensionQrBySip`,
+`approveExtensionPayment`) ahora leen ese valor guardado en vez de recalcularlo con la tasa
+vigente en el momento de confirmar — con fallback a la fórmula vieja solo para eventos PENDING
+creados antes de este deploy (no tienen `extraCommission` guardado), para no romper extensiones
+ya en curso.
+
+**No se tocó** E3 (validación de rango server-side para `platformCommissionPct`) — quedó
+explícitamente marcado como informativo/sin urgencia en el hallazgo original, y no fue parte de
+lo que se pidió hoy.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.

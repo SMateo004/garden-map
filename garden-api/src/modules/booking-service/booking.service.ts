@@ -2673,9 +2673,34 @@ export async function requestWalkExtensionPayment(
   const ratePerMinCaregiver = pricePerUnitCaregiver / 60;
   const extraBase = Math.round(ratePerMinCaregiver * additionalMinutes);
   const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+  // FIX (auditoría 2026-09-30, E2): se calcula y persiste la comisión de
+  // Garden sobre este monto UNA sola vez, acá, al momento de cotizar la
+  // extensión — antes cada confirmación (QR, SIP, aprobación manual)
+  // recalculaba este split con la tasa VIGENTE EN ESE MOMENTO, que puede
+  // diferir si un admin cambió platformCommissionPct durante la ventana del
+  // QR (15 min). El total que paga el cliente (extraTotal) nunca cambiaba,
+  // pero cuánto de eso le llegaba al cuidador vs. a Garden sí podía correrse
+  // respecto a lo cotizado acá. Mismo principio "calcular una vez y
+  // persistir" ya usado para el booking original (commissionAmount se fija
+  // al crear la reserva y nunca se recalcula al pagar).
+  const extraCommission = extraTotal - extraBase;
 
   const extensionId = crypto.randomUUID();
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+
+  // FIX (auditoría 2026-09-30, E1 — defensa adicional): a diferencia de
+  // requestHospedajeExtensionPayment, esta función no evitaba apilar varias
+  // extensiones sin pagar — un cliente podía generar dos (o más) solicitudes
+  // de extensión antes de que un admin/el QR confirmara ninguna. El fix
+  // principal de E1 (lock de fila en approveExtensionPayment) ya evita que
+  // dos aprobaciones concurrentes se pisen, pero esto cierra la causa raíz:
+  // sin pila de pendientes, no hay nada que aprobar dos veces.
+  const hasPendingExtension = events.some(
+    (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && (!e.qrExpiresAt || new Date(e.qrExpiresAt) > new Date())
+  );
+  if (hasPendingExtension) {
+    throw new BookingValidationError('Ya tienes una solicitud de extensión pendiente de pago. Confirma o espera a que expire antes de solicitar otra.');
+  }
 
   if (method === 'qr') {
     const qrResult = await generateQR(bookingId, 15, extraTotal, booking.serviceType); // 15 min de validez para extensiones
@@ -2684,6 +2709,7 @@ export async function requestWalkExtensionPayment(
       extensionId,
       additionalMinutes,
       extraAmount: extraTotal,
+      extraCommission,
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
@@ -2717,6 +2743,7 @@ export async function requestWalkExtensionPayment(
     extensionId,
     additionalMinutes,
     extraAmount: extraTotal,
+    extraCommission,
     method: 'manual',
     paymentId: manualPaymentId,
     timestamp: new Date().toISOString(),
@@ -2797,9 +2824,18 @@ export async function confirmWalkExtensionQr(
     extPetName = booking.petName;
 
     // Aplicar extensión
-    const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+    // FIX (auditoría 2026-09-30, E2): usar la comisión ya calculada y
+    // persistida al solicitar la extensión (pending.extraCommission), no
+    // recalcularla con cfg.COMMISSION_RATE vigente ACÁ — puede haber
+    // cambiado durante la ventana de 15 min del QR, lo que corría cuánto le
+    // llega al cuidador vs. a Garden de un monto (extraAmount) que el
+    // cliente ya pagó fijo. Fallback a la fórmula vieja solo para eventos
+    // PENDING creados antes de este fix (no tienen extraCommission guardado).
+    const extraCommission = pending.extraCommission ?? (() => {
+      const pricePerUnitClient = Number(booking.pricePerUnit);
+      const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+      return extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+    })();
 
     const newDuration = (booking.duration ?? 60) + additionalMinutes;
     newTotal = Number(booking.totalAmount) + extraAmount;
@@ -2904,6 +2940,10 @@ export async function requestHospedajeExtensionPayment(
   const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
   const extraBase = pricePerUnitCaregiver * additionalDays;
   const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+  // FIX (auditoría 2026-09-30, E2): ver comentario equivalente en
+  // requestWalkExtensionPayment — se persiste la comisión calculada acá para
+  // que la confirmación no la recalcule con una tasa que pudo cambiar.
+  const extraCommission = extraTotal - extraBase;
 
   const extensionId = crypto.randomUUID();
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
@@ -2923,6 +2963,7 @@ export async function requestHospedajeExtensionPayment(
       extensionId,
       additionalDays,
       extraAmount: extraTotal,
+      extraCommission,
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
@@ -2944,6 +2985,7 @@ export async function requestHospedajeExtensionPayment(
     extensionId,
     additionalDays,
     extraAmount: extraTotal,
+    extraCommission,
     method: 'manual',
     paymentId: manualPaymentId,
     timestamp: new Date().toISOString(),
@@ -3014,9 +3056,13 @@ export async function confirmHospedajeExtensionQr(
     extraAmount = pending.extraAmount;
     extPetName = booking.petName;
 
-    const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+    // FIX (auditoría 2026-09-30, E2): ver comentario equivalente en
+    // confirmWalkExtensionQr — usar la comisión ya persistida al solicitar.
+    const extraCommission = pending.extraCommission ?? (() => {
+      const pricePerUnitClient = Number(booking.pricePerUnit);
+      const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+      return extraAmount - pricePerUnitCaregiver * additionalDays;
+    })();
 
     const newEndDate = new Date(booking.endDate!);
     newEndDate.setDate(newEndDate.getDate() + additionalDays);
@@ -5689,7 +5735,11 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
 
     if (booking.serviceType === ServiceType.PASEO) {
       const additionalMinutes: number = pending.additionalMinutes;
-      const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+      // FIX (auditoría 2026-09-30, E2): usar la comisión ya persistida al
+      // solicitar la extensión (ver comentario equivalente en
+      // confirmWalkExtensionQr) en vez de recalcularla con la tasa vigente
+      // en este callback, que puede diferir de la vigente al cotizar.
+      const extraCommission = pending.extraCommission ?? (extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes));
       updateData = {
         duration: (booking.duration ?? 60) + additionalMinutes,
         totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
@@ -5701,7 +5751,8 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
       notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
     } else {
       const additionalDays: number = pending.additionalDays;
-      const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+      // FIX (auditoría 2026-09-30, E2): ver comentario equivalente arriba.
+      const extraCommission = pending.extraCommission ?? (extraAmount - pricePerUnitCaregiver * additionalDays);
       const newEndDate = new Date(booking.endDate!);
       newEndDate.setDate(newEndDate.getDate() + additionalDays);
       updateData = {

@@ -1678,69 +1678,93 @@ export async function approveExtensionPayment(
   extensionId: string,
   adminId: string
 ): Promise<{ success: boolean }> {
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: { caregiver: { select: { userId: true } } },
-  });
-  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  let clientId = '';
+  let caregiverUserId: string | null = null;
+  let isHospedaje = false;
+  let clientMsg = '';
+  let caregiverMsg = '';
 
-  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
-  const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
-  if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
-
-  const evt = events[idx];
-  const { extraAmount } = evt;
-  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
-  const COMMISSION_RATE = commissionPct / 100;
-  const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
-  const newTotal = Number(booking.totalAmount) + extraAmount;
-  const newCommission = Number(booking.commissionAmount);
-
-  const isHospedaje = booking.serviceType === 'HOSPEDAJE';
-  let bookingUpdate: Record<string, any>;
-  let clientMsg: string;
-  let caregiverMsg: string;
-
-  if (isHospedaje) {
-    const { additionalDays } = evt;
-    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
-    const newEndDate = new Date(booking.endDate!);
-    newEndDate.setDate(newEndDate.getDate() + additionalDays);
-    bookingUpdate = {
-      endDate: newEndDate,
-      totalDays: (booking.totalDays ?? 1) + additionalDays,
-      totalAmount: new Prisma.Decimal(newTotal),
-      commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
-    };
-    const n = additionalDays === 1 ? 'noche' : 'noches';
-    clientMsg = `Se aprobó tu extensión de +${additionalDays} ${n} de hospedaje.`;
-    caregiverMsg = `El pago de la extensión (+${additionalDays} ${n} · Bs ${extraAmount}) fue aprobado.`;
-    events[idx] = {
-      type: 'EXTENSION_CONFIRMED', extensionId, additionalDays, extraAmount,
-      method: 'manual', approvedBy: adminId,
-      paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
-    };
-  } else {
-    const { additionalMinutes } = evt;
-    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
-    bookingUpdate = {
-      duration: (booking.duration ?? 60) + additionalMinutes,
-      totalAmount: new Prisma.Decimal(newTotal),
-      commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
-    };
-    clientMsg = `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`;
-    caregiverMsg = `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`;
-    events[idx] = {
-      type: 'EXTENSION_CONFIRMED', extensionId, additionalMinutes, extraAmount,
-      method: 'manual', approvedBy: adminId,
-      paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
-    };
-  }
-
-  bookingUpdate.serviceEvents = events;
-
+  // FIX (auditoría 2026-09-30, E1): antes el booking se leía con un
+  // findUnique plano FUERA de cualquier transacción, y el update final no
+  // tenía ni SELECT ... FOR UPDATE ni condición de estado — dos aprobaciones
+  // casi simultáneas (dos admins, o doble click) partían de la misma foto de
+  // totalAmount/commissionAmount/serviceEvents, y la segunda escritura pisaba
+  // por completo el incremento de la primera: el cliente pagaba y era
+  // notificado de ambas extensiones, pero el booking solo reflejaba una, y el
+  // cuidador quedaba mal pagado (totalAmount - commissionAmount). Los 3
+  // hermanos de esta función (confirmWalkExtensionQr, confirmHospedajeExtensionQr,
+  // confirmExtensionQrBySip) ya tenían este fix — se replica el mismo patrón
+  // exacto acá: todo el read-compute-write pasa a vivir dentro de la
+  // transacción, con el lock de fila como primera instrucción.
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+
+    const booking = await tx.booking.findUnique({
+      where: { id: bookingId },
+      include: { caregiver: { select: { userId: true } } },
+    });
+    if (!booking) throw new NotFoundError('Reserva no encontrada');
+
+    const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+    const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
+    if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
+
+    const evt = events[idx];
+    const { extraAmount } = evt;
+    const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
+    const COMMISSION_RATE = commissionPct / 100;
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+    const newTotal = Number(booking.totalAmount) + extraAmount;
+    const newCommission = Number(booking.commissionAmount);
+
+    isHospedaje = booking.serviceType === 'HOSPEDAJE';
+    let bookingUpdate: Record<string, any>;
+
+    if (isHospedaje) {
+      const { additionalDays } = evt;
+      // FIX (auditoría 2026-09-30, E2): usar la comisión ya persistida al
+      // solicitar la extensión (evt.extraCommission) en vez de recalcularla
+      // con la tasa vigente al momento de la aprobación manual — mismo
+      // problema que en confirmWalkExtensionQr/confirmHospedajeExtensionQr/
+      // confirmExtensionQrBySip, mismo fix.
+      const extraCommission = evt.extraCommission ?? (extraAmount - pricePerUnitCaregiver * additionalDays);
+      const newEndDate = new Date(booking.endDate!);
+      newEndDate.setDate(newEndDate.getDate() + additionalDays);
+      bookingUpdate = {
+        endDate: newEndDate,
+        totalDays: (booking.totalDays ?? 1) + additionalDays,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+      };
+      const n = additionalDays === 1 ? 'noche' : 'noches';
+      clientMsg = `Se aprobó tu extensión de +${additionalDays} ${n} de hospedaje.`;
+      caregiverMsg = `El pago de la extensión (+${additionalDays} ${n} · Bs ${extraAmount}) fue aprobado.`;
+      events[idx] = {
+        type: 'EXTENSION_CONFIRMED', extensionId, additionalDays, extraAmount,
+        method: 'manual', approvedBy: adminId,
+        paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
+      };
+    } else {
+      const { additionalMinutes } = evt;
+      // FIX (auditoría 2026-09-30, E2): ver comentario equivalente arriba.
+      const extraCommission = evt.extraCommission ?? (extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes));
+      bookingUpdate = {
+        duration: (booking.duration ?? 60) + additionalMinutes,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+      };
+      clientMsg = `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`;
+      caregiverMsg = `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`;
+      events[idx] = {
+        type: 'EXTENSION_CONFIRMED', extensionId, additionalMinutes, extraAmount,
+        method: 'manual', approvedBy: adminId,
+        paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
+      };
+    }
+
+    bookingUpdate.serviceEvents = events;
+
     await tx.booking.update({ where: { id: bookingId }, data: bookingUpdate });
     await tx.adminNotification.updateMany({
       where: { type: 'EXTENSION_PAYMENT_APPROVAL', bookingId, readAt: null },
@@ -1754,12 +1778,15 @@ export async function approveExtensionPayment(
         data: { userId: booking.caregiver.userId, title: isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión de paseo aprobada', message: caregiverMsg, type: 'SERVICE_EXTENSION' },
       });
     }
+
+    clientId = booking.clientId;
+    caregiverUserId = booking.caregiver?.userId ?? null;
   });
 
   const { sendPushToUser } = await import('../../services/firebase.service.js');
-  sendPushToUser(booking.clientId, isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', clientMsg).catch(() => {});
-  if (booking.caregiver?.userId) {
-    sendPushToUser(booking.caregiver.userId, isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión aprobada', caregiverMsg).catch(() => {});
+  sendPushToUser(clientId, isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', clientMsg).catch(() => {});
+  if (caregiverUserId) {
+    sendPushToUser(caregiverUserId, isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión aprobada', caregiverMsg).catch(() => {});
   }
 
   logger.info('Admin: extensión aprobada', { bookingId, extensionId, adminId, isHospedaje });
