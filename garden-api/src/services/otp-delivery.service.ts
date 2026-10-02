@@ -6,7 +6,14 @@
  * WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_ACCESS_TOKEN (env). Mientras no estén
  * configurados, se omite silenciosamente y se usa solo SMS.
  *
- * SMS: dos proveedores en cadena.
+ * SMS: tres proveedores en cadena.
+ *   0. Bird (bird.com, ex-MessageBird) vía @messagebird/sdk. Usa la
+ *      plantilla OTP built-in `bird_otp_verification`, que elige su propio
+ *      remitente — no depende de SMS_SENDER_ID. Mandamos NUESTRO código
+ *      (el que ya está guardado en BD), no usamos Bird Verify: así la
+ *      validación, expiración, rate limits y el soporte manual de admins
+ *      siguen igual sin importar qué canal entregó el mensaje. Se omite
+ *      mientras BIRD_API_KEY no esté configurada.
  *   1. Vonage (SMS API clásica, rest.nexmo.com) — no requiere número
  *      Toll-Free ni Business Verification tipo AWS End User Messaging (el
  *      que se usaba antes, descartado por eso: rechazo repetido de
@@ -26,6 +33,7 @@
  *      sin trámite adicional.
  */
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { BirdClient } from '@messagebird/sdk';
 import { env } from '../config/env.js';
 import logger from '../shared/logger.js';
 
@@ -77,6 +85,26 @@ async function sendViaWhatsApp(toPhone: string, otp: string): Promise<boolean> {
     return true;
   } catch (err) {
     logger.error(String(err), 'WhatsApp OTP send error — falling back to SMS');
+    return false;
+  }
+}
+
+let birdClient: BirdClient | null = null;
+
+async function sendViaBird(toPhone: string, otp: string): Promise<boolean> {
+  if (!env.BIRD_API_KEY) return false;
+  try {
+    birdClient ??= new BirdClient({ apiKey: env.BIRD_API_KEY });
+    const msg = await birdClient.sms.send({
+      to: toPhone,
+      template: { slug: 'bird_otp_verification', parameters: { code: otp } },
+    });
+    // `accepted` = encolado, no entregado — igual que Vonage/SNS, no
+    // esperamos el delivery report.
+    logger.info(`Bird SMS OTP accepted (${msg.id}, status ${msg.status})`);
+    return true;
+  } catch (err) {
+    logger.error(String(err), 'Bird SMS send error — falling back to Vonage');
     return false;
   }
 }
@@ -143,15 +171,16 @@ async function sendViaAwsSns(toPhone: string, otp: string): Promise<boolean> {
 }
 
 /**
- * Envía el código OTP: WhatsApp primero, después Vonage, después AWS SNS
+ * Envía el código OTP: WhatsApp primero, después Bird, después Vonage, después AWS SNS
  * como última red de contención. Devuelve el canal que realmente entregó
- * el mensaje ('none' si los tres fallaron o no hay ninguno configurado —
+ * el mensaje ('none' si todos fallaron o no hay ninguno configurado —
  * el código sigue válido en BD para que soporte lo entregue manualmente).
  */
 export async function sendOtp(phone: string, otp: string): Promise<OtpChannel> {
   const toPhone = toE164Bolivia(phone);
 
   if (await sendViaWhatsApp(toPhone, otp)) return 'whatsapp';
+  if (await sendViaBird(toPhone, otp)) return 'sms';
   if (await sendViaVonage(toPhone, otp)) return 'sms';
   if (await sendViaAwsSns(toPhone, otp)) return 'sms';
   return 'none';

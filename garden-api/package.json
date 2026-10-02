@@ -31,6 +31,7 @@
     "@aws-sdk/client-sns": "^3.1106.0",
     "@aws-sdk/client-textract": "^3.996.0",
     "@aws-sdk/s3-request-presigner": "^3.996.0",
+    "@messagebird/sdk": "^0.84.0",
     "@prisma/client": "^5.22.0",
     "@sentry/node": "^10.49.0",
     "@socket.io/redis-adapter": "^8.3.0",

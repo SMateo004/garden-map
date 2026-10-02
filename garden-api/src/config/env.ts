@@ -66,6 +66,9 @@ const envSchema = z.object({
   // (agosto 2026), se descartó sin haber llegado a usarse en producción.
   // AWS SNS reutiliza AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY ya definidos
   // arriba para Rekognition.
+  // Bird (bird.com, ex-MessageBird) — primer proveedor SMS, antes que Vonage.
+  // Usa la plantilla OTP built-in de Bird, que elige su propio remitente.
+  BIRD_API_KEY: z.string().optional(),
   VONAGE_API_KEY: z.string().optional(),
   VONAGE_API_SECRET: z.string().optional(),
   SMS_SENDER_ID: z.string().default('GARDEN'),
