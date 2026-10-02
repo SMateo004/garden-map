@@ -1490,3 +1490,76 @@ bloqueante dado que el fix de aplicación ya cierra el problema real.
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-02 — Reseteo de contraseña y refresh tokens
+
+**Commit de referencia al iniciar la auditoría:** `9d2c8a7` (fix: acotar el chequeo de
+idempotencia de reservas recurrentes).
+
+**Área auditada:** `password-reset.service.ts` y el flujo de refresh tokens
+(`auth.service.ts`: `createRefreshToken`, `rotateRefreshToken`, `revokeAllRefreshTokens`) —
+seguridad de autenticación, nunca tuvo una corrida dedicada (solo tocada de pasada en otras
+auditorías). Elegida por eje de seguridad del CLAUDE.md.
+
+**Confirmado sin hallazgos — muy bien implementado:** `password-reset.service.ts` es un ejemplo
+de buena práctica: token de 256 bits, hasheado con SHA-256 antes de guardarse (nunca en claro en
+la base), expiración de 1h, protección contra enumeración de usuarios (misma respuesta exista o
+no el email), XSS-escape en el email, prevención de reusar la contraseña actual, revocación de
+todas las sesiones al resetear, y — clave — el claim del token es atómico de verdad
+(`$executeRaw UPDATE ... WHERE "usedAt" IS NULL`, chequeando filas afectadas). El rate limiter de
+login (`loginLimiter`, 5 intentos/15 min) y el de refresh (`refreshLimiter`) ya están en su lugar
+en `auth.routes.ts`.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado — toca auth, política explícita de esta
+auditoría: seguridad/auth siempre a revisión humana, mismo criterio que `check-blink` del
+2026-09-26)
+
+**`rotateRefreshToken` no reclama el token de forma atómica — dos requests casi simultáneos con el
+mismo refresh token pueden rotar ambos con éxito, generando dos sesiones nuevas válidas a partir
+de un solo token que debería ser de un solo uso.**
+
+`garden-api/src/modules/auth/auth.service.ts:128-153`. El propio comentario de la función dice
+"Revocar el token usado (evita reuso — token rotation)", pero la implementación no lo logra: la
+validación (`stored.revokedAt !== null`, línea 134) es una lectura (`findUnique`, línea 132) y la
+revocación (línea 139) es un `update()` plano, sin condición de estado — las dos instrucciones no
+son atómicas entre sí. Bajo Read Committed de Postgres, dos llamadas a `POST /api/auth/refresh`
+con el mismo `refreshToken` casi al mismo tiempo (reintento de red del lado del cliente, un bug
+del cliente que llama refresh dos veces, o un atacante que intercepta el token y lo usa justo
+cuando el dueño legítimo también lo usa) pueden leer ambas `revokedAt: null` antes de que
+cualquiera comitee, y ambas:
+1. Revocan el mismo token (redundante, inofensivo en sí mismo).
+2. Emiten un access token + refresh token NUEVOS y válidos.
+
+Esto rompe la garantía de "token rotation" de un solo uso: en el modelo estándar de OAuth refresh
+token rotation, un reuso debería ser imposible de que suceda con éxito para ambas partes — el
+punto entero de rotar es poder decir "si este token (ya revocado) se usa de nuevo, algo anda mal
+(posible robo)". Acá, en vez de que el segundo intento falle (que es la señal de alerta que
+debería disparar, idealmente revocando toda la familia de tokens del usuario), **ambos intentos
+tienen éxito** — un atacante que interceptó el refresh token y la víctima real pueden terminar con
+dos sesiones válidas simultáneas sin que el sistema lo note.
+
+**Confirmado con los tests existentes:** `tests/unit/refresh-token.test.ts` solo cubre el caso
+secuencial (un token YA revocado antes de la llamada) — no hay ningún test para el caso
+concurrente (dos llamadas con el mismo token todavía válido al mismo tiempo), confirmando que esta
+carrera nunca se consideró ni se probó.
+
+**Fix propuesto (no aplicado):** el mismo patrón de claim atómico que ya existe, probado y
+funcionando, en el archivo hermano `password-reset.service.ts:146-150` de este mismo módulo —
+reemplazar el `update()` plano de la línea 139 por:
+```ts
+const claimed = await prisma.$executeRaw`
+  UPDATE "refresh_tokens"
+  SET "revokedAt" = ${new Date()}
+  WHERE "id" = ${stored.id} AND "revokedAt" IS NULL
+`;
+if (claimed === 0) return null; // ya fue usado/revocado por otra request concurrente
+```
+Es un cambio acotado, mecánico, y usa un patrón ya existente y probado en el propio archivo
+vecino — pero por tocar directamente el mecanismo de sesión/autenticación, queda para revisión y
+aprobación explícita del dueño del proyecto antes de aplicarse, según la política de esta
+auditoría.
+
+**Verificación:** solo lectura de código hoy — no se aplicó ningún cambio, no hace falta
+`tsc`/tests.
