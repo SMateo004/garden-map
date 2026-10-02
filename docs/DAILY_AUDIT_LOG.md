@@ -1826,3 +1826,139 @@ resto de las funciones del archivo. Único caller (el controller) actualizado pa
 - `npm run test:unit` — 160/160 tests, 14/14 suites (sin tests nuevos — no hay suite existente
   para este módulo; el cambio es un chequeo de autorización idéntico al ya usado sin tests
   dedicados en las otras 4 funciones del mismo archivo).
+
+---
+
+## 2026-10-02 (más tarde) — Verificación de antecedentes del cuidador, verificación de email, y
+## registro de GPS (pendiente de corridas anteriores)
+
+**Commit de referencia al iniciar la auditoría:** `42908ae` (fix: GET de Meet & Greet sin validar
+pertenencia a la reserva). `git fetch` mostró la rama local `main` 13 commits detrás de
+`origin/main` (mismo patrón de corridas anteriores) — se hizo `git checkout main && git merge
+--ff-only origin/main` antes de tocar nada.
+
+**Área auditada:** dos ejes nunca cubiertos por ninguna corrida anterior pese a estar nombrados
+explícitamente en el eje (a) de CLAUDE.md ("identidad, antecedentes, teléfono/email") —
+verificación de antecedentes penales del cuidador (`caregiver-profile.service.ts`,
+`documento-antecedentes.agent.ts`) y verificación de email (`email.service.ts`) — más rate
+limiting de registro de cuentas. Delegado a un subagente de exploración de solo lectura; cada
+hallazgo se re-verificó leyendo el código fuente directamente antes de clasificar riesgo.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado — verificación de identidad del cuidador)
+
+**El estado "antecedentes verificados" (`antecedentesStatus === 'LIMPIO'`) que alimenta el badge
+público "🛡️ Antecedentes verificados" se otorga 100% por una sola llamada a un modelo de IA, sin
+ningún humano en el circuito — y un cuidador puede auto-limpiar una revisión ya marcada como
+sospechosa simplemente volviendo a subir un documento, antes de que un admin la revise.**
+
+`garden-api/src/modules/caregiver-profile/caregiver-profile.service.ts:900-923`
+(`submitAntecedentesDocument`):
+```js
+let finalStatus = 'EN_REVISION';
+if (resultado && resultado.documentoLicito && !resultado.antecedentesDetectados) {
+  finalStatus = 'LIMPIO';           // auto-aprobado, ningún admin interviene
+} else if (resultado) {
+  await prisma.adminNotification.create({ data: { type: 'ANTECEDENTES_FLAGGED', caregiverId: profile.id } });
+}
+```
+`garden-api/src/agents/documento-antecedentes.agent.ts` (Claude Vision) evalúa si el documento
+(certificado FELCC/REJAP subido como foto/PDF) parece lícito y si muestra antecedentes de
+violencia/maltrato animal — el prompt nunca verifica que el nombre del documento coincida con el
+titular de la cuenta. El resultado `LIMPIO` es lo que `caregiver.service.ts:285,559,1296` mapea a
+`antecedentesVerified = true`, mostrado al cliente como
+`garden-app/lib/screens/client/caregiver_profile_screen.dart:1534-1536` ("🛡️ Antecedentes
+verificados"). Es decir: una sola inferencia de un modelo de visión, sin revisión humana, otorga
+una insignia de confianza que el cliente razonablemente interpreta como "Garden confirmó que este
+cuidador no tiene antecedentes" — para una categoría de riesgo (maltrato animal, violencia) que es
+justamente la que un cliente esperaría que un humano confirme, no solo una IA.
+
+**Agravante — auto-limpieza de una revisión ya marcada.** `submitAntecedentesDocument` no tiene
+ningún guard sobre el `antecedentesStatus` vigente antes de aceptar una subida nueva: reinicia el
+estado a `EN_REVISION` y vuelve a correr la IA incondicionalmente (líneas 888-895). `
+listFlaggedAntecedentes` (`admin.service.ts:3746-3751`), la cola que ve el admin, solo muestra
+perfiles con `antecedentesStatus === 'EN_REVISION'` **en este instante** — así que un cuidador cuyo
+documento acaba de ser marcado (estado sigue `EN_REVISION`, ya se creó el `AdminNotification`)
+puede resubir otro documento (editado o distinto) antes de que un admin actúe; si esa segunda
+pasada de la IA da limpio, el estado salta a `LIMPIO` y el perfil desaparece en silencio de la cola
+de revisión — la alerta original nunca llega a revisarse. El único freno existente es puramente de
+UI (`garden-app/lib/screens/caregiver/caregiver_profile_data_screen.dart:1275`, deshabilita el
+botón de resubir solo si `_antecedentesStatus == 'PENDING'`), no server-side — llamando al endpoint
+directamente se lo salta.
+
+**Texto legal vs. lo que el código realmente hace.** `legal_screen.dart:263` y
+`caregiver_contract_content.dart:62` afirman "cualquier caso dudoso lo revisa una persona... nunca
+una IA sola" — cierto solo para el camino de suspensión (un `EN_REVISION`/flag sí requiere acción
+de un admin para suspender), pero ningún texto aclara que el resultado **positivo** ("antecedentes
+limpios", la insignia pública) es decidido enteramente por la IA sin ningún chequeo humano, ni que
+una resubida puede sacar un caso marcado de la cola de revisión sin que nadie lo vea.
+
+**Fix propuesto (no aplicado):**
+1. Agregar un guard server-side en `submitAntecedentesDocument`: si `antecedentesStatus ===
+   'EN_REVISION'` y ya existe un `AdminNotification` tipo `ANTECEDENTES_FLAGGED` sin resolver para
+   este cuidador, rechazar la resubida (o aceptarla pero sin permitir que mueva el estado a
+   `LIMPIO` automáticamente — forzar revisión manual igual).
+2. Decisión de producto a confirmar con el dueño del proyecto: ¿el veredicto `LIMPIO` debería
+   requerir confirmación de un admin antes de activar el badge público (igual que ya se exige para
+   suspender), o el riesgo de un falso negativo de la IA en esta categoría específica es aceptable
+   para el modelo de negocio? Cualquiera de las dos respuestas cambia el flujo de confianza que ven
+   los clientes, así que no se asume.
+3. Si se mantiene el auto-aprobado por IA, al menos corregir el texto legal/contrato para no
+   prometer "revisión humana" en términos que el usuario puede leer como aplicable también al caso
+   positivo.
+
+**Por qué no se aplicó:** cae directo en la categoría de alto riesgo de esta auditoría —
+verificación de identidad del cuidador — y además el punto 2 es una decisión de producto, no solo
+técnica. Queda para que el dueño del proyecto lo revise y decida.
+
+### Observaciones sin acción (no son bugs claros, informativo)
+
+- **Verificación de email solo se exige a cuidadores y empresas, nunca a clientes.**
+  `email.service.ts` está implementado al mismo nivel que la verificación de teléfono (código de 6
+  dígitos, hasheado SHA-256, expira a los 10 min, máx. 5 intentos, cooldown de 60s) y
+  `emailVerified` sí bloquea el auto-envío/completado del perfil de **cuidador** y el flag
+  "verificado" de cuentas **empresa** (`caregiver-profile.validation.ts:143,185`,
+  `auth.controller.ts:1100-1112`). Pero no se encontró ningún middleware/chequeo que bloquee
+  ninguna acción de un **cliente** por tener `emailVerified: false` (puede reservar, pagar, pedir
+  retiros, etc. indefinidamente sin verificar el email) — ni tampoco ningún texto de la app que
+  prometa lo contrario. Puede ser intencional (igual que la asimetría de calificaciones ya anotada
+  el 2026-09-25), así que se deja solo como observación para que el dueño del proyecto confirme si
+  es el comportamiento esperado.
+- **Registro de cuentas: rate limit por IP (30/hora), sin CAPTCHA ni fingerprint de dispositivo.**
+  `auth.routes.ts:18-25` — el propio comentario del código ya lo documenta como "generoso — límite
+  para pruebas/MVP", no como una medida anti-abuso final. No es un bug nuevo (es una limitación ya
+  reconocida en el propio código), así que no se reporta como hallazgo, solo se deja registrado por
+  si se vuelve prioridad más adelante.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+**Lost-update en el tracking GPS (`serviceTrackingData`), pendiente desde la corrida del
+2026-09-29.** Esa corrida ya había diagnosticado el bug (mismo patrón read-modify-write que
+`serviceEvents`, arreglado ese mismo día) pero no lo aplicó porque expresar también la lógica de
+recorte (mantener los últimos 1000 puntos al llegar al tope de 2000) como un único `UPDATE`
+atómico requería un `CASE`/`jsonb_agg` condicional que no se podía probar sin un entorno de
+staging. Hoy se aplicó una versión más simple que separa los dos problemas:
+
+1. **El append en sí (lo que de verdad perdía datos) ahora es atómico** — mismo patrón `||` ya
+   probado en producción para `serviceEvents` (`UPDATE "bookings" SET "serviceTrackingData" =
+   COALESCE("serviceTrackingData", '[]'::jsonb) || punto::jsonb WHERE id = ...`), sin lectura previa
+   del array completo. Dos pings de GPS casi simultáneos (reintento de red, doble envío) ya no
+   pueden pisarse.
+2. **El recorte al tope de 2000 puntos queda como una operación aparte**, no atómica con el append
+   a propósito: es solo una salvaguarda de crecimiento de almacenamiento (el comentario original ya
+   lo decía: "prevents unbounded JSON growth"), no de integridad de datos — si esa segunda
+   operación pierde una carrera ocasional contra otro ping, el peor caso es que el array queda
+   temporalmente un poco más largo de 2000 hasta el próximo punto, nunca se pierde un punto real.
+   Se aplicó en `trackServiceLocation()` y `recordHospedajeLocationPing()`
+   (`garden-api/src/modules/booking-service/booking.service.ts`).
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `TS5101` de
+`tsconfig.json`). `npm run test:unit` — 160/160 tests, 14/14 suites (sin tests nuevos — no hay
+suite dedicada a GPS tracking hoy; el cambio reemplaza un `update` ya sin tests por un patrón
+`$executeRaw` idéntico al que sí tienen cubierto `addServiceEvent`/`reportClientSos`).
+
+### Pendiente de decisión del dueño del proyecto
+
+El hallazgo de antecedentes (auto-aprobación por IA sin humano + auto-limpieza de una revisión
+marcada) de esta corrida. También siguen pendientes de corridas anteriores: **Meet & Greet sin
+reembolso en caso de incompatibilidad** (`complete(..., {approved:false})` cancela pero nunca
+reembolsa el pago ya hecho por el cliente, corrida del 2026-10-02 más temprano hoy).

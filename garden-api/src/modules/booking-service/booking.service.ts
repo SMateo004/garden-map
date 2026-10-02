@@ -4209,19 +4209,30 @@ export async function trackServiceLocation(
   }
 
   const punto = { lat, lng, timestamp: new Date().toISOString(), accuracy: accuracy ?? 0 };
-  let tracking: any[] = (booking.serviceTrackingData as any[]) || [];
+  const puntoJson = JSON.stringify(punto);
 
-  // Prevent unbounded growth: if we're at the cap, subsample older half and keep recent half
-  if (tracking.length >= GPS_MAX_POINTS) {
-    // Keep last 1000 points (recent history) to avoid losing the full route
-    tracking = tracking.slice(-1000);
+  // UPDATE atómico (jsonb ||) en vez de leer-modificar-escribir el array
+  // completo en JS — dos pings de GPS casi simultáneos (reintento de red,
+  // doble envío del cliente) podían pisarse bajo Read Committed, perdiendo
+  // un punto de la ruta sin dejar rastro. Mismo patrón que addServiceEvent.
+  await prisma.$executeRaw`
+    UPDATE "bookings"
+    SET "serviceTrackingData" = COALESCE("serviceTrackingData", '[]'::jsonb) || ${puntoJson}::jsonb
+    WHERE id = ${bookingId}
+  `;
+
+  // Recorte de histórico: operación aparte, no atómica con el append de
+  // arriba a propósito — es solo una salvaguarda de crecimiento de storage,
+  // no de integridad de datos, así que una carrera acá en el peor caso deja
+  // el array un poco más largo hasta el próximo punto, sin perder ninguno.
+  const current = await prisma.booking.findUnique({ where: { id: bookingId }, select: { serviceTrackingData: true } });
+  const tracking = (current?.serviceTrackingData as any[]) || [];
+  if (tracking.length > GPS_MAX_POINTS) {
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { serviceTrackingData: tracking.slice(-1000) },
+    });
   }
-  tracking.push(punto);
-
-  await prisma.booking.update({
-    where: { id: bookingId },
-    data: { serviceTrackingData: tracking },
-  });
 
   // Emit real-time GPS update via Socket.io (owner's live map receives this)
   const io = getIO();
@@ -4265,16 +4276,23 @@ export async function recordHospedajeLocationPing(
   }
 
   const punto = { lat, lng, timestamp: new Date().toISOString(), accuracy: accuracy ?? 0, type: 'HOURLY_PING' };
-  let tracking: any[] = (booking.serviceTrackingData as any[]) || [];
-  if (tracking.length >= GPS_MAX_POINTS) {
-    tracking = tracking.slice(-1000);
-  }
-  tracking.push(punto);
+  const puntoJson = JSON.stringify(punto);
 
-  await prisma.booking.update({
-    where: { id: bookingId },
-    data: { serviceTrackingData: tracking },
-  });
+  // Mismo fix de lost-update que trackServiceLocation() — ver comentario ahí.
+  await prisma.$executeRaw`
+    UPDATE "bookings"
+    SET "serviceTrackingData" = COALESCE("serviceTrackingData", '[]'::jsonb) || ${puntoJson}::jsonb
+    WHERE id = ${bookingId}
+  `;
+
+  const current = await prisma.booking.findUnique({ where: { id: bookingId }, select: { serviceTrackingData: true } });
+  const tracking = (current?.serviceTrackingData as any[]) || [];
+  if (tracking.length > GPS_MAX_POINTS) {
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { serviceTrackingData: tracking.slice(-1000) },
+    });
+  }
 }
 
 export async function getGpsTrack(bookingId: string, userId: string): Promise<any[]> {
