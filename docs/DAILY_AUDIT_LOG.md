@@ -1578,3 +1578,62 @@ requests concurrentes con el mismo token — `$executeRaw` devuelve 0 filas afec
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 159/159 tests (158 + el nuevo), 14/14 suites.
+
+---
+
+## 2026-10-02 (más tarde) — Pipeline de verificación de identidad: `/submit`
+
+**Commit de referencia al iniciar la auditoría:** `6d49a0b` (fix: claim atómico en
+rotateRefreshToken).
+
+**Área auditada:** `verification.service.ts` (`submitVerification`, 597 líneas) y
+`verification.routes.ts`/`fraud.service.ts` — el resto del pipeline de identidad. La corrida del
+2026-09-26 solo auditó `check-blink`; `/submit` (el endpoint que de verdad hace OCR + comparación
+facial, el más caro de todo el pipeline) nunca se revisó.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado — seguridad + verificación de identidad,
+misma política de esta auditoría que `check-blink`/`rotateRefreshToken`: siempre a revisión
+humana)
+
+**El sistema de límite de intentos de `/submit` (máx. 3, bloqueo 24h) solo cuenta fallos de
+prueba de vida — los pasos posteriores, que son los que de verdad facturan a AWS, pueden fallar
+sin límite. Combinado con que `/submit` no tiene ningún rate limiter propio (a diferencia de sus
+3 hermanos `create-liveness-session`/`check-liveness`/`check-blink`, los tres con
+`livenessSessionLimiter`), esto deja un camino para generar llamadas facturadas ilimitadas a
+Rekognition CompareFaces + Textract OCR.**
+
+`garden-api/src/modules/verification/verification.service.ts`, función `submitVerification`:
+- Línea 162-173: `maxAttempts` (3 en producción) se compara contra `caregiver.verificationAttempts`
+  y bloquea la cuenta 24h al llegar al límite — pero el ÚNICO lugar donde ese contador se
+  incrementa es la rama de fallo de liveness (línea 246-251, `if (livenessStatus !== 'PASSED' ...)
+  { ...increment... }`).
+- Los pasos 2 a 5 que siguen — detección facial (`detectFacesWithDetails` x2, línea 265-268),
+  calidad de rostro (líneas 277-280), comparación facial (`compareFaces`, línea 299 — llamada real
+  a AWS Rekognition `CompareFaces`), y OCR (`crossValidate`, línea 304 — llamada real a Amazon
+  Textract) — **ninguno de los `throw` de esas ramas incrementa `verificationAttempts`.** Fallar
+  en cualquiera de esos pasos (selfie borrosa, documento no clasificado como CI, rostros que no
+  coinciden, OCR que no extrae el nombre) es gratis para el contador de intentos.
+- La sesión (`IdentityVerificationSession.status`) tampoco cambia de `PENDING` en ninguna de esas
+  fallas intermedias (el único `update` de sesión está más adelante, en el camino de éxito/scoring
+  final) — así que el mismo `sessionId`/token sigue siendo válido para reintentar.
+- Los tokens de liveness (`blinkLivenessToken`/`awsLivenessToken`, JWT firmados con `userId` +
+  `score`) no quedan marcados como consumidos en ningún lado — son solo `jwt.verify` + chequeo de
+  `type`/`userId`. Mientras no expiren, el mismo JWT se puede reenviar en múltiples llamadas a
+  `/submit`, saltándose por completo la rama de liveness (y su incremento de contador) cada vez.
+- Resultado práctico: con UNA sola prueba de vida real exitosa (que sí tiene su propio límite —
+  `livenessSessionLimiter`, 10/hora — para la creación de la sesión de liveness en sí), un atacante
+  puede reenviar ese mismo `blinkLivenessToken`/`awsLivenessToken` a `/submit` repetidas veces,
+  cada vez disparando una comparación facial y un OCR reales y facturados, sin que el límite de 3
+  intentos ni ningún rate limiter lo frene.
+
+**Fix propuesto (no aplicado):**
+1. Agregar un rate limiter a `/submit` (mismo `livenessSessionLimiter`, o uno dedicado) — cierra
+   el hueco inmediato, mismo patrón que sus 3 hermanos.
+2. Mover (o duplicar) el incremento de `verificationAttempts` para que cubra TODAS las ramas de
+   fallo después de la liveness (detección facial, calidad, comparación, OCR), no solo la de
+   liveness — así el límite de 3 intentos realmente acota los pasos que facturan.
+3. (Mejora de más largo plazo, no bloqueante) Marcar los JWT de liveness como de un solo uso —
+   requeriría trackear el `jti`/sessionId consumido en algún lado, más invasivo que 1 y 2.
+
+**Verificación:** solo lectura de código hoy — no se aplicó ningún cambio, no hace falta
+`tsc`/tests.
