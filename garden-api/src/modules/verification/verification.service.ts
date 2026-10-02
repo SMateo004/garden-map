@@ -244,11 +244,6 @@ export async function submitVerification(
         livenessStatus = livenessResult.status;
 
         if (livenessStatus !== 'PASSED' || livenessScore < LIVENESS_CONFIDENCE_THRESHOLD) {
-          await prisma.caregiverProfile.update({
-            where: { userId: user.id },
-            // @ts-ignore
-            data: { verificationAttempts: { increment: 1 } }
-          });
           throw new BadRequestError(livenessResult.reason || 'Fallo en la prueba de vida');
         }
       } else {
@@ -373,6 +368,24 @@ export async function submitVerification(
 
     } catch (err: any) {
       if (err instanceof BadRequestError || err instanceof NotFoundError) {
+        // FIX (auditoría 2026-10-02): antes solo el fallo de liveness de AWS
+        // Rekognition incrementaba verificationAttempts acá dentro — cualquier otro
+        // rechazo de negocio del Paso 1-2 (token de liveness/parpadeo inválido, sin
+        // prueba de vida, sin rostro en la selfie, más de un rostro, calidad
+        // insuficiente) salía por este mismo catch sin contar como intento, aunque ya
+        // disparó llamadas reales y facturadas a AWS Rekognition. Se centraliza el
+        // incremento acá para cubrir todas esas ramas de una sola vez. Los fallos
+        // técnicos (AWS caído, conexión, etc. — rama de abajo) NO cuentan: no son
+        // atribuibles al usuario y no deberían consumirle intentos.
+        try {
+          await prisma.caregiverProfile.update({
+            where: { userId: user.id },
+            // @ts-ignore
+            data: { verificationAttempts: { increment: 1 } }
+          });
+        } catch (incErr: any) {
+          logger.warn('Could not increment verificationAttempts after rejection', { userId: user.id, error: incErr.message });
+        }
         throw err;
       }
       logger.error('CRITICAL AI FAILURE during identity verification', {

@@ -1637,3 +1637,42 @@ Rekognition CompareFaces + Textract OCR.**
 
 **Verificación:** solo lectura de código hoy — no se aplicó ningún cambio, no hace falta
 `tsc`/tests.
+
+---
+
+## 2026-10-02 (más tarde) — Revisión humana explícita: fix de `/submit` (verificación de
+identidad)
+
+Usuario aprobó aplicar las dos partes del fix propuesto arriba ("Si, aplicalo").
+
+**1. Rate limiter en `/submit`** — `garden-api/src/modules/verification/verification.routes.ts`:
+se agregó `livenessSessionLimiter` (mismo límite que sus 3 hermanos, 10/hora) como middleware de
+la ruta `POST /submit`, que antes no tenía ninguno.
+
+**2. Incremento de `verificationAttempts` centralizado para cubrir todas las ramas de fallo** —
+`garden-api/src/modules/verification/verification.service.ts`, función `submitVerification`:
+- Se quitó el incremento inline que solo vivía en la rama de fallo de liveness directo (AWS
+  Rekognition Face Liveness, antiguas líneas 247-251).
+- Se movió al único `catch` que envuelve todo el bloque de Pasos 1-5 (liveness, detección facial,
+  calidad, comparación, OCR): cuando el error atrapado es `BadRequestError`/`NotFoundError` (es
+  decir, un rechazo de negocio — token de liveness/parpadeo inválido, sin prueba de vida, sin
+  rostro en la selfie, más de un rostro, calidad insuficiente, fallo de liveness en sí), ahora se
+  incrementa `verificationAttempts` ahí, de forma centralizada, antes de relanzar el error.
+- Los fallos técnicos (rama de abajo del mismo `catch` — AWS/Rekognition/Textract caídos, error de
+  conexión, etc., que se envuelven como "servicio no disponible") **NO** incrementan el contador:
+  no son atribuibles al usuario y bloquear su cuenta por una caída nuestra sería un bug nuevo.
+- La comparación facial (`compareFaces`) y el OCR (`crossValidate`) no lanzan excepciones por sí
+  solos cuando el resultado es malo — alimentan el scoring final, que puede terminar en
+  `REJECTED` fuera de este `try/catch`. Ese camino YA incrementaba el contador sin cambios (en la
+  transacción de persistencia final, `verificationAttempts: { increment: 1 }` incondicional) —
+  confirmado leyendo el código, no se tocó.
+- No se implementó la mejora de más largo plazo (JWT de liveness de un solo uso) — quedó fuera de
+  alcance de este fix puntual, puede quedar para una auditoría futura si se considera necesario.
+
+**Verificación:**
+- `npx tsc --noEmit` — mismo único error preexistente no relacionado (`auth.controller.ts:1097`,
+  `phoneVerified`), sin errores nuevos.
+- `npm run test:unit` — 159/159 tests, 14/14 suites (sin tests nuevos para este fix — no hay
+  suite existente para `verification.service.ts` que mockee Prisma/AWS; el fix es un reordenamiento
+  de dónde se llama un `update` ya probado en producción en otros flujos de este mismo archivo, no
+  lógica nueva).

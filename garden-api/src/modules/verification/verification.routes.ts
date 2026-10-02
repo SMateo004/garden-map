@@ -52,9 +52,16 @@ router.post(
   controller.checkBlink
 );
 
-/** POST /api/verification/submit — public. Multipart: token, selfie, ciFront, ciBack. */
+/** POST /api/verification/submit — public. Multipart: token, selfie, ciFront, ciBack.
+ *  Mismo límite que create-liveness-session/check-liveness/check-blink — es, de hecho, el
+ *  endpoint más caro de los cuatro (detección facial x2 + comparación facial vía AWS
+ *  Rekognition + OCR vía Amazon Textract), y antes era el único de los cuatro sin rate
+ *  limiter propio (ver auditoría 2026-10-02). El límite de intentos por cuenta
+ *  (verificationAttempts, 3 antes de bloquear 24h) sigue siendo la defensa principal —
+ *  esto es una capa adicional, igual que en sus 3 hermanos. */
 router.post(
   '/submit',
+  livenessSessionLimiter,
   upload.fields([
     { name: 'selfie', maxCount: 1 },
     { name: 'ciFront', maxCount: 1 },
