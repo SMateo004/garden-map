@@ -16,6 +16,7 @@ jest.mock('../../src/config/database', () => ({
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
   },
 }));
@@ -69,23 +70,19 @@ describe('handleCheckoutCompleted — idempotencia Stripe', () => {
     (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue(null);     // sin stripeEventId duplicado
     (mockPrisma.booking.findUnique as jest.Mock).mockResolvedValue(baseBooking); // booking encontrado
 
-    (mockPrisma.booking.update as jest.Mock).mockResolvedValue({
-      ...baseBooking,
-      status: 'WAITING_CAREGIVER_APPROVAL',
-      paidAt: new Date(),
-      stripeEventId: 'evt_first',
-    });
+    (mockPrisma.booking.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
     await handleCheckoutCompleted(makeSession('booking-1'), 'evt_first');
 
-    expect(mockPrisma.booking.update).toHaveBeenCalledWith(
+    expect(mockPrisma.booking.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'booking-1', paidAt: null }),
         data: expect.objectContaining({ stripeEventId: 'evt_first' }),
       })
     );
   });
 
-  it('ignora el evento duplicado sin llamar a update (idempotencia por stripeEventId)', async () => {
+  it('ignora el evento duplicado sin llamar a updateMany (idempotencia por stripeEventId)', async () => {
     // Primera llamada a findFirst devuelve una reserva YA procesada con ese eventId
     (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValueOnce({
       ...baseBooking,
@@ -95,7 +92,7 @@ describe('handleCheckoutCompleted — idempotencia Stripe', () => {
     await handleCheckoutCompleted(makeSession('booking-1'), 'evt_duplicate');
 
     // No debe actualizar la reserva
-    expect(mockPrisma.booking.update).not.toHaveBeenCalled();
+    expect(mockPrisma.booking.updateMany).not.toHaveBeenCalled();
   });
 
   it('sale silenciosamente si la reserva no existe en la BD', async () => {
@@ -104,7 +101,7 @@ describe('handleCheckoutCompleted — idempotencia Stripe', () => {
 
     await handleCheckoutCompleted(makeSession('booking-no-existe'), 'evt_new');
 
-    expect(mockPrisma.booking.update).not.toHaveBeenCalled();
+    expect(mockPrisma.booking.updateMany).not.toHaveBeenCalled();
   });
 
   it('sale silenciosamente si la reserva ya tiene paidAt (doble proceso raro)', async () => {
@@ -113,6 +110,21 @@ describe('handleCheckoutCompleted — idempotencia Stripe', () => {
 
     await handleCheckoutCompleted(makeSession('booking-1'), 'evt_late');
 
-    expect(mockPrisma.booking.update).not.toHaveBeenCalled();
+    expect(mockPrisma.booking.updateMany).not.toHaveBeenCalled();
+  });
+
+  // FIX (auditoría 2026-10-02): caso que motivó el fix — antes el update no tenía
+  // guarda atómica, así que dos entregas concurrentes del mismo webhook (ambas con
+  // paidAt: null en su snapshot) procesaban ambas. Ahora, si el UPDATE condicionado
+  // a paidAt IS NULL afecta 0 filas (la otra ya ganó la carrera), debe salir
+  // silenciosamente sin duplicar el registro en blockchain ni la notificación.
+  it('sale silenciosamente si otra solicitud concurrente ya reclamó el mismo booking (claim atómico)', async () => {
+    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue(null);
+    (mockPrisma.booking.findUnique as jest.Mock).mockResolvedValue(baseBooking);
+    (mockPrisma.booking.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+    await handleCheckoutCompleted(makeSession('booking-1'), 'evt_race');
+
+    expect(mockPrisma.booking.updateMany).toHaveBeenCalled();
   });
 });

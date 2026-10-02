@@ -1676,3 +1676,66 @@ la ruta `POST /submit`, que antes no tenía ninguno.
   suite existente para `verification.service.ts` que mockee Prisma/AWS; el fix es un reordenamiento
   de dónde se llama un `update` ya probado en producción en otros flujos de este mismo archivo, no
   lógica nueva).
+
+---
+
+## 2026-10-02 (más tarde) — Incidente operativo: Render suspendido por facturación
+
+Al arrancar esta corrida, `https://api.gardenbo.com` respondía 503 con header
+`x-render-routing: suspend` — la API de producción estaba completamente caída (frontend en
+Vercel seguía respondiendo 200 normal; solo el backend). No es un bug de código: es Render
+suspendiendo el servicio, típicamente por un método de pago vencido/rechazado en la cuenta. El
+usuario resolvió la facturación en el dashboard de Render; se confirmó la recuperación con
+`GET /health` (`db: ok, redis: ok, sentry: ok`, uptime bajo — recién reiniciado) antes de seguir
+con la auditoría. Sin acción de código de mi parte — queda registrado para que quede constancia
+de la interrupción.
+
+## 2026-10-02 (más tarde) — Flujos de pago: SIP/Stripe (`payment.service.ts`)
+
+**Commit de referencia al iniciar la auditoría:** `d343bb0` (fix: `/submit` sin rate limiter).
+
+**Área auditada:** `payment.service.ts`/`payment.routes.ts` (630 líneas) — confirmación de pagos
+por QR, callback de SIP (banco), aprobación manual por admin, y checkout de Stripe. Áreas previas
+de pagos ya auditadas (recuperación de deuda, QR por monto exacto) se limitaron a
+`verifyPaymentByQr`/`verifyPaymentBySipCallback`; esta corrida revisó las funciones hermanas que
+no se habían mirado todavía: `verifyPaymentManual` y el webhook de Stripe
+(`handleCheckoutCompleted`).
+
+### Hallazgo BAJO RIESGO — aplicado y pusheado
+
+**`verifyPaymentManual` (aprobación manual de pago por admin) y `handleCheckoutCompleted`
+(webhook de Stripe) hacían un `update` plano sin guarda atómica, a diferencia de sus hermanos
+`verifyPaymentByQr`/`verifyPaymentBySipCallback` en el mismo archivo, que ya usan `updateMany`
+condicionado al estado vigente.**
+
+- `verifyPaymentManual`: dos clics de "aprobar pago" (o dos admins) casi simultáneos podían pasar
+  ambos el chequeo de `status`/`paidAt` con el mismo snapshot y ejecutar el `update` dos veces. El
+  estado final (`status`/`paidAt`) ya era idempotente por sí solo, pero no los efectos
+  secundarios: `dispatchOnChainWithRetry` se dispara dos veces (tx on-chain duplicada) y
+  `notificationService.onBookingWaitingApproval` manda la notificación push dos veces al cliente.
+  No duplica dinero (no toca `balance`/wallet), por eso queda en bajo riesgo — pero es la misma
+  clase de bug de concurrencia que ya se vino arreglando en el resto del archivo.
+- `handleCheckoutCompleted`: mismo patrón. El chequeo de idempotencia por `stripeEventId` cubre
+  reintentos de Stripe del MISMO evento, pero no dos entregas concurrentes (Stripe puede reenviar
+  si no recibe 200 a tiempo) que lean el mismo snapshot antes de que cualquiera escriba.
+  **Nota: confirmado en vivo (`POST /api/payments/create-checkout-session` con la cuenta
+  `reviewer.cliente` → "Pagos no configurados (Stripe)") que Stripe NO está configurado en
+  producción hoy — este camino es código muerto por ahora.** Se corrigió igual porque es el mismo
+  patrón de 2 líneas ya probado en el resto del archivo, por si se activa Stripe en el futuro sin
+  que alguien recuerde revisar esto.
+
+**Fix aplicado** (`garden-api/src/modules/payment-service/payment.service.ts`):
+- `verifyPaymentManual`: `update` → `updateMany` con `where: { id, status: { in: [PENDING_PAYMENT,
+  PAYMENT_PENDING_APPROVAL] }, paidAt: null }`; si `count === 0`, lanza `BadRequestError` (mismo
+  mensaje de "ya fue procesada" que sus hermanos).
+- `handleCheckoutCompleted`: `update` → `updateMany` con `where: { id, paidAt: null }`; si
+  `count === 0`, sale silenciosamente (consistente con el resto de la función, que no lanza
+  errores — es un webhook, no una respuesta a un cliente que necesite ver el mensaje).
+- `tests/unit/payment.idempotency.test.ts`: mock de Prisma actualizado con `booking.updateMany`;
+  las 4 pruebas existentes se ajustaron para verificar `updateMany` en vez de `update`; se agregó
+  una prueba nueva para el caso de carrera (`updateMany` devuelve `count: 0` → sale sin duplicar
+  side-effects).
+
+**Verificación:**
+- `npx tsc --noEmit` — mismo único error preexistente no relacionado (`auth.controller.ts:1097`).
+- `npm run test:unit` — 160/160 tests (159 + el nuevo), 14/14 suites.

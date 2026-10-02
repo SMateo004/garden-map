@@ -151,8 +151,15 @@ export async function handleCheckoutCompleted(
       ? session.payment_intent
       : session.payment_intent?.id;
 
-  await prisma.booking.update({
-    where: { id: bookingId },
+  // FIX (auditoría 2026-10-02): el chequeo de `alreadyProcessed`/`paidAt` arriba es
+  // solo una lectura — dos entregas casi simultáneas del mismo webhook (Stripe
+  // reintenta si no recibe 200 a tiempo) podían pasar ambas el chequeo con el mismo
+  // snapshot y ejecutar este `update` dos veces, disparando dos veces el registro en
+  // blockchain y la notificación de abajo. Se condiciona a `paidAt: null` (mismo
+  // patrón atómico que verifyPaymentByQr/verifyPaymentBySipCallback/
+  // verifyPaymentManual en este archivo) para que solo una gane la carrera.
+  const stripeUpdateResult = await prisma.booking.updateMany({
+    where: { id: bookingId, paidAt: null },
     data: {
       status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
       paidAt: new Date(),
@@ -160,6 +167,11 @@ export async function handleCheckoutCompleted(
       stripeEventId, // ← persiste para idempotencia
     },
   });
+
+  if (stripeUpdateResult.count === 0) {
+    logger.info('Stripe webhook: booking ya procesado por solicitud concurrente', { bookingId, stripeEventId });
+    return;
+  }
 
   logger.info('Booking waiting for caregiver approval after Stripe payment', {
     bookingId,
@@ -427,13 +439,29 @@ export async function verifyPaymentManual(
     throw new BadRequestError('Esta reserva ya tiene fecha de pago registrada');
   }
 
-  await prisma.booking.update({
-    where: { id: bookingId },
+  // FIX (auditoría 2026-10-02): antes era un `update` sin condición — a diferencia
+  // de verifyPaymentByQr/verifyPaymentBySipCallback en este mismo archivo, que ya
+  // usan `updateMany` con guarda de estado para evitar doble-procesamiento. Dos
+  // clics de "aprobar pago" (o dos admins) casi simultáneos podían pasar ambos el
+  // chequeo de arriba con el mismo snapshot y disparar dos veces
+  // dispatchOnChainWithRetry (tx on-chain duplicada) y la notificación push al
+  // cliente. El estado final (status/paidAt) ya era idempotente por sí solo, pero
+  // los efectos secundarios no lo eran. Mismo patrón atómico que sus hermanos.
+  const updateResult = await prisma.booking.updateMany({
+    where: {
+      id: bookingId,
+      status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
+      paidAt: null,
+    },
     data: {
       status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
       paidAt: new Date(),
     },
   });
+
+  if (updateResult.count === 0) {
+    throw new BadRequestError('Esta reserva ya fue procesada por otra solicitud. Actualiza la página.');
+  }
 
   // Si el dueño eligió donar, registrar la donación (ignorar si ya existe por doble-tap)
   if (booking.donationAmount && Number(booking.donationAmount) > 0) {
