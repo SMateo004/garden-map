@@ -3,7 +3,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import * as svc from './meet-and-greet.service.js';
 
 export const get = asyncHandler(async (req: Request, res: Response) => {
-  const mg = await svc.getMeetAndGreet(req.params.bookingId!);
+  const mg = await svc.getMeetAndGreet(req.params.bookingId!, (req as any).user.userId);
   res.json({ success: true, data: mg });
 });
 

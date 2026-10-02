@@ -1739,3 +1739,90 @@ condicionado al estado vigente.**
 **Verificación:**
 - `npx tsc --noEmit` — mismo único error preexistente no relacionado (`auth.controller.ts:1097`).
 - `npm run test:unit` — 160/160 tests (159 + el nuevo), 14/14 suites.
+
+---
+
+## 2026-10-02 (más tarde) — Meet & Greet post-pago (`meet-and-greet.service.ts`)
+
+**Commit de referencia al iniciar la auditoría:** `3d22510` (fix: `verifyPaymentManual`/webhook
+Stripe sin guarda atómica).
+
+**Área auditada:** `garden-api/src/modules/meet-and-greet/` (controller/routes/service, 394
+líneas) — módulo nunca tocado por ninguna auditoría anterior según el log. Nota: el código ya
+tenía comentarios propios de un fix previo (commit `c1dcff4`, fuera de este flujo de auditoría)
+que agregó `assertBelongsToBooking` a `propose`/`accept`/`reschedule`/`cancel` — se confirmó que
+sigue vigente, y se encontró que **`get()` quedó afuera de ese fix**.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado — dinero real de un cliente, requiere
+decisión antes de tocar el código)
+
+**`complete(bookingId, caregiverUserId, { approved: false })` cancela la reserva pero NUNCA
+reembolsa el dinero que el cliente ya pagó, pese a que el mensaje que se le manda dice
+textualmente "recibirás reembolso completo".**
+
+`meet-and-greet.service.ts:276-292`: este Meet & Greet (modelo `MeetAndGreet`, distinto del
+`PENDING_MG` pre-pago de `booking.service.ts`) solo se puede proponer cuando
+`booking.status === 'WAITING_CAREGIVER_APPROVAL'` (`propose()`, línea 94) — es decir, **el
+cliente ya pagó** (esa transición solo ocurre después de `paidAt`, ver `payment.service.ts`). Si
+el cuidador marca `approved: false` tras el encuentro:
+```ts
+await prisma.booking.update({
+  where: { id: bookingId },
+  data: { status: 'CANCELLED', cancellationReason: 'Incompatibilidad detectada en Meet & Greet' },
+});
+await sendNotif(booking.clientId, 'Meet & Greet: incompatibilidad',
+  'El cuidador detectó incompatibilidad. Tu reserva fue cancelada y recibirás reembolso completo.');
+```
+No se toca `User.balance`, no se crea ningún `WalletTransaction`, no se setea `refundStatus`/
+`refundAmount`. El dinero del cliente queda atrapado sin ningún mecanismo que lo recupere — no
+hay ningún job que escanee reservas `CANCELLED` sin `refundStatus` para corregirlo después
+(verificado: ningún job en `src/jobs/` lee `refundStatus` de otra reserva que no sea la que él
+mismo creó).
+
+**Hay (al menos) 3 lugares que ya resuelven exactamente esta misma situación — mismo status de
+origen (`WAITING_CAREGIVER_APPROVAL`), mismo motivo (el cuidador decide que el servicio no va, sin
+culpa del cliente) — con el patrón correcto, que este código no replica:**
+- `rejectBooking` (`booking.service.ts:3651-3710`): `refundStatus: APPROVED`, `refundAmount:
+  totalAmount`, incrementa `User.balance`, crea `WalletTransaction` tipo `REFUND`.
+- `caregiver-accept-expiry.job.ts` (`_expirarAceptacion`, líneas ~62-100): mismo patrón exacto
+  (`refundStatus: 'PROCESSED'`, balance + WalletTransaction) cuando el cuidador no responde a
+  tiempo.
+- `slot-conflict-expiry.job.ts`: mismo patrón (con `refundStatus: PENDING_APPROVAL` en ese caso
+  particular, pero sí procesa el reembolso).
+
+**Por qué queda para revisión humana en vez de aplicarse directo:** mover dinero real a la
+billetera de un cliente es, por política de este repo, siempre de alto riesgo — pero además hay
+una decisión implícita que no es puramente técnica: ¿el reembolso debe ser 100% automático a la
+billetera (como `rejectBooking`, ya que la cancelación no es culpa del cliente), o el dueño del
+proyecto prefiere revisión manual admin por tratarse de una decisión subjetiva del cuidador
+("incompatibilidad") en vez de un no-show objetivo? El texto ya prometido al cliente ("reembolso
+completo") sugiere la primera opción, pero es la que decide quién mueve la plata, no yo.
+
+**Fix propuesto (no aplicado):** en la rama `!body.approved` de `complete()`, reemplazar el
+`prisma.booking.update` plano por el mismo patrón de `rejectBooking`/`caregiver-accept-expiry.job.ts`
+— `updateMany` condicionado a `status: WAITING_CAREGIVER_APPROVAL` (atómico), `refundStatus:
+APPROVED`, `refundAmount: booking.totalAmount`, incremento de `User.balance` + `WalletTransaction`
+tipo `REFUND`, todo dentro de una sola `$transaction`.
+
+### Hallazgo BAJO RIESGO — aplicado y pusheado hoy
+
+**`GET /api/meet-and-greet/:bookingId` (`getMeetAndGreet`) no validaba pertenencia a la reserva**
+— a diferencia de `propose`/`accept`/`reschedule`/`complete`/`cancel` en el mismo archivo, que ya
+usan `assertBelongsToBooking` (agregado en un fix anterior, commit `c1dcff4`, no de esta
+auditoría). Cualquier usuario autenticado del sistema podía leer el Meet & Greet de **cualquier**
+reserva — fecha propuesta, modalidad, y para `IN_PERSON` la dirección física real del punto de
+encuentro — con solo conocer/adivinar un `bookingId` (UUID, por lo que la explotación práctica
+requiere ya tener ese ID, pero sigue siendo un control de acceso faltante real, mismo patrón que
+ya se corrigió para sus 4 hermanos en este archivo).
+
+**Fix aplicado** (`garden-api/src/modules/meet-and-greet/{meet-and-greet.service,controller}.ts`):
+`getMeetAndGreet` ahora recibe `userId`, busca el booking con el `caregiver.userId` incluido, y
+llama a `assertBelongsToBooking` antes de devolver el Meet & Greet — mismo patrón ya usado en el
+resto de las funciones del archivo. Único caller (el controller) actualizado para pasar
+`req.user.userId`.
+
+**Verificación:**
+- `npx tsc --noEmit` — mismo único error preexistente no relacionado (`auth.controller.ts:1097`).
+- `npm run test:unit` — 160/160 tests, 14/14 suites (sin tests nuevos — no hay suite existente
+  para este módulo; el cambio es un chequeo de autorización idéntico al ya usado sin tests
+  dedicados en las otras 4 funciones del mismo archivo).

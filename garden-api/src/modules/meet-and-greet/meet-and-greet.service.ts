@@ -64,7 +64,19 @@ function assertBelongsToBooking(booking: { clientId: string; caregiver: { userId
   }
 }
 
-export async function getMeetAndGreet(bookingId: string) {
+// FIX (auditoría 2026-10-02): a diferencia de propose/accept/reschedule/complete/cancel
+// (todos ya protegidos por assertBelongsToBooking, ver comentario de esa función), este
+// endpoint no validaba pertenencia — cualquier usuario autenticado del sistema podía leer
+// el Meet & Greet de CUALQUIER reserva (fecha, modalidad y, para IN_PERSON, la dirección
+// física del punto de encuentro) solo con adivinar/enumerar un bookingId.
+export async function getMeetAndGreet(bookingId: string, userId: string) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { caregiver: { select: { userId: true } } },
+  });
+  if (!booking) throw new AppError('Reserva no encontrada', 404, 'NOT_FOUND');
+  assertBelongsToBooking(booking, userId);
+
   return prisma.meetAndGreet.findUnique({ where: { bookingId } });
 }
 
