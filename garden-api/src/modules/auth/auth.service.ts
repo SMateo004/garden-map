@@ -135,8 +135,26 @@ export async function rotateRefreshToken(
     return null;
   }
 
-  // Revocar el token usado (evita reuso — token rotation)
-  await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+  // FIX (auditoría 2026-10-02): el chequeo de arriba (`stored.revokedAt !==
+  // null`) es una lectura separada del `update` de abajo — no eran atómicos
+  // entre sí. Dos llamadas casi simultáneas con el mismo refresh token
+  // (reintento de red del cliente, o un token robado usado justo cuando el
+  // dueño legítimo también lo usa) podían leer ambas `revokedAt: null` antes
+  // de que cualquiera comiteara, y ambas terminaban emitiendo una sesión
+  // nueva válida — rompiendo la garantía de un solo uso de "token rotation"
+  // (el comentario original decía "evita reuso" pero no lo lograba). Mismo
+  // patrón de claim atómico ya usado y probado en el archivo hermano
+  // password-reset.service.ts (resetPassword): UPDATE condicionado a
+  // revokedAt IS NULL, chequeando filas afectadas.
+  const claimed = await prisma.$executeRaw`
+    UPDATE "refresh_tokens"
+    SET "revokedAt" = ${new Date()}
+    WHERE "id" = ${stored.id} AND "revokedAt" IS NULL
+  `;
+  if (claimed === 0) {
+    // Otra request concurrente ya reclamó este token primero.
+    return null;
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: stored.userId },

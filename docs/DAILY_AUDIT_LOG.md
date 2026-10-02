@@ -1563,3 +1563,18 @@ auditoría.
 
 **Verificación:** solo lectura de código hoy — no se aplicó ningún cambio, no hace falta
 `tsc`/tests.
+
+---
+
+## 2026-10-02 (más tarde) — Revisión humana explícita: fix de `rotateRefreshToken`
+
+El dueño del proyecto pidió explícitamente aplicar el fix. Se reemplazó el `update()` plano por
+el mismo claim atómico (`$executeRaw UPDATE ... WHERE "revokedAt" IS NULL`, chequeando filas
+afectadas) ya usado en `password-reset.service.ts`. Se actualizó también
+`tests/unit/refresh-token.test.ts`: los mocks de `refreshToken.update` pasaron a mockear
+`$executeRaw`, y se agregó un test nuevo específico para la carrera que motivó el fix (dos
+requests concurrentes con el mismo token — `$executeRaw` devuelve 0 filas afectadas en la segunda,
+`rotateRefreshToken` debe devolver `null` sin emitir una sesión nueva).
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 159/159 tests (158 + el nuevo), 14/14 suites.

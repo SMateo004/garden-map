@@ -23,6 +23,7 @@ jest.mock('../../src/config/database', () => ({
     user: {
       findUnique: jest.fn(),
     },
+    $executeRaw: jest.fn(),
   },
 }));
 
@@ -93,7 +94,7 @@ describe('rotateRefreshToken', () => {
       revokedAt: null,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
-    (mockPrisma.refreshToken.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.$executeRaw as unknown as jest.Mock).mockResolvedValue(1); // claim exitoso
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
     const result = await rotateRefreshToken('valid-format-but-deleted-user');
@@ -107,7 +108,7 @@ describe('rotateRefreshToken', () => {
       revokedAt: null,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
-    (mockPrisma.refreshToken.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.$executeRaw as unknown as jest.Mock).mockResolvedValue(1); // claim exitoso
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
 
     const result = await rotateRefreshToken('valid-raw-token');
@@ -117,15 +118,32 @@ describe('rotateRefreshToken', () => {
     expect(result!.refreshToken).toBeDefined();
     expect(result!.expiresIn).toBeDefined();
 
-    // El token viejo debe haberse revocado
-    expect(mockPrisma.refreshToken.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'rt-1' },
-        data: expect.objectContaining({ revokedAt: expect.any(Date) }),
-      })
-    );
+    // El token viejo debe haberse reclamado atómicamente (UPDATE ... WHERE revokedAt IS NULL)
+    expect(mockPrisma.$executeRaw).toHaveBeenCalled();
     // Debe haberse creado uno nuevo
     expect(mockPrisma.refreshToken.create).toHaveBeenCalled();
+  });
+
+  // FIX (auditoría 2026-10-02): este es el caso que motivó el fix — antes el
+  // claim no era atómico y dos requests concurrentes con el mismo token
+  // podían rotar ambas con éxito. Ahora, si el UPDATE condicionado a
+  // revokedAt IS NULL afecta 0 filas (otra request ya lo reclamó primero),
+  // rotateRefreshToken debe devolver null en vez de emitir una sesión nueva.
+  it('devuelve null si otra request concurrente ya reclamó el mismo token (claim atómico)', async () => {
+    (mockPrisma.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+      id: 'rt-1',
+      userId: 'user-1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+    (mockPrisma.$executeRaw as unknown as jest.Mock).mockResolvedValue(0); // perdió la carrera
+
+    const result = await rotateRefreshToken('token-used-concurrently');
+
+    expect(result).toBeNull();
+    // No debe haber emitido ninguna sesión nueva
+    expect(mockPrisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
   });
 });
 
