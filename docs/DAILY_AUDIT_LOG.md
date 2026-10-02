@@ -1453,3 +1453,40 @@ recuperación automática de una corrida interrumpida, sin necesitar intervenci�
 
 **Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
 `npm run test:unit` — 158/158 tests, 14/14 suites.
+
+---
+
+## 2026-10-01 (más tarde) — Corrección: el propio fix de idempotencia de reservas recurrentes era demasiado amplio
+
+Dos revisiones de seguridad automatizadas (post-commit y post-push) marcaron, con razón, el fix
+de la entrada anterior: el chequeo de idempotencia buscaba por `clientId + caregiverId +
+serviceType + walkDate`, sin ningún otro criterio — eso podía confundir una reserva **manual**
+no relacionada (mismo cliente, mismo cuidador, casualmente el mismo día, pero sin ninguna relación
+con la serie recurrente) con la que debía generar la serie. Peor: si esa reserva manual todavía no
+tenía `recurringSeriesId`, el código la "adoptaba" asignándole el de la serie — una reserva ajena
+quedaba vinculada a una serie recurrente que nunca la generó.
+
+**Fix corregido:** el chequeo ahora tiene dos pasos.
+1. **Primario, sin ambigüedad posible:** `recurringSeriesId: series.id` + `walkDate` — si esta
+   serie específica ya generó una reserva para esta fecha, no hace falta nada más.
+2. **Fallback, acotado al máximo, solo para la ventana de crash más puntual** (la reserva se creó
+   pero el `recurringSeriesId` nunca se linkeó): además de cliente+cuidador+fecha, ahora exige
+   mismo `timeSlot`/`startTime` exactos de la serie (filtrando por `IS NULL` cuando corresponde,
+   no omitiendo la condición), `recurringSeriesId: null` (nunca pisa un link ya existente),
+   restringido a los únicos 3 estados que `createBooking()`/`initPayment()` podrían realmente
+   haber dejado (`PENDING_PAYMENT`, `WAITING_CAREGIVER_APPROVAL`, `CONFIRMED` — excluye
+   explícitamente `REJECTED_BY_CAREGIVER`, `SLOT_CONFLICT` y cualquier otro estado ajeno a ese
+   camino), y creada en los últimos 2 hours.
+
+**No se agregó** el chequeo de "mismas mascotas exactas" que también se sugirió — `Booking` no
+tiene un campo escalar `petIds` (eso solo existe en `RecurringBookingSeries`); las mascotas de una
+reserva viven en la tabla de unión `BookingPet`, y expresar "mismo conjunto exacto" ahí requeriría
+una subconsulta relacional. El resto de los criterios (cliente+cuidador+fecha+horario+ventana de
+2h+estado) ya acotan esto lo suficiente.
+
+**No se aplicó** la recomendación de más largo plazo (constraint único a nivel de base de datos en
+`(recurringSeriesId, walkDate)`) — requiere una migración de schema; queda como mejora futura, no
+bloqueante dado que el fix de aplicación ya cierra el problema real.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos (solo el preexistente `phoneVerified`).
+`npm run test:unit` — 158/158 tests, 14/14 suites.

@@ -169,33 +169,72 @@ export async function generateDueOccurrences(): Promise<{ generated: number; ski
   for (const series of due) {
     const walkDate = series.nextRunDate.toISOString().slice(0, 10);
     try {
-      // FIX (auditoría 2026-10-01, jobs): si el proceso se cae/reinicia justo
-      // después de que createBooking() crea la reserva pero ANTES de
-      // advance() (que mueve nextRunDate a la siguiente fecha) unas líneas
-      // más abajo, la próxima corrida del job vuelve a ver esta misma serie
-      // como vencida para la MISMA fecha — generaba una segunda reserva
-      // duplicada para el mismo día (y, si el saldo alcanzaba, un segundo
-      // cobro automático a la billetera del cliente por el mismo paseo). Se
-      // chequea por cliente+cuidador+fecha (no solo por recurringSeriesId,
-      // que recién se linkea DESPUÉS de crear la reserva — un crash entre
-      // esos dos pasos también dejaría una reserva sin el link, invisible a
-      // un chequeo que solo mirara recurringSeriesId) antes de generar una
-      // nueva.
-      const existing = await prisma.booking.findFirst({
+      // FIX (auditoría 2026-10-01, jobs — ajustado tras revisión de seguridad):
+      // si el proceso se cae/reinicia justo después de que createBooking() crea
+      // la reserva pero ANTES de advance() (que mueve nextRunDate a la
+      // siguiente fecha) unas líneas más abajo, la próxima corrida del job
+      // vuelve a ver esta misma serie como vencida para la MISMA fecha —
+      // generaba una segunda reserva duplicada (y, si el saldo alcanzaba, un
+      // segundo cobro automático a la billetera).
+      //
+      // Chequeo PRIMARIO, sin ambigüedad: ¿esta serie YA generó una reserva
+      // para esta fecha? (recurringSeriesId + walkDate identifica sin dudas
+      // una reserva que pertenece a esta serie).
+      const existingLinked = await prisma.booking.findFirst({
+        where: {
+          recurringSeriesId: series.id,
+          walkDate: new Date(walkDate + 'T00:00:00.000Z'),
+          status: { not: 'CANCELLED' },
+        },
+        select: { id: true },
+      });
+
+      // Fallback ESTRECHO solo para la ventana de crash más puntual: la
+      // reserva se creó pero el `update` que recién abajo la linkea a la
+      // serie (recurringSeriesId) nunca llegó a correr. La primera versión de
+      // este fix buscaba por cliente+cuidador+fecha sin más — una revisión de
+      // seguridad señaló que eso podía confundir (y hasta "adoptar",
+      // pisándole recurringSeriesId) una reserva MANUAL no relacionada del
+      // mismo cliente con el mismo cuidador ese mismo día. Ahora se exige
+      // además mismo horario/mascotas exactos de la serie, sin dueño de serie
+      // todavía (recurringSeriesId: null — si ya tuviera uno, nunca se
+      // sobreescribe), en un estado que createBooking()/initPayment() podrían
+      // realmente haber dejado (se excluyen explícitamente REJECTED_BY_CAREGIVER,
+      // SLOT_CONFLICT y cualquier otro estado ajeno a ese camino), y creada
+      // hace poco (ventana de 2 horas — más que de sobra para un reinicio de
+      // servidor, demasiado corta para confundirse con una reserva vieja).
+      const existing = existingLinked ?? await prisma.booking.findFirst({
         where: {
           clientId: series.clientId,
           caregiverId: series.caregiverId,
           serviceType: ServiceType.PASEO,
           walkDate: new Date(walkDate + 'T00:00:00.000Z'),
-          status: { not: 'CANCELLED' },
+          // Sin `?? undefined`: si la serie no tiene timeSlot/startTime
+          // (null), se filtra explícitamente por IS NULL — un `undefined`
+          // haría que Prisma OMITA la condición y matchee cualquier horario,
+          // justo el tipo de sobre-coincidencia que esta revisión señaló.
+          timeSlot: series.timeSlot,
+          startTime: series.startTime,
+          // Nota: Booking no tiene un campo escalar `petIds` (eso solo existe
+          // en RecurringBookingSeries) — las mascotas de una reserva viven en
+          // la tabla de unión BookingPet. No se agrega acá un chequeo de
+          // conjunto exacto contra eso (requeriría una subconsulta
+          // relacional); cliente+cuidador+fecha+horario+ventana de 2h+estado
+          // ya acotan esto lo suficiente para no confundirse con una reserva
+          // manual no relacionada.
+          recurringSeriesId: null,
+          status: { in: ['PENDING_PAYMENT', 'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED'] },
+          createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
         },
-        select: { id: true, recurringSeriesId: true },
+        select: { id: true },
       });
       if (existing) {
         logger.warn('recurring-booking-generation: reserva ya existía para esta fecha — se salta la creación (recuperación de corrida previa interrumpida)', {
           seriesId: series.id, walkDate, bookingId: existing.id,
         });
-        if (!existing.recurringSeriesId) {
+        if (!existingLinked) {
+          // Solo entra acá vía el fallback (que ya exige recurringSeriesId:
+          // null) — nunca pisa un link existente.
           await prisma.booking.update({ where: { id: existing.id }, data: { recurringSeriesId: series.id } }).catch(() => {});
         }
         await advance(series.id, series.daysOfWeek, walkDate);
