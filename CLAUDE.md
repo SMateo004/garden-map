@@ -126,35 +126,51 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
 
 ## Verificación de teléfono
 
-Cadena de 3 canales en `src/services/otp-delivery.service.ts`, cada uno se salta solo si el
-anterior falla o no está configurado:
+El backend genera el código, lo guarda en `User.phoneOtp` (10 min de vigencia) y lo manda al
+teléfono **guardado en la cuenta** (no a un número que se escriba en el momento). Cadena de
+canales en `src/services/otp-delivery.service.ts` — cada uno se salta si no está configurado o
+falla, y pasa al siguiente:
 
-1. **WhatsApp Business Cloud API** (`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_ACCESS_TOKEN`) — sin
-   configurar todavía (pendiente verificación de negocio de Meta, estancada pidiendo más info —
-   ver Business Manager > Autorizaciones y verificaciones). Si en el futuro se resuelve vía un
-   BSP como Infobip en vez de ir directo por Meta, revisar esto primero.
-2. **Infobip SMS** (`INFOBIP_API_KEY`/`INFOBIP_BASE_URL`/`SMS_SENDER_ID`) — cuenta en trámite de
-   alta (agosto 2026), pendiente de que ventas la habilite (el signup self-serve mandó a un
-   flujo de contacto comercial en vez de dar API key directo).
-3. **AWS SNS Publish** (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`, ya
-   configurados para Rekognition, + `SMS_SENDER_ID`) — API clásica de SNS, **distinta** de AWS
-   End User Messaging SMS/Pinpoint (la que se abandonó, ver abajo). No requiere número dedicado
-   ni Business Verification: sin origen especificado, AWS elige uno del pool compartido. Es la
-   red de contención que sí funciona hoy sin ningún trámite pendiente, mientras Infobip/WhatsApp
-   se activan.
+1. **WhatsApp Business Cloud API** (`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_ACCESS_TOKEN`) —
+   pendiente verificación de negocio de Meta (estancada pidiendo más info — ver Business Manager >
+   Autorizaciones y verificaciones). En octubre 2026 las variables estaban cargadas en Render pero
+   Meta respondía 500 `OAuthException` código 1 en cada intento: no entrega nada y solo suma
+   demora. Si sigue así, sacar `WHATSAPP_ACCESS_TOKEN` de Render hasta que Meta apruebe.
+2. **Bird** (bird.com, ex-MessageBird, `@messagebird/sdk`, `BIRD_API_KEY`) — **el canal que
+   funciona hoy** (verificado 2026-10-03 con un número real de Tigo). Manda NUESTRO código con
+   la plantilla built-in `bird_otp_verification`, que elige su propio remitente (no depende de
+   `SMS_SENDER_ID` ni del registro ante Tigo). No usamos Bird Verify a propósito: así validación,
+   expiración, rate limits y soporte manual siguen iguales sin importar el canal. Dos cosas que ya
+   lo rompieron, mirá esto primero si deja de llegar:
+   - La API key necesita el permiso **SMS → Write** (`BirdPermissionError ... "sms:write"`). Los
+     permisos se editan sobre la key existente en Bird > Platform tools > API keys, sin redeploy.
+   - Se cobra del wallet de Bird (`BirdBillingError: Insufficient wallet balance`). Si se acaba
+     el saldo, el envío cae a Vonage, que no llega (ver abajo).
+   - Opcional: `BIRD_CLIENT_ENRICHMENT=0` en Render para que el SDK no mande metadatos extra.
+3. **Vonage** (SMS API clásica, `VONAGE_API_KEY`/`VONAGE_API_SECRET`, remitente `SMS_SENDER_ID`)
+   — responde "aceptado" pero en la prueba con un número Tigo **no llegó**: muy probablemente
+   Tigo filtra en silencio el Sender ID `GARDEN` sin registrar. No confiar en él como respaldo
+   hasta registrar el Sender ID ante Tigo.
+4. **AWS SNS Publish** (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`, los mismos de
+   Rekognition) — API clásica de SNS, **distinta** de AWS End User Messaging SMS/Pinpoint (la
+   que se abandonó, ver abajo). Pool compartido, sin número dedicado ni Business Verification.
 
-Se descartó AWS End User Messaging SMS (Pinpoint, con número Toll-Free) porque quedó rechazado
-dos veces ("Business Verification Failed", cuenta personal sin entidad legal en EEUU) y no había
-forma de reintentarlo — **no confundir con AWS SNS Publish (punto 3), que es una API distinta y
-sí está en uso**. También se descartó Twilio: su propia documentación admite que en Bolivia
-sobrescribe el Sender ID de forma inconsistente fuera de la red Viva, lo que puede hacer que
-mensajes figuren como "delivered" sin llegar nunca — coincide con problemas reales ya vividos con
-Twilio en este proyecto. Importante para Bolivia sin importar el proveedor: **Tigo exige registro
-de Sender ID** (si no se hace, filtra en silencio); Entel reemplaza el Sender ID por un shortcode
-fijo igual (no es un bug); Viva no tiene restricciones.
+Cada canal deja una línea en los logs de Render al aceptar (`Bird SMS OTP accepted (sms_…)`,
+`Vonage SMS OTP accepted`, `AWS SNS OTP accepted`) o al fallar — empezá por ahí ante cualquier
+"no me llegó el código". "Aceptado" significa encolado, no entregado: para Bird, buscá el
+`sms_…` en Bird > SMS > Messages para ver qué hizo la operadora. Límite: 3 pedidos de código
+por hora por usuario (`phoneOtpSendLimiter`).
 
-Mientras ninguno de los tres canales esté activo, el código guarda el OTP en la base y notifica a
-los admins para dar soporte manual — esto ya funciona, no es un error.
+Si ningún canal entrega, el código queda en la base y se notifica a los admins
+(`PHONE_OTP_MANUAL_HELP`) para darlo por soporte manual — esto ya funciona, no es un error.
+
+Descartados, no reintentar: **AWS End User Messaging SMS** (Pinpoint, número Toll-Free) —
+rechazado dos veces por "Business Verification Failed" (cuenta personal sin entidad legal en
+EEUU); **Twilio** — en Bolivia sobrescribe el Sender ID de forma inconsistente fuera de Viva y
+marcaba mensajes "delivered" que nunca llegaban; **Infobip** — cuenta trabada semanas sin
+respuesta de ventas (agosto 2026). Para Bolivia sin importar el proveedor: **Tigo exige registro
+de Sender ID** (si no, filtra en silencio); Entel reemplaza el Sender ID por un shortcode fijo
+(no es un bug); Viva no tiene restricciones.
 
 ## Convenciones de git
 
@@ -169,11 +185,37 @@ los admins para dar soporte manual — esto ya funciona, no es un error.
   explicando el *por qué* cuando el cambio no es obvio — mirá `git log` para el tono exacto.
 - Solo commitear cuando el usuario lo pide explícitamente.
 
+## Sistema de diseño de `garden-app` (rediseño UX/UI, desde octubre 2026)
+
+Plan completo: https://claude.ai/artifact/Mn73LFKVLfawFNN63B6uKd (17 interfaces, por fases).
+Decisiones tomadas: **sí** al personaje Brote, **tuteo** en toda la app (la landing estática
+`garden-app/web/index.html` todavía usa voseo; hay que unificarla), el **admin no se rediseña**
+(solo adopta iconos y estados nuevos cuando se toque).
+
+Código nuevo de UI usa únicamente estas piezas — nada de inventar variantes:
+- Iconos: `GardenIcon(GIcon.<concepto>)` de `lib/design/garden_icons.dart`. Dos estados (`idle`
+  línea / `active` duotono). Base Phosphor (MIT) **incluida como fuentes** en
+  `assets/fonts/phosphor/` con códigos en `phosphor_glyphs.dart` — el paquete `phosphor_flutter`
+  no compila con Flutter 3.44, no lo agregues. Paseo / guardería / hospedaje son iconos propios
+  (`garden_service_icon.dart`), con `live: true` solo mientras el servicio está en curso.
+- Servicios: `GardenService.fromApi(...)` (color, etiqueta) — nunca emojis 🦮/🏠/🏡/🐾.
+- Movimiento: `GardenMotion` (`lib/theme/garden_motion.dart`), respetando `GardenMotion.resolve`.
+- Estados de reserva: `BookingStory.of(status, ctx)` + `GardenStatusPill` — ninguna pantalla escribe
+  su propio texto/color para un `BookingStatus`.
+- Mensajes de sistema del chat: `ChatEvent.parse` (`lib/narrative/chat_event.dart`) es el único
+  que lee los emojis del texto del backend.
+- Personaje: `Brote(pose: ...)`, nunca en pantallas de dinero, pago, disputas ni verificación.
+- Catálogo visual: `flutter run -t lib/main_catalog.dart -d chrome`. Componente nuevo → primero al
+  catálogo, después a la pantalla.
+- CI (`app-design-system` en `ci.yml`): `python tool/ui_ratchet.py` falla si suben los usos de
+  `Icons.*`, emojis o `Curves.*` sueltas. Al migrar código y bajarlos: `--update` y commitear la base.
+
 ## Metodología de testing establecida
 
 - Preferí probar en vivo contra la API real con `curl` y las cuentas `reviewer.*` en vez de
   asumir que el código funciona por lectura sola — este proyecto maneja dinero real.
 - Después de cualquier cambio en `garden-api`: `npx tsc --noEmit` (hay 2-3 errores preexistentes
   no relacionados, conocidos — no los persigas, solo confirmá que no agregaste nuevos).
-- Después de cualquier cambio en `garden-app`: `flutter analyze` (debería dar 0 errores).
+- Después de cualquier cambio en `garden-app`: `flutter analyze` (debería dar 0 errores),
+  `flutter test test/design_system_test.dart` y `python tool/ui_ratchet.py`.
 - Limpiá cualquier dato de prueba que hayas creado en producción antes de terminar la sesión.
