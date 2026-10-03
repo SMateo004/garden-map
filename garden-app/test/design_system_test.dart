@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:garden_app/design/brote.dart';
+import 'package:garden_app/design/garden_icons.dart';
+import 'package:garden_app/design/garden_pet_avatar.dart';
+import 'package:garden_app/design/garden_service.dart';
+import 'package:garden_app/design/garden_status_pill.dart';
+import 'package:garden_app/narrative/booking_story.dart';
+import 'package:garden_app/narrative/chat_event.dart';
+
+void main() {
+  final now = DateTime(2026, 10, 2, 10); // viernes
+  final ctx = BookingStoryContext(
+    petName: 'Luna',
+    caregiverName: 'Andrea Rojas',
+    service: GardenService.paseo,
+    start: DateTime(2026, 10, 3, 9),
+  );
+
+  group('BookingStory', () {
+    test('cubre todos los estados del backend sin caer al genérico', () {
+      for (final s in BookingStatus.values) {
+        final story = BookingStory.of(s.apiValue, ctx, now: now);
+        expect(story.status, s, reason: s.apiValue);
+        expect(story.ownerHeadline, isNot(contains('Reserva de')), reason: s.apiValue);
+      }
+    });
+
+    test('usa el nombre de la mascota y el primer nombre del cuidador', () {
+      final story = BookingStory.of('CONFIRMED', ctx, now: now);
+      expect(story.ownerHeadline, '¡Listo! Andrea pasea a Luna mañana a las 9:00.');
+      expect(story.caregiverHeadline, 'Mañana a las 9:00 paseas a Luna. Revisa sus notas.');
+    });
+
+    test('sin nombres cae a textos neutros', () {
+      final story = BookingStory.of('IN_PROGRESS', const BookingStoryContext(), now: now);
+      expect(story.ownerHeadline, 'tu mascota está con tu cuidador.');
+      expect(story.isLive, isTrue);
+    });
+
+    test('la gramática cambia según el servicio', () {
+      String owner(GardenService s) => BookingStory.of(
+            'IN_PROGRESS',
+            BookingStoryContext(petName: 'Luna', caregiverName: 'Andrea', service: s),
+            now: now,
+          ).ownerHeadline;
+      expect(owner(GardenService.paseo), 'Luna está paseando con Andrea.');
+      expect(owner(GardenService.guarderia), 'Luna está pasando el día con Andrea.');
+      expect(owner(GardenService.hospedaje), 'Luna se está quedando con Andrea.');
+    });
+
+    test('una disputa abierta tapa el estado y no usa exclamaciones', () {
+      final story = BookingStory.of(
+        'COMPLETED',
+        const BookingStoryContext(petName: 'Luna', disputed: true),
+        now: now,
+      );
+      expect(story.tone, StoryTone.alert);
+      expect(story.ownerHeadline, isNot(contains('!')));
+    });
+
+    test('dinero, cancelaciones y rechazos no llevan exclamaciones', () {
+      for (final s in ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'CANCELLED', 'REJECTED_BY_CAREGIVER']) {
+        final story = BookingStory.of(s, ctx, now: now);
+        expect(story.ownerHeadline, isNot(contains('!')), reason: s);
+        expect(story.caregiverHeadline, isNot(contains('!')), reason: s);
+      }
+    });
+
+    test('completado: califica si falta, si no ofrece repetir', () {
+      expect(BookingStory.of('COMPLETED', ctx, now: now).ownerNext?.action, StoryAction.rate);
+      const rated = BookingStoryContext(petName: 'Luna', caregiverName: 'Andrea', rated: true);
+      expect(BookingStory.of('COMPLETED', rated, now: now).ownerNext?.action, StoryAction.bookAgain);
+    });
+
+    test('whenLabel en lenguaje natural', () {
+      expect(BookingStory.whenLabel(DateTime(2026, 10, 2, 15, 30), now: now), 'hoy a las 15:30');
+      expect(BookingStory.whenLabel(DateTime(2026, 10, 3, 1), now: now), 'mañana a la 1:00');
+      expect(BookingStory.whenLabel(DateTime(2026, 10, 4, 9), now: now), 'el domingo a las 9:00');
+      expect(BookingStory.whenLabel(DateTime(2026, 11, 14, 9), now: now), 'el 14/11 a las 9:00');
+    });
+  });
+
+  group('ChatEvent', () {
+    test('propuesta de Meet & Greet con detalles sin emojis', () {
+      final e = ChatEvent.parse('📋 MEET & GREET PROPUESTO\n📅 jueves · 17:00\n📍 Parque Urbano\n🤝 Presencial');
+      expect(e.kind, ChatEventKind.meetProposed);
+      expect(e.details, ['jueves · 17:00', 'Parque Urbano', 'Presencial']);
+    });
+
+    test('clasifica confirmado, compatible, incompatible y cancelado', () {
+      expect(ChatEvent.parse('✅ Meet & Greet confirmado · jueves').kind, ChatEventKind.meetConfirmed);
+      expect(ChatEvent.parse('✅ Meet & Greet finalizado · ¡Todo compatible!').kind, ChatEventKind.meetCompatible);
+      expect(ChatEvent.parse('❌ Meet & Greet finalizado · incompatibilidad').kind, ChatEventKind.meetIncompatible);
+      final cancelled = ChatEvent.parse('🚫 Meet & Greet cancelado');
+      expect(cancelled.kind, ChatEventKind.meetCancelled);
+      expect(cancelled.text, 'Meet & Greet cancelado');
+    });
+
+    test('texto desconocido queda genérico y legible', () {
+      final e = ChatEvent.parse('El cuidador llegó');
+      expect(e.kind, ChatEventKind.generic);
+      expect(e.text, 'El cuidador llegó');
+    });
+  });
+
+  group('GardenService', () {
+    test('lee los valores del backend', () {
+      expect(GardenService.fromApi('PASEO'), GardenService.paseo);
+      expect(GardenService.fromApi('guarderia'), GardenService.guarderia);
+      expect(GardenService.fromApi('HOSPEDAJE'), GardenService.hospedaje);
+      expect(GardenService.fromApi('OTRO'), isNull);
+    });
+  });
+
+  group('Widgets', () {
+    Widget host(Widget child, {bool reduceMotion = false}) => MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: reduceMotion),
+            child: Scaffold(body: Center(child: child)),
+          ),
+        );
+
+    testWidgets('todos los iconos se dibujan en ambos estados', (tester) async {
+      await tester.pumpWidget(host(Wrap(children: [
+        for (final i in GIcon.values) ...[
+          GardenIcon(i),
+          GardenIcon(i, state: GIconState.active),
+        ],
+      ])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('servicio en vivo no anima si el sistema pide menos movimiento', (tester) async {
+      await tester.pumpWidget(host(const GardenIcon(GIcon.paseo, live: true), reduceMotion: true));
+      // pumpAndSettle fallaría por timeout si quedara un bucle corriendo.
+      await tester.pumpAndSettle();
+      expect(find.byType(GardenIcon), findsOneWidget);
+    });
+
+    testWidgets('píldora y avatar en vivo muestran el estado', (tester) async {
+      final story = BookingStory.of('IN_PROGRESS', ctx, now: now);
+      await tester.pumpWidget(host(Column(mainAxisSize: MainAxisSize.min, children: [
+        GardenStatusPill(story, service: GardenService.paseo, trailing: '23 min'),
+        GardenPetAvatar(name: 'Luna', species: 'DOG', tone: story.tone, service: GardenService.paseo),
+      ]), reduceMotion: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Paseando · 23 min'), findsOneWidget);
+    });
+
+    testWidgets('Brote dibuja las seis poses y se queda quieto', (tester) async {
+      await tester.pumpWidget(host(Wrap(children: [
+        for (final p in BrotePose.values) Brote(pose: p, size: 80),
+      ])));
+      // Sin bucles: debe asentarse solo después de la animación de entrada.
+      await tester.pumpAndSettle();
+      expect(find.byType(Brote), findsNWidgets(BrotePose.values.length));
+    });
+  });
+}

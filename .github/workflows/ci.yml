@@ -50,3 +50,30 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
         continue-on-error: true
+
+  app-design-system:
+    name: App (sistema de diseño)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: garden-app
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deuda visual: usos de Icons.*, emojis y Curves.* sueltas solo pueden bajar.
+      - name: Iconos, emojis y curvas no suben
+        run: python3 tool/ui_ratchet.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'  # igual que deploy-flutter-web.yml
+          channel: stable
+          cache: true
+
+      - name: Tests del sistema de diseño
+        run: |
+          flutter pub get
+          flutter test test/design_system_test.dart
