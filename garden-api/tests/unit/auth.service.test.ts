@@ -14,7 +14,8 @@ jest.mock('../../src/config/database', () => {
     findUnique: jest.fn(),
     create: jest.fn(),
   };
-  const caregiverProfile = { create: jest.fn() };
+  // findUnique: getStaffLoginInfo también consulta si la cuenta tiene perfil propio.
+  const caregiverProfile = { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) };
   const refreshToken = {
     create: jest.fn().mockResolvedValue({ id: 'rt-1', tokenHash: 'hash', expiresAt: new Date() }),
     findFirst: jest.fn(),
@@ -194,6 +195,31 @@ describe('AuthService', () => {
       expect(result.user.email).toBe('cuidador@test.com');
       expect(result.accessToken).toBeDefined();
       expect(result.expiresIn).toBeDefined();
+    });
+
+    it('un empleado con perfil independiente propio lo indica en el login', async () => {
+      const bcrypt = require('bcrypt');
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-2',
+        email: 'empleado@test.com',
+        role: UserRole.CAREGIVER,
+        firstName: 'Ana',
+        lastName: 'Rojas',
+        passwordHash: 'hashed_password123',
+      });
+      (mockPrisma.caregiverStaffMember.findUnique as jest.Mock).mockResolvedValueOnce({
+        status: 'ACTIVE',
+        caregiverProfileId: 'company-1',
+        caregiverProfile: { id: 'company-1', companyName: 'Patitas', userId: 'owner-1', suspended: false },
+      });
+      (mockPrisma.caregiverProfile.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'own-profile' });
+
+      const result = await login({ email: 'empleado@test.com', password: 'password123' });
+
+      expect(result.user.isCaregiverStaff).toBe(true);
+      expect(result.user.staffCompanyName).toBe('Patitas');
+      expect(result.user.hasOwnCaregiverProfile).toBe(true);
     });
 
     it('throws UnauthorizedError when user not found', async () => {
