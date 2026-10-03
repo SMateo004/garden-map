@@ -356,16 +356,20 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
 
   Future<void> _saveUserInfo() async {
     final isVerified = _profile?['identityVerificationStatus'] == 'VERIFIED';
-    
+    final isPhoneVerified = _profile?['phoneVerified'] == true;
+
     final Map<String, dynamic> body = {
-      'phone': _phoneController.text.trim(),
+      // Teléfono ya verificado: no se reenvía, el backend lo rechaza con
+      // 403 PHONE_LOCKED (solo se cambia por el chat de soporte).
+      if (!isPhoneVerified) 'phone': _phoneController.text.trim(),
     };
 
     if (!isVerified) {
       body['firstName'] = _firstNameController.text.trim();
       body['lastName'] = _lastNameController.text.trim();
     }
-    await http.patch(
+    if (body.isEmpty) return;
+    final response = await http.patch(
       Uri.parse('$_baseUrl/caregiver/user-info'),
       headers: {
         'Authorization': 'Bearer $_caregiverToken',
@@ -373,6 +377,10 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
       },
       body: jsonEncode(body),
     );
+    final data = jsonDecode(response.body);
+    if (data['success'] != true) {
+      throw Exception(data['error']?['message'] ?? 'Error al actualizar tus datos personales');
+    }
   }
 
   @override
@@ -1370,6 +1378,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
 
   Widget _buildPersonalInfoSection(Color textColor, Color subtextColor, bool isDark) {
     bool isVerified = _profile?['identityVerificationStatus'] == 'VERIFIED';
+    bool isPhoneVerified = _profile?['phoneVerified'] == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1428,12 +1437,19 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         ),
         const SizedBox(height: 12),
         TextField(
-          enabled: true,
+          enabled: !isPhoneVerified,
           controller: _phoneController,
           keyboardType: TextInputType.phone,
-          style: TextStyle(color: textColor),
+          style: TextStyle(color: isPhoneVerified ? subtextColor : textColor),
           decoration: _inputDecoration('Teléfono (ej: 70012345)', isDark),
         ),
+        if (isPhoneVerified) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Tu teléfono ya está verificado. Para cambiarlo, pídelo por el chat de soporte.',
+            style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
       ],
     );
   }

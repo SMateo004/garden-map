@@ -26,11 +26,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
   bool _uploadingPhoto = false;
   String _token = '';
   Uint8List? _pendingPhotoBytes;
-  // Verificación opcional de teléfono (ClientProfile.phoneVerified) — solo
-  // informativa, no bloquea nada. _savedPhone es el número que YA está
-  // guardado en el servidor (distinto de lo que el usuario esté tipeando
-  // sin guardar en _phoneCtrl), para no ofrecer "Verificar" sobre un número
-  // que todavía no se guardó.
+  // Verificación de teléfono (ClientProfile.phoneVerified). Una vez
+  // verificado, el backend bloquea cualquier cambio (403 PHONE_LOCKED) salvo
+  // por el chat de soporte — el campo se deshabilita más abajo para que
+  // coincida. _savedPhone es el número que YA está guardado en el servidor
+  // (distinto de lo que el usuario esté tipeando sin guardar en _phoneCtrl),
+  // para no ofrecer "Verificar" sobre un número que todavía no se guardó.
   bool _phoneVerified = false;
   String _savedPhone = '';
 
@@ -176,8 +177,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
     }
   }
 
-  /// Verificación opcional de teléfono — solo un dato de confianza en el
-  /// perfil, no bloquea ninguna acción.
+  /// Verificación de teléfono — una vez verificado, el número queda
+  /// bloqueado server-side (ver _phoneVerified arriba).
   Future<void> _startPhoneVerification() async {
     final verified = await showDialog<bool>(
       context: context,
@@ -311,7 +312,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
       final body = <String, dynamic>{
         'firstName': fn,
         'lastName': ln,
-        'phone': _phoneCtrl.text.trim(),
+        // Teléfono ya verificado: no se reenvía, el backend lo rechaza con
+        // 403 PHONE_LOCKED (solo se cambia por el chat de soporte).
+        if (!_phoneVerified) 'phone': _phoneCtrl.text.trim(),
         'city': cityName,
         'country': 'Bolivia',
         'address': _buildFullAddress(),
@@ -498,9 +501,10 @@ class _MyDataScreenState extends State<MyDataScreen> {
             ]),
             const SizedBox(height: 16),
 
-            // Phone — verificación opcional, no bloquea nada. Solo se ofrece
-            // cuando lo tipeado coincide con lo ya guardado en el servidor
-            // (si el usuario está editando a un número nuevo sin guardar
+            // Phone — una vez verificado queda bloqueado (ver _phoneVerified).
+            // El link "Verificar" solo se ofrece cuando lo tipeado coincide
+            // con lo ya guardado en el servidor (si el usuario está editando
+            // a un número nuevo sin guardar
             // todavía, no hay nada real que verificar).
             Row(children: [
               Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -520,10 +524,19 @@ class _MyDataScreenState extends State<MyDataScreen> {
               ],
             ]),
             const SizedBox(height: 6),
-            TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
+            TextField(controller: _phoneCtrl,
+                style: TextStyle(color: _phoneVerified ? subtextColor : textColor),
+                enabled: !_phoneVerified,
                 keyboardType: TextInputType.phone,
                 onChanged: (_) => setState(() {}),
                 decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
+            if (_phoneVerified) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Tu teléfono ya está verificado. Para cambiarlo, pídelo por el chat de soporte.',
+                style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Ciudad y país ya no se piden acá — la ciudad la define el
