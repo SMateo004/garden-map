@@ -21,6 +21,7 @@ import {
 } from './caregiver-profile.validation.js';
 import logger from '../../shared/logger.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
+import { corregirCamposPerfil } from '../../agents/redaccion.agent.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { onCaregiverWelcome } from '../../services/notification.service.js';
 
@@ -431,6 +432,14 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
     updateData.status = CaregiverStatus.DRAFT;
   }
 
+  // Perfil ya PUBLICADO: lo que se guarda lo ve el cliente al instante, así que el texto
+  // libre pasa antes por el corrector (solo ortografía, nunca reescribe; falla abierto).
+  // En DRAFT no hace falta: la corrección corre completa al enviar a aprobación.
+  if (profile.status === CaregiverStatus.APPROVED) {
+    const corregidos = await corregirCamposPerfil(updateData);
+    Object.assign(updateData, corregidos);
+  }
+
   logger.debug('Updating caregiver profile', { userId, updateData });
   const updated = await prisma.caregiverProfile.update({
     where: { id: (profile as any).id },
@@ -559,10 +568,16 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     throw new BadRequestError(message, 'MISSING_REQUIRED_FIELDS');
   }
 
+  // Antes de publicar: el corrector de la IA arregla ortografía, tildes y puntuación del
+  // texto libre para que el cliente nunca vea errores. Solo corrige (no reescribe) y falla
+  // abierto: si la IA no responde, se publica el texto tal como lo escribió el cuidador.
+  const textosCorregidos = await corregirCamposPerfil(profile as unknown as Record<string, unknown>);
+
   await prisma.$transaction(async (tx) => {
     await tx.caregiverProfile.update({
       where: { id: (profile as any).id },
       data: {
+        ...textosCorregidos,
         // Al completar los 9 pasos (incluyendo verificación de identidad y email),
         // el perfil queda aprobado automáticamente — las verificaciones son el proceso de aprobación.
         status: CaregiverStatus.APPROVED,

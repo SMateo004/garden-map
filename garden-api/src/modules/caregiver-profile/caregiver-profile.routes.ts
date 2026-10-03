@@ -7,6 +7,8 @@ import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper
 import { addPlacePhotoAtomic, removePlacePhotoAtomic, submitAntecedentesDocument, submitNitDocument } from './caregiver-profile.service.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import { mejorarRedaccion, RedaccionRechazadaError } from '../../agents/redaccion.agent.js';
 import { uploadImage, uploadRawFile } from '../../services/storage.service.js';
 import { assertImageBuffer, assertImageOrPdfBuffer } from '../../shared/mime-validation.js';
 import { validarFoto } from '../../agents/foto-validacion.agent.js';
@@ -42,6 +44,41 @@ router.post('/profile/check-text', asyncHandler(async (req, res) => {
   const resultado = await verificarCoherenciaTexto(field, capped);
   res.json({ success: true, data: resultado });
 }));
+// Cada llamada es una invocación real y facturada a Claude: límite por usuario (no por IP).
+const improveTextLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => (req as any).user?.userId ?? req.ip ?? 'anon',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Usaste mucho el asistente de IA. Intenta de nuevo en un rato.' } },
+});
+
+/** POST /profile/improve-text — botón "IA" del registro. Body: { field, text?, notes? }.
+ *  Con texto lo mejora; sin texto redacta uno nuevo a partir de `notes`. Devuelve { text, mode }. */
+router.post('/profile/improve-text', improveTextLimiter,
+  asyncHandler(async (req, res) => {
+    const { field, text, notes } = (req.body ?? {}) as { field?: unknown; text?: unknown; notes?: unknown };
+    if (typeof field !== 'string') {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_BODY', message: 'field es requerido' } });
+    }
+    try {
+      const out = await mejorarRedaccion({
+        campo: field,
+        texto: typeof text === 'string' ? text : undefined,
+        notas: typeof notes === 'string' ? notes : undefined,
+      });
+      return res.json({ success: true, data: { text: out.texto, mode: out.modo } });
+    } catch (err) {
+      if (err instanceof RedaccionRechazadaError) {
+        return res.status(422).json({ success: false, error: { code: 'TEXT_NOT_USABLE', message: err.message } });
+      }
+      logger.warn('[improve-text] fallo técnico', { error: err instanceof Error ? err.message : String(err) });
+      return res.status(503).json({ success: false, error: { code: 'AI_UNAVAILABLE', message: 'El asistente de IA no está disponible ahora. Puedes escribirlo tú y lo revisaremos al publicar.' } });
+    }
+  })
+);
+
 router.patch('/user-info', caregiverProfileController.patchUserInfo);
 router.post('/submit', caregiverProfileController.submit);
 router.post('/send-verify-email', caregiverProfileController.sendVerifyEmail);

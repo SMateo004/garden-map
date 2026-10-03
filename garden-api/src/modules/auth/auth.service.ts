@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { createHash, timingSafeEqual } from 'crypto';
+import { corregirTexto } from '../../agents/redaccion.agent.js';
 import { findValidInvite, consumeInvite } from './professional-invite.service.js';
 import { UserRole, VerificationStatus, CaregiverStatus, Zone } from '@prisma/client';
 import { randomBytes } from 'crypto';
@@ -989,6 +990,8 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
   const cityId = (body as any).cityId as string | undefined;
   const zoneId = (body as any).zoneId as string | undefined;
   const cityRecord = cityId ? await prisma.city.findUnique({ where: { id: cityId } }) : null;
+  // La empresa queda APPROVED al registrarse: su bio se corrige antes de guardarse.
+  const companyBio = body.bio ? await corregirTexto('bio', body.bio) : null;
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -1009,7 +1012,7 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
     const profile = await tx.caregiverProfile.create({
       data: {
         userId: user.id,
-        bio: body.bio ?? null,
+        bio: companyBio,
         zone: safeZoneEnum(body.zone) ?? null,
         ...(cityId ? { cityId } : {}),
         ...(zoneId ? { zoneId } : {}),
