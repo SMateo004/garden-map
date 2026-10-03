@@ -234,3 +234,10 @@ router.post('/client/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authC
 router.post('/client/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
 
 export default router;
+// Cambio de teléfono ya verificado: solo con ventana abierta por el bot de soporte
+// (ver phone-change.service.ts). start deja el número nuevo pendiente y envía el
+// código a ese número; se confirma con verify-phone (client o caregiver).
+router.get('/phone-status', authMiddleware, authController.phoneStatus);
+router.post('/phone-change/start', authMiddleware, phoneOtpSendLimiter, authController.startPhoneChange);
+router.post('/phone-change/cancel', authMiddleware, authController.cancelPhoneChange);
+

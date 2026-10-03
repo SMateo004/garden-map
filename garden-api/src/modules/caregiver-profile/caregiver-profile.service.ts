@@ -60,6 +60,13 @@ export async function patchUserInfo(
   // phone is @unique String (not nullable) — only update if non-empty and actually different
   const newPhone = body.phone?.trim();
   const phoneChanged = Boolean(newPhone && newPhone !== currentUser?.phone);
+  if (phoneChanged && newPhone) {
+    // Teléfono ya verificado = bloqueado; solo se cambia con la autorización del
+    // bot de soporte (phone-change.service.ts). Si aún no está verificado, se
+    // puede corregir libremente.
+    const { assertPhoneEditable } = await import('../auth/phone-change.service.js');
+    await assertPhoneEditable(userId, newPhone);
+  }
   if (phoneChanged) {
     userUpdateData.phone = newPhone;
   }
@@ -104,6 +111,7 @@ export async function patchUserInfo(
       where: { id: profile.id },
       data: { phoneVerified: false },
     });
+    await prisma.clientProfile.updateMany({ where: { userId }, data: { phoneVerified: false } });
     logger.info('Phone changed — phoneVerified reset on profile', { userId });
   }
 

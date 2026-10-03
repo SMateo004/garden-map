@@ -2,7 +2,8 @@ import prisma from '../../config/database.js';
 import { BadRequestError } from '../../shared/errors.js';
 import { getIO } from '../../services/socket.service.js';
 import logger from '../../shared/logger.js';
-import { responderSoporte, type MensajeHistorial } from '../../agents/soporte-chat.agent.js';
+import { responderSoporte, type MensajeHistorial, type RespuestaSoporte } from '../../agents/soporte-chat.agent.js';
+import { detectaCambioDeTelefono, responderCambioDeTelefono } from './phone-change-intent.js';
 
 const MAX_MESSAGE_LENGTH = 2000;
 const PREVIEW_LENGTH = 200;
@@ -87,19 +88,29 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
   // seguía respondiendo (y facturando llamadas a Claude) a cada mensaje
   // nuevo del cliente, contradiciendo la propia idea de "ya se escaló".
   let botMessage: { id: string; message: string; createdAt: Date } | null = null;
-  if (!thread.adminJoinedAt && thread.status !== 'ESCALATED') {
-    const historyRows = await prisma.supportMessage.findMany({
-      where: { threadId: thread.id },
-      orderBy: { createdAt: 'desc' },
-      take: BOT_HISTORY_WINDOW,
-      select: { senderRole: true, message: true },
-    });
-    const historial: MensajeHistorial[] = historyRows
-      .reverse()
-      .slice(0, -1) // el mensaje que acabamos de guardar ya va aparte como "nuevoMensaje"
-      .map((m) => ({ senderRole: m.senderRole as MensajeHistorial['senderRole'], message: m.message }));
+  // Pedido de cambio de teléfono: ruta determinística, sin modelo (ver
+  // phone-change-intent.ts). Se atiende aunque el hilo esté ESCALATED sin admin
+  // adentro — no cuesta una llamada a Claude y es la única vía para cambiar un
+  // número verificado, no puede quedar bloqueada por una escalación vieja.
+  const pedidoTelefono = !thread.adminJoinedAt && detectaCambioDeTelefono(message);
+  if (pedidoTelefono || (!thread.adminJoinedAt && thread.status !== 'ESCALATED')) {
+    let resultado: RespuestaSoporte;
+    if (pedidoTelefono) {
+      resultado = await responderCambioDeTelefono(userId);
+    } else {
+      const historyRows = await prisma.supportMessage.findMany({
+        where: { threadId: thread.id },
+        orderBy: { createdAt: 'desc' },
+        take: BOT_HISTORY_WINDOW,
+        select: { senderRole: true, message: true },
+      });
+      const historial: MensajeHistorial[] = historyRows
+        .reverse()
+        .slice(0, -1) // el mensaje que acabamos de guardar ya va aparte como "nuevoMensaje"
+        .map((m) => ({ senderRole: m.senderRole as MensajeHistorial['senderRole'], message: m.message }));
 
-    const resultado = await responderSoporte({ historial, nuevoMensaje: message, userId });
+      resultado = await responderSoporte({ historial, nuevoMensaje: message, userId });
+    }
 
     const savedBot = await prisma.supportMessage.create({
       data: { threadId: thread.id, senderRole: 'BOT', message: resultado.respuesta },

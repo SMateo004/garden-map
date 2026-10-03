@@ -19,6 +19,8 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { ConflictError, BadRequestError, UnauthorizedError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
+import * as phoneChange from './phone-change.service.js';
 
 /** GET /api/auth/me - Usuario actual (requiere Bearer). */
 export const me = asyncHandler(async (req: Request, res: Response) => {
@@ -44,6 +46,11 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
     // rol base sea CAREGIVER, o viceversa) — leer/escribir por user.role haría
     // que un caregiver-que-actúa-como-cliente nunca vea/edite su clientProfile.
     const effectiveRole = (req.user as { activeRole?: string })?.activeRole ?? user.role;
+    // Estado del teléfono a nivel de usuario (no de perfil): la app lo usa para
+    // bloquear el campo, encender el aviso de "verifica tu teléfono" y saber si
+    // hay un cambio autorizado en curso.
+    const phoneInfo = phoneChange.toPublicPhoneState(await phoneChange.getPhoneState(user.id));
+    const phoneFields = { phoneVerified: phoneInfo.verified, phoneChange: phoneInfo };
     // Para CLIENT, incluir clientProfile con datos extendidos
     if (effectiveRole === 'CLIENT') {
       const clientProfile = await prisma.clientProfile.findUnique({
@@ -68,6 +75,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         success: true,
         data: {
           ...user,
+          ...phoneFields,
           address: clientProfile?.address ?? null,
           bio: clientProfile?.bio ?? null,
           addressLat: clientProfile?.addressLat ?? null,
@@ -110,6 +118,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         success: true,
         data: {
           ...user,
+          ...phoneFields,
           profilePicture: effectivePhoto,
           // Exponer campos de dirección al mismo nivel que el cliente
           address: caregiverProfile?.address ?? null,
@@ -128,7 +137,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         },
       });
     }
-    return res.json({ success: true, data: user });
+    return res.json({ success: true, data: { ...user, ...phoneFields } });
   } catch (error) {
     // Log del error real para debugging
     logger.error('Error en GET /api/auth/me', { 
@@ -387,13 +396,17 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   // para resetear phoneVerified (el número nuevo nunca pasó por OTP).
   let phoneChanged = false;
   if (phone && phone.trim()) {
-    const cleanPhone = phone.trim().replace(/\D/g, '').replace(/^591/, '');
-    if (!/^[67][0-9]{7}$/.test(cleanPhone)) {
+    const cleanPhone = phoneChange.normalizeBoPhone(phone);
+    if (!cleanPhone) {
       return res.status(400).json({
         success: false,
         error: { code: 'INVALID_PHONE', message: 'Teléfono inválido: 8 dígitos, debe empezar con 6 o 7.' },
       });
     }
+    // Un teléfono ya verificado no se edita desde acá — solo por el flujo de
+    // cambio autorizado por soporte (phone-change.service.ts). Si el número es
+    // el mismo que ya tiene (la app lo reenvía en cada guardado) pasa sin cambios.
+    await phoneChange.assertPhoneEditable(userId, cleanPhone);
     const existingPhone = await prisma.user.findUnique({ where: { phone: cleanPhone }, select: { id: true } });
     if (existingPhone && existingPhone.id !== userId) {
       return res.status(409).json({ success: false, error: { code: 'PHONE_IN_USE', message: 'Ese teléfono ya está registrado en otra cuenta.' } });
@@ -470,8 +483,13 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     updated = await prisma.user.update({ where: { id: userId }, data: userData });
   }
   if (phoneChanged) {
-    // updateMany: no-op seguro si el usuario no tiene CaregiverProfile (CLIENT).
-    await prisma.caregiverProfile.updateMany({ where: { userId }, data: { phoneVerified: false } });
+    // updateMany: no-op seguro para el perfil que el usuario no tenga. Antes solo
+    // se reseteaba el de cuidador, y un cliente quedaba "verificado" con un número
+    // que nunca confirmó.
+    await Promise.all([
+      prisma.caregiverProfile.updateMany({ where: { userId }, data: { phoneVerified: false } }),
+      prisma.clientProfile.updateMany({ where: { userId }, data: { phoneVerified: false } }),
+    ]);
   }
   if (Object.keys(profileData).length > 0) {
     if (effectiveRole === 'CAREGIVER') {
@@ -999,13 +1017,17 @@ export const registerCompany = asyncHandler(async (req: Request, res: Response) 
 export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
-  if (!user || !user.phone) {
+  // Si hay un cambio de teléfono autorizado en curso, el código va al número
+  // NUEVO (pendingPhone), no al guardado — así se prueba que el usuario lo tiene.
+  const state = await phoneChange.getPhoneState(userId);
+  const targetPhone = state.pendingPhone ?? state.phone;
+  if (!targetPhone) {
     return res.status(400).json({ success: false, error: { code: 'NO_PHONE', message: 'No hay número de teléfono registrado en tu cuenta.' } });
   }
+  const user = { phone: targetPhone };
 
-  // Generar código y guardarlo en BD (10 min de vigencia)
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  // Generar código y guardarlo en BD (10 min de vigencia). randomInt = CSPRNG.
+  const otp = String(randomInt(100000, 1000000));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await prisma.user.update({
     where: { id: userId },
@@ -1066,7 +1088,7 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { phone: true, phoneOtp: true, phoneOtpExpiresAt: true },
+    select: { phone: true, pendingPhone: true, phoneOtp: true, phoneOtpExpiresAt: true },
   });
   if (!user || !user.phone) {
     return res.status(400).json({ success: false, error: { code: 'NO_PHONE', message: 'No hay número de teléfono registrado.' } });
@@ -1082,6 +1104,14 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
 
   if (user.phoneOtp !== code) {
     return res.status(400).json({ success: false, error: { code: 'WRONG_CODE', message: 'Código incorrecto. Revisa el SMS e intenta de nuevo.' } });
+  }
+
+  // Cambio de teléfono autorizado: el código acaba de probar que el usuario
+  // tiene el número NUEVO, recién ahora reemplaza al anterior (ver
+  // phone-change.service.ts). Si la ventana venció lanza PHONE_CHANGE_EXPIRED.
+  if (user.pendingPhone) {
+    await phoneChange.commitPhoneChange(userId, user.pendingPhone);
+    return res.json({ success: true, message: '¡Teléfono actualizado y verificado correctamente!' });
   }
 
   // Limpiar el código ya usado
@@ -1112,6 +1142,31 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
   } catch (_) {}
 
   return res.json({ success: true, message: '¡Teléfono verificado correctamente!' });
+});
+
+/** GET /api/auth/phone-status — estado del teléfono para la app (verificado / cambio autorizado / pendiente). */
+export const phoneStatus = asyncHandler(async (req: Request, res: Response) => {
+  const state = await phoneChange.getPhoneState(req.user!.userId);
+  return res.json({ success: true, data: phoneChange.toPublicPhoneState(state) });
+});
+
+/** POST /api/auth/phone-change/start — body: { phone }. Solo con la ventana abierta por soporte.
+ *  Deja el número nuevo como pendiente y le manda el código; User.phone no cambia todavía. */
+export const startPhoneChange = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const phone = req.body?.phone;
+  if (!phone || typeof phone !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PHONE', message: 'Ingresa el número nuevo.' } });
+  }
+  await phoneChange.startPhoneChange(userId, phone);
+  // Mismo handler de envío que la verificación normal: ahora apunta a pendingPhone.
+  return sendCaregiverPhoneOtp(req, res, () => undefined);
+});
+
+/** POST /api/auth/phone-change/cancel — descarta el cambio en curso; el número verificado sigue igual. */
+export const cancelPhoneChange = asyncHandler(async (req: Request, res: Response) => {
+  await phoneChange.cancelPhoneChange(req.user!.userId);
+  return res.json({ success: true, message: 'Cambio de teléfono cancelado.' });
 });
 
 // ── Password Reset (in-app code flow) ────────────────────────────────────────

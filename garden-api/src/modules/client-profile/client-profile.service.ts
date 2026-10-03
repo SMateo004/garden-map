@@ -53,7 +53,10 @@ export async function patchProfile(userId: string, body: PatchClientProfileBody)
 
   const data: Prisma.ClientProfileUpdateInput = {
     ...(body.address !== undefined && { address: body.address }),
-    ...(body.phone !== undefined && { phone: body.phone }),
+    // `phone` del body se ignora a propósito: el teléfono real es User.phone, que
+    // solo cambia por PATCH /auth/me (si no está verificado) o por el cambio
+    // autorizado por soporte. Escribir acá un campo legacy dejaba dos números
+    // distintos y sin pasar por la guarda de teléfono verificado.
     // String vacío se guarda como null — permite borrar un NIT/razón social cargado antes.
     ...(body.nit !== undefined && { nit: body.nit.trim() || null }),
     ...(body.nitRazonSocial !== undefined && { nitRazonSocial: body.nitRazonSocial.trim() || null }),

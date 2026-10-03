@@ -110,6 +110,12 @@ model User {
   withdrawalQrs                WithdrawalQr[]
   phoneOtp                     String?                       @db.VarChar(6)
   phoneOtpExpiresAt            DateTime?
+  /// Cambio de teléfono en curso: el número nuevo NO reemplaza a User.phone hasta
+  /// que el código OTP llegue a ESE número y se confirme (ver phone-change.service.ts).
+  pendingPhone                 String?                       @db.VarChar(20)
+  /// Ventana en que el usuario puede cambiar su teléfono ya verificado. La abre el
+  /// bot de soporte (nunca el cliente por su cuenta) y se cierra sola al vencer.
+  phoneChangeAuthorizedUntil   DateTime?
 
   @@index([email])
   @@index([role])
