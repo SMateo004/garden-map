@@ -188,11 +188,16 @@ export async function startPhoneChange(userId: string, rawPhone: string): Promis
   return { pendingPhone: clean, authorizedUntil: state.authorizedUntil };
 }
 
-/** Descarta el cambio en curso: el número verificado anterior no se toca. */
+/**
+ * Descarta el número pendiente: el verificado anterior no se toca. La ventana de
+ * autorización se conserva hasta que venza — así quien se equivocó al escribir
+ * el número nuevo puede corregirlo sin tener que pedirle otra vez al bot
+ * (que tiene tope diario). Solo commitPhoneChange o el vencimiento la cierran.
+ */
 export async function cancelPhoneChange(userId: string): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { pendingPhone: null, phoneChangeAuthorizedUntil: null, phoneOtp: null, phoneOtpExpiresAt: null },
+    data: { pendingPhone: null, phoneOtp: null, phoneOtpExpiresAt: null },
   });
 }
 
