@@ -1006,9 +1006,11 @@ export const registerCompany = asyncHandler(async (req: Request, res: Response) 
 
 // ── Phone Verification ───────────────────────────────────────────────────────
 // El backend genera el código, lo persiste en users.phoneOtp, y lo envía por
-// Twilio SMS. Ese mismo campo se expone siempre en el detalle de cuidador del
-// panel de administración (gateado por el switch otpVisibleToAdminEnabled —
-// ver admin.service.ts getCaregiverDetailForAdmin), para que el admin pueda
+// la cadena de canales de otp-delivery.service.ts (WhatsApp → Bird → Vonage →
+// AWS SNS — ver ese archivo para el detalle real y actualizado, no Twilio).
+// Ese mismo campo se expone siempre en el detalle de cuidador del panel de
+// administración (gateado por el switch otpVisibleToAdminEnabled — ver
+// admin.service.ts getCaregiverDetailForAdmin), para que el admin pueda
 // hacer pruebas. Aparte, existe el fallback PHONE_OTP_MANUAL_HELP (ver
 // admin.service.ts) que solo entra en juego para el flujo de reenvío manual.
 
@@ -1036,8 +1038,9 @@ export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Resp
 
   const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
 
-  // WhatsApp primero, SMS (AWS SNS) como respaldo automático. Si ambos
-  // fallan, el código sigue guardado en BD — soporte puede darlo manualmente.
+  // WhatsApp primero, después Bird/Vonage/AWS SNS en cadena (ver
+  // otp-delivery.service.ts). Si todos fallan, el código sigue guardado en
+  // BD — soporte puede darlo manualmente.
   const { sendOtp } = await import('../../services/otp-delivery.service.js');
   const channel = await sendOtp(toPhone, otp);
 

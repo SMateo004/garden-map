@@ -3615,7 +3615,8 @@ export async function generatePhoneOtpMessage(userId: string) {
     return { phone: toPhone, message, expiresAt: user.phoneOtpExpiresAt.toISOString(), reused: true };
   }
 
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const { randomInt } = await import('crypto');
+  const otp = String(randomInt(100000, 1000000));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await prisma.user.update({
     where: { id: userId },
