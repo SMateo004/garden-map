@@ -75,6 +75,7 @@ import 'services/garden_live_activity.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
+import 'services/analytics_service.dart';
 import 'services/presence_service.dart';
 import 'services/icon_schedule_service.dart';
 import 'utils/web_redirect.dart';
@@ -203,6 +204,7 @@ String _homeForRole(String effectiveRole) {
 
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
+  observers: [AnalyticsRouteObserver(() => _router.routeInformationProvider.value.uri.path)],
   initialLocation: '/',
   // Redirige al login si se intenta acceder a una ruta protegida sin sesión.
   redirect: (context, state) {
@@ -770,6 +772,7 @@ Future<void> _bootstrap() async {
   // pueda llamar a GpsTrackingSession.start(). No aplica a iOS/web (ahí el
   // tracking en background no usa un isolate de servicio separado).
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  unawaited(Analytics.instance.init()); // uso de la app — liviano, falla en silencio
     FlutterForegroundTask.initCommunicationPort();
   }
 
@@ -923,6 +926,7 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+    Analytics.instance.onLifecycle(state);
   // Presencia ("en línea" en el chat): conectada mientras la app está en
   // primer plano, desconectada al pasar a background — así el estado que ve
   // el otro participante refleja si la app está realmente activa, no solo

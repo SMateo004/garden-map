@@ -2048,3 +2048,70 @@ model UserFeatureFlag {
   @@index([flagKey])
   @@map("user_feature_flags")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALÍTICA DE PRODUCTO — liviana a propósito
+//
+// Tres capas para no inflar la base de datos:
+//  1. AnalyticsEvent  — eventos crudos de la app. Retención CORTA (90 días).
+//  2. AnalyticsSession — una fila por sesión de uso. Retención media (400 días).
+//  3. AnalyticsDaily  — agregados diarios por métrica. Permanente (~cientos de bytes/día).
+// El job analytics-rollup.job.ts agrega 1→3 cada noche y poda 1 y 2.
+// Nunca guardar acá datos personales (nombres, teléfonos, texto libre,
+// ubicación exacta): solo ids anónimos, nombres de evento y propiedades chicas.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AnalyticsEvent {
+  id         BigInt   @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  userId     String?  @db.VarChar(36)
+  deviceId   String   @db.VarChar(36)
+  sessionId  String   @db.VarChar(36)
+  /// screen_view | search | filter_applied | booking_start | booking_submit | ...
+  name       String   @db.VarChar(40)
+  screen     String?  @db.VarChar(60)
+  /// Tiempo en pantalla / duración del paso, en ms (según el evento).
+  durationMs Int?
+  /// Propiedades chicas (máx ~512 bytes, se recorta en el servidor).
+  props      Json?    @db.JsonB
+
+  @@index([createdAt])
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@map("analytics_events")
+}
+
+model AnalyticsSession {
+  id          String    @id @db.VarChar(36)
+  userId      String?   @db.VarChar(36)
+  deviceId    String    @db.VarChar(36)
+  /// android | ios | web
+  platform    String    @db.VarChar(10)
+  appVersion  String?   @db.VarChar(20)
+  locale      String?   @db.VarChar(10)
+  /// CLIENT | CAREGIVER | ADMIN | GUEST
+  role        String?   @db.VarChar(10)
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  durationSec Int       @default(0)
+  screenCount Int       @default(0)
+
+  @@index([startedAt])
+  @@index([userId, startedAt])
+  @@index([deviceId])
+  @@map("analytics_sessions")
+}
+
+model AnalyticsDaily {
+  day    DateTime @db.Date
+  /// ej: "event:booking_start", "sessions", "session_secs", "dau", "screen_secs"
+  metric String   @db.VarChar(60)
+  /// dimensión opcional: pantalla, plataforma, versión, valor de filtro…
+  dim    String   @default("") @db.VarChar(60)
+  count  Int      @default(0)
+  sum    BigInt   @default(0)
+
+  @@id([day, metric, dim])
+  @@index([metric, day])
+  @@map("analytics_daily")
+}

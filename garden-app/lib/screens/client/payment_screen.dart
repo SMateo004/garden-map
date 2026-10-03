@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import '../../services/analytics_service.dart';
 import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -582,6 +583,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     // pueda procesar por ese método. Se comunica claro en vez de intentar
     // algo roto.
     if (_selectedMethod == 'card' && !_walletCoversAll) {
+    Analytics.instance.track('payment_method', sinceMark: 'payment_view',
+        props: {'m': _selectedMethod, 'wallet': _walletBalance > 0 ? 'yes' : 'no'});
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('El pago con tarjeta aún no está disponible para procesar. Elige QR bancario por ahora.'),
         backgroundColor: GardenColors.warning,

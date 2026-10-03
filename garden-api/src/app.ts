@@ -16,6 +16,7 @@ import adminRoutes from './modules/admin/admin.routes.js';
 import bookingRoutes from './modules/booking-service/booking.routes.js';
 import recurringBookingRoutes from './modules/recurring-booking/recurring-booking.routes.js';
 import referralRoutes from './modules/referral/referral.routes.js';
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
 import paymentRoutes, { webhookRouter as stripeWebhookRouter } from './modules/payment-service/payment.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import caregiverProfileRoutes from './modules/caregiver-profile/caregiver-profile.routes.js';
@@ -303,6 +304,7 @@ app.use('/api/meet-and-greet', meetAndGreetRoutes);
 app.use('/api/places', placesRoutes);
 app.use('/api/vets', vetsRoutes);
 app.use('/api/app', appHealthRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Keys exposed to all unauthenticated clients (feature flags only — no financial/operational data).
 const PUBLIC_SETTING_KEYS = new Set([

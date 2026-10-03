@@ -56,6 +56,7 @@ import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
 import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.job.js';
+import { iniciarJobAnalyticsRollup } from './jobs/analytics-rollup.job.js';
 import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
 import { iniciarJobHospedajeLocationPing } from './jobs/hospedaje-location-ping.job.js';
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
@@ -259,6 +260,7 @@ async function start() {
     iniciarJobSlotConflictExpiry();
     iniciarJobChatRetention();
     iniciarJobCaregiverAcceptExpiry();
+    iniciarJobAnalyticsRollup();
     iniciarJobNoShowExpiry();
     iniciarJobRecordatorioCapacitaciones();
     iniciarJobHospedajeLocationPing();

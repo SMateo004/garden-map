@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import '../../services/analytics_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -455,9 +456,29 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  /// Preferencias del usuario para analítica: solo valores de catálogo
+  /// (servicio, zona, tamaño…), nunca el texto de búsqueda.
+  void _trackFilters() {
+    final a = Analytics.instance;
+    if (_selectedService != 'todos') a.filter('service', _selectedService);
+    if (_selectedZone != null) a.filter('zone', _selectedZone!.toLowerCase());
+    if (_selectedPetType != null) a.filter('pet_type', _selectedPetType!);
+    for (final s in _selectedSizes) {
+      a.filter('size', s);
+    }
+    if (_searchQuery.isNotEmpty) a.filter('search', 'used');
+    if (_filterVerifiedOnly) a.filter('verified_only', 'on');
+    if (_filterAggressive) a.filter('aggressive', 'on');
+    if (_filterPuppies) a.filter('puppies', 'on');
+    if (_filterSeniors) a.filter('seniors', 'on');
+    if (_minRating > 0) a.filter('min_rating', _minRating);
+    if (_sortBy != 'rating_desc') a.filter('sort', _sortBy);
+  }
+
   Future<void> _loadCaregivers({bool reset = false}) async {
     if (reset) setState(() { _caregivers = []; _currentPage = 1; _hasMore = true; });
     setState(() => _isLoading = true);
+    if (reset) _trackFilters();
 
     final params = <String, String>{
       'limit': '20',

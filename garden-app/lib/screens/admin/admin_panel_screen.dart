@@ -26,6 +26,7 @@ import 'admin_cities_screen.dart';
 import 'admin_trainings_screen.dart';
 import 'admin_test_booking_screen.dart';
 import 'admin_finance_screen.dart';
+import 'admin_analytics_screen.dart';
 import 'admin_pricing_screen.dart';
 import '../../design/phosphor_glyphs.dart';
 import 'admin_support_screen.dart';
@@ -1038,6 +1039,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Blockchain', Icons.link_rounded),
     ('Verif. de NIT', Icons.receipt_long_rounded),
     ('Comisiones', Ph.scales.regular),
+    ('Analítica', Icons.insights_rounded),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1049,10 +1051,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 30]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 31]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25, 29]),
     ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24, 28]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
+    ('Analítica', Icons.insights_outlined, [30]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27]),
   ];
 
@@ -1090,6 +1093,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminBlockchainScreen(adminToken: _adminToken),
         AdminNitVerificationsScreen(adminToken: _adminToken),
         AdminPricingScreen(adminToken: _adminToken),
+        AdminAnalyticsScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );

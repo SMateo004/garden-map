@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import '../../services/analytics_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
@@ -684,6 +685,7 @@ class _BookingScreenState extends State<BookingScreen> {
           headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
           body: jsonEncode(body),
         );
+          Analytics.instance.track('booking_submit', sinceMark: 'booking_start', props: {'flow': 'meet_greet'});
         final data = jsonDecode(response.body);
         if (response.statusCode == 201 && data['success'] == true) {
           final bookingId = data['data']['id'];
@@ -705,6 +707,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     // Normal flow (no M&G): navigate to PaymentScreen with booking params.
+    Analytics.instance.track('booking_submit', sinceMark: 'booking_start', props: {'flow': 'payment'});
     // The booking (PENDING_PAYMENT) is created only when the user generates the QR.
     if (!mounted) return;
     context.push('/payment-new', extra: {'bookingParams': body});
