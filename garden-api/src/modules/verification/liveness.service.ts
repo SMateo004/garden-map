@@ -1,7 +1,9 @@
 import logger from '../../shared/logger.js';
 import { BadRequestError } from '../../shared/errors.js';
-import { RekognitionClient, GetFaceLivenessSessionResultsCommand, CreateFaceLivenessSessionCommand, DetectFacesCommand } from '@aws-sdk/client-rekognition';
+import { RekognitionClient, GetFaceLivenessSessionResultsCommand, CreateFaceLivenessSessionCommand, DetectFacesCommand, CompareFacesCommand } from '@aws-sdk/client-rekognition';
 import jwt from 'jsonwebtoken';
+import sharp from 'sharp';
+import { randomUUID, createHash } from 'crypto';
 import { env } from '../../config/env.js';
 
 export type LivenessProvider = 'FACETEC' | 'ONFIDO' | 'AWS_REKOGNITION';
@@ -14,6 +16,9 @@ export type LivenessProvider = 'FACETEC' | 'ONFIDO' | 'AWS_REKOGNITION';
  */
 export const LIVENESS_CONFIDENCE_THRESHOLD = 85;
 
+/** Parpadeo web: similitud mínima entre el frame de ojos abiertos y el de ojos cerrados. */
+const BLINK_SAME_PERSON_MIN_SIMILARITY = 90;
+
 export interface LivenessResult {
   passed: boolean;
   score: number;
@@ -21,6 +26,8 @@ export interface LivenessResult {
   status: 'PASSED' | 'FAILED';
   externalSessionId?: string;
   reason?: string;
+  /** Imagen de referencia que AWS capturó durante la prueba de vida (solo si la devolvió). */
+  referenceImage?: Buffer;
 }
 
 function getRekognitionClient(): RekognitionClient | null {
@@ -61,6 +68,22 @@ export async function performLivenessCheck(
   }
 
   throw new BadRequestError('Provider de liveness no soportado para producción');
+}
+
+/**
+ * Miniatura (base64) de la cara capturada EN la prueba de vida. Viaja dentro del JWT
+ * firmado para que /submit compare esa cara —la que de verdad estuvo frente a la
+ * cámara— contra la foto del documento. Sin esto la selfie se subía aparte y nada
+ * probaba que fuera la misma persona que pasó el liveness.
+ */
+async function makeReferenceThumb(image: Buffer): Promise<string | undefined> {
+  try {
+    const out = await sharp(image).resize(320, 320, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
+    return out.toString('base64');
+  } catch (err: any) {
+    logger.warn('Liveness: no se pudo generar la miniatura de referencia', { error: err.message });
+    return undefined;
+  }
 }
 
 async function verifyAwsLiveness(sessionId: string): Promise<LivenessResult> {
@@ -113,6 +136,7 @@ async function verifyAwsLiveness(sessionId: string): Promise<LivenessResult> {
       provider: 'AWS_REKOGNITION',
       status: passed ? 'PASSED' : 'FAILED',
       externalSessionId: sessionId,
+      referenceImage: response.ReferenceImage?.Bytes ? Buffer.from(response.ReferenceImage.Bytes) : undefined,
       reason: passed ? undefined : `Fallo en prueba de vida (Confianza: ${confidence}%)`
     };
   } catch (error: any) {
@@ -145,8 +169,14 @@ export async function checkAwsLivenessNow(
     return { passed: false, score: result.score, status: result.status, reason: result.reason };
   }
 
+  const ref = result.referenceImage ? await makeReferenceThumb(result.referenceImage) : undefined;
+  if (!ref) {
+    logger.warn('Liveness: AWS no devolvió imagen de referencia — el token no queda atado al documento', { sessionId });
+  }
+
   const token = jwt.sign(
-    { userId, sessionId, type: 'aws_liveness', score: result.score },
+    // jti = sessionId de AWS: /submit lo marca como usado (una prueba de vida = una verificación).
+    { userId, sessionId, jti: sessionId, type: 'aws_liveness', score: result.score, ...(ref ? { ref } : {}) },
     env.JWT_SECRET as string,
     { expiresIn: '15m' },
   );
@@ -230,9 +260,28 @@ export async function checkBlinkLiveness(
       };
     }
 
+    // Los dos frames deben ser fotos distintas de LA MISMA persona: sin esto bastaba con
+    // mandar cualquier cara con ojos abiertos y otra cualquiera con ojos cerrados.
+    const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+    if (sha(frameOpen) === sha(frameClosed)) {
+      return { passed: false, score: 0, reason: 'Los dos frames son idénticos. Parpadea frente a la cámara.' };
+    }
+    const sameFace = await client.send(new CompareFacesCommand({
+      SourceImage: { Bytes: frameOpen },
+      TargetImage: { Bytes: frameClosed },
+      SimilarityThreshold: 0,
+    }));
+    const faceSimilarity = Math.max(0, ...(sameFace.FaceMatches ?? []).map((m) => m.Similarity ?? 0));
+    if (faceSimilarity < BLINK_SAME_PERSON_MIN_SIMILARITY) {
+      logger.warn('Blink liveness: los frames no parecen ser la misma persona', { userId, faceSimilarity });
+      return { passed: false, score: 0, reason: 'No se pudo confirmar que ambos frames sean la misma persona. Intenta de nuevo.' };
+    }
+
     // Issue a short-lived JWT so /submit can verify this blink check happened
+    // El frame de ojos abiertos hace de imagen de referencia (mismo rol que en AWS Liveness).
+    const ref = await makeReferenceThumb(frameOpen);
     const blinkToken = jwt.sign(
-      { userId, type: 'blink_liveness', score },
+      { userId, jti: randomUUID(), type: 'blink_liveness', score, ...(ref ? { ref } : {}) },
       env.JWT_SECRET as string,
       { expiresIn: '15m' },
     );

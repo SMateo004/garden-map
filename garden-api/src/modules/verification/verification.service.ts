@@ -25,9 +25,17 @@ import { performLivenessCheck, LIVENESS_CONFIDENCE_THRESHOLD } from './liveness.
 import { crossValidate, calculateDetailedTrustScore } from './identity-validation.service.js';
 import { parseExtractedDOB, calculateAgeFromDOB } from './ocr.service.js';
 import { uploadVerificationImage } from './verification-upload.js';
+import { getCache } from '../../shared/cache.js';
 import { generateFingerprint, getGeolocation, logVerificationAudit, calculateBehavioralRisk, DeviceInfo } from './fraud.service.js';
 
 const JWT_EXPIRY = '15m';
+
+/** Umbral mínimo cara-del-liveness vs cara-del-CI (igual que selfie vs CI). */
+const LIVENESS_REF_MIN_SIMILARITY = 85;
+const LIVENESS_USED_TTL_SECONDS = 20 * 60;
+const livenessUsedKey = (jti: string) => `liveness-used:${jti}`;
+
+interface LivenessProofClaims { userId: string; type: string; score: number; jti?: string; ref?: string }
 
 export interface VerificationJwtPayload {
   verificationId: string;
@@ -159,6 +167,21 @@ export async function submitVerification(
       throw new BadRequestError('Cuenta bloqueada temporalmente por demasiados intentos. Por favor espera 24h.');
     }
 
+    // Bloqueo ya vencido: reiniciar el contador. Sin esto verificationAttempts se
+    // quedaba en >= 3 para siempre, así que al terminar las 24h el chequeo de abajo
+    // volvía a bloquear al instante y solo un admin podía destrabar la cuenta.
+    if (caregiver?.verificationLockUntil) {
+      try {
+        await prisma.caregiverProfile.update({
+          where: { userId: session.userId },
+          data: { verificationAttempts: 0, verificationLockUntil: null },
+        });
+        caregiver = { verificationAttempts: 0, verificationLockUntil: null };
+      } catch (e) {
+        logger.warn('Could not reset expired verification lock', { userId: session.userId });
+      }
+    }
+
     const maxAttempts = env.NODE_ENV === 'development' ? 20 : 3;
     if (caregiver && (caregiver.verificationAttempts ?? 0) >= maxAttempts) {
       try {
@@ -186,6 +209,9 @@ export async function submitVerification(
     let croppedSelfie: Buffer = selfieBuffer;
     let croppedDoc: Buffer = ciFrontBuffer;
     let isUnderageByDocument = false;
+    let livenessJti: string | null = null;
+    let livenessRefB64: string | null = null;
+    let livenessRefSimilarity: number | null = null;
 
     try {
 
@@ -207,11 +233,13 @@ export async function submitVerification(
           const payload = (await import('jsonwebtoken')).default.verify(
             awsLivenessToken,
             env.JWT_SECRET as string,
-          ) as { userId: string; type: string; score: number };
+          ) as LivenessProofClaims;
 
           if (payload.type !== 'aws_liveness' || payload.userId !== user.id) {
             throw new BadRequestError('Token de prueba de vida inválido');
           }
+          livenessJti = payload.jti ?? null;
+          livenessRefB64 = payload.ref ?? null;
           livenessScore = payload.score;
           livenessStatus = 'PASSED';
           logger.info('AWS liveness token verified', { sessionId, score: livenessScore });
@@ -225,11 +253,13 @@ export async function submitVerification(
           const payload = (await import('jsonwebtoken')).default.verify(
             blinkLivenessToken,
             env.JWT_SECRET as string,
-          ) as { userId: string; type: string; score: number };
+          ) as LivenessProofClaims;
 
           if (payload.type !== 'blink_liveness' || payload.userId !== user.id) {
             throw new BadRequestError('Token de parpadeo inválido');
           }
+          livenessJti = payload.jti ?? null;
+          livenessRefB64 = payload.ref ?? null;
           livenessScore = payload.score;
           livenessStatus = 'PASSED';
           logger.info('Blink liveness verified', { sessionId, score: livenessScore });
@@ -254,6 +284,12 @@ export async function submitVerification(
         );
       }
 
+
+      // Una prueba de vida = una verificación: sin esto, el mismo token (15 min) o la
+      // misma sesión de AWS servían para varios envíos o para cuentas distintas.
+      if (livenessJti && (await getCache().get(livenessUsedKey(livenessJti)))) {
+        throw new BadRequestError('Esta prueba de vida ya fue usada. Repite la prueba de vida para continuar.');
+      }
 
       // 2. Face Detection
       logger.info('Step 2: Detecting faces', { sessionId });
@@ -293,10 +329,28 @@ export async function submitVerification(
       // Pass original buffers as fallback in case cropped images are rejected by Rekognition
       faceSimilarityValue = await compareFaces(croppedDoc, croppedSelfie, ciFrontBuffer, selfieBuffer);
 
+      // Atar la prueba de vida al documento: la cara capturada DURANTE el liveness debe
+      // ser la del CI. Sin esto, alguien podía pasar el liveness en vivo y subir después
+      // la selfie de otra persona junto con el CI de esa persona.
+      if (livenessRefB64) {
+        const refBuffer = Buffer.from(livenessRefB64, 'base64');
+        livenessRefSimilarity = await compareFaces(croppedDoc, refBuffer, ciFrontBuffer, refBuffer);
+        logger.info('Liveness reference vs document', { sessionId, similarity: livenessRefSimilarity });
+        if (livenessRefSimilarity < LIVENESS_REF_MIN_SIMILARITY) {
+          throw new BadRequestError('La persona de la prueba de vida no coincide con el documento. Repite la verificación con tu propio documento.');
+        }
+      }
+
       // 5. OCR & Name Matching (HARDENED)
       logger.info('Step 5: OCR with Amazon Textract', { sessionId });
       logger.info('Step 5: Starting OCR', { sessionId });
       crossValResult = await crossValidate(ciFrontBuffer, user.firstName, user.lastName, user.dateOfBirth, user.id, ciBackBuffer);
+      // Sin OCR no se pueden validar nombre ni CI contra el registro: antes quedaba solo la
+      // comparación facial y un score neutro de 50. En producción ahora se corta como error
+      // técnico (no consume intentos del usuario) en vez de aprobar a ciegas.
+      if ((crossValResult.ocrData as any)?.ocrUnavailable === true && env.NODE_ENV === 'production') {
+        throw new Error('OCR_UNAVAILABLE: Textract y Rekognition DetectText fallaron');
+      }
       finalFraudFlags = [...crossValResult.fraudFlags];
 
       // Re-validar la edad con la fecha de nacimiento REAL leída del CI —
@@ -317,6 +371,9 @@ export async function submitVerification(
       }
 
       if (!docValidation.ok) finalFraudFlags.push('non_standard_document');
+      // Rollout gradual: si el token no trae imagen de referencia (AWS no la devolvió o es el
+      // flujo legacy) se deja pasar pero queda marcado en el audit para revisar en logs.
+      if (!livenessRefB64) finalFraudFlags.push('liveness_not_bound');
       if (faceSimilarityValue >= 95 && livenessScore < 90) finalFraudFlags.push('suspect_liveness_quality');
 
       // Anti-Spoofing: Resolution/Blur check (already in Rekognition quality)
@@ -396,7 +453,7 @@ export async function submitVerification(
 
       // If it's a technical failure (AWS, connection, etc), don't just reject with score 0.
       // Throw a friendly error so the frontend shows the "Service Unavailable" screen.
-      throw new BadRequestError(`Nuestros servicios de verificación de identidad no están disponibles en este momento. Detalle: ${err.message || err.code || 'error desconocido'}`);
+      throw new BadRequestError('Nuestros servicios de verificación de identidad no están disponibles en este momento. Intenta de nuevo en unos minutos.', 'VERIFICATION_SERVICE_UNAVAILABLE');
     }
 
     let finalStatus = scoringResult.status;
@@ -552,7 +609,7 @@ export async function submitVerification(
           trustScore,
           behaviorScore: behaviorScoreValue,
           fraudFlags: finalFraudFlags as any,
-          notes: `CI: ${crossValResult.ocrData.documentNumber || 'N/A'} | OCR: ${scoringResult.ocrScore} | Face: ${scoringResult.faceScore}`
+          notes: `CI: ${crossValResult.ocrData.documentNumber || 'N/A'} | OCR: ${scoringResult.ocrScore} | Face: ${scoringResult.faceScore} | LivenessRef: ${livenessRefSimilarity != null ? Math.round(livenessRefSimilarity) : 'N/A'}`
         }
       } as any).catch((auditErr: any) => logger.warn('Audit log write failed (non-fatal)', { sessionId, error: auditErr.message }));
 
@@ -562,14 +619,18 @@ export async function submitVerification(
         if (error.meta?.target?.includes('ciNumber')) {
           throw new BadRequestError('Este número de documento ya está siendo utilizado por otro usuario.');
         }
-        throw new BadRequestError(`Conflicto de datos únicos (${JSON.stringify(error.meta?.target ?? 'desconocido')}). Intenta de nuevo.`);
+        throw new BadRequestError('Conflicto de datos únicos. Intenta de nuevo.');
       }
       if (error.code === 'P2025') {
         logger.error('Record not found during verification transaction', { sessionId, userId: session.userId, meta: error.meta });
         throw new BadRequestError('Perfil de cuidador no encontrado. Asegúrate de haber completado los pasos anteriores del formulario.');
       }
       logger.error('Prisma transaction failed during verification', { sessionId, error: error.message, code: error.code, meta: error.meta, stack: error.stack });
-      throw new BadRequestError(`Error al guardar los resultados (${error.code ?? 'DB_ERROR'}): ${error.message ?? 'intenta de nuevo'}`);
+      throw new BadRequestError(`Error al guardar los resultados (${error.code ?? 'DB_ERROR'}). Intenta de nuevo.`);
+    }
+
+    if (livenessJti) {
+      await getCache().set(livenessUsedKey(livenessJti), 1, LIVENESS_USED_TTL_SECONDS).catch(() => {});
     }
 
     // 7. Verification finalized
@@ -579,7 +640,7 @@ export async function submitVerification(
     if (finalStatus === 'VERIFIED') {
       message = '¡Identidad verificada correctamente!';
     } else if (isUnderageByDocument) {
-      message = 'No podemos verificarte: la fecha de nacimiento de tu documento indica que sos menor de 18 años. GARDEN requiere que los cuidadores sean mayores de edad.';
+      message = 'No podemos verificarte: la fecha de nacimiento de tu documento indica que eres menor de 18 años. GARDEN requiere que los cuidadores sean mayores de edad.';
     } else {
       message = 'Verificación rechazada. Los datos no coinciden o la calidad es insuficiente. Por favor, asegúrate de que el documento sea legible y tu rostro esté claro.';
     }
@@ -603,8 +664,6 @@ export async function submitVerification(
       throw error;
     }
     // Convert any unexpected error to a user-friendly 400 instead of letting it become a 500
-    throw new BadRequestError(
-      `Error inesperado en la verificación. Por favor intenta de nuevo. (${error.message ?? 'error desconocido'})`
-    );
+    throw new BadRequestError('Error inesperado en la verificación. Por favor intenta de nuevo.');
   }
 }
