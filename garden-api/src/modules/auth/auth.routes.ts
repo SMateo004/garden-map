@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import * as authController from './auth.controller.js';
+import { phoneOtpSendLimiter, phoneOtpSendIpLimiter, otpVerifyLimiter } from './otp-rate-limit.js';
 import { socialLogin, socialRegisterClient } from './social-auth.controller.js';
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
@@ -95,25 +96,6 @@ const passwordResetLimiter = rateLimit({
 
 // 10 intentos por 15 min — permite verificar/cambiar contraseña sin bloquear en el primer intento
 const passwordResetActionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos.' } },
-});
-
-// 3 envíos de OTP por hora — previene spam de WhatsApp/SMS (cada envío tiene costo)
-const phoneOtpSendLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados envíos de código. Espera 1 hora.' } },
-});
-
-// 10 intentos de verificación por 15 min — evita fuerza bruta sobre el código de 6 dígitos
-const otpVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -222,13 +204,13 @@ router.post('/forgot-password/set-password', passwordResetActionLimiter, authCon
 // tenga — caregiver y/o client). Se montan bajo ambos prefijos para que la
 // URL sea clara desde cada lado de la app; es el mismo código.
 /** POST /api/auth/caregiver/send-phone-otp — Envía OTP de 6 dígitos al teléfono del usuario. */
-router.post('/caregiver/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authController.sendCaregiverPhoneOtp);
+router.post('/caregiver/send-phone-otp', authMiddleware, phoneOtpSendLimiter, phoneOtpSendIpLimiter, authController.sendCaregiverPhoneOtp);
 
 /** POST /api/auth/caregiver/verify-phone — body: { code }. Verifica OTP y marca phoneVerified=true. */
 router.post('/caregiver/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
 
 /** POST /api/auth/client/send-phone-otp — igual que el de arriba, para el cliente (verificación opcional en "Mis Datos"). */
-router.post('/client/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authController.sendCaregiverPhoneOtp);
+router.post('/client/send-phone-otp', authMiddleware, phoneOtpSendLimiter, phoneOtpSendIpLimiter, authController.sendCaregiverPhoneOtp);
 
 /** POST /api/auth/client/verify-phone — body: { code }. */
 router.post('/client/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
@@ -238,6 +220,6 @@ export default router;
 // (ver phone-change.service.ts). start deja el número nuevo pendiente y envía el
 // código a ese número; se confirma con verify-phone (client o caregiver).
 router.get('/phone-status', authMiddleware, authController.phoneStatus);
-router.post('/phone-change/start', authMiddleware, phoneOtpSendLimiter, authController.startPhoneChange);
+router.post('/phone-change/start', authMiddleware, phoneOtpSendLimiter, phoneOtpSendIpLimiter, authController.startPhoneChange);
 router.post('/phone-change/cancel', authMiddleware, authController.cancelPhoneChange);
 
