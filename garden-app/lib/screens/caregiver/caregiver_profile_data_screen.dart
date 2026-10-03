@@ -9,6 +9,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/ai_write_assist.dart';
 import '../../widgets/extra_services_editor.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -1780,13 +1781,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                         ]),
                                       ),
                                     ] else ...[
-                                      IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3, coherenceKey: 'experienceDesc')),
+                                      IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3, coherenceKey: 'experienceDesc', aiField: 'experienceDescription')),
                                       const SizedBox(height: 10),
                                     ],
                                     // whyCaregiver y whatDiffers — siempre visibles
-                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2, coherenceKey: 'whyCaregiver')),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2, coherenceKey: 'whyCaregiver', aiField: 'whyCaregiver')),
                                     const SizedBox(height: 10),
-                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2, coherenceKey: 'whatDiffers')),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2, coherenceKey: 'whatDiffers', aiField: 'whatDiffers')),
                                   ],
                                 ],
                               ),
@@ -2293,11 +2294,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Follow-up: solo cuando experienceYears >= 1
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4, coherenceKey: 'experienceDesc')),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4, coherenceKey: 'experienceDesc', aiField: 'experienceDescription')),
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3, coherenceKey: 'whyCaregiver')),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3, coherenceKey: 'whyCaregiver', aiField: 'whyCaregiver')),
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3, coherenceKey: 'whatDiffers')),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3, coherenceKey: 'whatDiffers', aiField: 'whatDiffers')),
             ],
 
             if (_isAmateur && _experienceYearsController.text == '0') ...[
@@ -2445,7 +2446,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _sectionField(String label, TextEditingController controller, String hint, {int maxLines = 1, String? coherenceKey}) {
+  Widget _sectionField(String label, TextEditingController controller, String hint, {int maxLines = 1, String? coherenceKey, String? aiField}) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -2477,6 +2478,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ),
         ),
         if (coherenceKey != null) _coherenceWarningText(coherenceKey),
+        if (aiField != null)
+          AiWriteAssist(controller: controller, field: aiField, onApplied: () { setState(() {}); _computeCompletion(); }),
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../widgets/ai_write_assist.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
@@ -464,6 +465,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                         ),
                       const Divider(height: 32),
 
+                      // bioDetail (máx. 300): este campo se guarda en bio y en bioDetail a la vez.
+                      if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
                       // Sección 2 - Información básica
                       Text('Sobre ti', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 12),
@@ -684,6 +687,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                           icon: Icons.edit_note_rounded,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                              if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
                                             children: [
                                               Text('Descripción', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                                               const SizedBox(height: 8),
