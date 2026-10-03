@@ -5,6 +5,8 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -898,12 +900,17 @@ class _BookingScreenState extends State<BookingScreen> {
       ),
       child: Row(
         children: [
-          GardenAvatar(
-            imageUrl: _caregiver!['profilePicture'] as String?,
-            size: 56,
-            initials: (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false))
-                ? (_caregiver!['companyName'] as String)[0]
-                : '${(_caregiver!['firstName'] as String? ?? 'C')[0]}${(_caregiver!['lastName'] as String? ?? '')[0]}',
+          // Mismo Hero que la tarjeta del marketplace y el perfil: la foto del
+          // cuidador acompaña todo el camino hasta la reserva.
+          Hero(
+            tag: 'caregiver-${_caregiver!['id'] ?? widget.caregiverId}',
+            child: GardenAvatar(
+              imageUrl: _caregiver!['profilePicture'] as String?,
+              size: 56,
+              initials: (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false))
+                  ? (_caregiver!['companyName'] as String)[0]
+                  : '${(_caregiver!['firstName'] as String? ?? 'C')[0]}${(_caregiver!['lastName'] as String? ?? '')[0]}',
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -917,7 +924,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   style: GardenText.h4.copyWith(color: textColor)),
                 const SizedBox(height: 4),
                 Row(children: [
-                  const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                  const GardenIcon(GIcon.estrella, color: GardenColors.star, size: GIconSize.sm, state: GIconState.active),
                   const SizedBox(width: 4),
                   Text((_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1),
                     style: GardenText.metadata.copyWith(color: subtextColor)),
@@ -1553,18 +1560,18 @@ class _BookingScreenState extends State<BookingScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: GardenColors.forest.withValues(alpha: 0.08),
+                        color: GardenService.paseo.soft(themeNotifier.isDark),
                         borderRadius: BorderRadius.circular(GardenRadius.lg),
-                        border: Border.all(color: GardenColors.forest.withValues(alpha: 0.3)),
+                        border: Border.all(color: GardenService.paseo.ink(themeNotifier.isDark).withValues(alpha: 0.3)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('🦮', style: TextStyle(fontSize: 16)),
-                          SizedBox(width: 8),
+                          const GardenIcon(GIcon.paseo, state: GIconState.active),
+                          const SizedBox(width: 8),
                           Text('Esta guardería incluye un paseo durante el día',
                             style: TextStyle(
-                              color: GardenColors.forest,
+                              color: GardenService.paseo.ink(themeNotifier.isDark),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             )),
@@ -2277,9 +2284,9 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Selector de horario compartido para modo multi-día
   Widget _buildMultiDaySlotSelector(Color textColor, Color subtextColor) {
     const slots = [
-      {'key': 'MANANA', 'label': 'Mañana', 'icon': '🌤️'},
-      {'key': 'TARDE',  'label': 'Tarde',  'icon': '🌇'},
-      {'key': 'NOCHE',  'label': 'Noche',  'icon': '🌙'},
+      {'key': 'MANANA', 'label': 'Mañana', 'icon': GIcon.modoClaro},
+      {'key': 'TARDE',  'label': 'Tarde',  'icon': GIcon.tarde},
+      {'key': 'NOCHE',  'label': 'Noche',  'icon': GIcon.modoOscuro},
     ];
     return Row(
       children: slots.map((s) {
@@ -2310,10 +2317,13 @@ class _BookingScreenState extends State<BookingScreen> {
                 ),
                 child: Column(
                   children: [
-                    Text(s['icon']!, style: const TextStyle(fontSize: 20)),
+                    GardenIcon(s['icon'] as GIcon,
+                        size: GIconSize.lg,
+                        color: isSelected ? Colors.white : null,
+                        state: isSelected ? GIconState.active : GIconState.idle),
                     const SizedBox(height: 4),
                     Text(
-                      s['label']!,
+                      s['label'] as String,
                       style: TextStyle(
                         color: isSelected ? Colors.white : textColor,
                         fontWeight: FontWeight.w700,
@@ -2912,7 +2922,8 @@ class _BookingScreenState extends State<BookingScreen> {
           // ── Header row ─────────────────────────────────────────────────
           Row(
             children: [
-              Text('🐾', style: TextStyle(fontSize: 20, color: locked ? Colors.grey : null)),
+              GardenIcon(GIcon.meetGreet, size: GIconSize.lg,
+                  state: locked ? GIconState.idle : GIconState.active, color: locked ? Colors.grey : null),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

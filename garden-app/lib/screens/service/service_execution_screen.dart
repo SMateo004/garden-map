@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -15,6 +16,9 @@ import 'package:video_player/video_player.dart';
 import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_live_hero.dart';
+import '../../design/garden_pet_avatar.dart';
+import '../../narrative/booking_story.dart';
+import '../../theme/garden_motion.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/slide_to_confirm_button.dart';
@@ -5656,6 +5660,36 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  /// Lo primero que ve el dueño al calificar: la última foto del servicio
+  /// (regla pico-final: se califica la experiencia, no un formulario).
+  Widget _surveyMemory() {
+    final photo = _serviceEvents.reversed
+        .where((e) => !_isVideoEvent(e) && (e['photoUrl']?.toString().isNotEmpty ?? false))
+        .map((e) => e['photoUrl'].toString())
+        .firstOrNull;
+    if (photo == null) {
+      return GardenPetAvatar(
+        name: _booking?['petName'] as String?,
+        size: 84,
+        tone: StoryTone.done,
+        service: _svc,
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(GardenRadius.lg),
+      child: AspectRatio(
+        aspectRatio: 16 / 10,
+        child: Image.network(
+          fixImageUrl(photo),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Center(
+            child: GardenPetAvatar(name: _booking?['petName'] as String?, size: 84, service: _svc),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSatisfactionSurvey() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
@@ -5665,7 +5699,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     final canSubmit = _surveyRating > 0 && _surveyCommentController.text.trim().isNotEmpty;
-    final ratingLabels = ['', 'Terrible', 'Malo', 'Regular', 'Bueno', '¡Excelente!'];
+    final ratingLabels = ['', 'Muy malo', 'Malo', 'Regular', 'Bueno', 'Excelente'];
     final starColor = _surveyRating >= 4
         ? GardenColors.star
         : _surveyRating >= 3
@@ -5695,16 +5729,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
               child: Column(
                 children: [
-                  const Text('🐾', style: TextStyle(fontSize: 52)),
+                  _surveyMemory(),
                   const SizedBox(height: 16),
                   Text(
-                    '¿Qué tal estuvo el servicio?',
+                    '¿Cómo le fue a ${_booking?['petName'] ?? 'tu mascota'} con '
+                    '${(_booking?['caregiverName'] as String? ?? 'tu cuidador').split(' ').first}?',
                     style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tu calificación activa el smart contract para liberar el pago al cuidador.',
+                    'Tu calificación libera el pago al cuidador y ayuda a otras familias a elegir.',
                     style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
                     textAlign: TextAlign.center,
                   ),
@@ -5719,31 +5754,37 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               children: List.generate(5, (index) {
                 final ratingValue = index + 1;
                 final isSelected = ratingValue <= _surveyRating;
-                return GestureDetector(
-                  onTap: () => setState(() => _surveyRating = ratingValue),
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 1.0, end: isSelected ? 1.22 : 1.0),
-                    duration: const Duration(milliseconds: 180),
-                    builder: (context, scale, child) {
-                      return Transform.scale(
-                        scale: scale,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: Icon(
-                            isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                            color: isSelected ? GardenColors.star : borderColor,
-                            size: 54,
-                          ),
-                        ),
-                      );
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: '$ratingValue de 5 estrellas',
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _surveyRating = ratingValue);
                     },
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 1.0, end: isSelected ? 1.15 : 1.0),
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
+                      curve: GardenMotion.pop,
+                      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: GardenIcon(
+                          GIcon.estrella,
+                          size: GIconSize.hero,
+                          state: isSelected ? GIconState.active : GIconState.idle,
+                          color: isSelected ? GardenColors.star : borderColor,
+                        ),
+                      ),
+                    ),
                   ),
                 );
               }),
             ),
 
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: GardenMotion.resolve(context, GardenMotion.quick),
               child: _surveyRating > 0
                   ? Padding(
                       key: ValueKey(_surveyRating),
@@ -5850,7 +5891,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (isSel) ...[
-                          const Icon(Icons.check_rounded, color: GardenColors.primary, size: 14),
+                          const GardenIcon(GIcon.enviado, color: GardenColors.primary, size: GIconSize.xs),
                           const SizedBox(width: 4),
                         ],
                         Text(

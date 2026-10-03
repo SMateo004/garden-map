@@ -37,6 +37,7 @@ class Ph {
   static const clipboardText = PhGlyph(IconData(0xe198, fontFamily: _reg), IconData(0xe199, fontFamily: _duo), IconData(0xe198, fontFamily: _duo));
   static const clock = PhGlyph(IconData(0xe19a, fontFamily: _reg), IconData(0xe19b, fontFamily: _duo), IconData(0xe19a, fontFamily: _duo));
   static const confetti = PhGlyph(IconData(0xe81a, fontFamily: _reg), IconData(0xe81b, fontFamily: _duo), IconData(0xe81a, fontFamily: _duo));
+  static const copy = PhGlyph(IconData(0xe1ca, fontFamily: _reg), IconData(0xe1cb, fontFamily: _duo), IconData(0xe1ca, fontFamily: _duo));
   static const dog = PhGlyph(IconData(0xe74a, fontFamily: _reg), IconData(0xe74b, fontFamily: _duo), IconData(0xe74a, fontFamily: _duo));
   static const dotsThreeVertical = PhGlyph(IconData(0xe208, fontFamily: _reg), IconData(0xe209, fontFamily: _duo), IconData(0xe208, fontFamily: _duo));
   static const drop = PhGlyph(IconData(0xe210, fontFamily: _reg), IconData(0xe211, fontFamily: _duo), IconData(0xe210, fontFamily: _duo));
@@ -79,6 +80,7 @@ class Ph {
   static const star = PhGlyph(IconData(0xe46a, fontFamily: _reg), IconData(0xe46b, fontFamily: _duo), IconData(0xe46a, fontFamily: _duo));
   static const stethoscope = PhGlyph(IconData(0xe7ea, fontFamily: _reg), IconData(0xe7eb, fontFamily: _duo), IconData(0xe7ea, fontFamily: _duo));
   static const sun = PhGlyph(IconData(0xe472, fontFamily: _reg), IconData(0xe473, fontFamily: _duo), IconData(0xe472, fontFamily: _duo));
+  static const sunHorizon = PhGlyph(IconData(0xe5b6, fontFamily: _reg), IconData(0xe5b7, fontFamily: _duo), IconData(0xe5b6, fontFamily: _duo));
   static const syringe = PhGlyph(IconData(0xe968, fontFamily: _reg), IconData(0xe969, fontFamily: _duo), IconData(0xe968, fontFamily: _duo));
   static const tennisBall = PhGlyph(IconData(0xe720, fontFamily: _reg), IconData(0xe721, fontFamily: _duo), IconData(0xe720, fontFamily: _duo));
   static const timer = PhGlyph(IconData(0xe492, fontFamily: _reg), IconData(0xe493, fontFamily: _duo), IconData(0xe492, fontFamily: _duo));

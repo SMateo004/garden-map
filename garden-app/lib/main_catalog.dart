@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
 import 'design/garden_live_hero.dart';
+import 'design/garden_story_progress.dart';
+import 'design/garden_trust_seals.dart';
 import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
 import 'design/garden_pet_avatar.dart';
@@ -149,6 +151,24 @@ class _CatalogPageState extends State<_CatalogPage> {
                     ),
                   ),
                 ),
+          ]),
+          _Section('Sellos de confianza (perfil del cuidador)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const GardenTrustSeals(
+                identityVerified: true, backgroundChecked: false, offersWalks: true, caregiverFirstName: 'Andrea'),
+            ),
+          ]),
+          _Section('Qué sigue (pago confirmado, reservas)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const GardenStoryProgress(steps: [
+                StoryStepItem(GIcon.pagoProtegido, 'Pago verificado', StoryStepState.done),
+                StoryStepItem(GIcon.esperando, 'Andrea acepta la solicitud', StoryStepState.current,
+                    detail: 'Puedes escribirle desde Mis reservas'),
+                StoryStepItem(GIcon.paseo, 'Reserva confirmada para mañana a las 9:00', StoryStepState.next),
+              ]),
+            ),
           ]),
           _Section('Mosaicos y accesos (inicio)', [
             ConstrainedBox(

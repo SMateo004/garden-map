@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:garden_app/design/brote.dart';
 import 'package:garden_app/design/garden_booking_hero_card.dart';
 import 'package:garden_app/design/garden_live_hero.dart';
+import 'package:garden_app/design/garden_story_progress.dart';
+import 'package:garden_app/design/garden_trust_seals.dart';
 import 'package:garden_app/design/garden_icons.dart';
 import 'package:garden_app/design/garden_pet_avatar.dart';
 import 'package:garden_app/design/garden_service.dart';
@@ -217,6 +219,30 @@ void main() {
       expect(find.text('Luna está paseando con Andrea.'), findsNWidgets(2));
       expect(find.text('Ver mapa'), findsOneWidget);
       expect(find.text('1,6 km'), findsOneWidget);
+    });
+
+    testWidgets('sellos de confianza: siempre los cuatro, pendiente si falta', (tester) async {
+      await tester.pumpWidget(host(const GardenTrustSeals(
+        identityVerified: true, backgroundChecked: false, offersWalks: false, caregiverFirstName: 'Andrea',
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Por qué confiar en Andrea'), findsOneWidget);
+      for (final t in ['Identidad verificada', 'Antecedentes', 'Pago protegido', 'Seguimiento en vivo']) {
+        expect(find.text(t), findsOneWidget, reason: t);
+      }
+      expect(find.text('Pendiente'), findsOneWidget);
+      expect(find.text('Fotos durante el servicio'), findsOneWidget);
+    });
+
+    testWidgets('progreso de la historia muestra los tres pasos', (tester) async {
+      await tester.pumpWidget(host(const GardenStoryProgress(steps: [
+        StoryStepItem(GIcon.pagoProtegido, 'Pago verificado', StoryStepState.done),
+        StoryStepItem(GIcon.esperando, 'Andrea acepta', StoryStepState.current, detail: 'detalle'),
+        StoryStepItem(GIcon.paseo, 'Confirmada', StoryStepState.next),
+      ]), reduceMotion: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Andrea acepta'), findsOneWidget);
+      expect(find.text('detalle'), findsOneWidget);
     });
 
     testWidgets('Brote dibuja las seis poses y se queda quieto', (tester) async {

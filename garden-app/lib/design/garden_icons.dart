@@ -121,11 +121,13 @@ enum GIcon {
   editar(Ph.pencilSimple),
   eliminar(Ph.trash),
   compartir(Ph.shareNetwork),
+  copiar(Ph.copy),
   repetir(Ph.arrowsClockwise),
   celebrar(Ph.confetti),
   equipo(Ph.users),
   modoClaro(Ph.sun),
   modoOscuro(Ph.moon),
+  tarde(Ph.sunHorizon),
   salir(Ph.signOut);
 
   const GIcon(PhGlyph this.glyph) : service = null;

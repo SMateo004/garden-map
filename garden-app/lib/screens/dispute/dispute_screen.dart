@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -58,42 +60,42 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   // Opciones para el cliente
   static const List<Map<String, dynamic>> _clientOptions = [
-    {'id': 'late', 'label': 'El cuidador no llegó a tiempo', 'icon': '⏰'},
-    {'id': 'noshow', 'label': 'El cuidador nunca llegó / no inició el servicio', 'icon': '🚫'},
-    {'id': 'injured', 'label': 'Mi mascota se lastimó o enfermó', 'icon': '🤕'},
-    {'id': 'different', 'label': 'El servicio fue diferente a lo prometido', 'icon': '📋'},
-    {'id': 'irresponsible', 'label': 'El cuidador fue irresponsable', 'icon': '😤'},
-    {'id': 'space', 'label': 'El espacio no era adecuado', 'icon': '🏠'},
-    {'id': 'nocommunication', 'label': 'No hubo comunicación durante el servicio', 'icon': '📵'},
+    {'id': 'late', 'label': 'El cuidador no llegó a tiempo', 'icon': GIcon.reloj},
+    {'id': 'noshow', 'label': 'El cuidador nunca llegó / no inició el servicio', 'icon': GIcon.cancelado},
+    {'id': 'injured', 'label': 'Mi mascota se lastimó o enfermó', 'icon': GIcon.salud},
+    {'id': 'different', 'label': 'El servicio fue diferente a lo prometido', 'icon': GIcon.nota},
+    {'id': 'irresponsible', 'label': 'El cuidador fue irresponsable', 'icon': GIcon.conflicto},
+    {'id': 'space', 'label': 'El espacio no era adecuado', 'icon': GIcon.inicio},
+    {'id': 'nocommunication', 'label': 'No hubo comunicación durante el servicio', 'icon': GIcon.telefono},
   ];
 
   // Opciones de respuesta para el cuidador (basadas en lo que dijo el cliente)
   static const List<Map<String, dynamic>> _caregiverOptions = [
-    {'id': 'agree', 'label': 'Reconozco el problema y me disculpo', 'icon': '🙏'},
-    {'id': 'circumstances', 'label': 'Hubo circunstancias fuera de mi control', 'icon': '⚡'},
-    {'id': 'disagree', 'label': 'No es correcto lo que dice el dueño', 'icon': '❌'},
-    {'id': 'partial', 'label': 'Hubo un malentendido entre ambas partes', 'icon': '🤝'},
-    {'id': 'emergency', 'label': 'Tuve una emergencia y no pude comunicarme', 'icon': '🚨'},
-    {'id': 'evidence', 'label': 'Tengo fotos/evidencia que demuestra mi trabajo', 'icon': '📸'},
+    {'id': 'agree', 'label': 'Reconozco el problema y me disculpo', 'icon': GIcon.confirmado},
+    {'id': 'circumstances', 'label': 'Hubo circunstancias fuera de mi control', 'icon': GIcon.conflicto},
+    {'id': 'disagree', 'label': 'No es correcto lo que dice el dueño', 'icon': GIcon.cancelado},
+    {'id': 'partial', 'label': 'Hubo un malentendido entre ambas partes', 'icon': GIcon.meetGreet},
+    {'id': 'emergency', 'label': 'Tuve una emergencia y no pude comunicarme', 'icon': GIcon.emergencia},
+    {'id': 'evidence', 'label': 'Tengo fotos/evidencia que demuestra mi trabajo', 'icon': GIcon.foto},
   ];
 
   // Opciones para el cliente cuando RESPONDE a un reporte del cuidador
   // (caregiver-report → PENDING_CLIENT). Distintas de _clientOptions porque
   // acá el cliente está replicando a un reclamo específico, no abriendo uno.
   static const List<Map<String, dynamic>> _clientResponseOptions = [
-    {'id': 'i_was_there', 'label': 'Sí estuve, esperando en la dirección acordada', 'icon': '📍'},
-    {'id': 'tried_contact', 'label': 'Intenté contactar al cuidador y no respondió', 'icon': '📵'},
-    {'id': 'confusion', 'label': 'Hubo una confusión de horario o dirección', 'icon': '🕐'},
-    {'id': 'disagree', 'label': 'No es correcto lo que dice el cuidador', 'icon': '❌'},
+    {'id': 'i_was_there', 'label': 'Sí estuve, esperando en la dirección acordada', 'icon': GIcon.ubicacion},
+    {'id': 'tried_contact', 'label': 'Intenté contactar al cuidador y no respondió', 'icon': GIcon.telefono},
+    {'id': 'confusion', 'label': 'Hubo una confusión de horario o dirección', 'icon': GIcon.reloj},
+    {'id': 'disagree', 'label': 'No es correcto lo que dice el cuidador', 'icon': GIcon.cancelado},
   ];
 
   // Opciones para el cuidador cuando INICIA un reporte (caregiver-report,
   // sin disputa previa) — simétrico a _clientOptions pero desde su lado.
   static const List<Map<String, dynamic>> _caregiverReportOptions = [
-    {'id': 'no_answer', 'label': 'El cliente no contestó ni WhatsApp ni llamadas', 'icon': '📵'},
-    {'id': 'nobody_home', 'label': 'No había nadie en la dirección acordada', 'icon': '🚪'},
-    {'id': 'bad_address', 'label': 'La dirección no era correcta o no existía', 'icon': '📍'},
-    {'id': 'other', 'label': 'Otro motivo', 'icon': '❓'},
+    {'id': 'no_answer', 'label': 'El cliente no contestó ni WhatsApp ni llamadas', 'icon': GIcon.telefono},
+    {'id': 'nobody_home', 'label': 'No había nadie en la dirección acordada', 'icon': GIcon.inicio},
+    {'id': 'bad_address', 'label': 'La dirección no era correcta o no existía', 'icon': GIcon.ubicacion},
+    {'id': 'other', 'label': 'Otro motivo', 'icon': GIcon.ayuda},
   ];
 
   @override
@@ -400,7 +402,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('⏳', style: TextStyle(fontSize: 56)),
+            GardenIcon(GIcon.esperando, size: GIconSize.hero, color: subtextColor, state: GIconState.active),
             const SizedBox(height: 20),
             Text('Esperando respuesta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
@@ -432,7 +434,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
           color: GardenColors.warning.withValues(alpha: 0.08),
           child: Row(
             children: [
-              const Text('⚠️', style: TextStyle(fontSize: 20)),
+              const GardenIcon(GIcon.conflicto, color: GardenColors.warning, size: GIconSize.lg, state: GIconState.active),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -478,7 +480,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       }
                     }),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -491,7 +493,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       ),
                       child: Row(
                         children: [
-                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          GardenIcon(option['icon'] as GIcon, size: GIconSize.lg,
+                              state: selected ? GIconState.active : GIconState.idle),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Text(option['label'] as String,
@@ -564,8 +567,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     final clientReasonsLabels = (widget.clientReasons ?? []).map((id) {
-      final option = _clientOptions.firstWhere((o) => o['id'] == id, orElse: () => {'label': id, 'icon': '❓'});
-      return '${option['icon']} ${option['label']}';
+      final option = _clientOptions.firstWhere((o) => o['id'] == id, orElse: () => {'label': id, 'icon': GIcon.ayuda});
+      return option['label'] as String;
     }).toList();
 
     return Column(
@@ -614,7 +617,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       }
                     }),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -627,7 +630,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       ),
                       child: Row(
                         children: [
-                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          GardenIcon(option['icon'] as GIcon, size: GIconSize.lg,
+                              state: selected ? GIconState.active : GIconState.idle),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Text(option['label'] as String,
@@ -677,8 +681,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
     final caregiverReasonIds = ((_fullDispute?['caregiverResponse'] as List?) ?? []).cast<String>();
     final caregiverReasonsLabels = caregiverReasonIds.map((id) {
-      final option = _caregiverReportOptions.firstWhere((o) => o['id'] == id, orElse: () => {'label': id, 'icon': '❓'});
-      return '${option['icon']} ${option['label']}';
+      final option = _caregiverReportOptions.firstWhere((o) => o['id'] == id, orElse: () => {'label': id, 'icon': GIcon.ayuda});
+      return option['label'] as String;
     }).toList();
 
     return Column(
@@ -727,7 +731,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       }
                     }),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -740,7 +744,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       ),
                       child: Row(
                         children: [
-                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          GardenIcon(option['icon'] as GIcon, size: GIconSize.lg,
+                              state: selected ? GIconState.active : GIconState.idle),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Text(option['label'] as String,
@@ -794,7 +799,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
           color: GardenColors.warning.withValues(alpha: 0.08),
           child: Row(
             children: [
-              const Text('⚠️', style: TextStyle(fontSize: 20)),
+              const GardenIcon(GIcon.conflicto, color: GardenColors.warning, size: GIconSize.lg, state: GIconState.active),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -836,7 +841,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       }
                     }),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -849,7 +854,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       ),
                       child: Row(
                         children: [
-                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          GardenIcon(option['icon'] as GIcon, size: GIconSize.lg,
+                              state: selected ? GIconState.active : GIconState.idle),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Text(option['label'] as String,
@@ -899,7 +905,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('📋', style: TextStyle(fontSize: 64)),
+            const GardenIcon(GIcon.enRevision, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
             const SizedBox(height: 20),
             Text('Reporte enviado', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
@@ -977,7 +983,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('📋', style: TextStyle(fontSize: 64)),
+            const GardenIcon(GIcon.enRevision, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
             const SizedBox(height: 20),
             Text('Reporte recibido', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
@@ -1017,10 +1023,21 @@ class _DisputeScreenState extends State<DisputeScreen> {
         children: [
           const SizedBox(height: 20),
           // Veredicto
-          Text(isWin ? '✅' : isLoss ? '❌' : '⚖️', style: const TextStyle(fontSize: 64)),
+          Builder(builder: (_) {
+            final c = isWin ? GardenColors.successDark : isLoss ? GardenColors.error : GardenColors.warning;
+            return Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(color: c.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Center(
+                child: GardenIcon(isWin ? GIcon.confirmado : isLoss ? GIcon.cancelado : GIcon.enRevision,
+                    size: GIconSize.hero, color: c, state: GIconState.active),
+              ),
+            );
+          }),
           const SizedBox(height: 16),
           Text(
-            isWin ? '¡Disputa resuelta a tu favor!' : isLoss ? 'Disputa resuelta a favor del cliente' : 'Resolución parcial',
+            isWin ? 'Disputa resuelta a tu favor' : isLoss ? 'Disputa resuelta a favor del cliente' : 'Resolución parcial',
             style: TextStyle(
               color: isWin ? GardenColors.success : isLoss ? GardenColors.error : GardenColors.warning,
               fontSize: 20, fontWeight: FontWeight.w800,

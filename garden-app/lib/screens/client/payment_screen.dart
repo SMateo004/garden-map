@@ -10,6 +10,12 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_pet_avatar.dart';
+import '../../design/garden_service.dart';
+import '../../design/garden_story_progress.dart';
+import '../../narrative/booking_story.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../utils/browser_back_guard.dart';
@@ -1862,20 +1868,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
         child: Column(
           children: [
-            _summaryRow(Icons.pets_outlined, 'Mascota', bk['petName'] ?? '—',
+            _summaryRow(GIcon.mascotas, 'Mascota', bk['petName'] ?? '—',
                 textColor, subtextColor),
             const SizedBox(height: 12),
             _summaryRow(
-              bk['serviceType'] == 'PASEO'
-                  ? Icons.directions_walk_outlined
-                  : Icons.home_outlined,
+              GIcon.forService(GardenService.fromApi(bk['serviceType'] as String?) ?? GardenService.hospedaje),
               'Servicio',
-              bk['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
+              (GardenService.fromApi(bk['serviceType'] as String?) ?? GardenService.hospedaje).label,
               textColor,
               subtextColor,
             ),
             const SizedBox(height: 12),
-            _summaryRow(Icons.calendar_today_outlined, 'Fecha',
+            _summaryRow(GIcon.calendario, 'Fecha',
                 bk['walkDate'] ?? bk['startDate'] ?? '—', textColor, subtextColor),
             const SizedBox(height: 18),
             Divider(height: 1, color: borderColor),
@@ -1948,20 +1952,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
         child: Column(
           children: [
-            _summaryRow(Icons.pets_outlined, 'Mascotas',
+            _summaryRow(GIcon.mascotas, 'Mascotas',
                 '${petIds.length} mascota${petIds.length == 1 ? '' : 's'}',
                 textColor, subtextColor),
             const SizedBox(height: 12),
             _summaryRow(
-              serviceType == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+              GIcon.forService(GardenService.fromApi(serviceType) ?? GardenService.hospedaje),
               'Servicio',
-              serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje',
+              (GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label,
               textColor,
               subtextColor,
             ),
             if (date.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _summaryRow(Icons.calendar_today_outlined, 'Fecha', date, textColor, subtextColor),
+              _summaryRow(GIcon.calendario, 'Fecha', date, textColor, subtextColor),
             ],
             const SizedBox(height: 18),
             Divider(height: 1, color: borderColor),
@@ -2216,8 +2220,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: GardenColors.success.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.lock_outline_rounded,
-                          color: GardenColors.success, size: 18),
+                      child: const GardenIcon(GIcon.pagoProtegido,
+                          color: GardenColors.success, state: GIconState.active),
                     ),
                     const SizedBox(width: 10),
                     const Expanded(
@@ -2230,15 +2234,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _securityRow(Icons.schedule_rounded,
+                _securityRow(GIcon.reloj,
                     'El cuidador recibe el pago únicamente cuando el servicio es completado.',
                     textColor, subtextColor),
                 const SizedBox(height: 8),
-                _securityRow(Icons.account_balance_wallet_outlined,
+                _securityRow(GIcon.billetera,
                     'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.',
                     textColor, subtextColor),
                 const SizedBox(height: 8),
-                _securityRow(Icons.verified_user_outlined,
+                _securityRow(GIcon.pagoProtegido,
                     'Garden custodia el dinero hasta confirmar que todo salió bien.',
                     textColor, subtextColor),
                 const SizedBox(height: 8),
@@ -2247,7 +2251,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 // hace visible en el momento en que más importa (antes de
                 // pagar). Cifra y condiciones textuales tal como están en el
                 // contrato — no es una promesa nueva ni inflada.
-                _securityRow(Icons.health_and_safety_outlined,
+                _securityRow(GIcon.veterinaria,
                     'Fondo de Garantía Garden: hasta Bs 2.000 en gastos veterinarios de emergencia por incidente, cuando no sea negligencia del cuidador.',
                     textColor, subtextColor),
                 const SizedBox(height: 6),
@@ -2391,6 +2395,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Success screen ──────────────────────────────────────────────────────────
 
+  // ── Pago confirmado ───────────────────────────────────────────────────────
+  // Tono sereno (es dinero): sin exclamaciones ni personaje. La mascota y el
+  // icono del servicio entran con un pop corto, y abajo queda claro qué pasó
+  // y qué sigue, con el mismo relato que verá en Mis reservas.
   Widget _buildSuccessScreen() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
@@ -2399,97 +2407,103 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+    final b = _booking ?? const <String, dynamic>{};
+    final ctx = BookingStoryContext.fromBooking(b);
+    final svc = ctx.service;
+    final when = ctx.start != null ? BookingStory.whenLabel(ctx.start!, now: DateTime.now()) : null;
+
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
           child: Column(
             children: [
               TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 800),
-                curve: Curves.elasticOut,
-                builder: (context, value, child) => Transform.scale(
-                  scale: value,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: GardenColors.success.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: GardenColors.success.withValues(alpha: 0.5), width: 4),
-                    ),
-                    child: const Icon(Icons.check_rounded, color: GardenColors.success, size: 50),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                _paidWithWallet ? '¡Pagado con billetera!' : '¡Pago confirmado!',
-                style: TextStyle(
-                    fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: GardenColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                tween: Tween(begin: 0.6, end: 1.0),
+                duration: GardenMotion.resolve(context, GardenMotion.celebrate),
+                curve: GardenMotion.pop,
+                builder: (context, value, child) => Transform.scale(scale: value, child: child),
+                child: Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    if (_paidWithWallet) ...[
-                      const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.success, size: 14),
-                      const SizedBox(width: 6),
-                    ],
-                    Text(
-                      _paidWithWallet ? 'Deducido de tu billetera' : 'Pago aprobado',
-                      style: const TextStyle(
-                          color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 13),
+                    GardenPetAvatar(
+                      name: ctx.pet,
+                      size: 88,
+                      tone: StoryTone.good,
+                      service: svc,
                     ),
+                    if (svc != null)
+                      Positioned(
+                        right: -6,
+                        bottom: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: GardenIcon(GIcon.forService(svc), size: GIconSize.lg, state: GIconState.active),
+                        ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                _paidWithWallet
-                    ? 'Se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera Garden. Ahora el cuidador debe aceptar tu reserva.'
-                    : 'Tu pago fue verificado exitosamente. Ahora el cuidador debe aceptar tu reserva.',
-                style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
+                'Pago confirmado',
+                style: GardenText.displaySmall.copyWith(color: textColor, fontWeight: FontWeight.w900),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 8),
+              Text(
+                _paidWithWallet
+                    ? 'Se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera Garden. '
+                        'Ahora ${ctx.caregiver} revisa la solicitud para ${ctx.pet}.'
+                    : 'Ahora ${ctx.caregiver} revisa la solicitud para ${ctx.pet}. Te avisamos apenas responda.',
+                style: GardenText.bodyMedium.copyWith(color: subtextColor, height: 1.55),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: GardenColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const GardenIcon(GIcon.pagoProtegido,
+                        size: GIconSize.sm, color: GardenColors.successDark, state: GIconState.active),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Pago protegido: el cuidador lo recibe al terminar el servicio',
+                        style: GardenText.labelMedium.copyWith(color: GardenColors.successDark, letterSpacing: 0),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
               if (_booking != null)
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: borderColor),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4)),
-                    ],
                   ),
                   child: Column(
                     children: [
                       Row(
                         children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundImage: (_booking!['caregiverPhoto'] as String?)?.isNotEmpty == true
-                                ? NetworkImage(_booking!['caregiverPhoto'] as String)
-                                : null,
-                            backgroundColor: GardenColors.primary.withValues(alpha: 0.2),
-                            child: (_booking!['caregiverPhoto'] as String?)?.isNotEmpty != true
-                                ? const Icon(Icons.person, color: GardenColors.primary)
-                                : null,
+                          GardenAvatar(
+                            imageUrl: _booking!['caregiverPhoto'] as String?,
+                            size: 40,
+                            initials: ctx.caregiver,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -2498,29 +2512,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               children: [
                                 Text('Cuidador', style: TextStyle(color: subtextColor, fontSize: 12)),
                                 Text(_booking!['caregiverName'] ?? '—',
-                                    style: TextStyle(
-                                        color: textColor,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15)),
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       Divider(color: borderColor, height: 1),
-                      const SizedBox(height: 16),
-                      _detailRow('Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
-                      const SizedBox(height: 12),
-                      _detailRow('Fecha',
-                          _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
-                      const SizedBox(height: 12),
-                      _detailRow('Servicio',
-                          _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje', textColor, subtextColor),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
+                      _detailRow('Mascota', ctx.pet, textColor, subtextColor),
+                      const SizedBox(height: 10),
+                      _detailRow('Servicio', svc?.label ?? 'Servicio', textColor, subtextColor),
+                      const SizedBox(height: 10),
+                      _detailRow('Cuándo', when ?? (_booking!['walkDate'] ?? _booking!['startDate'] ?? '—'),
+                          textColor, subtextColor),
+                      const SizedBox(height: 14),
                       Divider(color: borderColor, height: 1),
-                      const SizedBox(height: 16),
-                      _detailRow('Total Pagado',
+                      const SizedBox(height: 14),
+                      _detailRow('Total pagado',
                           'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}',
                           GardenColors.primary, subtextColor,
                           isBoldValue: true),
@@ -2536,37 +2546,39 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               subtextColor,
                               subtextColor),
                       ],
-                      const SizedBox(height: 12),
-                      _detailRow('Estado', 'Esperando al cuidador', GardenColors.success, subtextColor),
                     ],
                   ),
                 ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.all(20),
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: GardenColors.primary.withValues(alpha: 0.05),
+                  color: surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+                  border: Border.all(color: borderColor),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Próximos pasos:',
-                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
-                    const SizedBox(height: 16),
-                    _stepRow('1', 'Pago verificado ✓', GardenColors.success, textColor),
-                    const SizedBox(height: 12),
-                    _stepRow('2', 'El cuidador acepta la reserva', GardenColors.primary, textColor),
-                    const SizedBox(height: 12),
-                    _stepRow('3', '¡Reserva confirmada!', GardenColors.success, textColor),
+                    Text('Qué sigue',
+                        style: GardenText.headingSmall.copyWith(color: textColor, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 14),
+                    GardenStoryProgress(steps: [
+                      const StoryStepItem(GIcon.pagoProtegido, 'Pago verificado', StoryStepState.done),
+                      StoryStepItem(GIcon.esperando, '${ctx.caregiver} acepta la solicitud', StoryStepState.current,
+                          detail: 'Puedes escribirle desde Mis reservas'),
+                      StoryStepItem(
+                          svc != null ? GIcon.forService(svc) : GIcon.confirmado,
+                          when != null ? 'Reserva confirmada para $when' : 'Reserva confirmada',
+                          StoryStepState.next),
+                    ]),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               GardenButton(
                 label: 'Ver mis reservas',
-                icon: Icons.list_alt_rounded,
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
                   if (_bookingId != null) await prefs.setString('highlight_booking_id', _bookingId!);
@@ -2828,16 +2840,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
               style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 20),
-            _reviewStep(Icons.screenshot_outlined,
+            _reviewStep(GIcon.foto,
                 'Toma una captura de tu comprobante bancario', subtextColor, textColor),
             const SizedBox(height: 12),
-            _reviewStep(Icons.email_outlined, 'Envíala a soporte@garden.bo', subtextColor, textColor),
+            _reviewStep(GIcon.correo, 'Envíala a soporte@garden.bo', subtextColor, textColor),
             if (_bookingId != null)
-              _reviewStep(Icons.tag_outlined,
+              _reviewStep(GIcon.nota,
                   'Incluye el ID de tu reserva: ${_bookingId!.substring(0, 8).toUpperCase()}',
                   subtextColor, textColor),
             const SizedBox(height: 12),
-            _reviewStep(Icons.schedule_outlined, 'Nuestro equipo lo revisará en 24 horas',
+            _reviewStep(GIcon.reloj, 'Nuestro equipo lo revisará en 24 horas',
                 subtextColor, textColor),
             const SizedBox(height: 28),
             SizedBox(
@@ -2861,11 +2873,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ],
       );
 
-  Widget _securityRow(IconData icon, String text, Color textColor, Color subtextColor) =>
+  Widget _securityRow(GIcon icon, String text, Color textColor, Color subtextColor) =>
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: subtextColor),
+          GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
           const SizedBox(width: 8),
           Expanded(
               child: Text(text,
@@ -2873,13 +2885,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ],
       );
 
-  Widget _reviewStep(IconData icon, String text, Color subtextColor, Color textColor) =>
+  Widget _reviewStep(GIcon icon, String text, Color subtextColor, Color textColor) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: GardenColors.primary),
+            GardenIcon(icon, color: GardenColors.primary, state: GIconState.active),
             const SizedBox(width: 12),
             Expanded(
                 child: Text(text, style: TextStyle(color: textColor, fontSize: 14, height: 1.4))),
@@ -2898,11 +2910,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ],
       );
 
-  Widget _summaryRow(IconData icon, String label, String value, Color textColor,
+  Widget _summaryRow(GIcon icon, String label, String value, Color textColor,
           Color subtextColor) =>
       Row(
         children: [
-          Icon(icon, size: 16, color: subtextColor),
+          GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
           const SizedBox(width: 10),
           Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
           const Spacer(),
@@ -2922,25 +2934,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   color: valueColor,
                   fontWeight: isBoldValue ? FontWeight.w900 : FontWeight.w700,
                   fontSize: 14)),
-        ],
-      );
-
-  Widget _stepRow(String number, String text, Color color, Color textColor) =>
-      Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration:
-                BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-            child: Center(
-                child: Text(number,
-                    style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-              child: Text(text,
-                  style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
         ],
       );
 }
@@ -2963,9 +2956,9 @@ class _PaymentSuccessOverlayState extends State<_PaymentSuccessOverlay>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
-    _scale = Tween<double>(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+    _ctrl = AnimationController(vsync: this, duration: GardenMotion.expressive);
+    _scale = Tween<double>(begin: 0.6, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: GardenMotion.pop));
     _fade = Tween<double>(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.4)));
     _ctrl.forward();
@@ -3010,11 +3003,14 @@ class _PaymentSuccessOverlayState extends State<_PaymentSuccessOverlay>
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.check_rounded, color: GardenColors.success, size: 72),
+                  child: const Center(
+                    child: GardenIcon(GIcon.confirmado,
+                        color: GardenColors.success, size: GIconSize.hero, state: GIconState.active),
+                  ),
                 ),
                 const SizedBox(height: 28),
                 const Text(
-                  '¡Pago confirmado!',
+                  'Pago confirmado',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,
