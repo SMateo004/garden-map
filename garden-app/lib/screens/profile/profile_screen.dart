@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
-import '../../services/auth_service.dart';
 import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
 import '../client/nearby_vets_screen.dart';
@@ -16,7 +15,8 @@ import 'change_pin_dialog.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
-import '../../services/caregiver_staff_service.dart';
+import '../../services/work_mode.dart';
+import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -32,7 +32,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   bool _isDeletingAccount = false;
-  bool _isSwitchingRole = false;
   bool _conversionInProgress = false;
   bool _isAbandoningConversion = false;
   String _token = '';
@@ -979,6 +978,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   children: [
                     Text('Mi cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
+                    if (WorkMode.available.length >= 2) ...[
+                      ModeSwitcherCard(isCompany: _caregiverProfile?['isCompany'] == true),
+                      const SizedBox(height: 14),
+                    ],
                     if (_effectiveRole == 'CLIENT') ...[
                       _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
                         final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
@@ -1002,7 +1005,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       // billetera/precios/config del negocio (eso es del dueño).
                       _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas',
                           onTap: () => context.push('/caregiver-staff/home')),
-                      ..._teamTiles(),
                     ],
                     if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
                       _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
@@ -1017,7 +1019,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                           onTap: () => context.push('/caregiver/edit-profile')),
                       _profileTile(icon: Icons.home_outlined, title: 'Mi panel',
                           onTap: () => context.push('/caregiver/home')),
-                      if (_caregiverProfile?['isCompany'] != true) ..._teamTiles(),
                       _profileTile(icon: Icons.pets_outlined, title: 'Mascotas',
                           onTap: () => context.push('/caregiver/pets')),
                       if (_caregiverProfile?['isCompany'] == true) ...[
@@ -1066,12 +1067,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
                     const SizedBox(height: 16),
-                    if (_role == 'CAREGIVER') ...[
-                      Text('Cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                      const SizedBox(height: 8),
-                      _switchRoleTile(textColor),
-                      const SizedBox(height: 16),
-                    ],
                     Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
@@ -1248,6 +1243,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         _sectionLabel('Mi cuenta', textColor),
         const SizedBox(height: 10),
+        if (WorkMode.available.length >= 2) ...[
+          ModeSwitcherCard(isCompany: _caregiverProfile?['isCompany'] == true),
+          const SizedBox(height: 14),
+        ],
         
         if (_effectiveRole == 'CLIENT') ...[
           _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
@@ -1274,7 +1273,6 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
           _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
-          ..._teamTiles(),
         ],
 
         if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
@@ -1289,7 +1287,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
-          if (_caregiverProfile?['isCompany'] != true) ..._teamTiles(),
           _profileTile(icon: Icons.pets_outlined, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
           if (_caregiverProfile?['isCompany'] == true) ...[
             _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
@@ -1433,10 +1430,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: 24),
         _sectionLabel('Cuenta', textColor),
         const SizedBox(height: 10),
-        if (_role == 'CAREGIVER') ...[
-          _switchRoleTile(textColor),
-          const SizedBox(height: 8),
-        ],
         _buildAccountInfoTile(),
         const SizedBox(height: 8),
         const SizedBox(height: 28),
@@ -1471,329 +1464,15 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // ── Switch role ─────────────────────────────────────────────────────────────
 
-  // ── Equipo de una empresa / modo de trabajo ───────────────────────────────
-  //
-  // Una misma cuenta puede ser empleado de una empresa Y cuidador independiente
-  // (como cambiar de perfil en Instagram): cada modo opera con su propia
-  // identidad y su propio dinero, nunca mezclados.
+  // ── Equipo de una empresa ───────────────────────────────────────────────────
+  // El cambio entre dueño / cuidador / empleado vive en ModeSwitcherCard.
+  // Esta fila es solo para quien aún no tiene otra identidad (dueño de mascota).
 
   Widget _joinTeamTile() => _profileTile(
         icon: GIcon.equipo.glyph!.regular,
         title: 'Unirme a un equipo',
         onTap: () => context.push('/caregiver-staff/join'),
       );
-
-  List<Widget> _teamTiles() {
-    if (!AuthState.hasStaffMembership) return [_joinTeamTile()];
-    final company = AuthState.staffCompanyName.isEmpty ? 'la empresa' : AuthState.staffCompanyName;
-    return [
-      if (AuthState.hasOwnCaregiverProfile)
-        _profileTile(
-          icon: GIcon.repetir.glyph!.regular,
-          title: AuthState.isCaregiverStaff ? 'Cambiar a mi perfil independiente' : 'Cambiar a trabajar para $company',
-          onTap: _switchWorkMode,
-        )
-      else
-        _profileTile(
-          icon: GIcon.agregar.glyph!.regular,
-          title: 'Trabajar también por mi cuenta',
-          onTap: _startOwnCaregiverProfile,
-        ),
-      _profileTile(icon: GIcon.salir.glyph!.regular, title: 'Salir del equipo de $company', onTap: _leaveTeam),
-    ];
-  }
-
-  Future<void> _switchWorkMode() async {
-    final toStaff = !AuthState.isCaregiverStaff;
-    await AuthState.setStaffMode(toStaff);
-    if (!mounted) return;
-    context.go(toStaff ? '/caregiver-staff/home' : '/caregiver/home');
-  }
-
-  /// Un empleado crea su propio perfil de cuidador para generar ingresos en su
-  /// tiempo libre. Conserva su membresía y su rol.
-  Future<void> _startOwnCaregiverProfile() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/auth/init-caregiver-profile'),
-        headers: {'Authorization': 'Bearer ${AuthState.token}'},
-      );
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode == 200 && data['success'] == true) {
-        final result = data['data'] as Map<String, dynamic>;
-        await AuthState.update(result['accessToken'] as String);
-        await SecureStorageService.saveRefreshToken(result['refreshToken'] as String);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('has_own_caregiver_profile', true);
-        AuthState.updateStaffInfo(hasOwnProfile: true);
-        await AuthState.setStaffMode(false);
-        if (!mounted) return;
-        context.go('/caregiver/onboarding', extra: {'resumeMode': true});
-      } else {
-        final err = data['error'] as Map<String, dynamic>?;
-        if (err?['code'] == 'CAREGIVER_PROFILE_EXISTS') {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('has_own_caregiver_profile', true);
-          AuthState.updateStaffInfo(hasOwnProfile: true);
-          await AuthState.setStaffMode(false);
-          if (!mounted) return;
-          context.go('/caregiver/onboarding', extra: {'resumeMode': true});
-          return;
-        }
-        if (!mounted) return;
-        GardenErrorDialog.show(context, err?['message'] as String? ?? 'No se pudo iniciar el proceso. Intenta de nuevo.');
-      }
-    } catch (_) {
-      if (!mounted) return;
-      GardenErrorDialog.show(context, 'Error de conexión. Verifica tu internet.');
-    }
-  }
-
-  Future<void> _leaveTeam() async {
-    final company = AuthState.staffCompanyName.isEmpty ? 'la empresa' : AuthState.staffCompanyName;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Salir del equipo'),
-        content: Text(AuthState.hasOwnCaregiverProfile
-            ? 'Dejarás de trabajar para $company. Tu perfil independiente y tus datos no se tocan.'
-            : 'Dejarás de trabajar para $company y tu cuenta volverá a ser de dueño de mascota.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Salir')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await CaregiverStaffService().leaveTeam();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_caregiver_staff', false);
-      await prefs.setString('staff_company_name', '');
-      AuthState.updateStaffInfo(isCaregiverStaff: false, companyName: '');
-      if (AuthState.hasOwnCaregiverProfile) {
-        await AuthState.setStaffMode(false);
-        if (!mounted) return;
-        context.go('/caregiver/home');
-        return;
-      }
-      // Sin perfil propio ya no tiene nada que hacer como cuidador: vuelve a ser
-      // dueño de mascota (el backend repone role=CLIENT al no haber membresía).
-      final response = await http.post(
-        Uri.parse('$_baseUrl/auth/abandon-caregiver-profile'),
-        headers: {'Authorization': 'Bearer ${AuthState.token}'},
-      );
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode == 200 && data['success'] == true) {
-        final result = data['data'] as Map<String, dynamic>;
-        await AuthState.update(result['accessToken'] as String);
-        await SecureStorageService.saveRefreshToken(result['refreshToken'] as String);
-        await prefs.setString('user_role', 'CLIENT');
-        await prefs.remove('active_role');
-        AuthState.updateRole(role: 'CLIENT', activeRole: '');
-      }
-      if (!mounted) return;
-      context.go('/service-selector');
-    } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
-    }
-  }
-
-  Widget _switchRoleTile(Color textColor) {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final isSwitchedToClient = _activeRole == 'CLIENT';
-    final label = isSwitchedToClient ? 'Volver a modo cuidador' : 'Cambiar a modo dueño';
-    final icon = isSwitchedToClient ? Icons.pets : Icons.swap_horiz_rounded;
-    final accent = isSwitchedToClient ? GardenColors.primary : GardenColors.success;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 0),
-      child: Material(
-        color: surface,
-        borderRadius: BorderRadius.circular(GardenRadius.md),
-        child: InkWell(
-          onTap: _isSwitchingRole ? null : () {
-            HapticFeedback.selectionClick();
-            _onSwitchRoleTap(isSwitchedToClient);
-          },
-          borderRadius: BorderRadius.circular(GardenRadius.md),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(GardenRadius.md),
-              border: Border.all(color: borderColor),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.09),
-                    borderRadius: BorderRadius.circular(GardenRadius.sm),
-                  ),
-                  child: _isSwitchingRole
-                      ? GardenLoadingIndicator(size: 17, color: accent)
-                      : Icon(icon, color: accent, size: 17),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded,
-                    color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Verifica reservas activas antes de mostrar el sheet de cambio de rol.
-  Future<void> _onSwitchRoleTap(bool isSwitchedToClient) async {
-    int activeBookings = 0;
-    // Solo verificar si está cambiando de CAREGIVER → CLIENT
-    if (!isSwitchedToClient && _token.isNotEmpty) {
-      try {
-        final res = await http.get(
-          Uri.parse('$_baseUrl/caregiver/bookings?limit=5'),
-          headers: {'Authorization': 'Bearer $_token'},
-        ).timeout(const Duration(seconds: 6));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          if (data['success'] == true) {
-            final bookings = (data['data'] as List? ?? []).cast<Map<String, dynamic>>();
-            activeBookings = bookings.where((b) => b['status'] == 'IN_PROGRESS').length;
-          }
-        }
-      } catch (_) {}
-    }
-    if (!mounted) return;
-    _showSwitchRoleSheet(isSwitchedToClient, activeBookings: activeBookings);
-  }
-
-  void _showSwitchRoleSheet(bool isSwitchedToClient, {int activeBookings = 0}) {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    final targetRole = isSwitchedToClient ? 'CAREGIVER' : 'CLIENT';
-    final title = isSwitchedToClient ? 'Volver a modo cuidador' : 'Cambiar a modo dueño de mascota';
-    final description = isSwitchedToClient
-        ? 'Volverás a tu interfaz de cuidador. Todas tus opciones de cuidador estarán disponibles nuevamente.'
-        : 'Usarás la app como dueño de mascota. Podrás hacer reservas con otros cuidadores pero no contigo mismo. Tu perfil de cuidador se mantendrá y podrás volver cuando quieras.';
-    final iconData = isSwitchedToClient ? Icons.pets : Icons.swap_horiz_rounded;
-    final accent = isSwitchedToClient ? GardenColors.primary : GardenColors.success;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => GlassBox(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(iconData, color: accent, size: 28),
-            ),
-            const SizedBox(height: 16),
-            Text(title,
-                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            Text(
-              description,
-              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.55),
-              textAlign: TextAlign.center,
-            ),
-            if (activeBookings > 0) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: GardenColors.warning.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(GardenRadius.md),
-                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Tienes $activeBookings servicio${activeBookings > 1 ? 's' : ''} en curso. Podrás seguir gestionándolo${activeBookings > 1 ? 's' : ''} desde tu panel de cuidador.',
-                        style: const TextStyle(
-                            color: GardenColors.warning, fontSize: 12, height: 1.45),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 28),
-            GardenButton(
-              label: 'Confirmar',
-              onPressed: () {
-                Navigator.pop(context);
-                _doSwitchRole(targetRole);
-              },
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar', style: TextStyle(color: subtextColor)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _doSwitchRole(String targetRole) async {
-    if (_isSwitchingRole) return;
-    setState(() => _isSwitchingRole = true);
-    try {
-      final authService = AuthService();
-      final effectiveRole = await authService.switchRole(
-        token: _token,
-        targetRole: targetRole,
-      );
-      if (!mounted) return;
-      // Actualizar token local desde AuthState (ya sincronizado por AuthService)
-      setState(() {
-        _token = AuthState.token;
-        _activeRole = effectiveRole == _role ? '' : effectiveRole;
-      });
-      if (!mounted) return;
-      if (effectiveRole == 'CAREGIVER') {
-        context.go('/caregiver/home');
-      } else {
-        context.go('/service-selector');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isSwitchingRole = false);
-    }
-  }
 
   // ── Conversión CLIENT→CAREGIVER en progreso ─────────────────────────────────
 

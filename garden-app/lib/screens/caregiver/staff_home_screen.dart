@@ -5,7 +5,9 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/caregiver_staff_service.dart';
+import '../../design/garden_icons.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/mode_switcher_card.dart';
 import 'reception_screen.dart';
 
 /// Dashboard reducido del empleado de una empresa cuidadora: solo ve y
@@ -188,28 +190,75 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
   }
 
   Widget _buildAccountTab(Color textColor, Color subtextColor, Color borderColor) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 20),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.business_rounded, color: subtextColor),
-            title: Text('Empresa', style: TextStyle(color: textColor)),
-            subtitle: Text(AuthState.staffCompanyName, style: TextStyle(color: subtextColor)),
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final company = AuthState.staffCompanyName.isEmpty ? 'Tu empresa' : AuthState.staffCompanyName;
+    final initial = company.trim().isEmpty ? 'G' : company.trim()[0].toUpperCase();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      children: [
+        // Quién eres y para quién trabajas ahora mismo.
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: borderColor),
           ),
-          Divider(color: borderColor),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.logout_rounded, color: GardenColors.error),
-            title: const Text('Cerrar sesión', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600)),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(initial, style: GardenText.h3.copyWith(color: GardenColors.primary)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(company, style: GardenText.h4.copyWith(color: textColor)),
+                    const SizedBox(height: 2),
+                    Text('Trabajas en el equipo', style: GardenText.bodySmall.copyWith(color: subtextColor)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        const ModeSwitcherCard(),
+        const SizedBox(height: 20),
+        Material(
+          color: surface,
+          borderRadius: BorderRadius.circular(GardenRadius.lg),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(GardenRadius.lg),
             onTap: _logout,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                children: [
+                  const GardenIcon(GIcon.salir, color: GardenColors.error),
+                  const SizedBox(width: 14),
+                  Text('Cerrar sesión',
+                      style: GardenText.labelLarge.copyWith(color: GardenColors.error, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

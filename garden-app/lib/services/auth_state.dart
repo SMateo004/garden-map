@@ -18,7 +18,7 @@
 ///
 library;
 
-import 'package:flutter/foundation.dart' show ValueNotifier, kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show ValueNotifier, kDebugMode, debugPrint, visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secure_storage_service.dart';
 import 'presence_service.dart';
@@ -90,6 +90,10 @@ class AuthState {
 
   /// Modo de trabajo preferido cuando la cuenta tiene ambas identidades.
   static bool get staffMode => _staffMode;
+
+  /// Solo para pruebas: fija el modo sin tocar el almacenamiento.
+  @visibleForTesting
+  static void debugSetStaffMode(bool value) => _staffMode = value;
 
   /// Cambia entre trabajar para la empresa (true) o por cuenta propia (false).
   static Future<void> setStaffMode(bool value) async {

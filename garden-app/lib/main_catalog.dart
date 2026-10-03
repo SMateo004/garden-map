@@ -7,6 +7,7 @@ import 'design/garden_story_progress.dart';
 import 'design/garden_trust_seals.dart';
 import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
+import 'design/garden_mode_switcher.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
 import 'design/garden_status_pill.dart';
@@ -186,6 +187,12 @@ class _CatalogPageState extends State<_CatalogPage> {
               ])
                 GardenShortcut(icon: i, label: l, onTap: () {}),
             ]),
+          ]),
+          _Section('Cambio de perfil (dueño / cuidador / equipo)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const _ModeSwitcherDemo(),
+            ),
           ]),
           _Section('Avatar de mascota', [
             Wrap(spacing: 20, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.end, children: [
@@ -522,6 +529,65 @@ class _MotionRowState extends State<_MotionRow> {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// Demo del selector de perfil: simula la espera del servidor (700 ms) para
+/// ver el indicador y el deslizamiento del fondo.
+class _ModeSwitcherDemo extends StatefulWidget {
+  const _ModeSwitcherDemo();
+
+  @override
+  State<_ModeSwitcherDemo> createState() => _ModeSwitcherDemoState();
+}
+
+class _ModeSwitcherDemoState extends State<_ModeSwitcherDemo> {
+  GardenMode _current = GardenMode.staff;
+  GardenMode? _switching;
+
+  static const _options = [
+    GardenModeOption(
+      mode: GardenMode.owner,
+      title: 'Dueño',
+      subtitle: 'de mascota',
+      description: 'Reserva paseos, guardería y hospedaje, y sigue a tu mascota en vivo.',
+      icon: GIcon.mascotas,
+    ),
+    GardenModeOption(
+      mode: GardenMode.independent,
+      title: 'Cuidador',
+      subtitle: 'por mi cuenta',
+      description: 'Tu perfil público, tu disponibilidad y tus ganancias propias.',
+      icon: GIcon.perfil,
+    ),
+    GardenModeOption(
+      mode: GardenMode.staff,
+      title: 'Equipo',
+      subtitle: 'Guardería Patitas',
+      description: 'Atiendes las reservas de Guardería Patitas. Lo que cobra el servicio va a la empresa, no a tu billetera.',
+      icon: GIcon.equipo,
+    ),
+  ];
+
+  Future<void> _select(GardenMode m) async {
+    setState(() => _switching = m);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    setState(() {
+      _current = m;
+      _switching = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GardenModeSwitcher(
+      options: _options,
+      current: _current,
+      switching: _switching,
+      onSelect: _select,
+      addActions: [GardenModeAddAction(label: 'Unirme a un equipo', onTap: () {})],
     );
   }
 }
