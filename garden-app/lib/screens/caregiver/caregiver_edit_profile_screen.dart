@@ -11,6 +11,8 @@ import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/phone_change_flow.dart';
+import '../../design/garden_icons.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -1448,6 +1450,17 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           Text(
             'Tu teléfono ya está verificado. Para cambiarlo, pídelo por el chat de soporte.',
             style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                final changed = await PhoneChangeFlow.promptAndRun(context, baseUrl: _baseUrl, token: _caregiverToken);
+                if (changed != null && mounted) setState(() => _phoneController.text = changed);
+              },
+              icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm),
+              label: const Text('Cambiar número verificado'),
+            ),
           ),
         ],
       ],

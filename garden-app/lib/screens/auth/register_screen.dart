@@ -12,6 +12,8 @@ import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/phone_change_flow.dart';
+import '../../services/auth_state.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -411,6 +413,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
           addressZone: _addressZone,
           cityId: _gardenCityId,
           zoneId: zoneId,
+        );
+        if (!mounted) return;
+        // El teléfono es el canal de contacto: se verifica en el momento del
+        // registro. "Verificar más tarde" no cierra el alta (si el SMS falla no
+        // queremos dejar a nadie afuera), pero el botón Mis Datos sigue
+        // pulsando hasta que se confirme.
+        await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => PhoneOtpDialog(
+            baseUrl: const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api'),
+            token: AuthState.token,
+            phone: phone,
+            cancelLabel: 'Verificar más tarde',
+          ),
         );
         if (!mounted) return;
         // El registro normal nunca pide foto — siempre falta en este punto,

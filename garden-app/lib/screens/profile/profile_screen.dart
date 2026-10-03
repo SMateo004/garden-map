@@ -14,6 +14,7 @@ import 'blocked_users_screen.dart';
 import 'notification_settings_screen.dart';
 import 'change_pin_dialog.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/phone_change_flow.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -62,7 +63,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
         (u['addressStreet'] as String? ?? '').trim().isEmpty ||
         (u['dateOfBirth'] == null) ||
-        (u['profilePicture'] as String? ?? '').trim().isEmpty;
+        (u['profilePicture'] as String? ?? '').trim().isEmpty ||
+        // Teléfono sin verificar: es el canal de contacto, el botón pulsa hasta
+        // que se confirme con el código (ver my_data_screen.dart).
+        u['phoneVerified'] != true;
   }
 
   /// True when "Datos del cuidador" is missing any required field.
@@ -73,7 +77,20 @@ class _ProfileScreenState extends State<ProfileScreen>
     final p = _caregiverProfile;
     if (p == null) return false;
     final percentage = (p['onboardingStatus'] as Map<String, dynamic>?)?['percentage'] as int?;
-    return (percentage ?? 0) < 100;
+    // Teléfono sin verificar también enciende el aviso (phoneVerified viene de /auth/me).
+    final phoneUnverified = _userData != null && _userData!['phoneVerified'] != true;
+    return (percentage ?? 0) < 100 || phoneUnverified;
+  }
+
+  /// Antes de entrar a "Datos del cuidador": si el teléfono no está verificado,
+  /// ofrece verificarlo ahí mismo (sin bloquear la entrada).
+  Future<void> _offerPhoneVerification() async {
+    final u = _userData;
+    if (u == null || u['phoneVerified'] == true) return;
+    final phone = (u['phone'] as String? ?? '').trim();
+    if (phone.isEmpty || phone.startsWith('social_pending_')) return;
+    final verified = await PhoneVerifyPrompt.offer(context, baseUrl: _baseUrl, token: AuthState.token, phone: phone);
+    if (verified && mounted) await _loadProfile();
   }
 
   /// true = cuidador amateur con capacitación AMATEUR obligatoria pendiente
@@ -987,6 +1004,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
                           highlight: _isCaregiverDataIncomplete,
                           onTap: () async {
+                            await _offerPhoneVerification();
+                            if (!mounted) return;
                             await context.push('/caregiver/profile-data');
                             await _refreshCaregiverProfile();
                           }),

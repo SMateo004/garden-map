@@ -12,6 +12,9 @@ import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/phone_change_flow.dart';
+import '../../design/garden_icons.dart';
+import '../support/support_chat_screen.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -26,14 +29,17 @@ class _MyDataScreenState extends State<MyDataScreen> {
   bool _uploadingPhoto = false;
   String _token = '';
   Uint8List? _pendingPhotoBytes;
-  // Verificación de teléfono (ClientProfile.phoneVerified). Una vez
-  // verificado, el backend bloquea cualquier cambio (403 PHONE_LOCKED) salvo
-  // por el chat de soporte — el campo se deshabilita más abajo para que
-  // coincida. _savedPhone es el número que YA está guardado en el servidor
-  // (distinto de lo que el usuario esté tipeando sin guardar en _phoneCtrl),
-  // para no ofrecer "Verificar" sobre un número que todavía no se guardó.
+  // Teléfono: una vez verificado queda BLOQUEADO (es el canal de contacto). Solo
+  // se cambia con una ventana que abre el bot de soporte desde el chat
+  // (_phoneChangeAuthorized), y el número nuevo solo reemplaza al anterior si
+  // se confirma con el código — ver widgets/phone_change_flow.dart.
+  // _savedPhone es el número que YA está guardado en el servidor (distinto de
+  // lo que el usuario esté tipeando sin guardar en _phoneCtrl).
   bool _phoneVerified = false;
+  bool _phoneChangeAuthorized = false;
+  DateTime? _phoneChangeUntil;
   String _savedPhone = '';
+  bool get _phoneLocked => _phoneVerified && !_phoneChangeAuthorized;
 
   late TextEditingController _firstCtrl;
   late TextEditingController _lastCtrl;
@@ -120,6 +126,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
           final rawPhone = user['phone'] as String? ?? '';
           _savedPhone = rawPhone.startsWith('social_pending_') ? '' : rawPhone;
           _phoneCtrl.text = _savedPhone;
+          // Estado del teléfono a nivel de usuario (viene en /auth/me).
+          _phoneVerified = user['phoneVerified'] == true;
+          final pc = user['phoneChange'] as Map<String, dynamic>?;
+          _phoneChangeAuthorized = pc?['canChange'] == true;
+          final until = pc?['changeAuthorizedUntil'] as String?;
+          _phoneChangeUntil = until != null ? DateTime.tryParse(until)?.toLocal() : null;
           _addressCtrl.text = user['address'] as String? ?? '';
           _bioCtrl.text = user['bio'] as String? ?? '';
           _streetCtrl.text = user['addressStreet'] as String? ?? '';
@@ -150,7 +162,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
         setState(() {
           _nitCtrl.text = profile['nit'] as String? ?? '';
           _nitRazonSocialCtrl.text = profile['nitRazonSocial'] as String? ?? '';
-          _phoneVerified = profile['phoneVerified'] == true;
         });
       }
     } catch (_) {}
@@ -177,12 +188,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
     }
   }
 
-  /// Verificación de teléfono — una vez verificado, el número queda
-  /// bloqueado server-side (ver _phoneVerified arriba).
+  /// Verifica el número guardado con un código por SMS.
   Future<void> _startPhoneVerification() async {
     final verified = await showDialog<bool>(
       context: context,
-      builder: (_) => _PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: _savedPhone),
+      barrierDismissible: false,
+      builder: (_) => PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: _savedPhone),
     );
     if (verified == true && mounted) {
       setState(() => _phoneVerified = true);
@@ -312,8 +323,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
       final body = <String, dynamic>{
         'firstName': fn,
         'lastName': ln,
-        // Teléfono ya verificado: no se reenvía, el backend lo rechaza con
-        // 403 PHONE_LOCKED (solo se cambia por el chat de soporte).
+        // Verificado = no se manda: el servidor tampoco lo acepta por esta vía. El
+        // cambio autorizado va por PhoneChangeFlow más abajo.
         if (!_phoneVerified) 'phone': _phoneCtrl.text.trim(),
         'city': cityName,
         'country': 'Bolivia',
@@ -348,6 +359,21 @@ class _MyDataScreenState extends State<MyDataScreen> {
       if (data['success'] == true) {
         final billingOk = await _saveBillingInfo();
         if (!mounted) return;
+        // Cambio de teléfono: la verificación del número nuevo es inmediata y
+        // obligatoria — si no se confirma, el número no cambia.
+        final phoneNow = _phoneCtrl.text.trim();
+        if (phoneNow != _savedPhone) {
+          if (_phoneVerified && _phoneChangeAuthorized) {
+            await PhoneChangeFlow.run(context, baseUrl: _baseUrl, token: _token, newPhone: phoneNow);
+          } else if (!_phoneVerified) {
+            await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: phoneNow),
+            );
+          }
+          if (!mounted) return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(billingOk ? 'Datos actualizados' : 'Datos actualizados (no se pudo guardar el NIT/Carnet, intenta de nuevo)'),
           backgroundColor: billingOk ? GardenColors.success : GardenColors.warning,
@@ -501,11 +527,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
             ]),
             const SizedBox(height: 16),
 
-            // Phone — una vez verificado queda bloqueado (ver _phoneVerified).
-            // El link "Verificar" solo se ofrece cuando lo tipeado coincide
-            // con lo ya guardado en el servidor (si el usuario está editando
-            // a un número nuevo sin guardar
-            // todavía, no hay nada real que verificar).
+            // Phone — verificado = bloqueado (solo cambia con autorización de
+            // soporte); sin verificar = editable y con aviso para verificar.
             Row(children: [
               Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
               if (_savedPhone.isNotEmpty && _phoneCtrl.text.trim() == _savedPhone) ...[
@@ -519,22 +542,53 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 else
                   GestureDetector(
                     onTap: _startPhoneVerification,
-                    child: const Text('Verificar', style: TextStyle(color: GardenColors.primary, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: GardenColors.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: GardenColors.warning),
+                      ),
+                      child: const Text('Sin verificar · Verificar ahora',
+                          style: TextStyle(color: GardenColors.warning, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                    ),
                   ),
               ],
             ]),
             const SizedBox(height: 6),
-            TextField(controller: _phoneCtrl,
-                style: TextStyle(color: _phoneVerified ? subtextColor : textColor),
-                enabled: !_phoneVerified,
+            TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
                 keyboardType: TextInputType.phone,
+                readOnly: _phoneLocked,
                 onChanged: (_) => setState(() {}),
-                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
-            if (_phoneVerified) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Tu teléfono ya está verificado. Para cambiarlo, pídelo por el chat de soporte.',
-                style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
+                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined).copyWith(
+                  suffixIcon: _phoneLocked ? Padding(padding: const EdgeInsets.all(14), child: GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor)) : null,
+                )),
+            if (_phoneLocked) ...[
+              const SizedBox(height: 6),
+              Text('Tu teléfono está verificado y no se puede editar. Si necesitas cambiarlo, solicítalo por el chat de soporte.',
+                  style: TextStyle(color: subtextColor, fontSize: 11.5)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen())),
+                  icon: const GardenIcon(GIcon.soporte, size: GIconSize.sm),
+                  label: const Text('Pedir cambio por el chat'),
+                ),
+              ),
+            ] else if (_phoneVerified && _phoneChangeAuthorized) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  'Cambio autorizado por soporte${_phoneChangeUntil != null ? ' (hasta las ${_phoneChangeUntil!.hour.toString().padLeft(2, '0')}:${_phoneChangeUntil!.minute.toString().padLeft(2, '0')})' : ''}. '
+                  'Escribe tu número nuevo y guarda: te enviaremos un código a ESE número. Si no lo confirmas, se mantiene el anterior.',
+                  style: TextStyle(color: textColor, fontSize: 11.5),
+                ),
               ),
             ],
             const SizedBox(height: 16),
@@ -759,112 +813,3 @@ class _MyDataScreenState extends State<MyDataScreen> {
 /// Diálogo de verificación de teléfono para el cliente — envía el código al
 /// abrirse (una sola vez, vía initState) y lo verifica al confirmar.
 /// Devuelve `true` (Navigator.pop) si la verificación fue exitosa.
-class _PhoneOtpDialog extends StatefulWidget {
-  final String baseUrl;
-  final String token;
-  final String phone;
-  const _PhoneOtpDialog({required this.baseUrl, required this.token, required this.phone});
-
-  @override
-  State<_PhoneOtpDialog> createState() => _PhoneOtpDialogState();
-}
-
-class _PhoneOtpDialogState extends State<_PhoneOtpDialog> {
-  bool _sending = true;
-  bool _verifying = false;
-  String? _error;
-  final _codeCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _sendCode();
-  }
-
-  @override
-  void dispose() {
-    _codeCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendCode() async {
-    setState(() { _sending = true; _error = null; });
-    try {
-      final res = await http.post(
-        Uri.parse('${widget.baseUrl}/auth/client/send-phone-otp'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      final data = jsonDecode(res.body);
-      if (data['success'] != true) {
-        _error = (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'No se pudo enviar el código';
-      }
-    } catch (_) {
-      _error = 'No se pudo enviar el código. Revisa tu conexión.';
-    }
-    if (mounted) setState(() => _sending = false);
-  }
-
-  Future<void> _verify() async {
-    setState(() { _verifying = true; _error = null; });
-    try {
-      final res = await http.post(
-        Uri.parse('${widget.baseUrl}/auth/client/verify-phone'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
-        body: jsonEncode({'code': _codeCtrl.text.trim()}),
-      );
-      final data = jsonDecode(res.body);
-      if (data['success'] == true) {
-        if (mounted) Navigator.pop(context, true);
-        return;
-      }
-      if (mounted) {
-        setState(() {
-          _verifying = false;
-          _error = (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'Código incorrecto';
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() { _verifying = false; _error = 'Error de conexión, intenta de nuevo.'; });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Verificar teléfono'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Te enviamos un código de 6 dígitos a ${widget.phone}.', style: const TextStyle(fontSize: 13)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _codeCtrl,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            autofocus: true,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, letterSpacing: 4),
-            decoration: const InputDecoration(counterText: '', hintText: '000000'),
-            onChanged: (_) => setState(() {}),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: GardenColors.error, fontSize: 12)),
-          ],
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: _sending ? null : _sendCode,
-            child: Text(_sending ? 'Enviando...' : 'Reenviar código'),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        TextButton(
-          onPressed: (_verifying || _codeCtrl.text.trim().length != 6) ? null : _verify,
-          child: Text(_verifying ? 'Verificando...' : 'Verificar'),
-        ),
-      ],
-    );
-  }
-}

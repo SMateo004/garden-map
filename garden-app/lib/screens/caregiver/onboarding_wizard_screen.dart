@@ -19,6 +19,8 @@ import '../../widgets/estimated_earnings_banner.dart';
 import 'verification_screen.dart';
 import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/phone_change_flow.dart';
+import '../../design/garden_icons.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
@@ -70,6 +72,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
+  // Teléfono ya verificado = bloqueado en este paso. Solo cambia con la
+  // autorización del bot de soporte + código al número nuevo (PhoneChangeFlow).
+  bool _phoneVerifiedLocked = false;
   final _addressController = TextEditingController();
 
   // Dirección detallada
@@ -286,6 +291,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _lastNameController.text = user['lastName'] as String? ?? '';
           _emailController.text = user['email'] as String? ?? '';
           _phoneController.text = user['phone'] as String? ?? '';
+          _phoneVerifiedLocked = user['phoneVerified'] == true;
           // Pre-fill address and bio from client profile data
           if ((user['address'] as String? ?? '').isNotEmpty) {
             _addressController.text = user['address'] as String;
@@ -396,6 +402,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
       // Pre-populate all wizard state variables from the saved profile
       _populateStateFromProfile(profile);
+      if (mounted) setState(() => _phoneVerifiedLocked = profile['phoneVerified'] == true);
 
       // Rellenar teléfono desde el objeto user del perfil (necesario en paso 8)
       final userNode = profile['user'] as Map<String, dynamic>?;
@@ -1481,7 +1488,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
           SizedBox(key: _keyStep0Phone, height: 0),
           TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
-              style: TextStyle(color: textColor), decoration: _field('Teléfono (ej: 76543210)', Icons.phone_outlined)),
+              readOnly: _phoneVerifiedLocked,
+              style: TextStyle(color: textColor),
+              decoration: _field('Teléfono (ej: 76543210)', Icons.phone_outlined).copyWith(
+                suffixIcon: _phoneVerifiedLocked ? const Padding(padding: EdgeInsets.all(14), child: GardenIcon(GIcon.verificado, state: GIconState.active, size: GIconSize.sm, color: GardenColors.success)) : null,
+              )),
+          if (_phoneVerifiedLocked)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final changed = await PhoneChangeFlow.promptAndRun(context, baseUrl: _baseUrl, token: AuthState.token);
+                  if (changed != null && mounted) setState(() => _phoneController.text = changed);
+                },
+                icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm),
+                label: const Text('Cambiar número verificado'),
+              ),
+            ),
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.only(left: 4),
