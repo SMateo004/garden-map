@@ -887,6 +887,10 @@ async function assertHospedajeAvailability(
     const ds = b.walkDate.toISOString().slice(0, 10);
     datePetCounts.set(ds, (datePetCounts.get(ds) ?? 0) + (b.petCount ?? 1));
   }
+  const walkInNow = await countWalkInPetsPresentNow(tx, caregiverId);
+  if (walkInNow.pets > 0) {
+    datePetCounts.set(walkInNow.today, (datePetCounts.get(walkInNow.today) ?? 0) + walkInNow.pets);
+  }
   let cur = new Date(start);
   while (cur < end) {
     const ds = cur.toISOString().slice(0, 10);
@@ -899,6 +903,23 @@ async function assertHospedajeAvailability(
     }
     cur.setDate(cur.getDate() + 1);
   }
+}
+
+/** Mascotas walk-in (CRM de empresas) que están en el local AHORA, en
+ * hospedaje/guardería. No tienen fecha de fin, así que solo se pueden
+ * contar contra "hoy" (hora Bolivia). Antes la disponibilidad solo miraba
+ * reservas de la app: un hotel lleno de walk-in seguía recibiendo reservas
+ * del marketplace y quedaba sobrevendido. */
+async function countWalkInPetsPresentNow(tx: Prisma.TransactionClient, caregiverId: string): Promise<{ today: string; pets: number }> {
+  const today = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const pets = await tx.walkInVisit.count({
+    where: {
+      caregiverProfileId: caregiverId,
+      checkedOutAt: null,
+      serviceType: { in: [ServiceType.HOSPEDAJE, ServiceType.GUARDERIA] },
+    },
+  });
+  return { today, pets };
 }
 
 /** Paseo: la fecha debe estar disponible (fila con timeBlocks[slot]=true o defaultSchedule.paseoTimeBlocks[slot]). */
@@ -1022,6 +1043,10 @@ async function assertPaseoAvailability(
       select: { petCount: true },
     });
     hospedajePetsThatDay = overlappingHospedaje.reduce((s, b) => s + (b.petCount ?? 1), 0);
+    const walkInNow = await countWalkInPetsPresentNow(tx, caregiverId);
+    if (walkInNow.pets > 0 && date.toISOString().slice(0, 10) === walkInNow.today) {
+      hospedajePetsThatDay += walkInNow.pets;
+    }
   }
 
   // Un bloque 'legacy' es aquel que no tiene hora de inicio (bloquea todo el slot)
@@ -2907,7 +2932,7 @@ export async function checkHospedajeExtensionAvailability(
   const [booking, cfg] = await Promise.all([
     prisma.booking.findFirst({
       where: { id: bookingId, clientId },
-      select: { id: true, serviceType: true, status: true, pricePerUnit: true },
+      select: { id: true, serviceType: true, status: true, pricePerUnit: true, petCount: true, bookingExtras: { select: { pricePerDay: true } } },
     }),
     getBookingSettings(),
   ]);
@@ -2916,7 +2941,29 @@ export async function checkHospedajeExtensionAvailability(
   if (booking.serviceType !== ServiceType.HOSPEDAJE) return { availableDays: 0, pricePerDay: 0 };
   if (booking.status !== BookingStatus.IN_PROGRESS) return { availableDays: 0, pricePerDay: 0 };
 
-  return { availableDays: cfg.HOSPEDAJE_MAX_EXTENSION_DAYS, pricePerDay: Number(booking.pricePerUnit) };
+  // Precio por noche que realmente se cobra al extender (con extras y
+  // descuento multi-mascota, ya con comisión) — debe coincidir con
+  // requestHospedajeExtensionPayment, que usa el mismo helper.
+  const perDayCaregiver = hospedajeExtensionPerDayCaregiver(booking, cfg.COMMISSION_RATE);
+  return { availableDays: cfg.HOSPEDAJE_MAX_EXTENSION_DAYS, pricePerDay: Math.round(perDayCaregiver * (1 + cfg.COMMISSION_RATE)) };
+}
+
+/** Descuento multi-mascota — mismo criterio que createBooking (100%/75%/50%). */
+const PET_DISCOUNT_FACTORS = [1.0, 0.75, 0.5];
+
+/** Monto POR NOCHE (sin comisión, lo que cobra el cuidador) de extender un
+ * hospedaje: tarifa base × descuento multi-mascota + los servicios extra
+ * contratados en la reserva original (a su precio snapshot, el que el
+ * cliente aceptó). Antes la extensión cobraba solo la tarifa base, así que
+ * la empresa atendía las noches nuevas con sus extras sin cobrarlos. */
+function hospedajeExtensionPerDayCaregiver(
+  booking: { pricePerUnit: unknown; petCount: number | null; bookingExtras: Array<{ pricePerDay: unknown }> },
+  commissionRate: number
+): number {
+  const base = Math.round(Number(booking.pricePerUnit) / (1 + commissionRate));
+  const petMultiplier = PET_DISCOUNT_FACTORS.slice(0, Math.max(1, booking.petCount ?? 1)).reduce((a, b) => a + b, 0);
+  const extrasPerDay = booking.bookingExtras.reduce((sum, e) => sum + Number(e.pricePerDay), 0);
+  return base * petMultiplier + extrasPerDay;
 }
 
 export async function requestHospedajeExtensionPayment(
@@ -2929,16 +2976,17 @@ export async function requestHospedajeExtensionPayment(
 
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, clientId },
-    select: { id: true, serviceType: true, status: true, pricePerUnit: true, caregiverId: true, serviceEvents: true },
+    select: {
+      id: true, serviceType: true, status: true, pricePerUnit: true, caregiverId: true, serviceEvents: true,
+      petCount: true, bookingExtras: { select: { pricePerDay: true } },
+    },
   });
 
   if (!booking) throw new BookingNotFoundError(bookingId);
   if (booking.serviceType !== ServiceType.HOSPEDAJE) throw new BookingValidationError('Solo se puede extender un hospedaje');
   if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('Solo se puede extender un hospedaje en curso');
 
-  const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-  const extraBase = pricePerUnitCaregiver * additionalDays;
+  const extraBase = Math.round(hospedajeExtensionPerDayCaregiver(booking, cfg.COMMISSION_RATE) * additionalDays);
   const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
   // FIX (auditoría 2026-09-30, E2): ver comentario equivalente en
   // requestWalkExtensionPayment — se persiste la comisión calculada acá para
@@ -3187,6 +3235,7 @@ export async function getMyBookings(
         dispute: true,
         meetAndGreet: true,
         bookingPets: true,
+        bookingExtras: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -3344,6 +3393,7 @@ export async function getBookingById(
       dispute: true,
       meetAndGreet: true,
       bookingPets: true,
+      bookingExtras: true,
     },
   });
 
@@ -3404,6 +3454,7 @@ export async function getBookingsByCaregiverUserId(
         dispute: true,
         meetAndGreet: true,
         bookingPets: true,
+        bookingExtras: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,

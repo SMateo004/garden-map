@@ -419,6 +419,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          Center(
+            child: GardenPressable(
+              pressedScale: 0.94,
+              onTap: () => context.push('/caregiver-staff/join'),
+              child: Text('¿Te invitó una empresa? Únete con tu código',
+                  style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+          ),
         ],
       ),
       ),

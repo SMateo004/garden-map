@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
+import '../../design/garden_icons.dart';
 import '../../services/auth_service.dart';
+import '../../services/auth_state.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
 /// "Unirme a un equipo" — un empleado invitado por el dueño de una empresa
-/// entra su código, crea su propia cuenta y queda vinculado al negocio.
+/// ingresa su código y queda vinculado al negocio. Si ya tiene sesión iniciada
+/// (dueño de mascota o cuidador independiente) lo canjea con su misma cuenta;
+/// si no, crea una cuenta nueva.
 class StaffInviteAcceptScreen extends StatefulWidget {
-  const StaffInviteAcceptScreen({super.key});
+  /// Código precargado (ej. desde un link `?code=XXXXXXXX`).
+  final String? initialCode;
+  const StaffInviteAcceptScreen({super.key, this.initialCode});
 
   @override
   State<StaffInviteAcceptScreen> createState() => _StaffInviteAcceptScreenState();
@@ -28,6 +34,18 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
   bool _isSubmitting = false;
   String? _companyName;
   bool _obscure = true;
+
+  bool get _loggedIn => AuthState.hasSession;
+
+  @override
+  void initState() {
+    super.initState();
+    final code = widget.initialCode?.trim() ?? '';
+    if (code.isNotEmpty) {
+      _codeCtrl.text = code.toUpperCase();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkCode());
+    }
+  }
 
   @override
   void dispose() {
@@ -63,17 +81,46 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
     }
   }
 
+  /// Canjea el código con la cuenta que ya tiene sesión — sin crear otra.
+  Future<void> _join() async {
+    if (_companyName == null) {
+      GardenSnackBar.warning(context, 'Primero verifica tu código de invitación');
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    try {
+      final result = await _service.joinTeam(_codeCtrl.text.trim());
+      await _authService.saveToken(result['accessToken'] as String);
+      await _authService.saveRefreshToken(result['refreshToken'] as String);
+      await _authService.saveUserData({
+        ...result['user'] as Map<String, dynamic>,
+        'isCaregiverStaff': result['isCaregiverStaff'],
+        'staffCompanyName': result['staffCompanyName'],
+        'hasOwnCaregiverProfile': result['hasOwnCaregiverProfile'],
+      });
+      // Recién unido: arranca trabajando para la empresa.
+      await AuthState.setStaffMode(true);
+      if (!mounted) return;
+      GardenSnackBar.success(context, 'Ya eres parte de $_companyName');
+      context.go('/caregiver-staff/home');
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
   Future<void> _submit() async {
     if (_companyName == null) {
-      GardenSnackBar.warning(context, 'Primero verificá tu código de invitación');
+      GardenSnackBar.warning(context, 'Primero verifica tu código de invitación');
       return;
     }
     if (_firstNameCtrl.text.trim().isEmpty || _lastNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Completá tu nombre y apellido');
+      GardenSnackBar.warning(context, 'Completa tu nombre y apellido');
       return;
     }
     if (_emailCtrl.text.trim().isEmpty || _phoneCtrl.text.trim().isEmpty || _passwordCtrl.text.isEmpty) {
-      GardenSnackBar.warning(context, 'Completá todos los campos');
+      GardenSnackBar.warning(context, 'Completa todos los campos');
       return;
     }
 
@@ -94,6 +141,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
         'isCaregiverStaff': result['isCaregiverStaff'],
         'staffCompanyName': result['staffCompanyName'],
       });
+      await AuthState.setStaffMode(true);
       if (!mounted) return;
       context.go('/caregiver-staff/home');
     } catch (e) {
@@ -133,11 +181,15 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🧑‍💼', style: TextStyle(fontSize: 40)),
+                  const GardenIcon(GIcon.equipo, size: GIconSize.hero, state: GIconState.active),
                   const SizedBox(height: 16),
                   Text('Unirme a un equipo', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
-                  Text('Entrá el código que te compartió tu empleador.', style: TextStyle(color: subtextColor, fontSize: 13.5)),
+                  Text(
+                    _loggedIn
+                        ? 'Ingresa el código que te compartió tu empleador. Usarás tu cuenta actual: no pierdes tus datos y puedes seguir trabajando por tu cuenta.'
+                        : 'Ingresa el código que te compartió tu empleador.',
+                    style: TextStyle(color: subtextColor, fontSize: 13.5)),
                   const SizedBox(height: 24),
                   TextField(
                     controller: _codeCtrl,
@@ -162,6 +214,13 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                       ]),
                     ),
                   ],
+                  if (_loggedIn) ...[
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: GardenButton(label: 'Unirme con mi cuenta', loading: _isSubmitting, onPressed: _isSubmitting ? null : _join),
+                    ),
+                  ] else ...[
                   const SizedBox(height: 20),
                   Row(children: [
                     Expanded(child: TextField(controller: _firstNameCtrl, style: TextStyle(color: textColor), decoration: deco('Nombre'))),
@@ -189,6 +248,14 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                     width: double.infinity,
                     child: GardenButton(label: 'Crear mi cuenta', loading: _isSubmitting, onPressed: _isSubmitting ? null : _submit),
                   ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => context.push('/login'),
+                      child: const Text('Ya tengo cuenta de Garden — iniciar sesión'),
+                    ),
+                  ),
+                  ],
                 ],
               ),
             ),

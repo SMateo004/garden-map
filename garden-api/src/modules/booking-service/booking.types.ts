@@ -125,6 +125,8 @@ export interface BookingCreateResult {
     petSize: string | null;
     specialNeeds: string | null;
   }>;
+  /** Servicios extra contratados (snapshot al reservar). Solo presente si hay. */
+  extras?: Array<{ name: string; pricePerDay: number; totalPrice: number }>;
 }
 
 /** Misma lógica usada en generateQR() (booking.service.ts) al construir la
@@ -202,6 +204,16 @@ export function bookingToResponse(b: any): BookingCreateResult {
     donationAmount: Number(b.donationAmount ?? 0),
     serviceReport: b.serviceReport ?? null,
   };
+
+  // Servicios extra contratados (snapshot al reservar) — el cuidador/empresa
+  // necesita saber qué debe entregar; el cliente, qué pagó.
+  if (Array.isArray(b.bookingExtras) && b.bookingExtras.length > 0) {
+    res.extras = b.bookingExtras.map((e: any) => ({
+      name: e.name,
+      pricePerDay: Number(e.pricePerDay),
+      totalPrice: Number(e.totalPrice),
+    }));
+  }
 
   // petIndex 1 es la mascota principal (ya está en petName/specialNeeds
   // arriba) — solo exponemos la 2ª y 3ª aquí para no duplicar.

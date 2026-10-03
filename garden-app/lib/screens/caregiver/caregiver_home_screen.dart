@@ -4222,6 +4222,39 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
 
+              // Servicios extra que el cliente contrató y pagó — el cuidador/
+              // empresa debe entregarlos durante el servicio.
+              if ((booking['extras'] as List?)?.isNotEmpty ?? false)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Servicios extra contratados',
+                            style: TextStyle(color: widget.subtextColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+                        const SizedBox(height: 6),
+                        ...(booking['extras'] as List).map((raw) {
+                          final e = raw as Map<String, dynamic>;
+                          final total = (e['totalPrice'] as num?)?.round() ?? 0;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text('${e['name'] ?? 'Extra'} · Bs $total',
+                                style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+
               Divider(height: 1, color: widget.borderColor),
 
               // Datos del dueño

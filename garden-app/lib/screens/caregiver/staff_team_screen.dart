@@ -70,7 +70,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Compartí este código con tu empleado. Lo usa una sola vez para crear su cuenta.',
+            Text('Comparte este código con tu empleado. Lo usa una sola vez: si ya tiene cuenta de Garden, entra con ella; si no, crea una.',
                 style: TextStyle(color: subtextColor, fontSize: 13)),
             const SizedBox(height: 16),
             Container(
@@ -92,7 +92,16 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
               Clipboard.setData(ClipboardData(text: code));
               GardenSnackBar.success(context, 'Código copiado');
             },
-            child: const Text('Copiar'),
+            child: const Text('Copiar código'),
+          ),
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(
+                  text: 'Te invité a mi equipo en Garden. Descarga la app (o entra a gardenbo.com), '
+                      've a Perfil > Unirme a un equipo e ingresa este código: $code'));
+              GardenSnackBar.success(context, 'Mensaje de invitación copiado');
+            },
+            child: const Text('Copiar mensaje'),
           ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
         ],

@@ -25,6 +25,25 @@ class CaregiverStaffService {
     return data;
   }
 
+  // ── Autoservicio con cuenta existente ────────────────────────────────────
+
+  /// Canjea un código con la cuenta que ya tiene sesión (sin crear otra).
+  Future<Map<String, dynamic>> joinTeam(String code) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/caregiver-staff/join'),
+      headers: _authHeaders,
+      body: jsonEncode({'code': code}),
+    );
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
+  /// El empleado se sale del equipo por su cuenta.
+  Future<void> leaveTeam() async {
+    final res = await http.post(Uri.parse('$baseUrl/caregiver-staff/leave'), headers: _authHeaders);
+    await _decode(res);
+  }
+
   // ── Gestión del dueño ────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> createInvite({String? label}) async {

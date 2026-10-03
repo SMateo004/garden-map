@@ -116,7 +116,9 @@ class AuthService {
     final staffCompanyName = user['staffCompanyName'] as String? ?? '';
     await prefs.setBool('is_caregiver_staff', isCaregiverStaff);
     await prefs.setString('staff_company_name', staffCompanyName);
-    AuthState.updateStaffInfo(isCaregiverStaff: isCaregiverStaff, companyName: staffCompanyName);
+    final hasOwnProfile = user['hasOwnCaregiverProfile'] == true;
+    await prefs.setBool('has_own_caregiver_profile', hasOwnProfile);
+    AuthState.updateStaffInfo(isCaregiverStaff: isCaregiverStaff, companyName: staffCompanyName, hasOwnProfile: hasOwnProfile);
   }
 
   // ── Session refresh ─────────────────────────────────────────────────────────

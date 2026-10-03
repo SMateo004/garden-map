@@ -169,16 +169,21 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/bookings/:id/extend
- * Extiende hospedaje (nueva endDate). Solo CONFIRMED; cliente titular.
+ * POST /api/bookings/:id/extend — DESHABILITADO.
+ * Este endpoint subía totalAmount de la reserva SIN generar ningún cobro
+ * (el cliente "extendía" gratis y el cuidador igual cobraba el total, con
+ * Garden absorbiendo la diferencia), y además descartaba los servicios extra
+ * y el descuento multi-mascota. La app no lo usa: la extensión real pasa por
+ * request-hospedaje-extension-payment + confirmación de pago.
  */
-export const extend = asyncHandler(async (req: Request, res: Response) => {
-  const bookingId = req.params.id!;
-  const clientId = req.user!.userId;
-  const body = extendBookingBodySchema.parse(req.body);
-  const newEndDate = new Date(body.newEndDate);
-  const booking = await bookingService.extendBooking(bookingId, clientId, newEndDate);
-  res.json({ success: true, data: booking });
+export const extend = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'ENDPOINT_DEPRECATED',
+      message: 'Para extender un hospedaje usa el pago de extensión desde la reserva en curso.',
+    },
+  });
 });
 
 /**

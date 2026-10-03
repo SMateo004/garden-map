@@ -15,6 +15,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 
 // ── Autoservicio del empleado (sin auth) ─────────────────────────────────────
 router.get('/invites/:code/preview', caregiverStaffController.previewInvite);
 router.post('/register', caregiverStaffController.registerStaff);
+// Con sesión iniciada: canjear el código con la cuenta existente (sin crear otra).
+// Sin requireRole('CAREGIVER'): quien canjea suele ser todavía un CLIENT.
+router.post('/join', authMiddleware, caregiverStaffController.joinTeam);
+router.post('/leave', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.leaveTeam);
 
 // ── Gestión del dueño (empresa) ──────────────────────────────────────────────
 router.post('/invites', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.createInvite);

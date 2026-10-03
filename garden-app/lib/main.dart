@@ -438,7 +438,7 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/caregiver-staff/join',
       name: 'caregiverStaffJoin',
-      builder: (context, state) => const StaffInviteAcceptScreen(),
+      builder: (context, state) => StaffInviteAcceptScreen(initialCode: state.uri.queryParameters['code']),
     ),
     GoRoute(
       path: '/caregiver/staff',

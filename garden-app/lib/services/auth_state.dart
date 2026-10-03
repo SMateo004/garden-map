@@ -49,7 +49,9 @@ class AuthState {
   static String _token = '';
   static String _role = '';
   static String _activeRole = '';
-  static bool _isCaregiverStaff = false;
+  static bool _isCaregiverStaff = false; // membresía activa en un equipo
+  static bool _hasOwnCaregiverProfile = false;
+  static bool _staffMode = true;
   static String _staffCompanyName = '';
 
   // ── Synchronous read ───────────────────────────────────────────────────────
@@ -74,7 +76,27 @@ class AuthState {
   /// true si esta cuenta CAREGIVER es un EMPLEADO de una empresa (no el
   /// dueño) — ver caregiver-staff module del backend. Siempre false para
   /// cuentas que no son CAREGIVER.
-  static bool get isCaregiverStaff => _isCaregiverStaff;
+  ///
+  /// Una misma cuenta puede ser empleado Y cuidador independiente: en ese caso
+  /// este getter dice en cuál de los dos modos está trabajando AHORA ([staffMode]).
+  /// Si solo es empleado, siempre es true.
+  static bool get isCaregiverStaff => _isCaregiverStaff && (!_hasOwnCaregiverProfile || _staffMode);
+
+  /// La cuenta pertenece a un equipo (sin importar el modo actual).
+  static bool get hasStaffMembership => _isCaregiverStaff;
+
+  /// La cuenta tiene además su propio perfil de cuidador independiente.
+  static bool get hasOwnCaregiverProfile => _hasOwnCaregiverProfile;
+
+  /// Modo de trabajo preferido cuando la cuenta tiene ambas identidades.
+  static bool get staffMode => _staffMode;
+
+  /// Cambia entre trabajar para la empresa (true) o por cuenta propia (false).
+  static Future<void> setStaffMode(bool value) async {
+    _staffMode = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('staff_mode', value);
+  }
 
   /// Nombre de la empresa a la que pertenece el empleado (vacío si no aplica).
   static String get staffCompanyName => _staffCompanyName;
@@ -91,6 +113,8 @@ class AuthState {
     _role = prefs.getString('user_role') ?? '';
     _activeRole = prefs.getString('active_role') ?? '';
     _isCaregiverStaff = prefs.getBool('is_caregiver_staff') ?? false;
+    _hasOwnCaregiverProfile = prefs.getBool('has_own_caregiver_profile') ?? false;
+    _staffMode = prefs.getBool('staff_mode') ?? true;
     _staffCompanyName = prefs.getString('staff_company_name') ?? '';
     if (kDebugMode) {
       debugPrint('[AuthState] initialized — session: ${_token.isNotEmpty ? "present" : "none"}, '
@@ -118,8 +142,9 @@ class AuthState {
 
   /// Mismo patrón que [updateRole] — llamar junto con cada escritura a
   /// `is_caregiver_staff`/`staff_company_name` en SharedPreferences.
-  static void updateStaffInfo({bool? isCaregiverStaff, String? companyName}) {
+  static void updateStaffInfo({bool? isCaregiverStaff, String? companyName, bool? hasOwnProfile}) {
     if (isCaregiverStaff != null) _isCaregiverStaff = isCaregiverStaff;
+    if (hasOwnProfile != null) _hasOwnCaregiverProfile = hasOwnProfile;
     if (companyName != null) _staffCompanyName = companyName;
   }
 
@@ -130,6 +155,8 @@ class AuthState {
     _role = '';
     _activeRole = '';
     _isCaregiverStaff = false;
+    _hasOwnCaregiverProfile = false;
+    _staffMode = true;
     _staffCompanyName = '';
     await SecureStorageService.clearAll();
     PresenceService.instance.disconnect();

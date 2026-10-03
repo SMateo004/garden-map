@@ -19,3 +19,7 @@ export const registerStaffBodySchema = z.object({
 export const removalReasonBodySchema = z.object({
   reason: z.string().max(300).optional(),
 });
+
+export const joinTeamBodySchema = z.object({
+  code: z.string().trim().min(1, 'Código de invitación requerido').max(12),
+});

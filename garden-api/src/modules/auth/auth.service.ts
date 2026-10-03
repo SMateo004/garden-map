@@ -63,6 +63,8 @@ export interface AuthTokens {
     /** Presente solo cuando role=CAREGIVER — true si esta cuenta es un empleado de una empresa (ver caregiver-staff module), no el dueño. */
     isCaregiverStaff?: boolean;
     staffCompanyName?: string | null;
+    /** true si la cuenta tiene su propio CaregiverProfile (cuidador independiente), además de ser empleado. */
+    hasOwnCaregiverProfile?: boolean;
   };
 }
 
@@ -675,7 +677,7 @@ export async function login(
   // y cada request a /api/caregiver-staff/* la vuelve a resolver por su cuenta,
   // así que revocar el acceso de un empleado corta en el siguiente request,
   // no cuando expire este token.
-  let staffInfo: { isCaregiverStaff: boolean; staffCompanyName: string | null } | null = null;
+  let staffInfo: { isCaregiverStaff: boolean; staffCompanyName: string | null; hasOwnCaregiverProfile: boolean } | null = null;
   if (user.role === UserRole.CAREGIVER) {
     const { getStaffLoginInfo } = await import('../caregiver-staff/caregiver-staff.service.js');
     staffInfo = await getStaffLoginInfo(user.id);
@@ -693,7 +695,7 @@ export async function login(
       firstName: user.firstName,
       lastName: user.lastName,
       profilePicture: user.profilePicture,
-      ...(staffInfo ? { isCaregiverStaff: staffInfo.isCaregiverStaff, staffCompanyName: staffInfo.staffCompanyName } : {}),
+      ...(staffInfo ? { isCaregiverStaff: staffInfo.isCaregiverStaff, staffCompanyName: staffInfo.staffCompanyName, hasOwnCaregiverProfile: staffInfo.hasOwnCaregiverProfile } : {}),
     },
   };
 }
@@ -1195,7 +1197,15 @@ export async function initCaregiverProfile(userId: string): Promise<SwitchRoleRe
 
   if (!user || user.isDeleted) throw new UnauthorizedError('Usuario no encontrado');
 
-  if (user.role !== UserRole.CLIENT) {
+  // Un empleado de empresa (role CAREGIVER, membresía activa, sin perfil propio)
+  // también puede arrancar su perfil independiente para generar ingresos propios
+  // en su tiempo libre — conserva su rol y su membresía.
+  let isStaffStartingOwnProfile = false;
+  if (user.role === UserRole.CAREGIVER) {
+    const { getStaffContext } = await import('../caregiver-staff/caregiver-staff.service.js');
+    isStaffStartingOwnProfile = !!(await getStaffContext(userId));
+  }
+  if (user.role !== UserRole.CLIENT && !isStaffStartingOwnProfile) {
     throw new ForbiddenError('Solo cuentas de dueño de mascota pueden iniciar el proceso de cuidador.', 'WRONG_ROLE');
   }
 
@@ -1293,10 +1303,16 @@ export async function abandonCaregiverProfile(userId: string): Promise<SwitchRol
     throw new ForbiddenError('Solo cuentas de cuidador pueden abandonar el proceso.', 'WRONG_ROLE');
   }
 
+  const { getStaffContext } = await import('../caregiver-staff/caregiver-staff.service.js');
+  const isStaff = !!(await getStaffContext(userId));
+  // Un empleado conserva el rol CAREGIVER (si no, perdería el acceso a su equipo):
+  // abandonar solo borra su perfil independiente.
+  const roleAfterAbandon = isStaff ? UserRole.CAREGIVER : UserRole.CLIENT;
+
   const profile = await prisma.caregiverProfile.findUnique({ where: { userId } });
   if (!profile) {
     // No profile — just revert role
-    await prisma.user.update({ where: { id: userId }, data: { role: UserRole.CLIENT, activeRole: null } });
+    await prisma.user.update({ where: { id: userId }, data: { role: roleAfterAbandon, activeRole: null } });
   } else {
     // Allow abandonment from DRAFT, REJECTED, or NEEDS_REVISION.
     // PENDING_REVIEW, APPROVED, SUSPENDED require admin intervention.
@@ -1309,19 +1325,19 @@ export async function abandonCaregiverProfile(userId: string): Promise<SwitchRol
     }
     await prisma.$transaction([
       prisma.caregiverProfile.delete({ where: { userId } }),
-      prisma.user.update({ where: { id: userId }, data: { role: UserRole.CLIENT, activeRole: null } }),
+      prisma.user.update({ where: { id: userId }, data: { role: roleAfterAbandon, activeRole: null } }),
     ]);
   }
 
   await revokeAllRefreshTokens(userId);
 
-  const payload: JwtPayload = { userId, role: UserRole.CLIENT };
+  const payload: JwtPayload = { userId, role: roleAfterAbandon };
   const { token: accessToken, expiresIn } = signAccessToken(payload);
   const newRefreshToken = await createRefreshToken(userId);
 
-  logger.info('auth.service: CAREGIVER conversion abandoned → CLIENT', { userId });
+  logger.info('auth.service: CAREGIVER conversion abandoned', { userId, roleAfterAbandon });
 
-  return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: UserRole.CLIENT };
+  return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: roleAfterAbandon };
 }
 
 /**

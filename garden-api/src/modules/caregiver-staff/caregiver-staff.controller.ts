@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { BadRequestError } from '../../shared/errors.js';
 import * as caregiverStaffService from './caregiver-staff.service.js';
-import { createInviteBodySchema, registerStaffBodySchema, removalReasonBodySchema } from './caregiver-staff.validation.js';
+import { createInviteBodySchema, registerStaffBodySchema, removalReasonBodySchema, joinTeamBodySchema } from './caregiver-staff.validation.js';
 
 // ── Gestión del dueño ────────────────────────────────────────────────────────
 
@@ -63,6 +63,22 @@ export const registerStaff = asyncHandler(async (req: Request, res: Response) =>
   }
   const result = await caregiverStaffService.registerStaffMember(parsed.data);
   res.status(201).json({ success: true, data: result });
+});
+
+/** POST /api/caregiver-staff/join — usuario ya logueado canjea un código con su cuenta existente. */
+export const joinTeam = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = joinTeamBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  }
+  const result = await caregiverStaffService.joinTeamWithExistingAccount(req.user!.userId, parsed.data.code);
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/caregiver-staff/leave — el empleado se sale del equipo. */
+export const leaveTeam = asyncHandler(async (req: Request, res: Response) => {
+  await caregiverStaffService.leaveTeam(req.user!.userId);
+  res.json({ success: true });
 });
 
 // ── Operativo del empleado ───────────────────────────────────────────────────
