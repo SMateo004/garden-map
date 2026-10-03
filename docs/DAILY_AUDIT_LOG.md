@@ -1962,3 +1962,125 @@ El hallazgo de antecedentes (auto-aprobación por IA sin humano + auto-limpieza 
 marcada) de esta corrida. También siguen pendientes de corridas anteriores: **Meet & Greet sin
 reembolso en caso de incompatibilidad** (`complete(..., {approved:false})` cancela pero nunca
 reembolsa el pago ya hecho por el cliente, corrida del 2026-10-02 más temprano hoy).
+
+---
+
+## 2026-10-03 — Teléfono verificado bloqueado (feature de ayer) y su impacto en garden-app
+
+**Commit de referencia al iniciar la auditoría:** `2319480` (feat: teléfono verificado
+bloqueado, cambio solo autorizado por el bot de soporte) — el más reciente en `git log`. `git
+fetch` mostró la rama local `main` 19 commits detrás de `origin/main` (mismo patrón de corridas
+anteriores) — se hizo `git checkout main && git merge --ff-only origin/main` antes de tocar nada.
+
+**Área auditada:** la feature de ayer (categoría (a) de CLAUDE.md — seguridad/verificación de
+teléfono) tocó solo `garden-api/` — bloquea la edición de un teléfono ya verificado (403
+`PHONE_LOCKED`) salvo por una ventana de 30 min que abre el bot de soporte con detección de
+patrón fijo (sin pasar por el modelo). Como el commit no tocó `garden-app/`, se delegó a un
+subagente de exploración de solo lectura la pregunta de si la UI de Flutter ya refleja ese nuevo
+comportamiento del backend — resultó que no, y el hallazgo se verificó leyendo el código fuente
+directamente antes de clasificarlo y arreglarlo. Aparte, se revisó a fondo
+`phone-change.service.ts` y `phone-change-intent.ts` (todo el flujo de autorización/cambio) en
+busca de condiciones de carrera y vectores de inyección hacia el chat de soporte.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy (`ab235ff`)
+
+**La UI de garden-app no reflejaba el bloqueo nuevo del backend, y en la pantalla de cuidador
+mostraba un falso éxito.** Ninguna pantalla leía `phoneVerified`, `phoneChange`, `pendingPhone`,
+`canChange` ni llamaba a los endpoints nuevos (`/auth/phone-status`,
+`/auth/phone-change/start|cancel`) — confirmado con grep exhaustivo sobre `garden-app/lib/`.
+
+- **Cliente** (`garden-app/lib/screens/client/my_data_screen.dart`): el campo de teléfono seguía
+  100% editable sin ninguna advertencia. Al guardar con un teléfono ya verificado, el 403
+  `PHONE_LOCKED` rechazaba **todo** el PATCH `/auth/me` (nombre, dirección, bio incluidos), con
+  un mensaje que solo hablaba de teléfono — confuso si el usuario solo quería cambiar otra cosa.
+- **Cuidador** (`garden-app/lib/screens/caregiver/caregiver_edit_profile_screen.dart`) — bug más
+  grave: `_saveUserInfo()` enviaba el PATCH de teléfono pero **nunca leía la respuesta**. Si el
+  backend devolvía 403 `PHONE_LOCKED`, la pantalla igual mostraba "✅ Perfil actualizado
+  correctamente" (basado solo en el PATCH de dirección/bio, que no incluye el teléfono) — el
+  cuidador se iba creyendo que su número había cambiado cuando el servidor nunca lo tocó, sin
+  ninguna pista de que debía pedirlo por soporte.
+
+**Fix aplicado:** en ambas pantallas, el campo de teléfono se deshabilita cuando
+`phoneVerified === true` (mismo patrón ya usado para nombre/apellido cuando la identidad está
+verificada) con un texto explicando que el cambio se pide por el chat de soporte; no se reenvía
+`phone` en el PATCH si ya está verificado (evita el rechazo del resto de campos sin motivo); y
+`_saveUserInfo()` del cuidador ahora decodifica la respuesta y lanza si `success !== true`, para
+que el `catch` ya existente de `_saveProfile()` muestre el error real en vez de reportar éxito a
+ciegas.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos. `npm run test:unit` — 160/160 (con
+`JWT_REFRESH_SECRET` seteado a mano para esta corrida local, igual que lo hace
+`.github/workflows/ci.yml` — `tests/setup.ts` no lo define, por lo que `npm run test:unit` sin
+más falla localmente con "Invalid env: JWT_REFRESH_SECRET Required" aunque CI pase bien; no es un
+problema introducido hoy, es una brecha preexistente entre el entorno de CI y el local/sandbox,
+se deja anotado por si alguna vez molesta a alguien más). **No se pudo correr `flutter analyze`
+ni el catálogo visual** — no hay SDK de Flutter instalado en este entorno de ejecución; los
+cambios son mínimos y siguen al carácter el patrón ya existente en el mismo archivo (`enabled:
+!isVerified` + `if (isVerified) ...[...]` para nombre/apellido), pero esto no sustituye una
+corrida real de `flutter analyze` — pendiente de confirmar en un entorno con Flutter.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy (`1b2e1c2`)
+
+Dos inconsistencias menores encontradas al leer el código de la feature de ayer:
+- `auth.controller.ts` tenía comentarios desactualizados sobre el envío de OTP de teléfono
+  ("Twilio SMS", "WhatsApp + AWS SNS") que no reflejan la cadena real ya vigente desde el commit
+  de Bird (WhatsApp → Bird → Vonage → AWS SNS, correctamente documentada en
+  `otp-delivery.service.ts`). Se corrigieron para apuntar a la fuente real.
+- `admin.service.ts` (`generatePhoneOtpMessage`, el reenvío manual de OTP que hace un admin)
+  seguía generando el código con `Math.random()` en vez de `randomInt` (CSPRNG) — el mismo tipo
+  de código que el commit de ayer ya endureció en `auth.controller.ts`, pero se les olvidó este
+  segundo generador. Se unificó al patrón seguro.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado — toca autorización/verificación de teléfono)
+
+**Carrera (TOCTOU) en `startPhoneChange` sobre un mismo número nuevo, impacto bajo pero real.**
+
+`garden-api/src/modules/auth/phone-change.service.ts` función `startPhoneChange`: el chequeo de
+"ese número ya está en uso o pendiente en otra cuenta" (`prisma.user.findFirst({ where: { id: {
+not: userId }, OR: [{ phone: clean }, { pendingPhone: clean }] } })`) y la escritura de
+`pendingPhone` en la cuenta propia son dos pasos separados, no atómicos. Si dos usuarios
+distintos piden casi simultáneamente cambiar su teléfono al mismo número nuevo `X`, ambos pueden
+leer "no está tomado" antes de que el otro escriba, y los dos terminan con `pendingPhone = X` a
+la vez — cada uno con su propio código OTP en su propia fila de `User`. El número real `X`
+recibiría **dos SMS con códigos distintos** en vez de uno.
+
+**Por qué el impacto es bajo:** `commitPhoneChange` sí es atómico (compare-and-set con
+`$transaction` + `phoneChangeAuthorizedUntil: {gt: now}`) y el campo `User.phone` es `@unique` a
+nivel de base de datos — si el primero en confirmar ya tomó el número, el segundo revienta con
+`P2002` y el código ya lo traduce a `PHONE_IN_USE` (no hay corrupción de datos ni duplicado
+silencioso). El único efecto real de la carrera es que el dueño legítimo del número `X` recibe
+un SMS de más, y solo si esa persona comparte el código equivocado con la cuenta equivocada (algo
+que ya requeriría ingeniería social, exista o no esta carrera) alguien distinto al verdadero
+dueño podría terminar "ganando" el número. No es una forma de que un atacante tome el control de
+la cuenta de otro usuario de Garden — ninguno de los dos "concursantes" obtiene nada sobre el
+número de un tercero sin su cooperación.
+
+**Fix propuesto (no aplicado):** envolver el chequeo "taken" + la escritura de `pendingPhone` en
+una transacción con `SELECT ... FOR UPDATE` sobre la fila candidata, o simplemente intentar el
+`update` con una condición `WHERE pendingPhone IS NULL OR pendingPhone != clean` a nivel de los
+otros usuarios antes de escribir — mismo patrón de claim atómico ya usado en el resto del
+proyecto (`booking.service.ts`, `admin.service.ts`).
+
+**Por qué no se aplicó:** toca directamente la lógica de autorización de un cambio de teléfono
+verificado — categoría de alto riesgo de esta auditoría (seguridad/verificación) — aunque el
+impacto real sea bajo. Queda para que el dueño del proyecto decida si vale la pena blindarlo
+igual (defensa en profundidad) o se acepta el riesgo residual tal cual.
+
+### Observación sin acción (no es un bug explotable, informativo)
+
+**Dos pedidos casi simultáneos de "cambiar mi teléfono" por el chat de soporte pueden gastar de
+una sola vez las 2 autorizaciones diarias permitidas.** `authorizePhoneChange` también tiene un
+read-then-write no atómico: si el usuario manda dos mensajes que matchean el patrón de cambio de
+teléfono muy rápido (doble tap, reintento de red), ambas llamadas pueden leer "todavía no hay
+ventana abierta" antes de que la primera escriba, y las dos crean su propio registro
+`AdminNotification` tipo `PHONE_CHANGE_AUTHORIZED` — consumiendo de un solo golpe el límite diario
+de 2 que existe justamente para frenar abuso. No es explotable por un atacante (solo
+autoperjudica al propio usuario que lo dispara), así que se deja solo anotado por si en algún
+momento genera quejas de soporte ("dice que ya usé mis 2 intentos y solo pedí uno").
+
+### Pendiente de decisión del dueño del proyecto
+
+El hallazgo de la carrera en `startPhoneChange` de esta corrida (impacto bajo, pero toca
+autorización de teléfono). Siguen pendientes de corridas anteriores: antecedentes del cuidador
+(auto-aprobación por IA sin humano, 2026-10-02) y Meet & Greet sin reembolso en incompatibilidad
+(2026-10-02).
