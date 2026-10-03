@@ -38,6 +38,18 @@ const validateCodeLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 1 hora.' } },
 });
 
+// register-professional / register-company validan el código ellos mismos, así que
+// también son un punto de adivinanza: solo cuentan los intentos fallidos (un registro
+// exitoso no consume cupo), con el mismo tope que validate-*-code.
+const codeRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 1 hora.' } },
+});
+
 // 3 envíos de código por hora — previene spam de email
 const emailCodeLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -172,13 +184,13 @@ router.post('/social/register-client', registerLimiter, socialRegisterClient);
 router.post('/validate-professional-code', validateCodeLimiter, authController.validateProfessionalCode);
 
 /** POST /api/auth/register-professional — registro profesional con código de admin. */
-router.post('/register-professional', registerLimiter, authController.registerProfessional);
+router.post('/register-professional', codeRegisterLimiter, registerLimiter, authController.registerProfessional);
 
 /** POST /api/auth/validate-company-code — verifica código de empresa sin crear cuenta. */
 router.post('/validate-company-code', validateCodeLimiter, authController.validateCompanyCode);
 
 /** POST /api/auth/register-company — registro de empresa (hotel/hostal/guardería) con código de admin. */
-router.post('/register-company', registerLimiter, authController.registerCompany);
+router.post('/register-company', codeRegisterLimiter, registerLimiter, authController.registerCompany);
 
 router.post('/forgot-password', passwordResetLimiter, authController.forgotPassword);
 
@@ -215,7 +227,6 @@ router.post('/client/send-phone-otp', authMiddleware, phoneOtpSendLimiter, phone
 /** POST /api/auth/client/verify-phone — body: { code }. */
 router.post('/client/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
 
-export default router;
 // Cambio de teléfono ya verificado: solo con ventana abierta por el bot de soporte
 // (ver phone-change.service.ts). start deja el número nuevo pendiente y envía el
 // código a ese número; se confirma con verify-phone (client o caregiver).
@@ -223,3 +234,4 @@ router.get('/phone-status', authMiddleware, authController.phoneStatus);
 router.post('/phone-change/start', authMiddleware, phoneOtpSendLimiter, phoneOtpSendIpLimiter, authController.startPhoneChange);
 router.post('/phone-change/cancel', authMiddleware, authController.cancelPhoneChange);
 
+export default router;

@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
+import { findValidInvite, consumeInvite } from './professional-invite.service.js';
 import { UserRole, VerificationStatus, CaregiverStatus, Zone } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
@@ -800,14 +801,20 @@ export interface RegisterProfessionalBody {
   [key: string]: unknown;
 }
 
+/** Compara códigos de registro en tiempo constante (no filtra aciertos parciales por timing). */
+function safeCodeEquals(submitted: string, stored: string): boolean {
+  const a = createHash('sha256').update(submitted.trim()).digest();
+  const b = createHash('sha256').update(stored.trim()).digest();
+  return timingSafeEqual(a, b);
+}
+
 /**
- * Verifica que el código de registro profesional es válido.
- * No crea nada — solo comprueba el código contra AppSettings.professionalRegistrationCode.
+ * Verifica que el código de registro profesional es válido: una invitación individual,
+ * sin usar, sin revocar y vigente (ver professional-invite.service.ts). El antiguo código
+ * compartido (AppSettings.professionalRegistrationCode) ya no se acepta.
  */
 export async function validateProfessionalCode(code: string): Promise<boolean> {
-  const stored = await getStringSetting('professionalRegistrationCode', '');
-  if (!stored || stored.trim() === '') return false;
-  return code.trim() === stored.trim();
+  return (await findValidInvite(code)) !== null;
 }
 
 /**
@@ -816,9 +823,9 @@ export async function validateProfessionalCode(code: string): Promise<boolean> {
  * Crea usuario CAREGIVER + CaregiverProfile con isProfessional=true, verified=true, status=APPROVED.
  */
 export async function registerProfessional(body: RegisterProfessionalBody): Promise<RegisterCaregiverResult> {
-  // Validate code
-  const valid = await validateProfessionalCode(body.code);
-  if (!valid) {
+  // Validate code (invitación individual de un solo uso)
+  const invite = await findValidInvite(body.code);
+  if (!invite) {
     throw new BadRequestError(
       'Código de registro profesional inválido.',
       'INVALID_PROFESSIONAL_CODE'
@@ -837,7 +844,6 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
   const passwordHash = await hashPassword(body.password);
   const email = body.email.toLowerCase().trim();
 
-  const now = new Date();
   const cityId = (body as any).cityId as string | undefined;
   const zoneId = (body as any).zoneId as string | undefined;
   const cityRecord = cityId ? await prisma.city.findUnique({ where: { id: cityId } }) : null;
@@ -858,6 +864,10 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
       },
     });
 
+    // Consumir la invitación en la misma transacción: si otro registro la usó antes,
+    // esto lanza y se revierte también la creación del usuario.
+    await consumeInvite(tx, invite.id, user.id);
+
     const profile = await tx.caregiverProfile.create({
       data: {
         userId: user.id,
@@ -870,27 +880,20 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
         servicesOffered: (body.services ?? []) as any[],
         pricePerDay: body.pricePerDay ?? null,
         pricePerWalk60: body.pricePerWalk60 ?? null,
+        // El wizard profesional también manda el precio de guardería; antes se descartaba acá.
+        pricePerGuarderia: typeof body.pricePerGuarderia === 'number' ? body.pricePerGuarderia : null,
         address: typeof body.address === 'string' ? body.address : null,
-        status: CaregiverStatus.APPROVED,
-        verified: true,
-        verifiedAt: now,
-        approvedAt: now,
-        identityVerificationStatus: 'VERIFIED',
+        // La invitación solo autoriza el registro; ya NO regala aprobación. El profesional
+        // pasa por verificación de identidad (IA), teléfono y correo, y recién ahí se
+        // aprueba (submitProfile). Mientras tanto no aparece en el marketplace.
+        status: CaregiverStatus.DRAFT,
+        verified: false,
+        identityVerificationStatus: 'PENDING',
         identityVerificationToken: randomBytes(32).toString('hex'),
-        emailVerified: true,
-        // El código profesional (validado arriba) es el gate de confianza
-        // para toda la cuenta — igual que emailVerified, phoneVerified debe
-        // quedar en true desde el registro. Sin esto quedaba en false por
-        // default y no había ninguna pantalla en el wizard de "profesional"
-        // para corregirlo — el cuidador quedaba con el teléfono sin
-        // verificar para siempre, sin forma de arreglarlo.
-        phoneVerified: true,
+        emailVerified: false,
+        phoneVerified: false,
         isProfessional: true,
-        // Campo legacy que la respuesta de este endpoint todavía expone
-        // (verificationStatus) — sin esto quedaba en su default
-        // PENDING_REVIEW aunque el resto de los campos ya reflejaran una
-        // cuenta aprobada y verificada, dando una respuesta inconsistente.
-        verificationStatus: VerificationStatus.APPROVED,
+        verificationStatus: VerificationStatus.PENDING_REVIEW,
         defaultAvailabilitySchedule: {
           hospedajeDefault: true,
           paseoTimeBlocks: {
@@ -910,7 +913,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
     result.user.id,
     `${result.user.firstName} ${result.user.lastName}`,
     'CAREGIVER',
-    true // professional = verified from the start
+    false // se marca verificado al aprobarse (submitProfile)
   ).catch(err => logger.error('Blockchain sync failed (professional register)', { userId: result.user.id, err }));
 
   const payload: JwtPayload = { userId: result.user.id, role: result.user.role };
@@ -942,7 +945,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
 export async function validateCompanyCode(code: string): Promise<boolean> {
   const stored = await getStringSetting('companyRegistrationCode', '');
   if (!stored || stored.trim() === '') return false;
-  return code.trim() === stored.trim();
+  return safeCodeEquals(code, stored);
 }
 
 export interface RegisterCompanyBody {
@@ -1011,6 +1014,9 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
         ...(cityId ? { cityId } : {}),
         ...(zoneId ? { zoneId } : {}),
         address: body.address ?? null,
+        // lat/lng llegaban en el body pero nunca se guardaban: la empresa quedaba sin ubicación en el mapa.
+        ...(typeof body.lat === 'number' ? { addressLat: body.lat } : {}),
+        ...(typeof body.lng === 'number' ? { addressLng: body.lng } : {}),
         servicesOffered: (body.services ?? []) as any[],
         status: CaregiverStatus.APPROVED,
         verified: false,            // set to true after phone+email verified

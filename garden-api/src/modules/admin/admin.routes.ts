@@ -228,6 +228,11 @@ router.post('/antecedentes-flagged/:profileId/dismiss', adminController.dismissA
 /** POST /api/admin/antecedentes-flagged/:profileId/reject — rechaza el documento, no suspende. */
 router.post('/antecedentes-flagged/:profileId/reject', adminController.rejectAntecedentesDocument);
 
+/** Invitaciones de registro profesional (un código por persona, un solo uso). */
+router.get('/professional-invites', adminController.listProfessionalInvites);
+router.post('/professional-invites', adminController.createProfessionalInvite);
+router.delete('/professional-invites/:id', adminController.revokeProfessionalInvite);
+
 /** GET /api/admin/nit-verifications — empresas con NIT en revisión. */
 router.get('/nit-verifications', adminController.getNitVerifications);
 

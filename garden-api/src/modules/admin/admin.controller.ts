@@ -5,6 +5,7 @@
  */
 
 import { Request, Response } from 'express';
+import * as professionalInvites from '../auth/professional-invite.service.js';
 import multer from 'multer';
 import { ServiceType } from '@prisma/client';
 import { asyncHandler } from '../../shared/async-handler.js';
@@ -1417,4 +1418,30 @@ export const generateEmailOtpMessage = asyncHandler(async (req: Request, res: Re
   const data = await adminService.generateEmailOtpMessage(userId!);
   auditLog({ userId: req.user!.userId, action: 'EMAIL_OTP_MANUAL_MESSAGE_GENERATED', entity: 'User', entityId: userId, ip: req.ip });
   res.json({ success: true, data });
+});
+
+
+// ── Invitaciones de registro profesional (un código por persona, un solo uso) ─────────────
+
+/** GET /api/admin/professional-invites — últimas 100 invitaciones con su estado. */
+export const listProfessionalInvites = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await professionalInvites.listInvites();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/professional-invites — body { label, expiresInDays? }. Devuelve el código UNA sola vez. */
+export const createProfessionalInvite = asyncHandler(async (req: Request, res: Response) => {
+  const { label, expiresInDays } = req.body ?? {};
+  if (typeof label !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_LABEL', message: 'Indica para quién es la invitación.' } });
+  }
+  const days = typeof expiresInDays === 'number' ? expiresInDays : undefined;
+  const data = await professionalInvites.createInvite(req.user!.userId, label, days);
+  res.status(201).json({ success: true, data });
+});
+
+/** DELETE /api/admin/professional-invites/:id — revoca una invitación aún sin usar. */
+export const revokeProfessionalInvite = asyncHandler(async (req: Request, res: Response) => {
+  await professionalInvites.revokeInvite(req.user!.userId, req.params.id!);
+  res.json({ success: true });
 });

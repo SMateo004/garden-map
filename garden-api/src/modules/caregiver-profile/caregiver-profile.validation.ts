@@ -141,6 +141,7 @@ const REQUIRED_FIELDS_FOR_SUBMIT = [
   'verificationAccepted',
   'identityVerified',
   'emailVerified',
+  'phoneVerified',
   'emergencyContacts',
   'experienceYears',
   'experienceDescription',
@@ -183,6 +184,9 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   // Verificación de identidad (IA) y email son obligatorios para aprobar
   if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
   if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
+  // El wizard ya lo exige, pero sin este chequeo en el servidor un cliente propio
+  // podía llamar a /submit con un teléfono nunca confirmado por OTP.
+  if (profile.phoneVerified !== true) missing.push('phoneVerified');
 
   // Paso 9: exactamente 3 contactos de emergencia válidos (nombre + teléfono boliviano)
   const emergencyContacts = Array.isArray(profile.emergencyContacts) ? profile.emergencyContacts : [];
@@ -207,6 +211,24 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
     if (!profile.emergencyResponse || profile.emergencyResponse.trim().length < 3) missing.push('emergencyResponse');
   }
 
+  return missing;
+}
+
+/**
+ * Requisitos de aprobación del cuidador PROFESIONAL (entra con invitación). Es más corto
+ * que el individual (sin fotos del hogar ni contactos de emergencia: el wizard profesional
+ * no los pide) pero NO se salta ninguna verificación: identidad con IA, email y teléfono
+ * son obligatorios igual que para cualquier cuidador.
+ */
+export function getMissingRequiredFieldsForProfessionalSubmit(profile: any): string[] {
+  const missing: string[] = [];
+  if (((profile.bio ?? '').trim().length < 10) && ((profile.bioDetail ?? '').trim().length < 10)) missing.push('bio');
+  const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
+  if (services.length < 1) missing.push('servicesOffered');
+  if (!profile.profilePhoto) missing.push('profilePhoto');
+  if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
+  if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
+  if (profile.phoneVerified !== true) missing.push('phoneVerified');
   return missing;
 }
 

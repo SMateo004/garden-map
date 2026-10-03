@@ -1108,7 +1108,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final (statusIcon, statusColor, statusLabel) = switch (_nitStatus) {
       'VERIFICADO' => (Icons.verified_rounded, GardenColors.success, 'Verificado'),
       'EN_REVISION' => (Icons.hourglass_top_rounded, GardenColors.warning, 'En revisión'),
-      'RECHAZADO' => (Icons.error_outline_rounded, GardenColors.error, 'Rechazado — subí uno nuevo'),
+      'RECHAZADO' => (Icons.error_outline_rounded, GardenColors.error, 'Rechazado — sube uno nuevo'),
       _ => (Icons.upload_file_outlined, subtextColor, 'Pendiente'),
     };
     final canEdit = _nitStatus == 'PENDING' || _nitStatus == 'RECHAZADO';
@@ -1128,7 +1128,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('NIT del negocio', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                    Text('Un admin revisa y aprueba el documento a mano', style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                    Text('Obligatorio para aparecer en el marketplace. Un admin lo revisa a mano', style: TextStyle(color: subtextColor, fontSize: 11.5)),
                   ],
                 ),
               ),

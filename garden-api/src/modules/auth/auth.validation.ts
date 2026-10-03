@@ -319,6 +319,16 @@ export const registerProfessionalMinimalSchema = z.object({
   address: z.string().max(500).optional(),
   cityId: z.string().optional(),
   zoneId: z.string().optional(),
+  // Antes todo esto pasaba sin validar por el .passthrough(): un servicio fuera del
+  // enum o un precio como texto llegaba a Prisma y reventaba en 500, y los precios
+  // negativos se guardaban tal cual.
+  zone: z.string().max(100).optional(),
+  services: z.array(z.nativeEnum(ServiceType)).max(3).optional(),
+  pricePerDay: z.number().int().min(0).optional(),
+  pricePerWalk60: z.number().int().min(0).optional(),
+  pricePerGuarderia: z.number().min(0).optional(),
+  photos: z.array(z.string().url()).max(6).optional(),
+  profilePhoto: z.string().url().optional(),
 }).passthrough();
 
 export const registerCompanyMinimalSchema = z.object({
@@ -333,7 +343,7 @@ export const registerCompanyMinimalSchema = z.object({
   address: z.string().max(500).optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
-  services: z.array(z.string()).optional(),
+  services: z.array(z.nativeEnum(ServiceType)).max(3).optional(),
   cityId: z.string().optional(),
   zoneId: z.string().optional(),
 });

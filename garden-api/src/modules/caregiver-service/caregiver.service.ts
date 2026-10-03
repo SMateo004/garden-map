@@ -51,6 +51,21 @@ function applyMarkup(price: number | null | undefined, rate: number): number | n
  * Lista cuidadores verificados con filtros y paginación.
  * Solo status=APPROVED y verified=true (aparecen tras approve del admin). Orden: rating DESC, createdAt DESC.
  */
+/**
+ * Cuándo una cuenta ya APPROVED+verified puede mostrarse al público:
+ *  - Individual normal: verified ya implica registro completo (wizard + submit).
+ *  - Profesional: nace APPROVED/verified con solo el registro mínimo — se muestra
+ *    recién con el perfil completo (bio, fotos, precios).
+ *  - Empresa: además del perfil completo, el NIT debe estar subido (EN_REVISION o
+ *    VERIFICADO); el admin decide después si lo aprueba como sello de confianza.
+ */
+const PUBLIC_VISIBILITY_OR: Prisma.CaregiverProfileWhereInput[] = [
+  { isProfessional: false, isCompany: false },
+  // Profesional (y empresas viejas con isProfessional=false) se resuelven por isCompany.
+  { isProfessional: true, isCompany: false, caregiverProfileComplete: true },
+  { isCompany: true, caregiverProfileComplete: true, nitStatus: { in: ['EN_REVISION', 'VERIFICADO'] } },
+];
+
 export async function listCaregivers(filters: CaregiverFilters): Promise<PaginatedCaregivers> {
   const {
     service, zone, cityId, zoneId, priceRange, spaceTypes,
@@ -107,7 +122,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     // (antes de terminar el paso final del wizard, perfil detallado) — a
     // diferencia del individual, donde verified:true ya implica registro
     // 100% completo. No mostrar una empresa a medias en el marketplace.
-    OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
+    OR: PUBLIC_VISIBILITY_OR,
     // Cuidadores amateur (0 años de experiencia) con capacitación obligatoria
     // pendiente no reciben reservas hasta completarla — no aparecen en el
     // marketplace. trainingComplete se recalcula en training.service.ts y
@@ -422,7 +437,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     suspended: false,
     status: CaregiverStatus.APPROVED,
     verified: true,
-    OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
+    OR: PUBLIC_VISIBILITY_OR,
   } as Prisma.CaregiverProfileWhereUniqueInput;
 
   // Manejar el caso donde timeBlocks no existe en la DB

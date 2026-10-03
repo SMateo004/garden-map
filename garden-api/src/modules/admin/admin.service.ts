@@ -3860,7 +3860,7 @@ export async function rejectAntecedentesDocument(profileId: string, adminId: str
     data: {
       userId: profile.userId,
       title: 'Tu documento de antecedentes fue rechazado',
-      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Podés subir uno nuevo desde tu perfil cuando quieras.`,
+      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Puedes subir uno nuevo desde tu perfil cuando quieras.`,
       type: 'ANTECEDENTES_REJECTED',
     },
   });
@@ -3948,7 +3948,7 @@ export async function rejectNitVerification(profileId: string, adminId: string, 
     data: {
       userId: profile.userId,
       title: 'Tu NIT fue rechazado',
-      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Podés subir uno nuevo desde tu perfil cuando quieras.`,
+      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Puedes subir uno nuevo desde tu perfil cuando quieras.`,
       type: 'NIT_REJECTED',
     },
   });

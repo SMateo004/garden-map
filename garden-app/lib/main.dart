@@ -34,7 +34,6 @@ import 'screens/client/my_bookings_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
-import 'screens/caregiver/caregiver_setup_flow_screen.dart';
 import 'screens/caregiver/become_caregiver_screen.dart';
 import 'screens/caregiver/caregiver_guide_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
@@ -459,11 +458,6 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/pets',
       name: 'caregiverPets',
       builder: (context, state) => const CaregiverPetsScreen(),
-    ),
-    GoRoute(
-      path: '/caregiver/setup',
-      name: 'caregiverSetup',
-      builder: (context, state) => const CaregiverSetupFlowScreen(),
     ),
     GoRoute(
       path: '/caregiver/verification',

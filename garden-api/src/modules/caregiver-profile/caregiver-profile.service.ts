@@ -14,6 +14,7 @@ import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils
 import type { PatchCaregiverProfileBody, PatchAvailabilityBody } from './caregiver-profile.validation.js';
 import {
   getMissingRequiredFieldsForSubmit,
+  getMissingRequiredFieldsForProfessionalSubmit,
   validateEmergencyContacts,
   SHIRT_SIZES,
   type RequiredSubmitField,
@@ -507,10 +508,28 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     };
   }
 
+  // Una cuenta suspendida o rechazada la destraba un admin, nunca el propio
+  // cuidador: sin este bloqueo, re-enviar el perfil completo lo devolvía a
+  // APPROVED por su cuenta (los gates de reservas solo miran `status`).
+  if (
+    profile.status === CaregiverStatus.SUSPENDED ||
+    profile.status === CaregiverStatus.REJECTED ||
+    (profile as any).suspended === true
+  ) {
+    throw new ForbiddenError(
+      'Tu cuenta no puede reenviarse por este medio. Contacta a soporte de GARDEN.',
+      'PROFILE_NOT_SUBMITTABLE'
+    );
+  }
+
   // Si ya fue enviado antes, permitir re-submit (puede haber completado pasos faltantes)
   // El status se actualizará a APPROVED si pasa todas las validaciones.
 
-  const missing = getMissingRequiredFieldsForSubmit(profile);
+  // Profesional por invitación (no empresa): mismos gates de verificación, lista más corta.
+  const isIndividualProfessional = (profile as any).isProfessional === true && (profile as any).isCompany !== true;
+  const missing: string[] = isIndividualProfessional
+    ? getMissingRequiredFieldsForProfessionalSubmit(profile)
+    : getMissingRequiredFieldsForSubmit(profile);
 
   if (missing.length > 0) {
     const fieldLabels: Record<string, string> = {
@@ -524,6 +543,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       profilePhoto: 'foto de perfil (paso 2)',
       identityVerified: 'verificación de identidad (paso 8)',
       emailVerified: 'verificación de email (paso 9)',
+      phoneVerified: 'verificación de teléfono (paso 9)',
       emergencyContacts: 'debes registrar exactamente 3 contactos de emergencia (paso 10)',
       experienceYears: 'años de experiencia (paso 7)',
       experienceDescription: 'descripción de experiencia (paso 7)',

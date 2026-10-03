@@ -1049,6 +1049,26 @@ model AdminAction {
   @@map("admin_actions")
 }
 
+/// Invitación de registro profesional: un código por persona, de un solo uso y con
+/// vencimiento. Reemplaza al código compartido `professionalRegistrationCode`
+/// (filtrado = cualquiera se registraba aprobado). Solo se guarda el hash (SHA-256);
+/// el código en claro se muestra una única vez al admin que lo genera.
+model ProfessionalInvite {
+  id           String    @id @default(uuid())
+  codeHash     String    @unique @db.VarChar(64)
+  /// Para quién es (nombre/nota del admin) — solo referencia interna.
+  label        String    @db.VarChar(120)
+  createdBy    String
+  expiresAt    DateTime
+  usedAt       DateTime?
+  usedByUserId String?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("professional_invites")
+}
+
 /// Notificaciones para el panel admin (ej. nueva solicitud cuidador, pago manual, cancelación por cuidador).
 model AdminNotification {
   id          String    @id @default(uuid())
