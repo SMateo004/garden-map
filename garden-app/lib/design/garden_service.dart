@@ -53,6 +53,14 @@ enum GardenService {
         GardenService.hospedaje => isDark ? const Color(0xFF4FD18A) : GardenColors.forest,
       };
 
+  /// Degradado para encabezados grandes con texto blanco encima (el color de
+  /// marca puro no tiene contraste suficiente para texto blanco).
+  List<Color> get hero => switch (this) {
+        GardenService.paseo     => const [Color(0xFF2FA83A), Color(0xFF1A7A2A)],
+        GardenService.guarderia => const [Color(0xFFC98500), Color(0xFF8F5E00)],
+        GardenService.hospedaje => const [GardenColors.forest, Color(0xFF0B5C2E)],
+      };
+
   /// Fondo suave para tarjetas y contenedores del servicio.
   Color soft(bool isDark) => switch (this) {
         GardenService.paseo     => isDark ? const Color(0xFF173A16) : const Color(0xFFE2F7DF),

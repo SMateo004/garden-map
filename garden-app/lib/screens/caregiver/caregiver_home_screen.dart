@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
@@ -3409,10 +3410,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             selectedIndex: _selectedTab,
             onTap: _onTabTap,
             items: [
-              const GardenNavItem(Icons.home_outlined,            Icons.home_rounded,            'Inicio'),
-              const GardenNavItem(Icons.calendar_month_outlined,  Icons.calendar_month_rounded,  'Disponibilidad'),
-              GardenNavItem(Icons.list_alt_outlined,        Icons.list_alt_rounded,        'Reservas', showDot: _hasUnreadChats),
-              const GardenNavItem(Icons.person_outline_rounded,   Icons.person_rounded,          'Mi Perfil'),
+              const GardenNavItem(GIcon.inicio,         'Inicio'),
+              const GardenNavItem(GIcon.disponibilidad, 'Disponibilidad'),
+              GardenNavItem(GIcon.reservas,             'Reservas', showDot: _hasUnreadChats),
+              const GardenNavItem(GIcon.perfil,         'Mi Perfil'),
             ],
           ),
         );

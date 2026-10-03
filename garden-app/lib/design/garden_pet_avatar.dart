@@ -26,6 +26,10 @@ class GardenPetAvatar extends StatefulWidget {
   final String? caregiverName;
   final Object? heroTag;
 
+  /// Color del anillo si no debe salir del tono (ej. blanco sobre un
+  /// encabezado de color).
+  final Color? ringColor;
+
   const GardenPetAvatar({
     super.key,
     this.name,
@@ -37,6 +41,7 @@ class GardenPetAvatar extends StatefulWidget {
     this.caregiverImageUrl,
     this.caregiverName,
     this.heroTag,
+    this.ringColor,
   });
 
   @override
@@ -84,7 +89,7 @@ class _GardenPetAvatarState extends State<GardenPetAvatar> with SingleTickerProv
     final gap = ringWidth;
     final ring = widget.tone == null
         ? null
-        : StoryColors.of(widget.tone!, isDark: isDark, service: widget.service).ink;
+        : widget.ringColor ?? StoryColors.of(widget.tone!, isDark: isDark, service: widget.service).ink;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
 
     Widget photo = ClipOval(

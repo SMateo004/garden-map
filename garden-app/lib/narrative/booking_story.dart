@@ -100,6 +100,34 @@ class BookingStoryContext {
     this.disputed = false,
   });
 
+  /// Lee el JSON de una reserva tal como lo devuelve garden-api
+  /// (bookingToResponse en booking.types.ts). [caregiverView]: el "otro" de la
+  /// historia es el dueño, no el cuidador — por ahora solo cambia el nombre.
+  factory BookingStoryContext.fromBooking(Map<String, dynamic> b, {bool caregiverView = false}) {
+    return BookingStoryContext(
+      petName: b['petName'] as String?,
+      caregiverName: (caregiverView ? b['clientName'] : b['caregiverName']) as String?,
+      service: GardenService.fromApi(b['serviceType'] as String?),
+      start: bookingStart(b),
+      rated: b['ownerRated'] == true || b['ownerRating'] != null,
+      disputed: b['hasDisputePending'] == true,
+    );
+  }
+
+  /// Fecha y hora de inicio: walkDate (paseo/guardería) o startDate
+  /// (hospedaje), más startTime "HH:mm" si existe. Son fechas sin huso en la
+  /// base (hora de Bolivia), así que se arman como hora local del teléfono.
+  static DateTime? bookingStart(Map<String, dynamic> b) {
+    final date = (b['walkDate'] ?? b['startDate']) as String?;
+    if (date == null || date.length < 10) return null;
+    final d = DateTime.tryParse(date.substring(0, 10));
+    if (d == null) return null;
+    final t = (b['startTime'] as String?)?.split(':');
+    final h = t != null && t.isNotEmpty ? int.tryParse(t[0]) : null;
+    final m = t != null && t.length > 1 ? int.tryParse(t[1]) : null;
+    return DateTime(d.year, d.month, d.day, h ?? 0, m ?? 0);
+  }
+
   String get pet => _clean(petName) ?? 'tu mascota';
   String get caregiver => _firstName(caregiverName) ?? 'tu cuidador';
 
@@ -351,6 +379,18 @@ class BookingStory {
 
   // ── Fechas en lenguaje natural ──────────────────────────────────────────
 
+  /// Tiempo transcurrido corto: "8 min", "1 h 05 min", "2 días".
+  static String elapsedLabel(DateTime since, {required DateTime now}) {
+    final d = now.difference(since);
+    if (d.isNegative || d.inMinutes < 1) return 'recién';
+    if (d.inMinutes < 60) return '${d.inMinutes} min';
+    if (d.inHours < 24) {
+      final m = d.inMinutes % 60;
+      return m == 0 ? '${d.inHours} h' : '${d.inHours} h ${m.toString().padLeft(2, '0')} min';
+    }
+    return d.inDays == 1 ? '1 día' : '${d.inDays} días';
+  }
+
   static const _weekdays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
   /// "hoy a las 9:00", "mañana a las 15:30", "el sábado a las 9:00",
@@ -405,4 +445,40 @@ class StoryColors {
         return StoryColors(c, a(GardenColors.error, isDark ? 0.18 : 0.10));
     }
   }
+}
+
+// ── RESERVA PROTAGONISTA ───────────────────────────────────────────────────
+
+/// Elige la reserva que va arriba de todo en el inicio del dueño, en orden de
+/// lo que más necesita su atención:
+///   en vivo → horario ocupado → Meet & Greet → confirmada (hasta 3 h después
+///   de la hora de inicio) → esperando al cuidador → terminada sin calificar
+///   (hasta 3 días después).
+/// Las PENDING_PAYMENT no entran: suelen ser QR abandonados.
+Map<String, dynamic>? pickHeroBooking(List<Map<String, dynamic>> bookings, {required DateTime now}) {
+  bool recentStart(Map<String, dynamic> b) {
+    final start = BookingStoryContext.bookingStart(b);
+    return start == null || now.isBefore(start.add(const Duration(hours: 3)));
+  }
+
+  bool recentlyEndedUnrated(Map<String, dynamic> b) {
+    if (b['ownerRated'] == true || b['ownerRating'] != null) return false;
+    final ended = DateTime.tryParse(b['serviceEndedAt'] as String? ?? '');
+    return ended != null && now.difference(ended.toLocal()).inHours < 72;
+  }
+
+  final rules = <(String, bool Function(Map<String, dynamic>))>[
+    ('IN_PROGRESS', (_) => true),
+    ('SLOT_CONFLICT', (_) => true),
+    ('PENDING_MG', (_) => true),
+    ('CONFIRMED', recentStart),
+    ('WAITING_CAREGIVER_APPROVAL', (_) => true),
+    ('COMPLETED', recentlyEndedUnrated),
+  ];
+  for (final (status, ok) in rules) {
+    for (final b in bookings) {
+      if (b['status'] == status && ok(b)) return b;
+    }
+  }
+  return null;
 }

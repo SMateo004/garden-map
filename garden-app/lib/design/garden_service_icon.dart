@@ -184,18 +184,21 @@ class _ServicePainter extends CustomPainter {
   void _paintWalk(Canvas canvas) {
     const paws = [Offset(11, 38), Offset(24, 26.5), Offset(37, 15)];
     if (duotone) {
+      // Duotono: el camino recorrido como puntos suaves entre las huellas.
       final trail = Path()
-        ..moveTo(6, 44)
-        ..quadraticBezierTo(22, 34, 26, 24)
-        ..quadraticBezierTo(30, 14, 44, 6);
-      canvas.drawPath(
-        trail,
-        Paint()
-          ..color = ink.withValues(alpha: ink.a * _soft)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5
-          ..strokeCap = StrokeCap.round,
-      );
+        ..moveTo(4, 46)
+        ..quadraticBezierTo(20, 36, 24, 26)
+        ..quadraticBezierTo(29, 15, 45, 5);
+      final dot = Paint()..color = ink.withValues(alpha: ink.a * 0.35);
+      for (final m in trail.computeMetrics()) {
+        for (double d = 2; d < m.length; d += 5.5) {
+          final pos = m.getTangentForOffset(d)?.position;
+          if (pos == null) continue;
+          // Sin puntos debajo de las huellas: quedarían tapados y ensucian.
+          if (paws.any((p) => (p - pos).distance < 7.5)) continue;
+          canvas.drawCircle(pos, 1.3, dot);
+        }
+      }
     }
     for (var i = 0; i < paws.length; i++) {
       if (!live) {

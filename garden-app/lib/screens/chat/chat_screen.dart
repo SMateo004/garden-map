@@ -4,8 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/chat_service.dart';
+import 'package:go_router/go_router.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_pet_avatar.dart';
+import '../../design/garden_status_pill.dart';
+import '../../narrative/booking_story.dart';
+import '../../narrative/chat_event.dart';
 import '../../theme/garden_theme.dart';
-import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -49,6 +55,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // correcta aunque el caller no la haya pasado (bug histórico: casi ningún
   // call site de ChatScreen pasaba otherPersonPhoto).
   String? _otherPersonPhoto;
+
+  // Reserva de este chat (mascota, servicio, estado): da el contexto de la
+  // conversación y personaliza las respuestas rápidas. Null si no cargó.
+  Map<String, dynamic>? _booking;
+
+  bool get _isCaregiver => widget.role == 'CAREGIVER';
+  String? get _status => (_booking?['status'] as String?) ?? widget.bookingStatus;
 
   // Bloqueo/reporte de chat
   String? _otherPersonId;
@@ -112,13 +125,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     await _chatService!.loadHistory(widget.bookingId);
     await _loadMG();
-    await _loadOtherParticipant();
+    await Future.wait([_loadOtherParticipant(), _loadBooking()]);
 
     if (!mounted) return;
 
     _chatService!.markRead(widget.bookingId);
     setState(() => _initialized = true);
     _scrollToBottom();
+  }
+
+  Future<void> _loadBooking() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (mounted && data['success'] == true && data['data'] is Map<String, dynamic>) {
+        setState(() => _booking = data['data'] as Map<String, dynamic>);
+      }
+    } catch (_) {
+      // Sin contexto el chat funciona igual, solo sin la franja de la reserva.
+    }
   }
 
   Future<void> _loadOtherParticipant() async {
@@ -489,17 +517,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// escribe casi todo el mundo antes/durante el servicio. Vacío fuera de
   /// CONFIRMED/IN_PROGRESS (antes de aceptar o después de terminar no aplican).
   List<String> get _quickReplies {
-    final status = widget.bookingStatus;
-    final isCaregiver = widget.role == 'CAREGIVER';
-    if (status == 'CONFIRMED') {
-      return isCaregiver
-          ? const ['Ya salí 🚗', 'Llego en 5 min', '¿Dónde te espero?']
-          : const ['¿Ya saliste?', 'Te espero en la puerta', 'Avisé al portero'];
-    }
-    if (status == 'IN_PROGRESS') {
-      return isCaregiver
-          ? const ['Todo bien 👍', 'Ya casi terminamos', 'Está tranquilo/a']
-          : const ['¡Gracias por la foto!', '¿Todo bien?'];
+    final pet = (_booking?['petName'] as String?)?.trim();
+    final name = (pet == null || pet.isEmpty) ? null : pet;
+    switch (_status) {
+      case 'WAITING_CAREGIVER_APPROVAL':
+      case 'PENDING_MG':
+        return _isCaregiver
+            ? ['¡Hola! Me encantaría conocer a ${name ?? 'tu mascota'}', '¿Tiene alguna necesidad especial?']
+            : ['¡Hola! ${name ?? 'Mi mascota'} es muy tranquilo/a', '¿Tienes disponibilidad?'];
+      case 'CONFIRMED':
+        return _isCaregiver
+            ? const ['Ya salí', 'Llego en 5 min', '¿Dónde te espero?']
+            : ['¿Ya saliste?', 'Te espero en la puerta', '${name ?? 'Mi mascota'} está listo/a'];
+      case 'IN_PROGRESS':
+        return _isCaregiver
+            ? ['${name ?? 'Tu mascota'} está feliz', 'Todo tranquilo', 'Ya casi terminamos']
+            : ['¿Cómo está ${name ?? 'mi mascota'}?', '¿Me mandas una foto?', '¡Gracias!'];
+      case 'COMPLETED':
+        return _isCaregiver
+            ? ['Gracias por confiar en mí', 'Fue un gusto cuidar a ${name ?? 'tu mascota'}']
+            : ['¡Gracias por cuidar a ${name ?? 'mi mascota'}!'];
     }
     return const [];
   }
@@ -716,7 +753,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             backgroundColor: surface,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: textColor),
+              icon: GardenIcon(GIcon.atras, color: textColor, semanticLabel: 'Volver'),
               onPressed: () => Navigator.pop(context),
             ),
             title: Row(
@@ -766,7 +803,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             actions: [
               if (_otherPersonId != null)
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: textColor),
+                  icon: GardenIcon(GIcon.masOpciones, color: textColor, semanticLabel: 'Más opciones'),
                   onSelected: (value) {
                     if (value == 'report') _showReportSheet();
                     if (value == 'block') _confirmBlockUser();
@@ -793,7 +830,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
-                            IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                            IconButton(icon: GardenIcon(GIcon.atras, color: textColor, size: GIconSize.sm, semanticLabel: 'Volver'), onPressed: () => Navigator.pop(context)),
                             GardenAvatar(imageUrl: _otherPersonPhoto, size: 28, initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName[0] : 'U'),
                             const SizedBox(width: 10),
                             Expanded(child: Column(
@@ -810,7 +847,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             )),
                             if (_otherPersonId != null)
                               PopupMenuButton<String>(
-                                icon: Icon(Icons.more_vert, color: textColor, size: 18),
+                                icon: GardenIcon(GIcon.masOpciones, color: textColor, size: GIconSize.sm, semanticLabel: 'Más opciones'),
                                 onSelected: (value) {
                                   if (value == 'report') _showReportSheet();
                                   if (value == 'block') _confirmBlockUser();
@@ -824,6 +861,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
+                    if (_booking != null) _buildContextStrip(surface, borderColor, textColor),
                     Expanded(child: Column(
                 children: [
                   // Banner Meet & Greet (cuando está ACCEPTED)
@@ -837,7 +875,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                       child: Row(
                         children: [
-                          const Text('🤝', style: TextStyle(fontSize: 15)),
+                          const GardenIcon(GIcon.meetGreet, color: GardenColors.success, size: GIconSize.sm),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -851,11 +889,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   // Lista de mensajes
                   Expanded(
                     child: (_chatService?.messages ?? []).isEmpty
-                      ? GardenEmptyState(
-                          type: GardenEmptyType.chat,
-                          title: 'Empieza la conversación',
-                          subtitle: 'Envía un mensaje a ${widget.otherPersonName} para coordinar el servicio.',
-                          compact: true,
+                      ? Center(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Brote(pose: BrotePose.hola, size: 110),
+                                const SizedBox(height: 12),
+                                Text('Saluda a ${widget.otherPersonName.split(' ').first}',
+                                    textAlign: TextAlign.center,
+                                    style: GardenText.h4.copyWith(color: textColor)),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _isCaregiver
+                                      ? 'Preséntate y pregunta lo que necesites saber de ${_booking?['petName'] ?? 'la mascota'}.'
+                                      : 'Cuéntale cómo es ${_booking?['petName'] ?? 'tu mascota'} y coordinen el servicio.',
+                                  textAlign: TextAlign.center,
+                                  style: GardenText.bodyMedium.copyWith(color: subtextColor),
+                                ),
+                              ],
+                            ),
+                          ),
                         )
                       : ListView.builder(
                           controller: _scrollController,
@@ -878,7 +933,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: _mgLoading ? null : () => _proposeMG(),
-                          icon: const Icon(Icons.handshake_outlined, size: 16),
+                          icon: const GardenIcon(GIcon.meetGreet, size: GIconSize.sm, color: GardenColors.primary),
                           label: const Text('Proponer Meet & Greet', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: GardenColors.primary,
@@ -900,7 +955,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.block_rounded, color: subtextColor, size: 18),
+                          GardenIcon(GIcon.bloqueado, color: subtextColor),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -986,7 +1041,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               color: GardenColors.primary,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                            child: const Center(
+                                child: GardenIcon(GIcon.enviar, color: Colors.white, state: GIconState.active,
+                                    semanticLabel: 'Enviar')),
                           ),
                         ),
                       ],
@@ -1004,11 +1061,59 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// De quién y de qué habla este chat: la mascota con su anillo de estado y
+  /// la frase de BookingStory. Toca para abrir el servicio.
+  Widget _buildContextStrip(Color surface, Color borderColor, Color textColor) {
+    final b = _booking!;
+    final ctx = BookingStoryContext.fromBooking(b, caregiverView: _isCaregiver);
+    final story = BookingStory.of(b['status'] as String?, ctx);
+    return Material(
+      color: surface,
+      child: InkWell(
+        onTap: () => context.push('/service/${widget.bookingId}', extra: {
+          'role': _isCaregiver ? 'CAREGIVER' : 'CLIENT',
+          'token': _token,
+        }),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 8, 10, 10),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: borderColor))),
+          child: Row(
+            children: [
+              GardenPetAvatar(
+                name: ctx.pet,
+                size: 36,
+                tone: story.tone,
+                service: ctx.service,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GardenStatusPill(story, service: ctx.service, dense: true),
+                    const SizedBox(height: 3),
+                    Text(
+                      story.headlineFor(caregiverView: _isCaregiver),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GardenText.bodySmall.copyWith(color: textColor, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const GardenIcon(GIcon.siguiente),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMGProposalCard(ChatMessage msg, Color textColor, Color subtextColor) {
     final isDark = themeNotifier.isDark;
-    final lines = msg.message.split('\n');
-    // Parse lines: skip first (header), rest are emoji-prefixed info
-    final infoLines = lines.skip(1).toList();
+    // Detalles en el orden en que los arma el backend: fecha, lugar, modalidad.
+    final infoLines = ChatEvent.parse(msg.message).details;
+    const infoIcons = [GIcon.calendario, GIcon.ubicacion, GIcon.meetGreet];
 
     // Only the most recent proposal card should show action buttons
     final mgStatus = _mg?['status'] as String?;
@@ -1040,9 +1145,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
                 child: Row(
                   children: [
-                    const Text('🤝', style: TextStyle(fontSize: 16)),
+                    const GardenIcon(GIcon.meetGreet, state: GIconState.active),
                     const SizedBox(width: 8),
-                    Text('Meet & Greet Propuesto',
+                    Text('Meet & Greet propuesto',
                         style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
@@ -1052,10 +1157,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: infoLines.map((line) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(line, style: TextStyle(color: textColor, fontSize: 13)),
-                  )).toList(),
+                  children: [
+                    for (var k = 0; k < infoLines.length; k++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          GardenIcon(k < infoIcons.length ? infoIcons[k] : GIcon.nota,
+                              size: GIconSize.sm, color: subtextColor),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(infoLines[k], style: TextStyle(color: textColor, fontSize: 13))),
+                        ]),
+                      ),
+                  ],
                 ),
               ),
               // Action buttons (only on latest PROPOSED card that user didn't propose)
@@ -1105,45 +1218,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMessageBubble(ChatMessage msg, bool isMe, Color textColor, Color subtextColor) {
-    // Mensaje de sistema (M&G events)
+    // Mensaje de sistema: ChatEvent decide icono y tono (nunca el emoji).
     if (msg.isSystem) {
-      // Special M&G proposal card
-      if (msg.message.startsWith('📋 MEET & GREET PROPUESTO')) {
+      final event = ChatEvent.parse(msg.message);
+      if (event.kind == ChatEventKind.meetProposed) {
         return _buildMGProposalCard(msg, textColor, subtextColor);
       }
-
+      final c = StoryColors.of(event.tone, isDark: themeNotifier.isDark);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Center(
           child: Container(
+            constraints: const BoxConstraints(maxWidth: 340),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: msg.message.startsWith('✅')
-                  ? GardenColors.success.withValues(alpha: 0.1)
-                  : msg.message.startsWith('❌')
-                      ? GardenColors.error.withValues(alpha: 0.08)
-                      : GardenColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: msg.message.startsWith('✅')
-                    ? GardenColors.success.withValues(alpha: 0.3)
-                    : msg.message.startsWith('❌')
-                        ? GardenColors.error.withValues(alpha: 0.25)
-                        : GardenColors.primary.withValues(alpha: 0.2),
-              ),
+              color: c.soft,
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Text(
-              msg.message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: msg.message.startsWith('✅')
-                    ? GardenColors.success
-                    : msg.message.startsWith('❌')
-                        ? GardenColors.error
-                        : GardenColors.primary,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GardenIcon(event.icon, state: GIconState.active, size: GIconSize.sm, color: c.ink),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    [event.text, ...event.details].join(' · '),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.ink, height: 1.35),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1209,10 +1312,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Text(time, style: TextStyle(color: subtextColor, fontSize: 10)),
                     if (isMe) ...[
                       const SizedBox(width: 4),
-                      Icon(
-                        msg.read ? Icons.done_all : Icons.done,
-                        size: 12,
+                      GardenIcon(
+                        msg.read ? GIcon.leido : GIcon.enviado,
+                        size: GIconSize.xs,
                         color: msg.read ? GardenColors.primary : subtextColor,
+                        semanticLabel: msg.read ? 'Leído' : 'Enviado',
                       ),
                     ],
                   ],

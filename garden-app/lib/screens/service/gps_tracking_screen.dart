@@ -11,6 +11,9 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/gps_tracking_session.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -325,7 +328,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final headerColor = _isCaregiver ? GardenColors.forest : GardenColors.secondary;
+    final headerColor = GardenService.paseo.hero.last;
     // El tracking del cuidador ya no se puede pausar manualmente — corre
     // siempre mientras el servicio esté IN_PROGRESS, así que el badge
     // siempre muestra "activo" (sin estado "pausado").
@@ -355,7 +358,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             child: Container(
               width: 36, height: 36,
               decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-              child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+              child: const Center(child: GardenIcon(GIcon.atras, color: Colors.white, semanticLabel: 'Volver')),
             ),
           ),
           const SizedBox(width: 12),
@@ -365,7 +368,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _isCaregiver ? '📍 Compartiendo GPS' : '🐾 Siguiendo a ${widget.petName}',
+                  _isCaregiver ? 'Compartiendo tu ubicación' : 'Siguiendo a ${widget.petName}',
                   style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
                 ),
@@ -388,11 +391,13 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 width: 36, height: 36,
                 margin: const EdgeInsets.only(right: 8),
                 decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-                child: Icon(
-                  _showTrailForCaregiver
-                      ? Icons.timeline_rounded
-                      : Icons.timeline_outlined,
-                  color: Colors.white, size: 20,
+                child: Center(
+                  child: GardenIcon(
+                    GIcon.distancia,
+                    state: _showTrailForCaregiver ? GIconState.active : GIconState.idle,
+                    color: Colors.white,
+                    semanticLabel: _showTrailForCaregiver ? 'Ocultar recorrido' : 'Mostrar recorrido',
+                  ),
                 ),
               ),
             ),
@@ -407,7 +412,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 width: 36, height: 36,
                 margin: const EdgeInsets.only(right: 8),
                 decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-                child: const Icon(Icons.ios_share_rounded, color: Colors.white, size: 18),
+                child: const Center(child: GardenIcon(GIcon.compartir, color: Colors.white, semanticLabel: 'Compartir')),
               ),
             ),
           ],
@@ -490,14 +495,14 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.link_rounded, color: GardenColors.primary),
+                leading: const GardenIcon(GIcon.compartir, state: GIconState.active, size: GIconSize.lg),
                 title: Text('Copiar link', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                 onTap: () async {
                   await Clipboard.setData(ClipboardData(text: url));
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('✓ Link copiado'),
+                      content: Text('Link copiado'),
                       backgroundColor: GardenColors.success,
                       duration: Duration(seconds: 2),
                     ));
@@ -505,7 +510,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.chat_rounded, color: GardenColors.success),
+                leading: const GardenIcon(GIcon.chat, state: GIconState.active, size: GIconSize.lg),
                 title: Text('Compartir por WhatsApp', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -558,18 +563,18 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _StatChip(
-                icon: Icons.route_rounded,
+                icon: GIcon.distancia,
                 label: 'Recorrido',
                 value: _fmtDist(_distanceMeters),
-                color: GardenColors.primary,
+                color: GardenService.paseo.ink(themeNotifier.isDark),
                 textColor: textColor,
                 subtextColor: subtextColor,
               ),
               _StatChip(
-                icon: Icons.pets_rounded,
+                icon: GIcon.paseo,
                 label: widget.petName,
-                value: _isCaregiver ? 'Cuidando' : 'En paseo',
-                color: GardenColors.success,
+                value: _isCaregiver ? 'Paseando' : 'En paseo',
+                color: GardenService.paseo.ink(themeNotifier.isDark),
                 textColor: textColor,
                 subtextColor: subtextColor,
               ),
@@ -581,7 +586,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.info_outline_rounded, size: 13, color: GardenColors.secondary),
+                GardenIcon(GIcon.enVivo, size: GIconSize.xs, color: subtextColor),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -626,8 +631,23 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               Polyline(
                 points: _track,
                 strokeWidth: 4.5,
-                color: GardenColors.secondary,
+                color: GardenService.paseo.ink(false).withValues(alpha: 0.55),
               ),
+            ],
+          ),
+
+        // Huellas a lo largo del recorrido: el camino se lee como pasos.
+        if (_track.length >= 4 && (!_isCaregiver || _showTrailForCaregiver))
+          MarkerLayer(
+            markers: [
+              for (final p in _pawPoints())
+                Marker(
+                  point: p,
+                  width: 18,
+                  height: 18,
+                  child: GardenIcon(GIcon.huella,
+                      size: GIconSize.sm, state: GIconState.active, color: GardenService.paseo.ink(false)),
+                ),
             ],
           ),
 
@@ -639,10 +659,15 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 point: _track.first,
                 width: 22, height: 22,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: GardenColors.success, shape: BoxShape.circle,
+                  decoration: BoxDecoration(
+                    color: GardenService.paseo.hero.first,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 14),
+                  child: const Center(
+                    child: GardenIcon(GIcon.inicio, size: GIconSize.xs, color: Colors.white, state: GIconState.active,
+                        semanticLabel: 'Inicio del paseo'),
+                  ),
                 ),
               ),
             ],
@@ -666,16 +691,16 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                           // Pulso tipo radar detrás del avatar — sutil, solo
                           // acá (posición en vivo durante el paseo), no en
                           // ningún otro ícono del mapa.
-                          const _MapPulseRing(color: GardenColors.primary),
+                          _MapPulseRing(color: GardenService.paseo.ink(false)),
                           Container(
                             width: 44, height: 44,
                             decoration: BoxDecoration(
-                              color: GardenColors.primary,
+                              color: GardenService.paseo.hero.first,
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: GardenColors.primary.withValues(alpha: 0.45),
+                                  color: GardenService.paseo.ink(false).withValues(alpha: 0.45),
                                   blurRadius: 8, spreadRadius: 2,
                                 ),
                               ],
@@ -694,9 +719,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                       ),
                     ),
                     // Triángulo apuntando hacia abajo
-                    const CustomPaint(
-                      size: Size(12, 7),
-                      painter: _DownArrow(GardenColors.primary),
+                    CustomPaint(
+                      size: const Size(12, 7),
+                      painter: _DownArrow(GardenService.paseo.hero.first),
                     ),
                   ],
                 ),
@@ -712,12 +737,23 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   }
 
   Widget _petInitial() => Center(
-        child: Text(
-          widget.petName.isNotEmpty ? widget.petName[0].toUpperCase() : '🐾',
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
-        ),
+        child: widget.petName.isNotEmpty
+            ? Text(
+                widget.petName[0].toUpperCase(),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+              )
+            : const GardenIcon(GIcon.huella, color: Colors.white, state: GIconState.active),
       );
+
+  /// ~10 puntos repartidos a lo largo del recorrido (sin el inicio ni la
+  /// posición actual, que ya tienen su propio marcador).
+  List<LatLng> _pawPoints() {
+    const count = 10;
+    final inner = _track.sublist(1, _track.length - 1);
+    if (inner.length <= count) return inner;
+    final step = inner.length / count;
+    return [for (var k = 0; k < count; k++) inner[(k * step).floor()]];
+  }
 
   Widget _darkTile(BuildContext context, Widget child, TileImage tile) =>
       ColorFiltered(
@@ -781,7 +817,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('📍', style: TextStyle(fontSize: 56)),
+                const Brote(pose: BrotePose.buscando, size: 110),
                 const SizedBox(height: 24),
                 Text(
                   'Permiso de ubicación requerido',
@@ -800,7 +836,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
                   onPressed: () => Geolocator.openAppSettings(),
-                  icon: const Icon(Icons.settings),
+                  icon: const GardenIcon(GIcon.ajustes, color: Colors.white),
                   label: const Text('Abrir configuración de permisos'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: GardenColors.primary,
@@ -894,7 +930,7 @@ class _PulsingDotSmallState extends State<_PulsingDotSmall>
 }
 
 class _StatChip extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final String value;
   final Color color;
@@ -911,7 +947,10 @@ class _StatChip extends StatelessWidget {
             width: 40, height: 40,
             decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 20),
+            child: Center(
+              child: GardenIcon(icon, color: color, state: GIconState.active,
+                  live: icon == GIcon.paseo),
+            ),
           ),
           const SizedBox(height: 6),
           Text(value,

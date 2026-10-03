@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../design/garden_icons.dart';
 import '../widgets/garden_loading_indicator.dart';
+import 'garden_motion.dart';
 
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
@@ -595,8 +597,8 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
                   // Blob líquido — se desliza detrás del ítem activo con
                   // rebote elástico, en vez de saltar de color instantáneo.
                   AnimatedPositioned(
-                    duration: const Duration(milliseconds: 480),
-                    curve: Curves.elasticOut,
+                    duration: GardenMotion.resolve(context, GardenMotion.expressive),
+                    curve: GardenMotion.pop,
                     left: itemWidth * widget.selectedIndex + blobMargin,
                     top: 0,
                     width: (itemWidth - blobMargin * 2).clamp(0.0, itemWidth),
@@ -633,8 +635,8 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
                             // Squish táctil: downscale breve al tocar, rebote
                             // elástico al volver — sensación de gota de líquido.
                             scale: squished ? 0.90 : 1.0,
-                            duration: Duration(milliseconds: squished ? 100 : 200),
-                            curve: squished ? Curves.easeOut : Curves.easeOutBack,
+                            duration: squished ? GardenMotion.instant : GardenMotion.quick,
+                            curve: squished ? GardenMotion.enter : GardenMotion.pop,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -643,10 +645,12 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
                                   children: [
                                     Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                      child: Icon(
-                                        selected ? item.activeIcon : item.icon,
+                                      child: GardenIcon(
+                                        item.icon,
+                                        state: selected ? GIconState.active : GIconState.idle,
                                         color: iconColor,
-                                        size: 22,
+                                        size: GIconSize.lg,
+                                        semanticLabel: item.label,
                                       ),
                                     ),
                                     if (item.showDot)
@@ -667,7 +671,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
                                 ),
                                 const SizedBox(height: 3),
                                 AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 240),
+                                  duration: GardenMotion.standard,
                                   // Nav labels — SemiBold 600 inactive / Bold 700 active (nav labels spec)
                                   style: GoogleFonts.nunito(
                                     color: labelColor,
@@ -696,12 +700,12 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
 }
 
 class GardenNavItem {
-  final IconData icon;
-  final IconData activeIcon;
+  /// Icono del sistema GardenIcon: línea si no está seleccionado, duotono si sí.
+  final GIcon icon;
   final String label;
   /// Muestra un punto rojo sobre el ícono — ej. mensajes de chat sin leer.
   final bool showDot;
-  const GardenNavItem(this.icon, this.activeIcon, this.label, {this.showDot = false});
+  const GardenNavItem(this.icon, this.label, {this.showDot = false});
 }
 
 // ── LIQUID GLASS DIALOG ────────────────────────────────────────────────────

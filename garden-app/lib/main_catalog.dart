@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'design/brote.dart';
+import 'design/garden_booking_hero_card.dart';
+import 'design/garden_live_hero.dart';
+import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
@@ -102,6 +105,68 @@ class _CatalogPageState extends State<_CatalogPage> {
             const _StoryRow('COMPLETED', rated: true),
             const _StoryRow('IN_PROGRESS', disputed: true),
           ]),
+          _Section('Tarjeta protagonista (inicio)', [
+            for (final b in _sampleBookings())
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: GardenBookingHeroCard(
+                    booking: b,
+                    petSpecies: 'DOG',
+                    onTap: () {},
+                    onAction: (_) {},
+                    onChat: b['status'] == 'COMPLETED' ? null : () {},
+                  ),
+                ),
+              ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenBookingHeroCard(
+                booking: _sampleBookings().first,
+                caregiverView: true,
+                petSpecies: 'DOG',
+                onAction: (_) {},
+              ),
+            ),
+            _Note('Última: la misma reserva en vivo vista por el cuidador', fg),
+          ]),
+          _Section('Servicio en vivo (encabezado)', [
+            for (final b in _sampleBookings().take(1))
+              for (final svc in const ['PASEO', 'GUARDERIA', 'HOSPEDAJE'])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: GardenLiveHero(
+                        booking: {...b, 'serviceType': svc},
+                        timerLabel: svc == 'HOSPEDAJE' ? 'Noche 1 de 3' : '00:23:10',
+                        distanceKm: svc == 'PASEO' ? 1.6 : null,
+                        height: 280,
+                      ),
+                    ),
+                  ),
+                ),
+          ]),
+          _Section('Mosaicos y accesos (inicio)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const _TilesDemo(),
+            ),
+            const SizedBox(height: 14),
+            Wrap(children: [
+              for (final (i, l) in const [
+                (GIcon.veterinaria, 'Veterinarias cerca'),
+                (GIcon.favorito, 'Favoritos'),
+                (GIcon.repetir, 'Reservas fijas'),
+                (GIcon.regalo, 'Invita y gana'),
+                (GIcon.ayuda, 'Ayuda'),
+              ])
+                GardenShortcut(icon: i, label: l, onTap: () {}),
+            ]),
+          ]),
           _Section('Avatar de mascota', [
             Wrap(spacing: 20, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.end, children: [
               const _Labeled('sin estado', GardenPetAvatar(name: 'Luna', species: 'DOG', size: 56)),
@@ -148,6 +213,72 @@ class _CatalogPageState extends State<_CatalogPage> {
         ],
       ),
     );
+  }
+}
+
+List<Map<String, dynamic>> _sampleBookings() {
+  final now = DateTime.now();
+  String day(int add) {
+    final d = DateTime(now.year, now.month, now.day + add);
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  return [
+    {
+      'id': 'b1', 'status': 'IN_PROGRESS', 'serviceType': 'PASEO', 'petName': 'Luna',
+      'caregiverName': 'Andrea Rojas', 'walkDate': day(0), 'startTime': '09:00',
+      'serviceStartedAt': now.subtract(const Duration(minutes: 23)).toUtc().toIso8601String(),
+    },
+    {
+      'id': 'b2', 'status': 'CONFIRMED', 'serviceType': 'GUARDERIA', 'petName': 'Luna',
+      'caregiverName': 'Carlos Méndez', 'walkDate': day(1), 'startTime': '08:30',
+    },
+    {
+      'id': 'b3', 'status': 'WAITING_CAREGIVER_APPROVAL', 'serviceType': 'HOSPEDAJE', 'petName': 'Luna',
+      'caregiverName': 'Valeria Suárez', 'startDate': day(4),
+    },
+    {
+      'id': 'b4', 'status': 'COMPLETED', 'serviceType': 'HOSPEDAJE', 'petName': 'Luna',
+      'caregiverName': 'Valeria Suárez', 'startDate': day(-2),
+      'serviceEndedAt': now.subtract(const Duration(hours: 3)).toUtc().toIso8601String(),
+    },
+  ];
+}
+
+class _TilesDemo extends StatefulWidget {
+  const _TilesDemo();
+  @override
+  State<_TilesDemo> createState() => _TilesDemoState();
+}
+
+class _TilesDemoState extends State<_TilesDemo> {
+  GardenService? _selected = GardenService.paseo;
+  bool _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: GardenServiceTile(
+          service: null,
+          selected: _all,
+          onTap: () => setState(() => _all = true),
+        ),
+      ),
+      for (final s in GardenService.values) ...[
+        const SizedBox(width: 8),
+        Expanded(
+          child: GardenServiceTile(
+            service: s,
+            selected: !_all && _selected == s,
+            onTap: () => setState(() {
+              _all = false;
+              _selected = s;
+            }),
+          ),
+        ),
+      ],
+    ]);
   }
 }
 

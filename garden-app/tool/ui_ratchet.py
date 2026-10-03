@@ -6,6 +6,8 @@ Cuenta en lib/:
   - emojis:         emojis en código (los iconos de interfaz son GardenIcon;
                     el emoji queda solo para lo que escribe la gente)
   - loose_curves:   Curves.* fuera de lib/theme/garden_motion.dart
+  - voseo:          formas de voseo en textos de la interfaz ("Revisá",
+                    "podés"). La app habla de tú (decisión de octubre 2026).
 
 Uso:
   python tool/ui_ratchet.py            # falla (exit 1) si algún número subió
@@ -32,6 +34,18 @@ EMOJI_ALLOW = {
 CURVES_ALLOW = {"lib/theme/garden_motion.dart"}
 
 ICONS_RE = re.compile(r"(?<![\w.])Icons\.\w")
+
+# Voseo habitual en textos de interfaz. Solo se busca dentro de literales de
+# texto (los comentarios del código pueden estar en voseo, no los ve nadie).
+VOSEO = (
+    "podés|tenés|querés|sabés|sos|necesitás|revisá|probá|volvé|intentá|elegí|agregá|tocá|"
+    "ingresá|escribí|confirmá|esperá|subí|completá|verificá|contactá|seleccioná|usá|mirá|"
+    "descargá|buscá|encontrá|pedí|hacé|poné|decí|dejá|activá|cargá|guardá|compartí|"
+    "registrate|creá|abrí|aceptá|avisá|llamá|pagá|reservá|cancelá|contanos|escribinos|"
+    "andá|vení|fijate|asegurate|acordate|animate|sumate|unite|conectate"
+)
+VOSEO_RE = re.compile(r"(?i)(?<![\wáéíóúñ])(%s)(?![\wáéíóúñ])" % VOSEO)
+STRING_RE = re.compile(r"'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"")
 CURVES_RE = re.compile(r"(?<![\w.])Curves\.\w")
 
 
@@ -40,7 +54,7 @@ def is_emoji(cp: int) -> bool:
 
 
 def count() -> dict:
-    totals = {"material_icons": 0, "emojis": 0, "loose_curves": 0}
+    totals = {"material_icons": 0, "emojis": 0, "loose_curves": 0, "voseo": 0}
     for f in sorted(LIB.rglob("*.dart")):
         rel = f.relative_to(ROOT).as_posix()
         text = f.read_text(encoding="utf-8")
@@ -49,6 +63,7 @@ def count() -> dict:
             totals["emojis"] += sum(1 for ch in text if is_emoji(ord(ch)))
         if rel not in CURVES_ALLOW:
             totals["loose_curves"] += len(CURVES_RE.findall(text))
+        totals["voseo"] += sum(len(VOSEO_RE.findall(m.group(0))) for m in STRING_RE.finditer(text))
     return totals
 
 
@@ -82,6 +97,7 @@ def main() -> int:
                 "material_icons": "  → usa GardenIcon(GIcon.…) de lib/design/garden_icons.dart",
                 "emojis": "  → usa GardenIcon o Brote en lugar de emojis",
                 "loose_curves": "  → usa GardenMotion.enter / exit / pop",
+                "voseo": "  → la app habla de tú: \"Revisa\", \"puedes\"",
             }[k]
         print(f"{mark} {k}: {v} (base {b}){hint}")
     if not failed and any(now[k] < base.get(k, now[k]) for k in now):

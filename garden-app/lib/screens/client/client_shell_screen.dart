@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_tutorial.dart';
 import 'marketplace_screen.dart';
@@ -23,10 +24,10 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
   late int _selectedTab;
 
   static const _items = [
-    GardenNavItem(Icons.search_outlined,         Icons.search_rounded,        'Inicio'),
-    GardenNavItem(Icons.list_alt_outlined,       Icons.list_alt_rounded,      'Reservas'),
-    GardenNavItem(Icons.pets_outlined,           Icons.pets,                  'Mascotas'),
-    GardenNavItem(Icons.person_outline_rounded,  Icons.person_rounded,        'Mi Perfil'),
+    GardenNavItem(GIcon.inicio,   'Inicio'),
+    GardenNavItem(GIcon.reservas, 'Reservas'),
+    GardenNavItem(GIcon.mascotas, 'Mascotas'),
+    GardenNavItem(GIcon.perfil,   'Mi Perfil'),
   ];
 
   @override

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:garden_app/design/brote.dart';
+import 'package:garden_app/design/garden_booking_hero_card.dart';
+import 'package:garden_app/design/garden_live_hero.dart';
 import 'package:garden_app/design/garden_icons.dart';
 import 'package:garden_app/design/garden_pet_avatar.dart';
 import 'package:garden_app/design/garden_service.dart';
@@ -81,6 +83,56 @@ void main() {
     });
   });
 
+  group('Reserva protagonista', () {
+    Map<String, dynamic> bk(String status, {String? date, String? time, Map<String, dynamic> extra = const {}}) =>
+        {'id': status, 'status': status, 'walkDate': date, 'startTime': time, ...extra};
+
+    test('lo en vivo gana sobre todo lo demás', () {
+      final picked = pickHeroBooking([
+        bk('CONFIRMED', date: '2026-10-03', time: '09:00'),
+        bk('WAITING_CAREGIVER_APPROVAL'),
+        bk('IN_PROGRESS'),
+      ], now: now);
+      expect(picked?['status'], 'IN_PROGRESS');
+    });
+
+    test('una confirmada deja de mostrarse 3 h después de su hora', () {
+      final b = bk('CONFIRMED', date: '2026-10-02', time: '06:00');
+      expect(pickHeroBooking([b], now: DateTime(2026, 10, 2, 8, 59)), isNotNull);
+      expect(pickHeroBooking([b], now: DateTime(2026, 10, 2, 9, 1)), isNull);
+    });
+
+    test('terminada sin calificar se muestra 3 días; calificada o vieja no', () {
+      final ended = now.subtract(const Duration(hours: 5)).toUtc().toIso8601String();
+      final old = now.subtract(const Duration(days: 4)).toUtc().toIso8601String();
+      expect(pickHeroBooking([bk('COMPLETED', extra: {'serviceEndedAt': ended})], now: now), isNotNull);
+      expect(pickHeroBooking([bk('COMPLETED', extra: {'serviceEndedAt': ended, 'ownerRated': true})], now: now), isNull);
+      expect(pickHeroBooking([bk('COMPLETED', extra: {'serviceEndedAt': old})], now: now), isNull);
+    });
+
+    test('pagos pendientes no aparecen (suelen ser QR abandonados)', () {
+      expect(pickHeroBooking([bk('PENDING_PAYMENT')], now: now), isNull);
+    });
+
+    test('lee la reserva del backend', () {
+      final c = BookingStoryContext.fromBooking({
+        'petName': 'Luna', 'caregiverName': 'Andrea Rojas', 'serviceType': 'HOSPEDAJE',
+        'startDate': '2026-10-05', 'ownerRating': 5, 'hasDisputePending': false,
+      });
+      expect(c.service, GardenService.hospedaje);
+      expect(c.start, DateTime(2026, 10, 5));
+      expect(c.rated, isTrue);
+      expect(c.caregiver, 'Andrea');
+    });
+
+    test('tiempo transcurrido corto', () {
+      expect(BookingStory.elapsedLabel(now.subtract(const Duration(seconds: 20)), now: now), 'recién');
+      expect(BookingStory.elapsedLabel(now.subtract(const Duration(minutes: 23)), now: now), '23 min');
+      expect(BookingStory.elapsedLabel(now.subtract(const Duration(minutes: 65)), now: now), '1 h 05 min');
+      expect(BookingStory.elapsedLabel(now.subtract(const Duration(hours: 50)), now: now), '2 días');
+    });
+  });
+
   group('ChatEvent', () {
     test('propuesta de Meet & Greet con detalles sin emojis', () {
       final e = ChatEvent.parse('📋 MEET & GREET PROPUESTO\n📅 jueves · 17:00\n📍 Parque Urbano\n🤝 Presencial');
@@ -147,6 +199,24 @@ void main() {
       ]), reduceMotion: true));
       await tester.pumpAndSettle();
       expect(find.text('Paseando · 23 min'), findsOneWidget);
+    });
+
+    testWidgets('tarjeta protagonista y encabezado en vivo se dibujan', (tester) async {
+      final booking = {
+        'id': 'b1', 'status': 'IN_PROGRESS', 'serviceType': 'PASEO', 'petName': 'Luna',
+        'caregiverName': 'Andrea Rojas',
+        'serviceStartedAt': DateTime.now().subtract(const Duration(minutes: 23)).toUtc().toIso8601String(),
+      };
+      await tester.pumpWidget(host(SingleChildScrollView(
+        child: Column(children: [
+          GardenBookingHeroCard(booking: booking, onAction: (_) {}, onChat: () {}),
+          GardenLiveHero(booking: booking, timerLabel: '00:23:10', distanceKm: 1.6),
+        ]),
+      ), reduceMotion: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Luna está paseando con Andrea.'), findsNWidgets(2));
+      expect(find.text('Ver mapa'), findsOneWidget);
+      expect(find.text('1,6 km'), findsOneWidget);
     });
 
     testWidgets('Brote dibuja las seis poses y se queda quieto', (tester) async {

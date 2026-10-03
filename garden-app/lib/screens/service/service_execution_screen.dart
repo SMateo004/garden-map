@@ -12,6 +12,10 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_live_hero.dart';
+import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
@@ -44,7 +48,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // se manda junto con /conclude para el reporte del servicio.
   String? _selectedMood;
   String _token = '';
-  late AnimationController _pulseController;
   Timer? _serviceTimer;
   Timer? _photoRefreshTimer;
   Timer? _caregiverRefreshTimer;
@@ -122,10 +125,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
     // Rebuild when comment text changes so the submit button enables/disables correctly
     _surveyCommentController.addListener(() { if (mounted) setState(() {}); });
     if (widget.role == 'CAREGIVER') {
@@ -166,7 +165,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   @override
   void dispose() {
-    _pulseController.dispose();
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
     _caregiverRefreshTimer?.cancel();
@@ -351,6 +349,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (_) {}
   }
+
+  GardenService get _svc =>
+      GardenService.fromApi(_booking?['serviceType'] as String?) ?? GardenService.paseo;
 
   String _buildGpsStatusText() {
     if (!_gpsHasSignal) return 'El cuidador aún no ha compartido su ubicación';
@@ -788,10 +789,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isPaseo = _booking?['serviceType'] == 'PASEO';
     final isGuarderia = _booking?['serviceType'] == 'GUARDERIA';
-    final heroColors = isPaseo
-        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
-        : [GardenColors.primaryDark, GardenColors.primary];
-    final serviceEmoji = isPaseo ? '🦮' : (isGuarderia ? '🏡' : '🏠');
+    final heroColors = _svc.hero;
     final serviceConfirmedLabel = isPaseo
         ? 'Paseo confirmado'
         : (isGuarderia ? 'Guardería confirmada' : 'Hospedaje confirmado');
@@ -882,7 +880,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(serviceEmoji, style: const TextStyle(fontSize: 13)),
+                                GardenIcon(GIcon.forService(_svc),
+                                    size: GIconSize.sm, color: Colors.white, state: GIconState.active),
                                 const SizedBox(width: 6),
                                 Text(
                                   serviceConfirmedLabel,
@@ -1963,27 +1962,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
     final isPaseo = _booking?['serviceType'] == 'PASEO';
     final isGuarderia = _booking?['serviceType'] == 'GUARDERIA';
-    final heroColors = isPaseo
-        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
-        : [GardenColors.primaryDark, GardenColors.primary];
+    final heroColors = _svc.hero;
 
     final caregiverName = _booking?['caregiverName'] as String? ?? 'Tu cuidador';
     final caregiverPhoto = _booking?['caregiverPhoto'] as String?;
     final caregiverRating = _booking?['caregiverRating'];
     final petName = _booking?['petName'] as String? ?? 'Tu mascota';
 
-    String serviceLabel;
-    String serviceEmoji;
-    if (isPaseo) {
-      serviceLabel = 'Paseo confirmado';
-      serviceEmoji = '🦮';
-    } else if (isGuarderia) {
-      serviceLabel = 'Guardería confirmada';
-      serviceEmoji = '🏡';
-    } else {
-      serviceLabel = 'Hospedaje confirmado';
-      serviceEmoji = '🏠';
-    }
+    final String serviceLabel = isPaseo
+        ? 'Paseo confirmado'
+        : (isGuarderia ? 'Guardería confirmada' : 'Hospedaje confirmado');
 
     return Scaffold(
       backgroundColor: bg,
@@ -2043,7 +2031,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(serviceEmoji, style: const TextStyle(fontSize: 13)),
+                                GardenIcon(GIcon.forService(_svc),
+                                    size: GIconSize.sm, color: Colors.white, state: GIconState.active),
                                 const SizedBox(width: 6),
                                 Text(serviceLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
                               ],
@@ -2268,12 +2257,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // Antes HOSPEDAJE y GUARDERIA compartían el mismo tratamiento visual
     // (incluso un tono café fuera de paleta, 0xFF8C5200) — ahora cada uno
     // tiene su propio anclaje coherente con la marca.
-    final serviceAccent = isPaseo
-        ? GardenColors.forest
-        : isHospedaje
-            ? GardenColors.orange
-            : GardenColors.info;
-    final serviceEmoji = isPaseo ? '🦮' : (isHospedaje ? '🏠' : '🏡');
+    final serviceAccent = _svc.ink(isDark);
     final serviceTypeLabel = isPaseo ? 'Paseo' : (isHospedaje ? 'Hospedaje' : 'Guardería');
     final timerStr = (isPaseo || isGuarderia)
         ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
@@ -2281,81 +2265,25 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
         .where((e) => e['type'] == 'INCIDENT' || e['type'] == 'ACCIDENT').toList();
     final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
-    final heroColors = isPaseo
-        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
-        : isHospedaje
-            ? [GardenColors.orange, GardenColors.orangeDark]
-            : [GardenColors.info, GardenColors.infoDark];
 
     return Scaffold(
       backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
-          // ── Hero inmersivo ─────────────────────────────────────────────
+          // ── Hero: la mascota en vivo (GardenLiveHero) ──────────────────
           SliverToBoxAdapter(
             child: Stack(
               children: [
-                Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: heroColors,
-                    ),
-                  ),
-                ),
-                Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.2)],
-                    ),
-                  ),
-                ),
-                SafeArea(
-                  bottom: false,
-                  child: SizedBox(
-                    height: 300,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 6),
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, _) => Transform.translate(
-                            offset: Offset(0, _pulseController.value * -6),
-                            child: isPaseo
-                                ? _WalkIllustration(petName: _booking?['petName'] ?? '')
-                                : _StayIllustration(petName: _booking?['petName'] ?? ''),
-                          ),
-                        ),
-                        const Spacer(),
-                        // Live timer badge
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.28),
-                            borderRadius: BorderRadius.circular(GardenRadius.full),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _PulsingDot(size: 8),
-                              const SizedBox(width: 10),
-                              Text(
-                                isPaseo ? 'EN VIVO  $timerStr' : 'EN CURSO  $timerStr',
-                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1.2),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                GardenLiveHero(
+                  booking: _booking ?? const {},
+                  caregiverView: widget.role != 'CLIENT',
+                  petPhotoUrl: _booking?['petPhoto'] as String?,
+                  timerLabel: timerStr,
+                  distanceKm: isPaseo
+                      ? (_booking?['gpsDistance'] as num?) != null
+                      ? (_booking!['gpsDistance'] as num).toDouble() / 1000
+                      : null
+                      : null,
                 ),
                 // Nav buttons
                 Positioned(
@@ -2375,7 +2303,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
+                      child: const Center(
+                          child: GardenIcon(GIcon.atras, color: Colors.white, semanticLabel: 'Volver')),
                     ),
                   ),
                 ),
@@ -2391,7 +2320,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                         ),
-                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                        child: const Center(
+                            child: GardenIcon(GIcon.cerrar, color: Colors.white, semanticLabel: 'Cerrar')),
                       ),
                     ),
                   ),
@@ -2543,7 +2473,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
                           child: Row(
                             children: [
-                              const Text('🐾', style: TextStyle(fontSize: 16)),
+                              const GardenIcon(GIcon.huella, state: GIconState.active),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: RichText(
@@ -2622,7 +2552,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         children: [
                           Row(
                             children: [
-                              Text(serviceEmoji, style: const TextStyle(fontSize: 15)),
+                              GardenIcon(GIcon.forService(_svc), size: GIconSize.md, state: GIconState.active),
                               const SizedBox(width: 8),
                               Text(
                                 serviceTypeLabel.toUpperCase(),
@@ -2654,7 +2584,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
                   if (_booking?['serviceType'] == 'PASEO' || _booking?['serviceType'] == 'HOSPEDAJE')
-                    _sectionHeader('Seguimiento en vivo', Icons.sensors_rounded, textColor, subtextColor),
+                    _sectionHeader('Seguimiento en vivo', GIcon.enVivo, textColor, subtextColor),
                   if (_booking?['serviceType'] == 'PASEO') ...[
                     // ── Card GPS en vivo ──────────────────────────────────────
                     GestureDetector(
@@ -2677,15 +2607,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              GardenColors.forest.withValues(alpha: 0.92),
-                              GardenColors.forest.withValues(alpha: 0.75),
-                            ],
+                            colors: GardenService.paseo.hero,
                           ),
                           borderRadius: BorderRadius.circular(GardenRadius.xl),
                           boxShadow: [
                             BoxShadow(
-                              color: GardenColors.forest.withValues(alpha: 0.25),
+                              color: GardenService.paseo.hero.first.withValues(alpha: 0.25),
                               blurRadius: 12, offset: const Offset(0, 4),
                             ),
                           ],
@@ -2698,7 +2625,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(GardenRadius.md),
                               ),
-                              child: const Icon(Icons.map_rounded, color: Colors.white, size: 22),
+                              child: const Center(child: GardenIcon(GIcon.mapa, color: Colors.white, size: GIconSize.lg)),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -2780,7 +2707,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _sectionHeader('Actualizaciones del servicio', Icons.photo_camera_back_outlined, textColor, subtextColor),
+                        _sectionHeader('Momentos del servicio', GIcon.foto, textColor, subtextColor),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                           decoration: BoxDecoration(
@@ -2872,23 +2799,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            width: 48, height: 48,
-                            decoration: BoxDecoration(
-                              color: GardenColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(GardenRadius.md),
-                            ),
-                            child: const Center(child: Text('📸', style: TextStyle(fontSize: 22))),
-                          ),
-                          const SizedBox(width: 14),
+                          const Brote(pose: BrotePose.esperando, size: 56),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Esperando fotos',
+                                Text('Esperando el primer momento',
                                   style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
                                 const SizedBox(height: 3),
-                                Text('El cuidador te enviará fotos durante el servicio',
+                                Text(
+                                  '${(_booking?['caregiverName'] as String? ?? 'Tu cuidador').split(' ').first} '
+                                  'te va a enviar fotos de ${_booking?['petName'] ?? 'tu mascota'} durante el servicio.',
                                   style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4)),
                               ],
                             ),
@@ -3880,12 +3802,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   /// Encabezado de sección estilo Airbnb/Uber — un ícono chico + label en
   /// mayúsculas espaciadas, para agrupar visualmente bloques de contenido
   /// relacionado sin necesitar otra caja/borde.
-  Widget _sectionHeader(String label, IconData icon, Color textColor, Color subtextColor) {
+  Widget _sectionHeader(String label, GIcon icon, Color textColor, Color subtextColor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Icon(icon, color: subtextColor, size: 15),
+          GardenIcon(icon, color: subtextColor, size: GIconSize.sm),
           const SizedBox(width: 6),
           Text(
             label.toUpperCase(),
@@ -6446,60 +6368,6 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
         width: widget.size, height: widget.size,
         decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
-    );
-  }
-}
-
-class _WalkIllustration extends StatelessWidget {
-  final String petName;
-  const _WalkIllustration({required this.petName});
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 96, height: 96,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-          ),
-          child: const Center(child: Text('🦮', style: TextStyle(fontSize: 48))),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          petName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: 0.2),
-        ),
-      ],
-    );
-  }
-}
-
-class _StayIllustration extends StatelessWidget {
-  final String petName;
-  const _StayIllustration({required this.petName});
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 96, height: 96,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-          ),
-          child: const Center(child: Text('🏠', style: TextStyle(fontSize: 48))),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          petName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: 0.2),
-        ),
-      ],
     );
   }
 }

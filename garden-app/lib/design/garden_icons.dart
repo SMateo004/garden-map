@@ -36,7 +36,8 @@ enum GIcon {
   // ── Navegación ──
   inicio(Ph.house),
   buscar(Ph.magnifyingGlass),
-  reservas(Ph.calendarBlank),
+  reservas(Ph.clipboardText),
+  disponibilidad(Ph.calendarDots),
   mascotas(Ph.pawPrint),
   perfil(Ph.user),
   ajustes(Ph.gear),
@@ -44,6 +45,10 @@ enum GIcon {
   ayuda(Ph.question),
   soporte(Ph.headset),
   siguiente(Ph.caretRight),
+  atras(Ph.caretLeft),
+  cerrar(Ph.x),
+  filtros(Ph.slidersHorizontal),
+  mapa(Ph.mapTrifold),
 
   // ── Servicios (iconos propios, ver garden_service_icon.dart) ──
   paseo.service(GardenService.paseo),
@@ -74,6 +79,7 @@ enum GIcon {
   cancelado(Ph.xCircle),
   enRevision(Ph.scales),
   conflicto(Ph.warningCircle),
+  emergencia(Ph.siren),
 
   // ── Confianza ──
   identidadVerificada(Ph.identificationCard),
@@ -99,9 +105,16 @@ enum GIcon {
   nota(Ph.notepad),
   telefono(Ph.phone),
   correo(Ph.envelope),
+  enviado(Ph.check),
+  leido(Ph.checks),
+  masOpciones(Ph.dotsThreeVertical),
+  bloqueado(Ph.prohibit),
 
   // ── General ──
   reloj(Ph.clock),
+  calendario(Ph.calendarBlank),
+  cronometro(Ph.timer),
+  distancia(Ph.path),
   estrella(Ph.star),
   favorito(Ph.heart),
   agregar(Ph.plus),

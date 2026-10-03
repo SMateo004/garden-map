@@ -13,12 +13,20 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/zones.dart';
 import '../../services/zones_service.dart';
 import '../../services/cities_service.dart';
+import '../../design/brote.dart';
+import '../../design/garden_booking_hero_card.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
+import '../../design/garden_tiles.dart';
+import '../../narrative/booking_story.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
 import '../../services/auth_state.dart';
 import '../../utils/web_redirect.dart';
+import 'nearby_vets_screen.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -114,6 +122,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── Reserva activa / próxima ──
   Map<String, dynamic>? _activeBooking;
+
+  // ── Mascotas del cliente (saludo y foto de la reserva) ──
+  List<Map<String, dynamic>> _clientPets = [];
 
   // ── Current user id (para excluir propio perfil de cuidador) ──
   String? _currentUserId;
@@ -366,8 +377,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   /// ambos o ninguno, se deja en "Todos" (null). Nunca pisa un valor ya
   /// explícito (ej. venir de un link con initialPetType) ni un guest sin
   /// sesión.
+  /// Carga las mascotas del cliente (para el saludo y la foto en la tarjeta
+  /// de la reserva) y, si todas son de la misma especie, preselecciona ese
+  /// filtro.
   Future<void> _autoSelectPetTypeFromClientPets() async {
-    if (widget.initialPetType != null) return;
     final token = AuthState.token;
     if (token.isEmpty) return;
     try {
@@ -379,8 +392,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] != true) return;
       final pets = (data['data'] as List? ?? []).cast<Map<String, dynamic>>();
+      if (mounted) setState(() => _clientPets = pets);
       final types = pets.map((p) => p['animalType']?.toString()).whereType<String>().toSet();
-      if (types.length == 1 && mounted) {
+      if (widget.initialPetType == null && types.length == 1 && mounted) {
         setState(() => _selectedPetType = types.first);
       }
     } catch (_) {
@@ -416,16 +430,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] != true) return;
       final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
-      // Prioridad: IN_PROGRESS > CONFIRMED > WAITING_CAREGIVER_APPROVAL
-      // Desaparece solo cuando tiene ownerRating (fue calificado)
-      const activeStatuses = ['IN_PROGRESS', 'CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'];
-      Map<String, dynamic>? found;
-      for (final s in activeStatuses) {
-        found = bookings.where((b) =>
-          b['status'] == s && b['ownerRating'] == null
-        ).firstOrNull;
-        if (found != null) break;
-      }
+      final found = pickHeroBooking(bookings, now: DateTime.now());
       if (mounted) setState(() => _activeBooking = found);
     } catch (_) {}
   }
@@ -550,158 +555,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   String _getGreeting() {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Buenos días,';
-    if (h < 19) return 'Buenas tardes,';
-    return 'Buenas noches,';
-  }
-
-  String _formatBookingTime(Map<String, dynamic> b) {
-    // Paseo: mostrar hora específica si está disponible
-    final startTime = b['startTime'] as String?;
-    if (startTime != null && startTime.isNotEmpty) {
-      try {
-        final parts = startTime.split(':');
-        final h = int.parse(parts[0]);
-        final m = int.parse(parts[1]);
-        final period = h >= 12 ? 'pm' : 'am';
-        final h12 = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-        final mStr = m.toString().padLeft(2, '0');
-        return '$h12:$mStr $period';
-      } catch (_) {}
-    }
-    // Fallback: timeSlot
-    final slot = b['timeSlot'] as String?;
-    if (slot == 'MANANA') return 'por la mañana';
-    if (slot == 'TARDE') return 'por la tarde';
-    if (slot == 'NOCHE') return 'por la noche';
-    return '';
-  }
-
-  Widget _buildActiveBookingBanner() {
-    final b = _activeBooking;
-    if (b == null) return const SizedBox.shrink();
-
-    final status = b['status'] as String;
-    final isInProgress = status == 'IN_PROGRESS';
-    final isPaseo = b['serviceType'] == 'PASEO';
-    final petName = b['petName'] as String? ?? 'tu mascota';
-    final caregiverName = (b['caregiverName'] as String? ?? 'el cuidador').split(' ').first;
-    final duration = b['duration'] as int?;
-    final timeStr = _formatBookingTime(b);
-
-    // Texto principal y sublabel según estado
-    String mainText;
-    String subText;
-    IconData actionIcon;
-
-    if (isInProgress) {
-      mainText = isPaseo
-          ? '$petName está de paseo 🐕'
-          : '$petName está con $caregiverName';
-      subText = 'con $caregiverName${duration != null ? ' · $duration min' : ''}';
-      actionIcon = Icons.play_circle_fill_rounded;
-    } else if (status == 'CONFIRMED') {
-      final walkDate = b['walkDate'] as String?;
-      String fechaStr = '';
-      DateTime? serviceDateTime;
-      if (walkDate != null) {
-        try {
-          final d = DateTime.parse(walkDate);
-          const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-          fechaStr = '${d.day} ${months[d.month - 1]}';
-          // Build datetime from date + startTime to hide banner when past
-          final st = b['startTime'] as String?;
-          if (st != null && st.isNotEmpty) {
-            final tp = st.split(':');
-            serviceDateTime = DateTime(d.year, d.month, d.day,
-                int.tryParse(tp[0]) ?? 8, int.tryParse(tp.length > 1 ? tp[1] : '0') ?? 0);
-          } else {
-            serviceDateTime = DateTime(d.year, d.month, d.day, 8, 0);
-          }
-        } catch (_) {}
-      }
-      // Hide banner once the scheduled time has passed (service should have started)
-      if (serviceDateTime != null && DateTime.now().isAfter(serviceDateTime)) {
-        return const SizedBox.shrink();
-      }
-      mainText = isPaseo
-          ? '$petName pasea${timeStr.isNotEmpty ? ' a las $timeStr' : ''}'
-          : '$petName se queda con $caregiverName';
-      subText = 'con $caregiverName${fechaStr.isNotEmpty ? ' · $fechaStr' : ''}${duration != null && isPaseo ? ' · $duration min' : ''}';
-      actionIcon = Icons.calendar_today_rounded;
-    } else {
-      mainText = 'Reserva pendiente de confirmación';
-      subText = 'con $caregiverName · $petName';
-      actionIcon = Icons.hourglass_top_rounded;
-    }
-
-    // Rediseño más compacto y amigable: fondo suave (no bloque sólido), una
-    // sola línea de texto principal con la etiqueta de estado como chip
-    // integrado, e ícono más pequeño — antes ocupaba ~100px de alto, ahora
-    // baja a ~56px sin perder la información.
-    return GestureDetector(
-      onTap: () => context.push('/my-bookings'),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: GardenColors.primary.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(actionIcon, color: GardenColors.primary, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(children: [
-                    Text(
-                      isInProgress ? 'EN CURSO' : 'PRÓXIMA SESIÓN',
-                      style: const TextStyle(
-                        color: GardenColors.primary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        subText,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: GardenColors.primary.withValues(alpha: 0.65), fontSize: 11),
-                      ),
-                    ),
-                  ]),
-                  Text(
-                    mainText,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: GardenColors.primary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: GardenColors.primary.withValues(alpha: 0.5), size: 20),
-          ],
-        ),
-      ),
-    );
+    if (h < 12) return 'Buenos días';
+    if (h < 19) return 'Buenas tardes';
+    return 'Buenas noches';
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -777,207 +633,296 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ── Layout MÓVIL ──────────────────────────────────────────────────────────
+  // Solo el saludo queda fijo. La reserva protagonista, la búsqueda, los
+  // servicios y los accesos scrollean junto con la lista para que en un
+  // teléfono chico los cuidadores no queden escondidos debajo del encabezado.
   Widget _buildMobileLayout(ThemeData theme, bool isDark, Color bg, Color surface, Color border) {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    final header = <Widget>[
+      if (kIsWeb) _buildMobileAppBanner(bg, border, textColor, subtextColor, isDark),
+      if (_activeBooking != null) ...[
+        _buildActiveBookingCard(),
+        const SizedBox(height: 14),
+      ],
+      _buildMobileSearchRow(theme, isDark, surface, border, textColor, subtextColor),
+      const SizedBox(height: 12),
+      _buildServiceTiles(),
+      const SizedBox(height: 14),
+      _buildShortcuts(),
+      const SizedBox(height: 18),
+      Text(
+        _listTitle,
+        style: GardenText.h4.copyWith(color: textColor, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 10),
+    ];
 
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Saludo + Notificaciones ───────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_getGreeting(),
-                            style: GardenText.metadata.copyWith(color: subtextColor)),
-                        const SizedBox(height: 2),
-                        RichText(
-                          text: TextSpan(children: [
-                            TextSpan(
-                              text: _userName?.split(' ').first ?? 'tú',
-                              style: GardenText.h3.copyWith(
-                                  color: textColor, fontWeight: FontWeight.w900),
-                            ),
-                            const TextSpan(text: ' 🌿',
-                                style: TextStyle(fontSize: 22)),
-                          ]),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_authToken.isNotEmpty)
-                    NotificationBell(token: _authToken, baseUrl: _baseUrl),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // ── Banner app móvil (solo web en mobile) ─────────────────
-            if (kIsWeb) _buildMobileAppBanner(bg, border, textColor, subtextColor, isDark),
-            if (kIsWeb && !_appBannerDismissed) const SizedBox(height: 4),
-
-            // ── Banner reserva activa / próxima ───────────────────────
-            _buildActiveBookingBanner(),
-            if (_activeBooking != null) const SizedBox(height: 8),
-
-            // ── Barra de búsqueda ──────────────────────────────────────
-            Container(
-              color: Colors.transparent,
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: bg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: border),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: TextStyle(color: textColor, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar cuidador...',
-                          hintStyle: TextStyle(color: subtextColor, fontSize: 14),
-                          prefixIcon: Icon(Icons.search, color: subtextColor, size: 18),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                        onChanged: (v) {
-                          _searchDebounce?.cancel();
-                          _searchDebounce = Timer(const Duration(milliseconds: 400), () {
-                            setState(() => _searchQuery = v.trim());
-                            _loadCaregivers(reset: true);
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Botón filtros
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      _showMobileFilterSheet(theme, isDark, surface, border);
-                    },
-                    child: Container(
-                      height: 40, width: 40,
-                      decoration: BoxDecoration(
-                        color: _activeFilterCount > 0
-                            ? GardenColors.primary.withValues(alpha: 0.15)
-                            : bg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _activeFilterCount > 0 ? GardenColors.primary : border,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Center(child: Icon(Icons.tune_rounded,
-                              color: _activeFilterCount > 0 ? GardenColors.primary : subtextColor,
-                              size: 20)),
-                          if (_activeFilterCount > 0)
-                            Positioned(
-                              top: 4, right: 4,
-                              child: Container(
-                                width: 14, height: 14,
-                                decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                                child: Center(child: Text('$_activeFilterCount',
-                                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800))),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Chips de servicio ──────────────────────────────────────
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
-              child: Row(
-                children: [
-                  _mobileServiceChip('todos', 'Todos', isDark),
-                  const SizedBox(width: 8),
-                  _mobileServiceChip('paseo', '🦮 Paseo', isDark),
-                  const SizedBox(width: 8),
-                  _mobileServiceChip('hospedaje', '🏠 Hospedaje', isDark),
-                  const SizedBox(width: 8),
-                  _mobileServiceChip('guarderia', '🏡 Guardería', isDark),
-                ],
-              ),
-            ),
-            // El filtro de tipo de mascota ya no vive acá suelto — ahora se
-            // autocompleta según las mascotas del cliente (ver
-            // _autoSelectPetTypeFromClientPets) y solo queda editable dentro
-            // de "Todos los filtros", para no duplicar el control en dos
-            // lugares de la pantalla principal.
-            const SizedBox(height: 6),
-            Container(height: 1, color: border),
-
-            // ── Lista de cuidadores ────────────────────────────────────
-            Expanded(child: _buildCaregiverList(theme, isDark)),
+            _buildGreeting(textColor, subtextColor),
+            Expanded(child: _buildCaregiverList(theme, isDark, header: header)),
           ],
         ),
       ),
-      // FAB: mapa
       floatingActionButton: FloatingActionButton.small(
         backgroundColor: GardenColors.primary,
+        tooltip: 'Ver mapa',
         onPressed: () {
           HapticFeedback.selectionClick();
           _showMobileMapSheet(isDark);
         },
-        child: const Icon(Icons.map_outlined, color: Colors.white, size: 20),
+        child: const GardenIcon(GIcon.mapa, color: Colors.white, size: GIconSize.md),
       ),
     );
   }
 
-  Widget _mobileServiceChip(String value, String label, bool isDark) {
-    final isSelected = _selectedService == value;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedService = value);
-        _loadCaregivers(reset: true);
+  // ── Saludo: la persona y su mascota ──────────────────────────────────────
+  Widget _buildGreeting(Color textColor, Color subtextColor) {
+    final firstName = _userName?.split(' ').first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      child: Row(
+        children: [
+          const Brote(pose: BrotePose.hola, size: 46),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstName == null ? _getGreeting() : '${_getGreeting()}, $firstName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GardenText.bodySmall.copyWith(color: subtextColor, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  _petQuestion,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GardenText.headingLarge.copyWith(color: textColor, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
+          if (_authToken.isNotEmpty) NotificationBell(token: _authToken, baseUrl: _baseUrl),
+        ],
+      ),
+    );
+  }
+
+  List<String> get _petNames => _clientPets
+      .map((p) => (p['name'] as String?)?.trim() ?? '')
+      .where((n) => n.isNotEmpty)
+      .toList();
+
+  String get _petQuestion {
+    final names = _petNames;
+    if (names.isEmpty) return '¿Qué necesita tu mascota hoy?';
+    if (names.length == 1) return '¿Qué hace ${names.first} hoy?';
+    if (names.length == 2) return '¿Qué hacen ${names[0]} y ${names[1]} hoy?';
+    return '¿Qué hacen tus mascotas hoy?';
+  }
+
+  String get _listTitle {
+    final names = _petNames;
+    final forWho = names.length == 1 ? 'para ${names.first}' : 'de confianza';
+    return 'Cuidadores $forWho en $_cityName';
+  }
+
+  // ── Reserva protagonista ─────────────────────────────────────────────────
+  Widget _buildActiveBookingCard() {
+    final b = _activeBooking!;
+    final id = b['id'] as String;
+    final pet = _clientPets.where((p) => p['id'] == b['petId']).firstOrNull;
+    final status = b['status'] as String?;
+    final disputed = b['hasDisputePending'] == true;
+
+    void openService() => context.push('/service/$id', extra: {'role': 'CLIENT', 'token': _authToken});
+    void openChat() => context.push('/chat/$id', extra: {
+          'otherPersonName': b['caregiverName'] ?? 'Cuidador',
+          'otherPersonPhoto': b['caregiverPhoto'],
+        });
+    final opensService = status == 'IN_PROGRESS' || status == 'CONFIRMED' || status == 'COMPLETED';
+
+    return GardenBookingHeroCard(
+      booking: b,
+      petPhotoUrl: pet?['photoUrl'] as String?,
+      petSpecies: pet?['animalType'] as String?,
+      onTap: opensService ? openService : () => context.push('/my-bookings'),
+      onChat: status == 'COMPLETED' ? null : openChat,
+      onAction: (action) {
+        switch (action) {
+          case StoryAction.viewMap:
+          case StoryAction.viewNotes:
+            openService();
+          case StoryAction.chat:
+            openChat();
+          case StoryAction.pay:
+            context.push('/payment/$id');
+          case StoryAction.viewMeet:
+            context.push('/meet-and-greet/$id', extra: {'role': 'CLIENT'});
+          case StoryAction.chooseOtherTime:
+            context.push('/slot-conflict/$id', extra: {
+              'serviceType': b['serviceType'],
+              'caregiverId': b['caregiverId'],
+            });
+          case StoryAction.viewDetail:
+            if (disputed) {
+              context.push('/dispute/$id', extra: {'role': 'CLIENT'});
+            } else {
+              openService();
+            }
+          case StoryAction.bookAgain:
+            context.push('/caregiver/${b['caregiverId']}');
+          case StoryAction.rate:
+          case StoryAction.respond:
+          case StoryAction.sendPhoto:
+          case StoryAction.findAnother:
+            context.push('/my-bookings');
+        }
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? GardenColors.primary
-              : (isDark
-                  ? GardenColors.primary.withValues(alpha: 0.12)
-                  : GardenColors.lime.withValues(alpha: 0.75)),
-          borderRadius: BorderRadius.circular(GardenRadius.full),
-          boxShadow: isSelected
-              ? [BoxShadow(
-                  color: GardenColors.primary.withValues(alpha: 0.28),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                )]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : GardenColors.primary,
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+    );
+  }
+
+  // ── Búsqueda + filtros ───────────────────────────────────────────────────
+  Widget _buildMobileSearchRow(ThemeData theme, bool isDark, Color surface, Color border,
+      Color textColor, Color subtextColor) {
+    final hasFilters = _activeFilterCount > 0;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: border),
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: textColor, fontSize: 14),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Busca un cuidador por nombre',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 14),
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 6),
+                  child: GardenIcon(GIcon.buscar, color: subtextColor),
+                ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 38),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onChanged: (v) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+                  setState(() => _searchQuery = v.trim());
+                  _loadCaregivers(reset: true);
+                });
+              },
+            ),
           ),
         ),
+        const SizedBox(width: 8),
+        Semantics(
+          button: true,
+          label: hasFilters ? 'Filtros, $_activeFilterCount activos' : 'Filtros',
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _showMobileFilterSheet(theme, isDark, surface, border);
+            },
+            child: AnimatedContainer(
+              duration: GardenMotion.resolve(context, GardenMotion.quick),
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: hasFilters ? GardenColors.primary.withValues(alpha: 0.15) : surface,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: hasFilters ? GardenColors.primary : border),
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: GardenIcon(
+                      GIcon.filtros,
+                      state: hasFilters ? GIconState.active : GIconState.idle,
+                    ),
+                  ),
+                  if (hasFilters)
+                    Positioned(
+                      top: 5,
+                      right: 5,
+                      child: Container(
+                        width: 15,
+                        height: 15,
+                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                        child: Center(
+                          child: Text('$_activeFilterCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Servicios como mosaicos (día → noche) ────────────────────────────────
+  Widget _buildServiceTiles() {
+    const options = <(String, GardenService?)>[
+      ('todos', null),
+      ('paseo', GardenService.paseo),
+      ('guarderia', GardenService.guarderia),
+      ('hospedaje', GardenService.hospedaje),
+    ];
+    return Row(
+      children: [
+        for (var k = 0; k < options.length; k++) ...[
+          if (k > 0) const SizedBox(width: 8),
+          Expanded(
+            child: GardenServiceTile(
+              service: options[k].$2,
+              selected: _selectedService == options[k].$1,
+              onTap: () {
+                if (_selectedService == options[k].$1) return;
+                setState(() => _selectedService = options[k].$1);
+                _loadCaregivers(reset: true);
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Accesos rápidos ──────────────────────────────────────────────────────
+  Widget _buildShortcuts() {
+    final items = <(GIcon, String, VoidCallback)>[
+      (GIcon.veterinaria, 'Veterinarias cerca',
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
+      (GIcon.favorito, 'Favoritos', () => context.push('/favorites')),
+      (GIcon.repetir, 'Reservas fijas', () => context.push('/recurring-bookings')),
+      (GIcon.regalo, 'Invita y gana', () => context.push('/referral')),
+      (GIcon.ayuda, 'Ayuda', () => context.push('/help-center')),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (icon, label, onTap) in items) GardenShortcut(icon: icon, label: label, onTap: onTap),
+        ],
       ),
     );
   }
@@ -1038,7 +983,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Descargá GARDEN para una experiencia completa con notificaciones, GPS y más.',
+            'Descarga GARDEN para una experiencia completa con notificaciones, GPS y más.',
             style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
           ),
           const SizedBox(height: 10),
@@ -1900,38 +1845,46 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── Caregiver List ────────────────────────────────────────────────────────
 
-  Widget _buildCaregiverList(ThemeData theme, bool isDark) {
+  /// [header]: widgets que scrollean arriba de la lista (layout móvil).
+  Widget _buildCaregiverList(ThemeData theme, bool isDark, {List<Widget> header = const []}) {
     final displayed = _displayCaregivers;
+    final pad = header.isEmpty
+        ? const EdgeInsets.all(GardenSpacing.lg)
+        : const EdgeInsets.fromLTRB(16, 4, 16, 96);
+
+    // Estado vacío o error debajo del encabezado, sin perder el encabezado.
+    Widget withHeader(Widget state) => header.isEmpty
+        ? state
+        : ListView(padding: pad, children: [...header, SizedBox(height: 320, child: state)]);
 
     // Skeleton cards que calcan el layout final de la tarjeta de cuidador —
     // se percibe mucho más premium que un spinner genérico en una pantalla
     // tan cargada de listas como el marketplace.
     if (_isLoading && _caregivers.isEmpty) {
-      return ListView.builder(
-        padding: const EdgeInsets.all(GardenSpacing.lg),
-        itemCount: 5,
-        itemBuilder: (_, __) => _buildCaregiverCardSkeleton(isDark),
+      return ListView(
+        padding: pad,
+        children: [...header, for (var k = 0; k < 5; k++) _buildCaregiverCardSkeleton(isDark)],
       );
     }
     if (_hasError && _caregivers.isEmpty) {
-      return GardenEmptyState(
+      return withHeader(GardenEmptyState(
         type: GardenEmptyType.generic,
         title: 'No pudimos conectar',
-        subtitle: 'Revisá tu conexión a internet e intentá de nuevo — tus filtros quedaron guardados.',
+        subtitle: 'Revisa tu conexión a internet e intenta de nuevo. Tus filtros quedaron guardados.',
         ctaLabel: 'Reintentar',
         onCta: () => _loadCaregivers(reset: true),
-      );
+      ));
     }
     if (displayed.isEmpty && !_isLoading) {
-      return GardenEmptyState(
+      return withHeader(GardenEmptyState(
         type: GardenEmptyType.caregivers,
         title: 'Sin cuidadores disponibles',
         subtitle: _activeFilterCount > 0
-            ? 'Ningún cuidador coincide con los filtros aplicados. Probá ampliar la zona o quitar algún filtro.'
-            : 'No hay cuidadores disponibles en este momento. Volvé a intentar en un rato.',
+            ? 'Ningún cuidador coincide con tus filtros. Prueba ampliar la zona o quitar algún filtro.'
+            : 'No hay cuidadores disponibles en este momento. Vuelve a intentar en un rato.',
         ctaLabel: _activeFilterCount > 0 ? 'Limpiar filtros' : null,
         onCta: _activeFilterCount > 0 ? _clearAllFilters : null,
-      );
+      ));
     }
 
     // Construir lista combinada: cuidadores + banners intercalados por position
@@ -1953,12 +1906,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       onRefresh: () => _loadCaregivers(reset: true),
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.all(GardenSpacing.lg),
+        padding: pad,
         // Siempre scrolleable para que el pull-to-refresh funcione incluso
         // con pocos resultados que no llenan la pantalla.
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: items.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, i) {
+        itemCount: header.length + items.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index < header.length) return header[index];
+          final i = index - header.length;
           if (i == items.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -1974,8 +1929,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               : _buildCaregiverCard(item['data'] as Map<String, dynamic>);
           return card
               .animate()
-              .fadeIn(duration: 220.ms, delay: delayMs.ms)
-              .slideY(begin: 0.04, end: 0, duration: 220.ms, curve: Curves.easeOut);
+              .fadeIn(duration: GardenMotion.quick, delay: delayMs.ms)
+              .slideY(begin: 0.04, end: 0, duration: GardenMotion.quick, curve: GardenMotion.enter);
         },
       ),
     );
@@ -2151,15 +2106,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final zone = _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
     final expYears = caregiver['experienceYears'] as int?;
     final allServices = (caregiver['services'] as List? ?? []);
-    final services = allServices.take(2).toList();
+    final services = allServices.take(3).toList();
     // Set de servicios realmente habilitados (servicesOffered) — un precio
     // guardado en la BD (ej. Guardería pre-rellenada con el precio de Paseo)
     // no implica que el cuidador ofrezca ese servicio hoy.
     final servicesSet = allServices.map((s) => s.toString()).toSet();
 
-    // Prices to display — list of (label, unit) pairs
-    // Solo se muestra el precio si el servicio está habilitado Y el precio > 0
-    final List<(String, String)> prices = [];
+    // Precios a mostrar: (monto, unidad, servicio). Solo si el servicio está
+    // habilitado Y el precio > 0. El servicio se dibuja con su icono propio.
+    final List<(String, String, GardenService)> prices = [];
     final priceDay = caregiver['pricePerDay'];
     final priceWalk60 = caregiver['pricePerWalk60'];
     final priceWalk30 = caregiver['pricePerWalk30'];
@@ -2170,23 +2125,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final priceGuarderia = caregiver['pricePerGuarderia'];
     final bool hasGuarderiaPrice = servicesSet.contains('GUARDERIA') && priceGuarderia != null && (priceGuarderia as num) > 0;
 
+    final walk = ('Bs $priceWalk30', '30 min', GardenService.paseo);
+    final day = ('Bs $priceGuarderia', '/hora', GardenService.guarderia);
+    final night = ('Bs $priceDay', '/noche', GardenService.hospedaje);
     if (_selectedService == 'hospedaje') {
-      if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));
+      if (hasDayPrice) prices.add(night);
     } else if (_selectedService == 'paseo') {
-      if (hasWalk30Price) prices.add(('Bs $priceWalk30', '30 min'));
+      if (hasWalk30Price) prices.add(walk);
     } else if (_selectedService == 'guarderia') {
-      if (hasGuarderiaPrice) prices.add(('Bs $priceGuarderia', '/hora 🏡'));
+      if (hasGuarderiaPrice) prices.add(day);
     } else {
-      // 'todos' — show only prices for services the caregiver actually offers
-      if (hasWalk30Price) {
-        prices.add(('Bs $priceWalk30', '30 min 🦮'));
-      }
-      if (hasDayPrice) {
-        prices.add(('Bs $priceDay', '/noche 🏠'));
-      }
-      if (hasGuarderiaPrice) {
-        prices.add(('Bs $priceGuarderia', '/hora 🏡'));
-      }
+      // 'todos' — solo los servicios que el cuidador ofrece de verdad
+      if (hasWalk30Price) prices.add(walk);
+      if (hasGuarderiaPrice) prices.add(day);
+      if (hasDayPrice) prices.add(night);
     }
 
     return GardenPressable(
@@ -2225,12 +2177,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             color: isVerified ? GardenColors.primary.withValues(alpha: 0.6) : borderColor,
                             width: isVerified ? 2 : 1.5),
                       ),
-                      child: GardenAvatar(
+                      child: Hero(
+                        tag: 'caregiver-${caregiver['id']}',
+                        child: GardenAvatar(
                         imageUrl: caregiver['profilePicture'] as String?,
                         size: 58,
                         initials: (isCompany && (companyName?.isNotEmpty ?? false))
                             ? companyName![0]
                             : '${firstName.isNotEmpty ? firstName[0] : "C"}${lastName.isNotEmpty ? lastName[0] : ""}',
+                        ),
                       ),
                     ),
                     if (isVerified)
@@ -2239,7 +2194,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         child: Container(
                           width: 18, height: 18,
                           decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                          child: const Icon(Icons.verified_rounded, size: 11, color: Colors.white),
+                          child: const GardenIcon(GIcon.verificado,
+                              size: GIconSize.xs, color: Colors.white, state: GIconState.active,
+                              semanticLabel: 'Verificado'),
                         ),
                       ),
                   ]),
@@ -2248,50 +2205,64 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          Expanded(
-                            child: Text(displayName,
-                                style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
-                          const SizedBox(width: 2),
-                          Text(rating, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
-                          if (reviewCount > 0) ...[
-                            const SizedBox(width: 2),
-                            Text('($reviewCount)', style: TextStyle(color: subtextColor, fontSize: 10)),
-                          ],
-                        ]),
+                        Text(displayName,
+                            maxLines: 1,
+                            style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 3),
-                        Row(children: [
-                          Container(
-                            width: 7, height: 7,
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(color: zoneColor, shape: BoxShape.circle),
-                          ),
-                          Text(zone, style: TextStyle(color: subtextColor, fontSize: 11)),
-                          if (expYears != null) ...[
-                            Text('  ·  ', style: TextStyle(color: subtextColor, fontSize: 11)),
-                            const Icon(Icons.workspace_premium_outlined, size: 10, color: GardenColors.primary),
+                        // Calificación, zona y experiencia como grupos: si no
+                        // entran en una línea, bajan enteros (sin "·" colgando).
+                        Wrap(spacing: 10, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            const GardenIcon(GIcon.estrella,
+                                color: GardenColors.star, size: GIconSize.xs, state: GIconState.active),
                             const SizedBox(width: 2),
-                            Text('$expYears+ años',
-                                style: const TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w600)),
-                          ],
+                            Text(reviewCount > 0 ? rating : 'Nuevo',
+                                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                            if (reviewCount > 0) ...[
+                              const SizedBox(width: 2),
+                              Text('($reviewCount)', style: TextStyle(color: subtextColor, fontSize: 10)),
+                            ],
+                          ]),
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(
+                              width: 7, height: 7,
+                              margin: const EdgeInsets.only(right: 4),
+                              decoration: BoxDecoration(color: zoneColor, shape: BoxShape.circle),
+                            ),
+                            Text(zone, style: TextStyle(color: subtextColor, fontSize: 11)),
+                          ]),
+                          if (expYears != null)
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                              const GardenIcon(GIcon.antecedentes, size: GIconSize.xs, color: GardenColors.primary),
+                              const SizedBox(width: 2),
+                              Text('$expYears+ años',
+                                  style: const TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w600)),
+                            ]),
                         ]),
                         if (services.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Wrap(
                             spacing: 4,
-                            children: services.map((s) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: GardenColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(s.toString(),
-                                  style: const TextStyle(color: GardenColors.primary, fontSize: 9, fontWeight: FontWeight.w600)),
-                            )).toList(),
+                            runSpacing: 4,
+                            children: [
+                              for (final svc in services
+                                  .map((s) => GardenService.fromApi(s.toString()))
+                                  .whereType<GardenService>())
+                                Container(
+                                  padding: const EdgeInsets.fromLTRB(5, 2, 8, 2),
+                                  decoration: BoxDecoration(
+                                    color: svc.soft(isDark),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    GardenIcon(GIcon.forService(svc), size: GIconSize.sm, state: GIconState.active),
+                                    const SizedBox(width: 3),
+                                    Text(svc.label,
+                                        style: TextStyle(color: svc.ink(isDark), fontSize: 10, fontWeight: FontWeight.w700)),
+                                  ]),
+                                ),
+                            ],
                           ),
                         ],
                       ],
@@ -2310,8 +2281,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                     color: GardenColors.primary,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13)),
-                            Text(p.$2,
-                                style: TextStyle(color: subtextColor, fontSize: 10)),
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                              if (prices.length > 1) ...[
+                                GardenIcon(GIcon.forService(p.$3), size: GIconSize.xs, state: GIconState.active),
+                                const SizedBox(width: 3),
+                              ],
+                              Text(p.$2, style: TextStyle(color: subtextColor, fontSize: 10)),
+                            ]),
                             if (prices.length > 1 && p != prices.last) const SizedBox(height: 4),
                           ],
                         )),
