@@ -63,7 +63,9 @@ export async function sendTransactionalEmail(email: string, subject: string, htm
 export async function sendVerificationEmail(email: string, code: string, htmlBody?: string): Promise<void> {
   const isDev = env.NODE_ENV !== 'production';
 
-  logger.info(`📩 Verification code for ${email}: [ ${code} ]`);
+  // Solo en desarrollo: en producción el código quedaría visible para
+  // cualquiera con acceso a los logs de Render y se podría usar.
+  if (isDev) logger.info(`📩 Verification code for ${email}: [ ${code} ]`);
   logger.info(`📩 Attempting to send email to: ${email}`);
   const body = htmlBody ?? `Your verification code is: <b>${code}</b>`;
   try {

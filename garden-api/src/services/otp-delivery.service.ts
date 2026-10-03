@@ -139,6 +139,7 @@ async function sendViaVonage(toPhone: string, otp: string): Promise<boolean> {
       logger.error(`Vonage SMS send rejected (status ${first?.status}): ${first?.['error-text'] ?? 'sin detalle'}`);
       return false;
     }
+    logger.info(`Vonage SMS OTP accepted (${toPhone.slice(0, 7)}…)`);
     return true;
   } catch (err) {
     logger.error(String(err), 'Vonage SMS send error — falling back to AWS SNS');
@@ -153,7 +154,7 @@ async function sendViaAwsSns(toPhone: string, otp: string): Promise<boolean> {
       region: env.AWS_REGION,
       credentials: { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY },
     });
-    await client.send(
+    const out = await client.send(
       new PublishCommand({
         PhoneNumber: toPhone,
         Message: `GARDEN: tu código de verificación es ${otp}. Vence en 10 minutos. No lo compartas con nadie.`,
@@ -163,6 +164,7 @@ async function sendViaAwsSns(toPhone: string, otp: string): Promise<boolean> {
         },
       })
     );
+    logger.info(`AWS SNS OTP accepted (${out.MessageId}, ${toPhone.slice(0, 7)}…)`);
     return true;
   } catch (err) {
     logger.error(String(err), 'AWS SNS Publish error — code saved in DB for manual support');
