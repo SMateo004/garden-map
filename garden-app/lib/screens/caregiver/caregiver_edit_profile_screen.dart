@@ -687,7 +687,6 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                           icon: Icons.edit_note_rounded,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
-                                              if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
                                             children: [
                                               Text('Descripción', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                                               const SizedBox(height: 8),
@@ -698,6 +697,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                                 style: TextStyle(color: textColor, fontSize: 13),
                                                 decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                                               ),
+                                              if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
                                             ],
                                           ),
                                         ),
