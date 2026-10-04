@@ -17,7 +17,8 @@ jest.mock('../../src/config/database', () => {
     create: jest.fn().mockResolvedValue(fakeUser),
     update: jest.fn().mockResolvedValue(fakeUser),
   };
-  const caregiverProfile = { create: jest.fn().mockResolvedValue({ id: 'cp-1' }) };
+  // findUnique: getStaffLoginInfo también consulta si la cuenta tiene perfil propio (null = no).
+  const caregiverProfile = { create: jest.fn().mockResolvedValue({ id: 'cp-1' }), findUnique: jest.fn().mockResolvedValue(null) };
   const refreshToken = {
     create: jest.fn().mockResolvedValue({ id: 'rt-1', token: 'refresh-token' }),
     findUnique: jest.fn().mockResolvedValue(null),

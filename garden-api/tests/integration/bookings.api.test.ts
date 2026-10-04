@@ -72,8 +72,12 @@ jest.mock('../../src/config/database', () => {
   // `{ prisma }` con nombre (no default) de config/database.js — sin exponer
   // también `prisma` acá, ese import resuelve undefined y auditLog explota.
   const auditLog = { create: jest.fn().mockResolvedValue({}) };
-  const txModels = { booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification };
+  // La disponibilidad de hospedaje/guardería cuenta las mascotas walk-in
+  // presentes en el local (ver countWalkInPetsPresentNow) — 0 = sin walk-in.
+  const walkInVisit = { count: jest.fn().mockResolvedValue(0) };
+  const txModels = { walkInVisit, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification };
   const db = {
+    walkInVisit,
     booking,
     caregiverProfile,
     availability,
