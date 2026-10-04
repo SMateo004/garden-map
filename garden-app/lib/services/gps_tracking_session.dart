@@ -156,7 +156,7 @@ class GpsTrackingSession extends ChangeNotifier {
         androidNotificationOptions: AndroidNotificationOptions(
           channelId: 'gps_tracking_service',
           channelName: 'Ubicación en vivo del paseo',
-          channelDescription: 'Se muestra mientras compartís tu ubicación en vivo durante un paseo activo.',
+          channelDescription: 'Se muestra mientras compartes tu ubicación en vivo durante un paseo activo.',
           onlyAlertOnce: true,
         ),
         iosNotificationOptions: const IOSNotificationOptions(),

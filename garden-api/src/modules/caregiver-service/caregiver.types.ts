@@ -45,6 +45,8 @@ export interface CaregiverListItem {
 }
 
 export interface CaregiverDetail extends CaregiverListItem {
+  /** Tasa de impuestos vigente (IVA+IT, %) — se suma sobre los precios mostrados. */
+  taxRatePct?: number;
   bio: string | null;
   bioDetail?: string | null;
   /** Video de presentación (link de YouTube), opcional. */

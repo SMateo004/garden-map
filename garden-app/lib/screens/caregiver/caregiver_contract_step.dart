@@ -83,7 +83,7 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
                     const SizedBox(height: 6),
                     Text(
-                      'Último paso — leé el contrato completo hasta el final para poder aceptarlo.',
+                      'Último paso — lee el contrato completo hasta el final para poder aceptarlo.',
                       style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
                     ),
                     const SizedBox(height: 8),

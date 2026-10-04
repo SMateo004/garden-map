@@ -155,7 +155,7 @@ class _AdminNitVerificationsScreenState extends State<AdminNitVerificationsScree
             padding: const EdgeInsets.all(16),
             color: GardenColors.primary.withValues(alpha: 0.08),
             child: Text(
-              'El agente de IA solo da contexto sobre si el documento se ve auténtico — vos siempre decidís. Revisa el documento antes de aprobar o rechazar.',
+              'El agente de IA solo da contexto sobre si el documento se ve auténtico — tú siempre decides. Revisa el documento antes de aprobar o rechazar.',
               style: TextStyle(color: textColor, fontSize: 12.5),
             ),
           ),

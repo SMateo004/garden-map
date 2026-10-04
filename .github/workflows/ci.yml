@@ -76,4 +76,4 @@ jobs:
       - name: Tests del sistema de diseño
         run: |
           flutter pub get
-          flutter test test/design_system_test.dart
+          flutter test test/design_system_test.dart test/widget_test.dart

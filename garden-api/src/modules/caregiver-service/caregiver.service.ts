@@ -427,6 +427,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
   if (cached) return cached;
 
   const rateFor = await getRateResolver();
+  const { taxRatePct } = await getPricingConfig();
 
   // Solo visibles para clientes: APPROVED + verified, no suspendido.
   // Empresas quedan verified:true antes de terminar el wizard (ver
@@ -581,6 +582,9 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, rateFor(profile.id, 'PASEO')),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, rateFor(profile.id, 'PASEO')),
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, rateFor(profile.id, 'GUARDERIA')),
+    // Para que la app muestre el total con impuestos ANTES de pagar (los precios
+    // de arriba ya incluyen la comisión; el impuesto se suma sobre ellos).
+    taxRatePct,
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
     antecedentesVerified: (profile as any).antecedentesStatus === 'LIMPIO',

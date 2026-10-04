@@ -286,7 +286,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   const SizedBox(height: 14),
                                   _manualItem(GIcon.lista, 'Mis Reservas', 'Gestiona todas tus solicitudes pendientes, reservas activas e historial de servicios.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(GIcon.billetera, 'Billetera', 'Consulta tu saldo disponible y solicita retiros a tu cuenta bancaria o Tigo Money. Protegida con un PIN de 4 dígitos (o huella/Face ID) que vos configurás — te lo pedimos cada vez que entrás.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.billetera, 'Billetera', 'Consulta tu saldo disponible y solicita retiros a tu cuenta bancaria o Tigo Money. Protegida con un PIN de 4 dígitos (o huella/Face ID) que tú configuras — te lo pedimos cada vez que entras.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
                                   _manualItem(GIcon.perfil, 'Mi Perfil', 'Edita tu bio, fotos, servicios y tarifas. Un perfil completo y con buenas fotos recibe 3x más solicitudes.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),

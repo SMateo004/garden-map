@@ -1734,7 +1734,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 6),
           Text(
-            'Último paso — leé el contrato completo hasta el final para poder aceptarlo.',
+            'Último paso — lee el contrato completo hasta el final para poder aceptarlo.',
             style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
           const SizedBox(height: 8),
@@ -1822,7 +1822,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 6),
           Text(
             'Último paso. Este PIN de 4 dígitos protege tu billetera y la ubicación exacta de tus clientes cuando '
-            'gestionás un servicio — te lo vamos a pedir cada vez que entres a esas pantallas, así tus datos quedan '
+            'gestionas un servicio — te lo vamos a pedir cada vez que entres a esas pantallas, así tus datos quedan '
             'seguros aunque tu teléfono caiga en otras manos.',
             style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),

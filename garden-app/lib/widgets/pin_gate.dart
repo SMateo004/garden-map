@@ -162,7 +162,7 @@ class _PinDialogState extends State<_PinDialog> {
           Text(
             _needsSetup
                 ? 'Este PIN de 4 dígitos protege tu billetera y datos sensibles si tu teléfono cae en otras manos.'
-                : 'Por tu seguridad, pedimos tu PIN cada vez que entrás a estas pantallas.',
+                : 'Por tu seguridad, pedimos tu PIN cada vez que entras a estas pantallas.',
             style: TextStyle(color: textColor, fontSize: 13),
           ),
           const SizedBox(height: 16),

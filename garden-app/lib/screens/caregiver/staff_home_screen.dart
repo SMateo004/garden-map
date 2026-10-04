@@ -6,6 +6,10 @@ import '../../services/auth_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../design/garden_icons.dart';
+import '../../narrative/booking_story.dart';
+import '../../design/garden_status_pill.dart';
+import '../../design/garden_service_icon.dart';
+import '../../design/garden_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/mode_switcher_card.dart';
 import 'reception_screen.dart';
@@ -47,37 +51,6 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
   Future<void> _logout() async {
     await AuthService().clearToken();
     if (mounted) context.go('/login');
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'CONFIRMED': return 'Confirmada';
-      case 'WAITING_CAREGIVER_APPROVAL': return 'Esperando aprobación';
-      case 'IN_PROGRESS': return 'En curso';
-      case 'COMPLETED': return 'Completada';
-      case 'CANCELLED': return 'Cancelada';
-      case 'PENDING_MG': return 'Meet & Greet pendiente';
-      default: return status;
-    }
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'IN_PROGRESS': return GardenColors.primary;
-      case 'CONFIRMED': return GardenColors.success;
-      case 'COMPLETED': return Colors.grey;
-      case 'CANCELLED': return GardenColors.error;
-      default: return GardenColors.warning;
-    }
-  }
-
-  GIcon _serviceIcon(String type) {
-    switch (type) {
-      case 'PASEO': return GIcon.paseo;
-      case 'HOSPEDAJE': return GIcon.hospedaje;
-      case 'GUARDERIA': return GIcon.guarderia;
-      default: return GIcon.reservas;
-    }
   }
 
   @override
@@ -144,7 +117,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
         itemBuilder: (context, index) {
           final b = _bookings[index];
           final status = b['status'] as String;
-          final serviceType = b['serviceType'] as String? ?? '';
+          final service = GardenService.fromApi(b['serviceType'] as String?) ?? GardenService.paseo;
+          final story = BookingStory.of(status, BookingStoryContext.fromBooking(b, caregiverView: true));
           return InkWell(
             borderRadius: BorderRadius.circular(14),
             onTap: () async {
@@ -163,7 +137,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
               ),
               child: Row(
                 children: [
-                  GardenIcon(_serviceIcon(serviceType), size: GIconSize.xl, state: GIconState.active),
+                  GardenServiceIcon(service, size: 32, live: status == 'IN_PROGRESS'),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -175,11 +149,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: _statusColor(status).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                    child: Text(_statusLabel(status), style: TextStyle(color: _statusColor(status), fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
+                  GardenStatusPill(story, service: service, dense: true),
                 ],
               ),
             ),

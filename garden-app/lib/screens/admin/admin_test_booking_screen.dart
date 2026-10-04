@@ -424,7 +424,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                   const SizedBox(height: 8),
                 ],
                 if (_selectedPetId == null) ...[
-                  Text('Nombre de mascota (si no elegís una de arriba)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text('Nombre de mascota (si no eliges una de arriba)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   TextField(controller: _petNameCtrl, style: TextStyle(color: textColor), decoration: deco.copyWith(hintText: 'Ej: Firulais')),
                 ],

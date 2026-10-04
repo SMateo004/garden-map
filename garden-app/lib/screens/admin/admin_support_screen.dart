@@ -472,7 +472,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
                       final aligned = isAdmin || isBot; // "nuestro lado" de la conversación
                       final createdAt = DateTime.tryParse(m['createdAt'] as String? ?? '')?.toLocal();
                       final hh = createdAt == null ? '' : '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-                      final label = isBot ? 'Asistente' : isAdmin ? 'Vos' : null;
+                      final label = isBot ? 'Asistente' : isAdmin ? 'Tú' : null;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Column(

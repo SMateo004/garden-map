@@ -1297,7 +1297,6 @@ class GardenInput extends StatelessWidget {
   }
 }
 
-
 // ── TEMA GLOBAL ────────────────────────────────────────────────────────────
 
 /// Los tres modos de tema que soporta la app.

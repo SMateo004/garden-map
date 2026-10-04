@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -759,6 +760,24 @@ class _BookingScreenState extends State<BookingScreen> {
       return 'No acepta mayores';
     }
     return null;
+  }
+
+  /// Tasa de impuestos (IVA+IT) que el backend suma sobre los precios
+  /// mostrados — viene en GET /caregivers/:id. Null si el cuidador llegó
+  /// precargado desde un listado que no la trae: ahí se avisa que los
+  /// impuestos se suman al pagar en vez de inventar una tasa.
+  double? get _taxRate {
+    final pct = (_caregiver?['taxRatePct'] as num?)?.toDouble();
+    return pct == null ? null : pct / 100;
+  }
+
+  /// Impuesto y total como los calcula pricing.service.ts (montos enteros).
+  ({int subtotal, int? tax, int total}) _priceBreakdown(double price) {
+    final subtotal = price.round();
+    final rate = _taxRate;
+    if (rate == null) return (subtotal: subtotal, tax: null, total: subtotal);
+    final tax = (subtotal * rate).round();
+    return (subtotal: subtotal, tax: tax, total: subtotal + tax);
   }
 
   double? _calculatePrice() {
@@ -1994,9 +2013,9 @@ class _BookingScreenState extends State<BookingScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Total estimado',
+                                Text(_taxRate != null ? 'Total con impuestos' : 'Subtotal (+ impuestos)',
                                     style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                                Text('Bs ${calculatedPrice.round()}',
+                                Text('Bs ${_priceBreakdown(calculatedPrice).total}',
                                     style: const TextStyle(
                                         color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
                               ],
@@ -2026,20 +2045,16 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e, stack) {
       debugPrint('BUILD ERROR: $e');
       debugPrint('STACK TRACE: $stack');
+      // Nunca mostrar un stack trace al usuario: estado vacío amable con salida.
       return Scaffold(
-        backgroundColor: GardenColors.darkBackground,
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 60),
-              const Text('Error:', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              Text('$e', style: const TextStyle(color: Colors.white, fontSize: 12)),
-              const SizedBox(height: 16),
-              const Text('Stack:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-              Text('$stack', style: const TextStyle(color: Colors.white70, fontSize: 10)),
-            ],
+        appBar: AppBar(elevation: 0),
+        body: Center(
+          child: GardenEmptyState(
+            type: GardenEmptyType.generic,
+            title: 'No pudimos cargar la reserva',
+            subtitle: 'Algo salió mal de nuestro lado. Vuelve a intentarlo en un momento.',
+            ctaLabel: 'Volver',
+            onCta: () => context.canPop() ? context.pop() : context.go('/marketplace'),
           ),
         ),
       );
@@ -3429,6 +3444,8 @@ class _BookingScreenState extends State<BookingScreen> {
     if (!_isMultiDay && _selectedDate == null) return const SizedBox();
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final breakdown = _priceBreakdown(price);
     // Build pet names list
     final selectedPets = _selectedPetIds
         .map((id) => _pets.firstWhere((p) => p['id'] == id, orElse: () => <String, dynamic>{}))
@@ -3505,18 +3522,43 @@ class _BookingScreenState extends State<BookingScreen> {
               return _summaryRow(GIcon.agregar, extra['name'] as String? ?? 'Extra', 'Bs ${total.round()}');
             }),
           const Divider(height: 24),
+          // Mismo desglose que verá en la pantalla de pago: el total ya trae
+          // los impuestos, así no hay sorpresas entre "Reservar" y "Pagar".
+          if (breakdown.tax != null) ...[
+            _priceLine('Servicio', breakdown.subtotal, subtextColor),
+            _priceLine('Impuestos (IVA e IT · ${(_taxRate! * 100).round()}%)', breakdown.tax!, subtextColor),
+            const SizedBox(height: 6),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-              Text('Bs ${price.round()}',
+              Text(breakdown.tax != null ? 'Total' : 'Subtotal',
+                  style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Bs ${breakdown.total}',
                   style: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
             ],
           ),
+          if (breakdown.tax == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Los impuestos (IVA e IT) se suman en el detalle de pago.',
+                  style: TextStyle(color: subtextColor, fontSize: 12)),
+            ),
         ],
       ),
     );
   }
+
+  Widget _priceLine(String label, int amount, Color color) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: TextStyle(color: color, fontSize: 13)),
+            Text('Bs $amount', style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
 
   Widget _summaryRow(GIcon icon, String label, String value) {
     final isDark = themeNotifier.isDark;

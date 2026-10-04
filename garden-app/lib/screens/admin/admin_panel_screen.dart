@@ -3557,7 +3557,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       'bankAccount': user['bankAccount'] ?? cpProfile['bankAccount'],
                       'bankHolder':  user['bankHolder']  ?? cpProfile['bankHolder'],
                       'bankType':    user['bankType']    ?? cpProfile['bankType'],
-                      'balance':     user['balance']     ?? cpProfile['balance'],
+                      // User.balance es la única fuente de verdad (CaregiverProfile.balance está deprecado).
+                      'balance':     user['balance']     ?? 0,
                     };
                     final status = w['status'] as String;
                     final isPending = status == 'PENDING';
@@ -5559,7 +5560,7 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                   child: Text(
                     'Tamaño recomendado: 1600×600px (panorámica, ~2.7:1), JPG/PNG/WEBP, máx. 5MB. '
                     'La tarjeta se recorta a un alto fijo tanto en celular como en escritorio — '
-                    'mantené el texto o logo importante centrado en la imagen para que no quede cortado.',
+                    'mantén el texto o logo importante centrado en la imagen para que no quede cortado.',
                     style: TextStyle(color: subtextColor, fontSize: 11.5, height: 1.4),
                   ),
                 ),

@@ -93,7 +93,7 @@ class _CaregiverPinStepState extends State<CaregiverPinStep> {
               const SizedBox(height: 6),
               Text(
                 'Último paso. Este PIN de 4 dígitos protege tu billetera y la ubicación exacta de tus clientes cuando '
-                'gestionás un servicio — te lo vamos a pedir cada vez que entres a esas pantallas, así tus datos '
+                'gestionas un servicio — te lo vamos a pedir cada vez que entres a esas pantallas, así tus datos '
                 'quedan seguros aunque tu teléfono caiga en otras manos.',
                 style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
               ),

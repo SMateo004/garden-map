@@ -773,13 +773,16 @@ Future<void> _bootstrap() async {
   // pueda llamar a GpsTrackingSession.start(). No aplica a iOS/web (ahí el
   // tracking en background no usa un isolate de servicio separado).
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-  unawaited(Analytics.instance.init()); // uso de la app — liviano, falla en silencio
     FlutterForegroundTask.initCommunicationPort();
   }
 
   // Cargar token en memoria PRIMERO — el GoRouter redirect y todas las
   // pantallas usan AuthState.token de forma sincrónica desde aquí en adelante.
   await AuthState.initialize();
+
+  // Uso de la app en todas las plataformas (antes quedaba dentro del bloque
+  // de Android y en iOS/web nunca arrancaba) — liviano, falla en silencio.
+  unawaited(Analytics.instance.init());
 
   // Cargar preferencia de tema guardada antes de mostrar nada
   await themeNotifier.init();

@@ -538,7 +538,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
                 Expanded(child: Text('Polígono de la zona (mínimo 4 puntos)', style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w700))),
                 TextButton.icon(onPressed: _addPointRow, icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true), label: const Text('Punto')),
               ]),
-              Text('Se pintan en el mapa del marketplace en el orden en que los cargues. Deja todas las filas vacías si preferís que la zona se muestre solo como un marcador (punto), sin polígono.',
+              Text('Se pintan en el mapa del marketplace en el orden en que los cargues. Deja todas las filas vacías si prefieres que la zona se muestre solo como un marcador (punto), sin polígono.',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
               const SizedBox(height: 10),
               ...List.generate(_pointLat.length, (i) => Padding(
