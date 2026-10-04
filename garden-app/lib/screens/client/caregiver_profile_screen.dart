@@ -8,8 +8,6 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_trust_seals.dart';
 import '../../theme/garden_theme.dart';
-import '../../widgets/temporada_alta_badge.dart';
-import '../../services/agentes_service.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -703,8 +701,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           children: [
                             if (verified) _verifiedBadge(),
                             _paymentBadge(),
-                            if (_caregiver!['zone'] == 'EQUIPETROL')
-                              TemporadaAltaBadge(zona: 'Equipetrol', porcentajeAjuste: 15, motivo: 'Semana Santa', fechaVueltaNormal: '24 de marzo', agentesService: AgentesService(authToken: '')),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -1119,8 +1115,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         if (verified) _verifiedBadge(),
                         _paymentBadge(),
-                        if (_caregiver!['zone'] == 'EQUIPETROL')
-                          TemporadaAltaBadge(zona: 'Equipetrol', porcentajeAjuste: 15, motivo: 'Semana Santa', fechaVueltaNormal: '24 de marzo', agentesService: AgentesService(authToken: '')),
                       ]),
                       const SizedBox(height: 16),
                       _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),

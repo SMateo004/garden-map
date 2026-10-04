@@ -20,7 +20,6 @@ import 'screens/client/caregiver_profile_screen.dart';
 import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
 import 'screens/client/slot_conflict_screen.dart';
-import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/staff_home_screen.dart';
 import 'screens/caregiver/staff_invite_accept_screen.dart';
@@ -515,18 +514,6 @@ final GoRouter _router = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return PaymentScreen(
           bookingParams: extra?['bookingParams'] as Map<String, dynamic>?,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/booking-confirmed/:bookingId',
-      name: 'bookingConfirmed',
-      builder: (context, state) {
-        final bookingId = state.pathParameters['bookingId']!;
-        final extra = state.extra as Map<String, dynamic>?;
-        return BookingConfirmedScreen(
-          bookingId: bookingId,
-          bookingData: extra,
         );
       },
     ),
