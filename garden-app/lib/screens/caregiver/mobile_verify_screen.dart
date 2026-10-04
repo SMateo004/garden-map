@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import 'blink_challenge_screen.dart';
 import 'camera_overlay_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Pantalla de verificación de identidad para móvil.
 /// Se accede escaneando el QR que muestra la web — el token llega como parámetro.
@@ -222,7 +223,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.verified_user_rounded, color: GardenColors.primary, size: 20),
+            const GardenIcon(GIcon.protegido, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
             const SizedBox(width: 8),
             Text('Verificación · Garden', style: TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: 16)),
           ],
@@ -278,7 +279,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.link_off_rounded, color: GardenColors.error, size: 80),
+            const GardenIcon(GIcon.desvincular, size: GIconSize.hero, color: GardenColors.error),
             const SizedBox(height: 24),
             Text('Enlace inválido o expirado', style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
@@ -304,7 +305,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
               color: GardenColors.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.verified_user_rounded, color: GardenColors.primary, size: 48),
+            child: const GardenIcon(GIcon.protegido, size: GIconSize.hero, state: GIconState.active, color: GardenColors.primary),
           ),
           const SizedBox(height: 24),
           Text('Verificación de identidad', style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold)),
@@ -411,7 +412,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.camera_alt, size: 64, color: GardenColors.primary),
+                                const GardenIcon(GIcon.foto, size: GIconSize.hero, color: GardenColors.primary),
                                 const SizedBox(height: 12),
                                 Text('Toca para abrir cámara', style: TextStyle(color: _subtext)),
                               ],
@@ -423,7 +424,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                             child: Container(
                               decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
                               padding: const EdgeInsets.all(2),
-                              child: const Icon(Icons.check, color: Colors.white, size: 22),
+                              child: const GardenIcon(GIcon.hecho, size: GIconSize.md, color: Colors.white),
                             ),
                           ),
                       ],
@@ -434,7 +435,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                   const SizedBox(height: 10),
                   TextButton.icon(
                     onPressed: () => _capturePhoto(type),
-                    icon: const Icon(Icons.refresh, size: 18, color: GardenColors.primary),
+                    icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
                     label: const Text('Volver a tomar', style: TextStyle(color: GardenColors.primary)),
                   ),
                 ],
@@ -492,7 +493,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
               duration: const Duration(milliseconds: 600),
               builder: (_, v, __) => Transform.scale(
                 scale: v,
-                child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 100),
+                child: const GardenIcon(GIcon.confirmado, size: GIconSize.hero, state: GIconState.active, color: GardenColors.success),
               ),
             ),
             const SizedBox(height: 28),
@@ -515,7 +516,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.computer_rounded, color: GardenColors.primary, size: 28),
+                  const GardenIcon(GIcon.computadora, size: GIconSize.lg, color: GardenColors.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -539,7 +540,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cancel_rounded, color: GardenColors.error, size: 90),
+            const GardenIcon(GIcon.cancelado, size: GIconSize.hero, state: GIconState.active, color: GardenColors.error),
             const SizedBox(height: 24),
             Text('Verificación rechazada',
                 style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold)),
@@ -554,7 +555,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.refresh_rounded),
+                icon: const GardenIcon(GIcon.repetir, size: GIconSize.lg, inheritColor: true),
                 label: const Text('Intentar de nuevo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: GardenColors.primary,

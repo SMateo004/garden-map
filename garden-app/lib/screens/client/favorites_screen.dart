@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
+import '../../design/garden_icons.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -176,7 +177,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           color: Colors.black.withValues(alpha: 0.45),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.favorite, color: Colors.red, size: 18),
+                        child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: Colors.red),
                       ),
                     ),
                   ),
@@ -193,7 +194,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.verified, color: Colors.white, size: 12),
+                            GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: Colors.white),
                             SizedBox(width: 4),
                             Text('Verificado', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                           ],
@@ -227,7 +228,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             const SizedBox(height: 3),
                             Row(
                               children: [
-                                Icon(Icons.location_on_outlined, size: 12, color: subtextColor),
+                                GardenIcon(GIcon.ubicacion, size: GIconSize.xs, color: subtextColor),
                                 const SizedBox(width: 3),
                                 Text(zone, style: TextStyle(color: subtextColor, fontSize: 12)),
                               ],
@@ -240,7 +241,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.star_rounded, color: GardenColors.star, size: 15),
+                              const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                               const SizedBox(width: 3),
                               Text(rating, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                             ],
@@ -344,7 +345,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget _photoPlaceholder() {
     return Container(
       color: GardenColors.primary.withValues(alpha: 0.1),
-      child: const Center(child: Icon(Icons.pets, size: 40, color: GardenColors.primary)),
+      child: const Center(child: GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary)),
     );
   }
 

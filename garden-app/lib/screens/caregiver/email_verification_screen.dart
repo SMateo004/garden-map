@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -285,7 +286,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               shape: BoxShape.circle,
               gradient: GardenGradients.fresh,
             ),
-            child: const Icon(Icons.check_rounded, size: 56, color: Colors.white),
+            child: const GardenIcon(GIcon.hecho, size: GIconSize.hero, color: Colors.white),
           ),
           const SizedBox(height: 24),
           Text(
@@ -319,11 +320,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             shape: BoxShape.circle,
             color: GardenColors.primary.withValues(alpha: 0.12),
           ),
-          child: const Icon(
-            Icons.email_outlined,
-            size: 44,
-            color: GardenColors.primary,
-          ),
+          child: const GardenIcon(GIcon.correo, size: GIconSize.hero, color: GardenColors.primary),
         ),
         const SizedBox(height: 28),
 

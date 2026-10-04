@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import './garden_loading_indicator.dart';
+import '../design/garden_icons.dart';
 
 /// Resultado del mapa picker.
 class AddressMapResult {
@@ -115,7 +116,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
         now.difference(_lastOutOfBoundsWarning!) > const Duration(seconds: 2)) {
       _lastOutOfBoundsWarning = now;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No podés marcar una ubicación fuera de ${widget.cityName}'),
+        content: Text('No puedes marcar una ubicación fuera de ${widget.cityName}'),
         duration: const Duration(seconds: 2),
       ));
     }
@@ -255,7 +256,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline, color: Color(0xFF16a34a), size: 18),
+                          const GardenIcon(GIcon.info, size: GIconSize.sm, color: Color(0xFF16a34a)),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -308,7 +309,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.location_pin, color: Color(0xFF16a34a), size: 48),
+                          GardenIcon(GIcon.ubicacion, size: GIconSize.hero, color: Color(0xFF16a34a)),
                           SizedBox(height: 24),
                         ],
                       ),
@@ -325,7 +326,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         onPressed: _locating ? null : _locateMe,
                         child: _locating
                             ? const GardenLoadingIndicator(size: 18)
-                            : const Icon(Icons.my_location),
+                            : const GardenIcon(GIcon.miUbicacion, size: GIconSize.lg, inheritColor: true),
                       ),
                     ),
                   ],
@@ -365,7 +366,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.location_on, size: 16, color: Color(0xFF16a34a)),
+                            const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: Color(0xFF16a34a)),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -391,7 +392,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.check_circle_outline),
+                        icon: const GardenIcon(GIcon.confirmado, size: GIconSize.lg, inheritColor: true),
                         label: const Text('Confirmar ubicación'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF16a34a),

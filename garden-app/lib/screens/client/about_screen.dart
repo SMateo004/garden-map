@@ -4,8 +4,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../design/garden_icons.dart';
 
-// ─── Misma paleta día/noche que landing_screen ────────────────────────────────
+// ─── Paleta día/noche de la página "Sobre Garden" ───────────────────────────────
 class _P {
   final bool dark;
   const _P(this.dark);
@@ -125,7 +126,7 @@ class _AboutState extends State<AboutScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.arrow_back_rounded, color: pal.textSec, size: 16),
+                GardenIcon(GIcon.atras, size: GIconSize.sm, color: pal.textSec),
                 const SizedBox(width: 6),
                 Text('Volver', style: TextStyle(color: pal.textSec, fontSize: 13, fontWeight: FontWeight.w500)),
               ]),
@@ -182,7 +183,7 @@ class _HeroSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(100),
               border: Border.all(color: pal.primary.withValues(alpha: 0.35)),
             ),
-            child: Text('🌿 Nuestra historia',
+            child: Text('Nuestra historia',
               style: TextStyle(color: pal.accent, fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.3)),
           ).animate().fadeIn(delay: 100.ms, duration: 600.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
           const SizedBox(height: 28),
@@ -230,10 +231,10 @@ class _StatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final pal = _Theme.of(context);
     final stats = [
-      ('🏙️', 'Santa Cruz', 'Ciudad de lanzamiento'),
-      ('🐾', '2025', 'Año de fundación'),
-      ('🔒', 'Blockchain', 'Pagos asegurados'),
-      ('🤖', 'IA', 'Verificación de cuidadores'),
+      (GIcon.ubicacion, 'Santa Cruz', 'Ciudad de lanzamiento'),
+      (GIcon.huella, '2025', 'Año de fundación'),
+      (GIcon.pagoProtegido, 'Pago protegido', 'Se libera al terminar'),
+      (GIcon.identidadVerificada, 'Identidad', 'Verificación de cuidadores'),
     ];
     return Wrap(
       alignment: WrapAlignment.center,
@@ -248,7 +249,7 @@ class _StatsRow extends StatelessWidget {
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 4))],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(s.$1, style: const TextStyle(fontSize: 26)),
+          GardenIcon(s.$1, size: GIconSize.xl, state: GIconState.active),
           const SizedBox(height: 6),
           Text(s.$2, style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 15)),
           Text(s.$3, style: TextStyle(color: pal.textSec, fontSize: 12)),
@@ -308,7 +309,7 @@ class _AboutSection extends StatelessWidget {
       const SizedBox(height: 20),
       Text(
         'Nuestro sistema de escrow blockchain protege cada pago: el cuidador solo recibe el dinero cuando '
-        'vos confirmás que el servicio fue completado correctamente. Sin riesgos, sin sorpresas.',
+        'tú confirmas que el servicio fue completado correctamente. Sin riesgos, sin sorpresas.',
         style: GoogleFonts.nunito(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
       ),
     ]),
@@ -826,14 +827,14 @@ class _LegalSection extends StatelessWidget {
             border: Border.all(color: pal.primary.withValues(alpha: 0.22)),
           ),
           child: Column(children: [
-            Icon(Icons.gavel_rounded, color: pal.accent, size: 36),
+            GardenIcon(GIcon.multa, size: GIconSize.xl, color: pal.accent),
             const SizedBox(height: 20),
             Text('Transparencia legal',
               textAlign: TextAlign.center,
               style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w900, fontSize: mobile ? 22 : 28, letterSpacing: -0.8)),
             const SizedBox(height: 14),
             Text(
-              'Creemos en la transparencia total. Podés leer en detalle nuestros términos de uso, '
+              'Creemos en la transparencia total. Puedes leer en detalle nuestros términos de uso, '
               'política de privacidad y cómo gestionamos tus datos y pagos.',
               textAlign: TextAlign.center,
               style: GoogleFonts.nunito(color: pal.textSec, fontSize: 14, height: 1.7),

@@ -198,7 +198,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                     decoration: deco('Código de invitación').copyWith(
                       suffixIcon: _isCheckingCode
                           ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(size: 16, color: GardenColors.primary))
-                          : IconButton(icon: const Icon(Icons.check_rounded), onPressed: _checkCode),
+                          : IconButton(icon: const GardenIcon(GIcon.hecho, size: GIconSize.lg, inheritColor: true), onPressed: _checkCode),
                     ),
                     onSubmitted: (_) => _checkCode(),
                   ),
@@ -208,7 +208,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                       child: Row(children: [
-                        const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 18),
+                        const GardenIcon(GIcon.confirmado, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
                         const SizedBox(width: 8),
                         Expanded(child: Text('Te estás uniendo a $_companyName', style: const TextStyle(color: GardenColors.success, fontWeight: FontWeight.w600, fontSize: 13))),
                       ]),
@@ -238,7 +238,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                     style: TextStyle(color: textColor),
                     decoration: deco('Contraseña').copyWith(
                       suffixIcon: IconButton(
-                        icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 20),
+                        icon: GardenIcon(_obscure ? GIcon.ver : GIcon.ocultar, size: GIconSize.md, color: subtextColor),
                         onPressed: () => setState(() => _obscure = !_obscure),
                       ),
                     ),

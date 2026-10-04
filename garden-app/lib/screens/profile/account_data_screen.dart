@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class AccountDataScreen extends StatefulWidget {
   const AccountDataScreen({super.key});
@@ -112,7 +113,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                 Container(
                   width: 60, height: 60,
                   decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.delete_forever_rounded, color: GardenColors.error, size: 32),
+                  child: const GardenIcon(GIcon.eliminar, size: GIconSize.xl, color: GardenColors.error),
                 ),
                 const SizedBox(height: 16),
                 Text(_role == 'CAREGIVER' ? 'Solicitar eliminación de cuenta' : 'Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -141,7 +142,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                       borderSide: const BorderSide(color: GardenColors.error, width: 2),
                     ),
                     suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor),
+                      icon: GardenIcon(obscure ? GIcon.ver : GIcon.ocultar, size: GIconSize.lg, color: subtextColor),
                       onPressed: () => setS(() => obscure = !obscure),
                     ),
                   ),
@@ -251,7 +252,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                  IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor), onPressed: () => Navigator.pop(context)),
                   const SizedBox(width: 6),
                   Text('Accesibilidad y Cuenta', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
@@ -268,31 +269,27 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
               children: [
                 // Account Info Section
                 _section('Datos de tu cuenta', borderColor, children: [
-                  _infoRow('ID de cuenta', _userData?['id'] ?? '---', Icons.fingerprint_rounded, textColor, subtextColor, canCopy: true),
-                  _infoRow('Nombre completo', '${_userData?['firstName'] ?? ''} ${_userData?['lastName'] ?? ''}'.trim(), Icons.person_outlined, textColor, subtextColor),
-                  _infoRow('Email', _userData?['email'] ?? '---', Icons.email_outlined, textColor, subtextColor),
-                  _infoRow('Rol', _userData?['role'] ?? '---', Icons.badge_outlined, textColor, subtextColor),
+                  _infoRow('ID de cuenta', _userData?['id'] ?? '---', GIcon.huellaDigital, textColor, subtextColor, canCopy: true),
+                  _infoRow('Nombre completo', '${_userData?['firstName'] ?? ''} ${_userData?['lastName'] ?? ''}'.trim(), GIcon.perfil, textColor, subtextColor),
+                  _infoRow('Email', _userData?['email'] ?? '---', GIcon.correo, textColor, subtextColor),
+                  _infoRow('Rol', _userData?['role'] ?? '---', GIcon.identidadVerificada, textColor, subtextColor),
                   _infoRow(
                     'Cuenta creada',
                     _formatDate(_userData?['createdAt'] as String?),
-                    Icons.calendar_today_outlined, textColor, subtextColor,
-                  ),
+                    GIcon.calendario, textColor, subtextColor),
                   _infoRow(
                     'Estado email',
                     _userData?['emailVerified'] == true ? 'Verificado' : 'Sin verificar',
-                    Icons.mark_email_read_outlined, textColor, subtextColor,
-                  ),
+                    GIcon.correo, textColor, subtextColor),
                   if (_role == 'CAREGIVER') ...[
                     _infoRow(
                       'Estado identidad',
                       _caregiverProfile?['identityVerificationStatus'] ?? '---',
-                      Icons.verified_user_outlined, textColor, subtextColor,
-                    ),
+                      GIcon.protegido, textColor, subtextColor),
                     _infoRow(
                       'Estado perfil',
                       _caregiverProfile?['status'] ?? '---',
-                      Icons.stars_outlined, textColor, subtextColor,
-                    ),
+                      GIcon.destacado, textColor, subtextColor),
                   ],
                 ]),
 
@@ -303,16 +300,14 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                   _infoRow(
                     'Contrato Garden',
                     _blockchainContract,
-                    Icons.account_balance_outlined, textColor, subtextColor,
+                    GIcon.retiro, textColor, subtextColor,
                     canCopy: true,
                     monospace: true,
-                    truncate: true,
-                  ),
+                    truncate: true),
                   _infoRow(
                     'Red',
                     'Polygon Amoy Testnet',
-                    Icons.hub_outlined, textColor, subtextColor,
-                  ),
+                    GIcon.ia, textColor, subtextColor),
                   if (_blockchainTxs.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -325,9 +320,9 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                     ),
                     for (final tx in _blockchainTxs.take(5)) ...[
                       if (tx['blockchainTxHash'] != null)
-                        _infoRow('TX creacion', tx['blockchainTxHash'] as String, Icons.receipt_long_outlined, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
+                        _infoRow('TX creacion', tx['blockchainTxHash'] as String, GIcon.recibo, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
                       if (tx['blockchainFinalizedTxHash'] != null)
-                        _infoRow('TX finalizacion', tx['blockchainFinalizedTxHash'] as String, Icons.check_circle_outline, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
+                        _infoRow('TX finalizacion', tx['blockchainFinalizedTxHash'] as String, GIcon.confirmado, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
                     ],
                   ],
                 ]),
@@ -346,7 +341,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        const Icon(Icons.warning_amber_rounded, color: GardenColors.error, size: 18),
+                        const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.error),
                         const SizedBox(width: 8),
                         Text('Zona de peligro', style: TextStyle(color: GardenColors.error, fontSize: 14, fontWeight: FontWeight.w800)),
                       ]),
@@ -359,7 +354,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                          icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, inheritColor: true),
                           label: const Text('Eliminar mi cuenta', style: TextStyle(fontWeight: FontWeight.w700)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: GardenColors.error,
@@ -406,14 +401,14 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
     );
   }
 
-  Widget _infoRow(String label, String value, IconData icon, Color textColor, Color subtextColor, {
+  Widget _infoRow(String label, String value, GIcon icon, Color textColor, Color subtextColor, {
     bool canCopy = false, bool monospace = false, bool truncate = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: subtextColor),
+          GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -442,7 +437,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
               },
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Icon(Icons.copy_rounded, size: 16, color: GardenColors.primary),
+                child: GardenIcon(GIcon.copiar, size: GIconSize.sm, color: GardenColors.primary),
               ),
             ),
         ],

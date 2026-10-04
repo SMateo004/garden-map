@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
 import '../../services/auth_state.dart';
+import '../../design/garden_icons.dart';
 
 /// Página de artículo completo del Centro de Ayuda — estilo Airbnb.
 /// Muestra todas las secciones del artículo y, al final, un feedback rápido
@@ -29,9 +30,9 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          icon: const GardenIcon(GIcon.soporte, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
           title: const Text('Iniciá sesión para chatear'),
-          content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión o crear una cuenta.'),
+          content: const Text('Para hablar con nuestro equipo de soporte primero necesitas iniciar sesión o crear una cuenta.'),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
             FilledButton(
@@ -63,7 +64,7 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: text, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -130,7 +131,7 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
                 else
                   Text(
                     _wasHelpful!
-                        ? '¡Gracias por tu feedback! 🌿'
+                        ? '¡Gracias por tu feedback!'
                         : 'Gracias por avisarnos — si tu duda sigue sin resolverse, escríbenos abajo.',
                     style: TextStyle(color: subtext, fontSize: 13),
                     textAlign: TextAlign.center,
@@ -164,9 +165,8 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
                   const SizedBox(height: 12),
                   GardenButton(
                     label: 'Chatear con soporte',
-                    icon: Icons.support_agent_rounded,
-                    onPressed: _openSupportChat,
-                  ),
+                    gIcon: GIcon.soporte,
+                    onPressed: _openSupportChat),
                 ],
               ),
             ),

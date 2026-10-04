@@ -343,7 +343,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline, color: GardenColors.error, size: 18),
+                      const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -367,7 +367,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: GardenColors.warning, size: 18),
+                      const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
+import '../../design/garden_icons.dart';
 
 class BookingConfirmedScreen extends StatelessWidget {
   final String bookingId;
@@ -65,11 +66,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                               width: 3.5,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            color: GardenColors.success,
-                            size: 50,
-                          ),
+                          child: const GardenIcon(GIcon.hecho, size: GIconSize.hero, color: GardenColors.success),
                         ),
                       );
                     },
@@ -117,7 +114,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                                   : null,
                               backgroundColor: GardenColors.primary.withValues(alpha: 0.15),
                               child: caregiverPhoto == null
-                                  ? const Icon(Icons.person, color: GardenColors.primary)
+                                  ? const GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary)
                                   : null,
                             ),
                             const SizedBox(width: 12),
@@ -245,7 +242,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            Icon(Icons.copy_rounded, size: 14, color: GardenColors.polygon.withValues(alpha: 0.6)),
+                            GardenIcon(GIcon.copiar, size: GIconSize.xs, color: GardenColors.polygon.withValues(alpha: 0.6)),
                           ],
                         ),
                       ),

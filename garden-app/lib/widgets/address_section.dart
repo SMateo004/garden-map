@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../services/cities_service.dart';
 import '../services/zones_service.dart';
 import 'address_map_picker.dart';
+import '../design/garden_icons.dart';
 
 /// Sección de dirección reutilizable: abre el mapa picker primero,
 /// luego muestra los campos de texto detallados y un selector de
@@ -110,9 +111,9 @@ class _AddressSectionState extends State<AddressSection> {
   bool _zoneNoMatch = false;
   bool _loadingZonesForMatch = true;
 
-  InputDecoration _field(String hint, IconData icon) => InputDecoration(
+  InputDecoration _field(String hint, GIcon icon) => InputDecoration(
         hintText: hint,
-        prefixIcon: Icon(icon, size: 20),
+        prefixIcon: GardenIcon(icon, size: GIconSize.md, inheritColor: true),
       );
 
   @override
@@ -259,7 +260,7 @@ class _AddressSectionState extends State<AddressSection> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline, color: Color(0xFF16a34a), size: 18),
+              const GardenIcon(GIcon.info, size: GIconSize.sm, color: Color(0xFF16a34a)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -285,7 +286,7 @@ class _AddressSectionState extends State<AddressSection> {
             child: DropdownButton<String>(
               value: _selectedCityId,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              icon: const GardenIcon(GIcon.desplegar, size: GIconSize.lg, inheritColor: true),
               dropdownColor: widget.isDark ? const Color(0xFF1E1E2E) : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               hint: _loadingCities
@@ -295,7 +296,7 @@ class _AddressSectionState extends State<AddressSection> {
                   .map((c) => DropdownMenuItem(
                         value: c.id,
                         child: Row(children: [
-                          const Icon(Icons.location_city_rounded, size: 18, color: Color(0xFF16a34a)),
+                          const GardenIcon(GIcon.edificio, size: GIconSize.sm, color: Color(0xFF16a34a)),
                           const SizedBox(width: 10),
                           Text(c.name, style: TextStyle(color: widget.textColor, fontSize: 14)),
                         ]),
@@ -330,13 +331,10 @@ class _AddressSectionState extends State<AddressSection> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            icon: Icon(
-              hasPin ? Icons.edit_location_alt : Icons.add_location_alt_outlined,
-              color: hasPin ? const Color(0xFF16a34a) : null,
-            ),
+            icon: GardenIcon(GIcon.ubicacion, size: GIconSize.lg, color: hasPin ? const Color(0xFF16a34a) : null),
             label: Text(
               hasPin
-                  ? '📍 Ubicación confirmada — toca para ajustar'
+                  ? 'Ubicación confirmada — toca para ajustar'
                   : 'Abrir mapa y confirmar ubicación',
               style: TextStyle(
                 color: hasPin ? const Color(0xFF16a34a) : null,
@@ -384,7 +382,7 @@ class _AddressSectionState extends State<AddressSection> {
                           controller: widget.streetController,
                           style: TextStyle(color: widget.textColor),
                           onChanged: (_) => widget.onFieldsChanged?.call(),
-                          decoration: _field('Calle / Avenida', Icons.signpost_outlined),
+                          decoration: _field('Calle / Avenida', GIcon.mapa),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -393,7 +391,7 @@ class _AddressSectionState extends State<AddressSection> {
                         child: TextFormField(
                           controller: widget.numberController,
                           style: TextStyle(color: widget.textColor),
-                          decoration: _field('N° casa', Icons.tag),
+                          decoration: _field('N° casa', GIcon.precio),
                           keyboardType: TextInputType.text,
                         ),
                       ),
@@ -432,7 +430,7 @@ class _AddressSectionState extends State<AddressSection> {
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Row(children: [
-                          Icon(Icons.lock_outline_rounded, size: 14, color: widget.subtextColor),
+                          GardenIcon(GIcon.seguridad, size: GIconSize.xs, color: widget.subtextColor),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -446,7 +444,7 @@ class _AddressSectionState extends State<AddressSection> {
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Row(children: [
-                          Icon(Icons.schedule_rounded, size: 14, color: widget.subtextColor),
+                          GardenIcon(GIcon.reloj, size: GIconSize.xs, color: widget.subtextColor),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -477,7 +475,7 @@ class _AddressSectionState extends State<AddressSection> {
                               ),
                             ),
                             child: widget.isApartment
-                                ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                ? const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white)
                                 : null,
                           ),
                           const SizedBox(width: 10),
@@ -496,7 +494,7 @@ class _AddressSectionState extends State<AddressSection> {
                           child: TextFormField(
                             controller: widget.apartmentController,
                             style: TextStyle(color: widget.textColor),
-                            decoration: _field('Número de dpto.', Icons.meeting_room_outlined),
+                            decoration: _field('Número de dpto.', GIcon.habitacion),
                             keyboardType: TextInputType.text,
                           ),
                         ),
@@ -505,7 +503,7 @@ class _AddressSectionState extends State<AddressSection> {
                           child: TextFormField(
                             controller: widget.condominioController,
                             style: TextStyle(color: widget.textColor),
-                            decoration: _field('Nombre del condominio', Icons.apartment_outlined),
+                            decoration: _field('Nombre del condominio', GIcon.edificio),
                           ),
                         ),
                       ]),
@@ -517,8 +515,7 @@ class _AddressSectionState extends State<AddressSection> {
                       style: TextStyle(color: widget.textColor),
                       decoration: _field(
                         'Referencia (ej: frente al parque, casa verde)',
-                        Icons.place_outlined,
-                      ),
+                        GIcon.ubicacion),
                     ),
                   ],
                 )
@@ -629,11 +626,11 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
             child: DropdownButton<String>(
               value: widget.selectedZone,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              icon: const GardenIcon(GIcon.desplegar, size: GIconSize.lg, inheritColor: true),
               dropdownColor: widget.isDark ? const Color(0xFF1E1E2E) : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               hint: Row(children: [
-                Icon(Icons.map_outlined, color: widget.subtextColor, size: 20),
+                GardenIcon(GIcon.mapa, size: GIconSize.md, color: widget.subtextColor),
                 const SizedBox(width: 10),
                 Text(
                   _loadingZones
@@ -701,11 +698,7 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
         GestureDetector(
           onTap: () => setState(() => _showMap = !_showMap),
           child: Row(children: [
-            Icon(
-              _showMap ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-              color: widget.subtextColor,
-              size: 18,
-            ),
+            GardenIcon(_showMap ? GIcon.plegar : GIcon.desplegar, size: GIconSize.sm, color: widget.subtextColor),
             const SizedBox(width: 4),
             Text(
               _showMap ? 'Ocultar mapa de zonas' : '¿No sé a qué zona pertenezco? Ver mapa',

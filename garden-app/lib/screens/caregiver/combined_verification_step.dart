@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Paso 8 del wizard de cuidador: verificación combinada de teléfono + email.
 /// Reemplaza los antiguos pasos separados 8 (teléfono) y 9 (email) — ambos
@@ -387,7 +388,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       extraAction: widget.onChangePhone != null
                           ? TextButton.icon(
                               onPressed: () => _showChangePhoneDialog(subtextColor),
-                              icon: const Icon(Icons.edit_outlined, size: 15, color: GardenColors.primary),
+                              icon: const GardenIcon(GIcon.editar, size: GIconSize.xs, color: GardenColors.primary),
                               label: const Text('Cambiar número', style: TextStyle(color: GardenColors.primary, fontSize: 13)),
                             )
                           : null,
@@ -444,7 +445,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                           border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
                         ),
                         child: Row(children: [
-                          const Icon(Icons.info_outline, color: GardenColors.warning, size: 18),
+                          const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -509,7 +510,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
               child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor)),
             ),
             if (verified)
-              const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 22),
+              const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.success),
           ]),
           if (verified) ...[
             const SizedBox(height: 8),
@@ -594,7 +595,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                   border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.error_outline, color: GardenColors.error, size: 16),
+                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 8),
                   Expanded(child: Text(errorMessage, style: const TextStyle(color: GardenColors.error, fontSize: 12))),
                 ]),

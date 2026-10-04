@@ -71,12 +71,12 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     }
   }
 
-  String _serviceEmoji(String type) {
+  GIcon _serviceIcon(String type) {
     switch (type) {
-      case 'PASEO': return '🐕';
-      case 'HOSPEDAJE': return '🏠';
-      case 'GUARDERIA': return '🏡';
-      default: return '📋';
+      case 'PASEO': return GIcon.paseo;
+      case 'HOSPEDAJE': return GIcon.hospedaje;
+      case 'GUARDERIA': return GIcon.guarderia;
+      default: return GIcon.reservas;
     }
   }
 
@@ -119,9 +119,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             onDestinationSelected: (i) => setState(() => _tab = i),
             backgroundColor: surface,
             destinations: const [
-              NavigationDestination(icon: Icon(Icons.event_note_outlined), selectedIcon: Icon(Icons.event_note_rounded), label: 'Reservas'),
-              NavigationDestination(icon: Icon(Icons.meeting_room_outlined), selectedIcon: Icon(Icons.meeting_room_rounded), label: 'Recepción'),
-              NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Cuenta'),
+              NavigationDestination(icon: GardenIcon(GIcon.nota, size: GIconSize.lg, inheritColor: true), selectedIcon: GardenIcon(GIcon.nota, size: GIconSize.lg, inheritColor: true), label: 'Reservas'),
+              NavigationDestination(icon: GardenIcon(GIcon.habitacion, size: GIconSize.lg, inheritColor: true), selectedIcon: GardenIcon(GIcon.habitacion, size: GIconSize.lg, inheritColor: true), label: 'Recepción'),
+              NavigationDestination(icon: GardenIcon(GIcon.perfil, size: GIconSize.lg, inheritColor: true), selectedIcon: GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, inheritColor: true), label: 'Cuenta'),
             ],
           ),
         );
@@ -163,7 +163,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
               ),
               child: Row(
                 children: [
-                  Text(_serviceEmoji(serviceType), style: const TextStyle(fontSize: 28)),
+                  GardenIcon(_serviceIcon(serviceType), size: GIconSize.xl, state: GIconState.active),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -398,7 +398,7 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                   GardenButton(label: 'Avisar que voy en camino', outline: true, loading: _isActing, onPressed: _isActing ? null : _markEnRoute),
                   const SizedBox(height: 10),
                   if (isPaseo) ...[
-                    GardenButton(label: '📍 Ya llegué', outline: true, loading: _isActing, onPressed: _isActing ? null : _markArrived),
+                    GardenButton(label: 'Ya llegué', outline: true, loading: _isActing, onPressed: _isActing ? null : _markArrived),
                     const SizedBox(height: 10),
                   ],
                   GardenButton(label: 'Iniciar servicio (foto)', loading: _isActing, onPressed: _isActing ? null : _startService),
@@ -417,7 +417,7 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                   ],
                   Text('Fotos del servicio: $_photoCount / $_minPhotos mínimas', style: TextStyle(color: subtextColor, fontSize: 13)),
                   const SizedBox(height: 10),
-                  GardenButton(label: 'Agregar foto', outline: true, icon: Icons.camera_alt_outlined, loading: _isActing, onPressed: _isActing ? null : _addPhotoEvent),
+                  GardenButton(label: 'Agregar foto', outline: true, gIcon: GIcon.foto, loading: _isActing, onPressed: _isActing ? null : _addPhotoEvent),
                   const SizedBox(height: 10),
                   GardenButton(
                     label: canConclude ? 'Concluir servicio' : 'Faltan fotos para concluir',

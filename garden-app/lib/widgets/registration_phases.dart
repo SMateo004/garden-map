@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 /// Agrupa los pasos de un wizard de registro en fases con nombre — mismo
 /// patrón que usan Airbnb/Uber en sus onboardings de host/conductor: un
@@ -140,7 +141,7 @@ class RegistrationPhaseIntro extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('🌿', style: TextStyle(fontSize: 40)),
+                  const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
                   const SizedBox(height: 16),
                   Text(title,
                       style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),

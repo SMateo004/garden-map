@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Implementación WEB de la pantalla de verificación de identidad.
 /// Muestra un QR que el cuidador escanea con su teléfono.
@@ -192,7 +193,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               title: Text('Verificación de identidad', style: TextStyle(color: _text)),
               leading: _step == 2
                   ? IconButton(
-                      icon: Icon(Icons.arrow_back, color: _text),
+                      icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: _text),
                       onPressed: () => setState(() { _step = 0; _stopPolling(); }),
                     )
                   : null,
@@ -224,7 +225,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             Container(
               width: 72, height: 72,
               decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: const Icon(Icons.hourglass_top_rounded, color: GardenColors.warning, size: 36),
+              child: const GardenIcon(GIcon.esperando, size: GIconSize.xl, color: GardenColors.warning),
             ),
             const SizedBox(height: 20),
             Text('Tu verificación está en revisión',
@@ -262,7 +263,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               color: GardenColors.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.qr_code_scanner_rounded, color: GardenColors.primary, size: 48),
+            child: const GardenIcon(GIcon.pagarQr, size: GIconSize.hero, color: GardenColors.primary),
           ),
           const SizedBox(height: 24),
           Text('Verifica tu identidad con tu teléfono',
@@ -286,7 +287,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             child: _generatingToken
                 ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : ElevatedButton.icon(
-                    icon: const Icon(Icons.qr_code_2_rounded),
+                    icon: const GardenIcon(GIcon.pagarQr, size: GIconSize.lg, inheritColor: true),
                     label: const Text('Generar QR',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     style: ElevatedButton.styleFrom(
@@ -409,7 +410,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             // Botón regenerar QR (por si expira)
             TextButton.icon(
               onPressed: _generatingToken ? null : _generateQR,
-              icon: const Icon(Icons.refresh_rounded, size: 18, color: GardenColors.primary),
+              icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
               label: const Text('Generar nuevo QR',
                   style: TextStyle(color: GardenColors.primary, fontSize: 13)),
             ),
@@ -428,7 +429,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cancel_rounded, color: Colors.red, size: 90),
+            const GardenIcon(GIcon.cancelado, size: GIconSize.hero, state: GIconState.active, color: Colors.red),
             const SizedBox(height: 24),
             Text('Verificación rechazada',
                 style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold)),
@@ -445,7 +446,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.qr_code_2_rounded),
+                icon: const GardenIcon(GIcon.pagarQr, size: GIconSize.lg, inheritColor: true),
                 label: const Text('Generar nuevo QR e intentar de nuevo',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(

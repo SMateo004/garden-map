@@ -192,7 +192,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('🤝', style: TextStyle(fontSize: 40)),
+              const GardenIcon(GIcon.meetGreet, size: GIconSize.xl, state: GIconState.active),
               const SizedBox(height: 12),
               Text('¿Cómo fue el Meet & Greet?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               const SizedBox(height: 8),
@@ -412,7 +412,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: GardenColors.error.withValues(alpha: 0.3), width: 2),
               ),
-              child: const Icon(Icons.cancel_outlined, color: GardenColors.error, size: 40),
+              child: const GardenIcon(GIcon.cancelado, size: GIconSize.xl, color: GardenColors.error),
             ),
             const SizedBox(height: 20),
             Text(
@@ -450,7 +450,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 minLines: 2,
                 maxLines: 4,
                 decoration: InputDecoration(
-                  hintText: 'Contanos brevemente qué pasó',
+                  hintText: 'Cuéntanos brevemente qué pasó',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onChanged: (_) => setSheetState(() {}),
@@ -918,14 +918,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               ]),
                               const SizedBox(height: 6),
                               Row(children: [
-                                Icon(Icons.access_time_rounded, size: 13, color: subtextColor),
+                                GardenIcon(GIcon.reloj, size: GIconSize.xs, color: subtextColor),
                                 const SizedBox(width: 5),
                                 Text(dateLabel, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
                               ]),
                               if (meetingPoint.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Row(children: [
-                                  Icon(Icons.location_on_outlined, size: 13, color: subtextColor),
+                                  GardenIcon(GIcon.ubicacion, size: GIconSize.xs, color: subtextColor),
                                   const SizedBox(width: 5),
                                   Expanded(child: Text(meetingPoint, style: TextStyle(color: subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
                                 ]),
@@ -941,10 +941,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         const SizedBox(height: 10),
                         GardenButton(
                           label: mgPassed ? 'Continuar con el pago' : 'Esperando fecha M&G',
-                          icon: mgPassed ? Icons.arrow_forward_rounded : Icons.lock_clock_outlined,
+                          gIcon: mgPassed ? GIcon.avanzar : GIcon.seguridad,
                           color: mgPassed ? GardenColors.primary : subtextColor,
-                          onPressed: mgPassed ? () => _proceedToPayment(booking['id'] as String) : null,
-                        ),
+                          onPressed: mgPassed ? () => _proceedToPayment(booking['id'] as String) : null),
                         if (mgPassed) ...[
                           const SizedBox(height: 8),
                           Builder(builder: (_) {
@@ -977,7 +976,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               bookingStatus: status,
                             ),
                           )),
-                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          icon: const GardenIcon(GIcon.chat, size: GIconSize.sm, inheritColor: true),
                           label: const Text('Coordinar M&G por chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: GardenColors.primary,
@@ -997,15 +996,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
                         Expanded(
                           child: GardenButton(
-                            label: status == 'CONFIRMED' ? 'Ver reserva' : '🔴 En curso',
-                            icon: status == 'CONFIRMED' ? Icons.visibility_outlined : Icons.play_circle_outline,
+                            label: status == 'CONFIRMED' ? 'Ver reserva' : 'En curso',
+                            gIcon: status == 'CONFIRMED' ? GIcon.ver : GIcon.iniciar,
                             height: 40,
                             color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
                             onPressed: () => context.push(
                               '/service/${booking['id']}',
                               extra: {'role': 'CLIENT', 'token': _clientToken},
-                            ),
-                          ),
+                            )),
                         ),
                       // Cancel is allowed before service starts — not once IN_PROGRESS
                       if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED')
@@ -1051,7 +1049,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         '/service/${booking['id']}',
                         extra: {'role': 'CLIENT', 'token': _clientToken},
                       ),
-                      icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                      icon: const GardenIcon(GIcon.recibo, size: GIconSize.sm, inheritColor: true),
                       label: const Text('Ver resumen del servicio', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
@@ -1076,7 +1074,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           if (booking['petId'] != null) 'petId': booking['petId'],
                         },
                       ),
-                      icon: const Icon(Icons.replay_rounded, size: 16),
+                      icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
                       label: const Text('Reservar de nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
@@ -1106,7 +1104,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             ));
                             if (mounted) _loadUnreadCounts();
                           },
-                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          icon: const GardenIcon(GIcon.chat, size: GIconSize.sm, inheritColor: true),
                           label: const Text('Abrir chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: GardenColors.primary,
@@ -1151,7 +1149,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         '/service/${booking['id']}',
                         extra: {'role': 'CLIENT', 'token': _clientToken},
                       ),
-                      icon: const Icon(Icons.add_alarm_rounded, size: 16),
+                      icon: const GardenIcon(GIcon.alarma, size: GIconSize.sm, inheritColor: true),
                       label: const Text('Ampliar tiempo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
@@ -1168,7 +1166,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: () => _showReportDialog(booking),
-                      icon: const Icon(Icons.flag_outlined, size: 16, color: GardenColors.error),
+                      icon: const GardenIcon(GIcon.reportar, size: GIconSize.sm, color: GardenColors.error),
                       label: const Text(
                         'Reportar incumplimiento',
                         style: TextStyle(
@@ -1222,7 +1220,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Text('🤝', style: TextStyle(fontSize: 16)),
+                                const GardenIcon(GIcon.meetGreet, size: GIconSize.sm, state: GIconState.active),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
@@ -1251,7 +1249,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               role: 'CLIENT',
                             ),
                           )),
-                          icon: const Text('🤝', style: TextStyle(fontSize: 14)),
+                          icon: const GardenIcon(GIcon.meetGreet, size: GIconSize.xs, state: GIconState.active),
                           label: Text(
                             mgStatus == 'PROPOSED' ? 'Meet & Greet · Propuesta pendiente'
                               : mgStatus == 'COMPLETED' ? 'Meet & Greet finalizado'
@@ -1341,7 +1339,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
-                  child: const Icon(Icons.list_alt_rounded, color: GardenColors.primary, size: 18),
+                  child: const GardenIcon(GIcon.lista, size: GIconSize.sm, color: GardenColors.primary),
                 ),
                 const SizedBox(width: 10),
                 Text('Mis reservas', style: GardenText.h4.copyWith(color: textColor)),
@@ -1352,11 +1350,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               NotificationBell(token: _clientToken, baseUrl: _baseUrl),
               IconButton(
                 tooltip: 'Paseos recurrentes',
-                icon: Icon(Icons.repeat_rounded, color: subtextColor, size: 20),
+                icon: GardenIcon(GIcon.repetir, size: GIconSize.md, color: subtextColor),
                 onPressed: () => context.push('/recurring-bookings'),
               ),
               IconButton(
-                icon: Icon(Icons.refresh_rounded, color: subtextColor, size: 20),
+                icon: GardenIcon(GIcon.repetir, size: GIconSize.md, color: subtextColor),
                 onPressed: _loadBookings,
               ),
             ],
@@ -1517,7 +1515,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         color: GardenColors.error.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.flag_outlined, color: GardenColors.error, size: 20),
+                      child: const GardenIcon(GIcon.reportar, size: GIconSize.md, color: GardenColors.error),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1567,11 +1565,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            selected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                            color: selected ? GardenColors.error : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                            size: 20,
-                          ),
+                          GardenIcon(selected ? GIcon.casillaMarcada : GIcon.casilla, size: GIconSize.md, state: selected ? GIconState.active : GIconState.idle, color: selected ? GardenColors.error : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary)),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -1599,7 +1593,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 16),
+                      const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1677,7 +1671,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Row(children: [
-          const Icon(Icons.check_circle_rounded, color: GardenColors.success),
+          const GardenIcon(GIcon.confirmado, size: GIconSize.lg, state: GIconState.active, color: GardenColors.success),
           const SizedBox(width: 8),
           Text(title),
         ]),
@@ -1819,11 +1813,7 @@ class _RatingSheetState extends State<_RatingSheet> {
                     onTap: () => setState(() => _rating = starIndex),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(
-                        starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: starIndex <= _rating ? GardenColors.star : subtextColor.withValues(alpha: 0.2),
-                        size: 48,
-                      ),
+                      child: GardenIcon(GIcon.estrella, size: GIconSize.hero, state: starIndex <= _rating ? GIconState.active : GIconState.idle, color: starIndex <= _rating ? GardenColors.star : subtextColor.withValues(alpha: 0.2)),
                     ),
                   );
                 }),
@@ -1931,7 +1921,7 @@ class _TipSheetState extends State<_TipSheet> {
       if (!mounted) return;
       if (data['success'] == true) {
         Navigator.pop(context);
-        GardenSnackBar.success(context, '✓ Propina de Bs ${_amount.toStringAsFixed(0)} enviada — ¡gracias!');
+        GardenSnackBar.success(context, 'Propina de Bs ${_amount.toStringAsFixed(0)} enviada — ¡gracias!');
       } else {
         GardenSnackBar.error(context, data['error']?['message'] ?? 'No se pudo enviar la propina');
       }
@@ -1971,7 +1961,7 @@ class _TipSheetState extends State<_TipSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text('¿Le dejás una propina? 💚', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              Text('¿Le dejas una propina?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               Text('100% va directo al cuidador — Garden no cobra comisión sobre propinas.',
                   style: TextStyle(color: subtextColor, fontSize: 12.5)),
@@ -2002,7 +1992,7 @@ class _TipSheetState extends State<_TipSheet> {
                           Navigator.pop(context);
                           context.push('/wallet');
                         },
-                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                        icon: const GardenIcon(GIcon.billetera, size: GIconSize.sm, inheritColor: true),
                         label: const Text('Cargar saldo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: GardenColors.primary,
@@ -2085,9 +2075,8 @@ class _TipSheetState extends State<_TipSheet> {
               GardenButton(
                 label: _submitting ? 'Enviando...' : 'Enviar propina de Bs ${_amount.toStringAsFixed(0)}',
                 loading: _submitting,
-                icon: Icons.favorite_rounded,
-                onPressed: (_amount > 0 && !_submitting && !_exceedsBalance) ? _submit : null,
-              ),
+                gIcon: GIcon.favorito,
+                onPressed: (_amount > 0 && !_submitting && !_exceedsBalance) ? _submit : null),
               const SizedBox(height: 8),
               Center(
                 child: TextButton(

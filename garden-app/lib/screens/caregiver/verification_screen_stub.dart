@@ -14,6 +14,7 @@ import 'camera_overlay_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'liveness_detector_native.dart'
     if (dart.library.html) 'liveness_detector_web.dart';
+import '../../design/garden_icons.dart';
 
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -362,7 +363,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       child: Column(
         children: [
           const SizedBox(height: 16),
-          const Icon(Icons.verified_user, color: GardenColors.primary, size: 80),
+          const GardenIcon(GIcon.protegido, size: GIconSize.hero, state: GIconState.active, color: GardenColors.primary),
           const SizedBox(height: 24),
           Text(
             'Verifica tu identidad',
@@ -375,10 +376,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
             style: TextStyle(color: _textSecondary, height: 1.5),
           ),
           const SizedBox(height: 32),
-          _buildRequirementItem(Icons.face_rounded, 'Verificación de vida en tiempo real.'),
-          _buildRequirementItem(Icons.photo_camera, 'Selfie nítida de tu rostro.'),
-          _buildRequirementItem(Icons.credit_card, 'Foto del anverso (frente) de tu CI.'),
-          _buildRequirementItem(Icons.credit_card_outlined, 'Foto del reverso (atrás) de tu CI.'),
+          _buildRequirementItem(GIcon.rostro, 'Verificación de vida en tiempo real.'),
+          _buildRequirementItem(GIcon.foto, 'Selfie nítida de tu rostro.'),
+          _buildRequirementItem(GIcon.tarjeta, 'Foto del anverso (frente) de tu CI.'),
+          _buildRequirementItem(GIcon.tarjeta, 'Foto del reverso (atrás) de tu CI.'),
           const SizedBox(height: 48),
           _generatingToken
               ? const GardenLoadingIndicator(color: GardenColors.primary)
@@ -405,12 +406,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
     );
   }
 
-  Widget _buildRequirementItem(IconData icon, String text) {
+  Widget _buildRequirementItem(GIcon icon, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, color: GardenColors.primary, size: 22),
+          GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary),
           const SizedBox(width: 12),
           Expanded(child: Text(text, style: TextStyle(color: _textPrimary))),
         ],
@@ -508,7 +509,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.camera_alt, size: 64, color: GardenColors.primary),
+                                const GardenIcon(GIcon.foto, size: GIconSize.hero, color: GardenColors.primary),
                                 const SizedBox(height: 12),
                                 Text('Toca para capturar', style: TextStyle(color: _textSecondary)),
                               ],
@@ -523,7 +524,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                                 shape: BoxShape.circle,
                               ),
                               padding: const EdgeInsets.all(2),
-                              child: const Icon(Icons.check, color: Colors.white, size: 24),
+                              child: const GardenIcon(GIcon.hecho, size: GIconSize.lg, color: Colors.white),
                             ),
                           ),
                       ],
@@ -535,7 +536,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 if (preview != null)
                   TextButton.icon(
                     onPressed: () => _capturePhoto(type),
-                    icon: const Icon(Icons.refresh, size: 18, color: GardenColors.primary),
+                    icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
                     label: const Text('Volver a tomar', style: TextStyle(color: GardenColors.primary)),
                   ),
 
@@ -769,7 +770,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               elevation: 0,
               leading: _currentStep > 0 && _currentStep < 4
                   ? IconButton(
-                      icon: const Icon(Icons.arrow_back),
+                      icon: const GardenIcon(GIcon.atras, size: GIconSize.lg, inheritColor: true),
                       onPressed: () => setState(() => _currentStep--),
                     )
                   : null,
@@ -787,7 +788,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         return _buildCaptureStep(
           'selfie',
           'Toma tu selfie',
-          'Asegurate de que tu rostro este bien iluminado y sea claramente visible.',
+          'Asegúrate de que tu rostro este bien iluminado y sea claramente visible.',
           _selfiePreview,
           () => setState(() => _currentStep = 0),
           () => setState(() => _currentStep = 2),
@@ -796,7 +797,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         return _buildCaptureStep(
           'ciFront',
           'Foto del CI - Frente',
-          'Asegurate de que el documento este bien iluminado y legible.',
+          'Asegúrate de que el documento este bien iluminado y legible.',
           _ciFrontPreview,
           () => setState(() => _currentStep = 1),
           () => setState(() => _currentStep = 3),
@@ -805,7 +806,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         return _buildCaptureStep(
           'ciBack',
           'Foto del CI - Reverso',
-          'Asegurate de que el documento este bien iluminado y legible.',
+          'Asegúrate de que el documento este bien iluminado y legible.',
           _ciBackPreview,
           () => setState(() => _currentStep = 2),
           _submitVerification,

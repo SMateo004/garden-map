@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Lista de usuarios bloqueados en el chat, con opción de desbloquear.
 /// Requerido por App Store (1.2 UGC) y Google Play — el usuario debe poder
@@ -99,7 +100,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                               color: subtextColor.withValues(alpha: 0.08),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.block_rounded, size: 40, color: subtextColor.withValues(alpha: 0.6)),
+                            child: GardenIcon(GIcon.bloqueado, size: GIconSize.xl, color: subtextColor.withValues(alpha: 0.6)),
                           ),
                           const SizedBox(height: 18),
                           Text('No has bloqueado a nadie',

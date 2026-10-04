@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 class TemporadaAltaBadge extends StatefulWidget {
   final String zona;
@@ -135,7 +136,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                           },
                         ),
                       ] else if (snapshot.hasError) ...[
-                        const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const GardenIcon(GIcon.conflicto, size: GIconSize.hero, color: Colors.red),
                         const SizedBox(height: 16),
                         const Text(
                           "No pudimos cargar la explicación",

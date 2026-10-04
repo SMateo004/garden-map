@@ -232,12 +232,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.credit_card_rounded, color: GardenColors.primary),
+                  leading: const GardenIcon(GIcon.tarjeta, size: GIconSize.lg, color: GardenColors.primary),
                   title: Text('Cambiar tarjeta', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'change'),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: GardenColors.error),
+                  leading: const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error),
                   title: const Text('Eliminar tarjeta', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'remove'),
                 ),
@@ -337,7 +337,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _promoDiscountApplied = (d['discountAmount'] as num?)?.toDouble();
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('✓ Código aplicado — Bs ${_promoDiscountApplied?.toStringAsFixed(2) ?? '0'} de descuento'),
+          content: Text('Código aplicado — Bs ${_promoDiscountApplied?.toStringAsFixed(2) ?? '0'} de descuento'),
           backgroundColor: GardenColors.success,
         ));
       } else if (mounted) {
@@ -972,7 +972,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✓ QR guardado correctamente'),
+            content: Text('QR guardado correctamente'),
             backgroundColor: GardenColors.success,
             duration: Duration(seconds: 3),
           ),
@@ -1093,7 +1093,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               backgroundColor: surface,
               elevation: 0,
               leading: IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+                icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
                 onPressed: interceptBack ? _handleBack : () => context.pop(),
               ),
             ),
@@ -1174,8 +1174,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           methodCard(
             method: 'qr',
             label: 'QR bancario',
-            iconWidget: Icon(Icons.qr_code_2_rounded,
-                color: _selectedMethod == 'qr' ? GardenColors.primary : subtextColor, size: 26),
+            iconWidget: GardenIcon(GIcon.pagarQr, size: GIconSize.lg, color: _selectedMethod == 'qr' ? GardenColors.primary : subtextColor),
             enabled: true,
             onTap: () {
               HapticFeedback.selectionClick();
@@ -1217,7 +1216,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.receipt_long_outlined, color: GardenColors.primary, size: 18),
+            const GardenIcon(GIcon.recibo, size: GIconSize.sm, color: GardenColors.primary),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -1240,7 +1239,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             Text(hasData ? 'Editar' : 'Agregar',
                 style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(width: 2),
-            Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+            GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
           ],
         ),
       ),
@@ -1366,7 +1365,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.event_busy_outlined, color: GardenColors.primary, size: 18),
+            const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
             const SizedBox(width: 8),
             Text('Política de cancelación', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
           ]),
@@ -1403,15 +1402,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
           border: Border.all(color: borderColor),
         ),
         child: Row(children: [
-          const Icon(Icons.local_offer_outlined, color: GardenColors.primary, size: 18),
+          const GardenIcon(GIcon.precio, size: GIconSize.sm, color: GardenColors.primary),
           const SizedBox(width: 10),
           Expanded(
-            child: Text('¿Tenés un código promocional?',
+            child: Text('¿Tienes un código promocional?',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
           ),
           const Text('Agregar', style: TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
           const SizedBox(width: 2),
-          Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+          GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
         ]),
       ),
     );
@@ -1459,7 +1458,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   Text('Código promocional', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
                   Text(
-                    'Si tenés un código de descuento, ingresalo acá antes de generar el pago.',
+                    'Si tienes un código de descuento, ingrésalo aquí antes de generar el pago.',
                     style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
                   ),
                   const SizedBox(height: 20),
@@ -1511,7 +1510,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         children: [
           Row(
             children: [
-              const Text('🐾', style: TextStyle(fontSize: 16)),
+              const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -1617,10 +1616,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.favorite_rounded, color: accent, size: 14),
+                const GardenIcon(GIcon.favorito, size: GIconSize.xs, state: GIconState.active, color: accent),
                 const SizedBox(width: 6),
                 Text(
-                  'Bs ${_donationAmount.toStringAsFixed(2)} se donarán al hogar 🐶',
+                  'Bs ${_donationAmount.toStringAsFixed(2)} se donarán al hogar',
                   style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ],
@@ -1654,7 +1653,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timer_outlined, size: 16, color: color),
+          GardenIcon(GIcon.cronometro, size: GIconSize.sm, color: color),
           const SizedBox(width: 8),
           Text(
             'Expira en  $mm:$ss',
@@ -1742,7 +1741,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.info_outline_rounded, size: 13, color: GardenColors.warning),
+                      const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.warning),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
@@ -1784,7 +1783,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               onPressed: _isSavingQr ? null : _saveQr,
               icon: _isSavingQr
                   ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                  : const Icon(Icons.download_rounded, size: 16, color: GardenColors.primary),
+                  : const GardenIcon(GIcon.descargar, size: GIconSize.sm, color: GardenColors.primary),
               label: Text(
                 _isSavingQr ? 'Guardando...' : 'Guardar QR',
                 style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600),
@@ -1808,8 +1807,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.account_balance_wallet_rounded,
-                        color: GardenColors.primary, size: 16),
+                    const GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
@@ -2048,7 +2046,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 13, color: subtextColor),
+                  GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -2100,8 +2098,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.account_balance_wallet_rounded,
-                            color: _useWallet ? GardenColors.primary : subtextColor, size: 20),
+                        GardenIcon(GIcon.billetera, size: GIconSize.md, state: GIconState.active, color: _useWallet ? GardenColors.primary : subtextColor),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -2161,11 +2158,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          _walletCoversAll ? Icons.check_circle_outline : Icons.info_outline,
-                          size: 16,
-                          color: _walletCoversAll ? GardenColors.success : GardenColors.warning,
-                        ),
+                        GardenIcon(_walletCoversAll ? GIcon.confirmado : GIcon.info, size: GIconSize.sm, color: _walletCoversAll ? GardenColors.success : GardenColors.warning),
                         const SizedBox(width: 8),
                         Text(
                           _walletCoversAll
@@ -2205,7 +2198,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_2_rounded, size: 16, color: GardenColors.primary),
+                  const GardenIcon(GIcon.pagarQr, size: GIconSize.sm, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2318,7 +2311,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
-                const Icon(Icons.local_offer_rounded, color: GardenColors.success, size: 16),
+                const GardenIcon(GIcon.precio, size: GIconSize.sm, color: GardenColors.success),
                 const SizedBox(width: 8),
                 Text('Código "${_booking!['promoCode']}" aplicado',
                     style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w700)),
@@ -2348,11 +2341,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ? 'Usar billetera + Generar QR'
                         : 'Generar QR de pago',
             loading: _isSubmitting,
-            icon: _walletCoversAll
-                ? Icons.account_balance_wallet_rounded
-                : Icons.qr_code_2_outlined,
-            onPressed: _isSubmitting ? null : _initPayment,
-          ),
+            gIcon: _walletCoversAll ? GIcon.billetera : GIcon.pagarQr,
+            onPressed: _isSubmitting ? null : _initPayment),
 
           if (_sipUnavailable) ...[
             const SizedBox(height: 16),
@@ -2367,7 +2357,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 18),
+                    const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text('No pudimos generar tu código de pago en este momento.',
@@ -2379,7 +2369,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     onPressed: _requestingManual ? null : _requestManualPayment,
                     icon: _requestingManual
                         ? const GardenLoadingIndicator(size: 16, color: GardenColors.warning)
-                        : const Icon(Icons.support_agent_rounded, size: 16),
+                        : const GardenIcon(GIcon.soporte, size: GIconSize.sm, state: GIconState.active, inheritColor: true),
                     label: const Text('Solicitar aprobación manual', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: GardenColors.warning,
@@ -2400,7 +2390,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.shield_outlined, size: 14, color: subtextColor),
+              GardenIcon(GIcon.protegido, size: GIconSize.xs, color: subtextColor),
               const SizedBox(width: 6),
               Text('Pago revisado y validado por GARDEN',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
@@ -2634,7 +2624,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: GardenColors.error.withValues(alpha: 0.4), width: 4),
                 ),
-                child: const Icon(Icons.close_rounded, color: GardenColors.error, size: 50),
+                child: const GardenIcon(GIcon.cerrar, size: GIconSize.hero, color: GardenColors.error),
               ),
               const SizedBox(height: 28),
               Text('Pago rechazado',
@@ -2659,7 +2649,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      const Icon(Icons.info_outline, size: 16, color: GardenColors.warning),
+                      const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
                       const SizedBox(width: 8),
                       Text('¿Qué puedes hacer?',
                           style: TextStyle(
@@ -2678,17 +2668,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
               const SizedBox(height: 32),
               GardenButton(
                 label: 'Volver a pagar',
-                icon: Icons.qr_code_2_outlined,
+                gIcon: GIcon.pagarQr,
                 onPressed: () => setState(() {
                   _paymentRejected = false;
                   _qrResponse = null;
-                }),
-              ),
+                })),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.support_agent_outlined, size: 18),
+                  icon: const GardenIcon(GIcon.soporte, size: GIconSize.sm, inheritColor: true),
                   label: const Text('Solicitar revisión manual',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
@@ -2734,7 +2723,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 4),
                 ),
-                child: const Icon(Icons.support_agent_rounded, color: GardenColors.warning, size: 50),
+                child: const GardenIcon(GIcon.soporte, size: GIconSize.hero, state: GIconState.active, color: GardenColors.warning),
               ),
               const SizedBox(height: 28),
               Text('Esperando aprobación',
@@ -2785,7 +2774,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 2),
                   ),
-                  child: const Icon(Icons.timer_off_outlined, color: GardenColors.warning, size: 46),
+                  child: const GardenIcon(GIcon.cronometro, size: GIconSize.hero, color: GardenColors.warning),
                 ),
                 const SizedBox(height: 28),
                 Text('QR vencido',
@@ -2800,9 +2789,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const SizedBox(height: 36),
                 GardenButton(
                   label: 'Ir al marketplace',
-                  icon: Icons.search_rounded,
-                  onPressed: () => context.go('/marketplace'),
-                ),
+                  gIcon: GIcon.buscar,
+                  onPressed: () => context.go('/marketplace')),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => context.go('/my-bookings'),

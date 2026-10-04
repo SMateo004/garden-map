@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/garden_theme.dart';
+import '../../design/garden_icons.dart';
 
 /// Pantalla genérica para documentos legales (Política + Términos).
 /// Se instancia con [title] y [sections] — cada sección tiene título y párrafo.
@@ -29,7 +30,7 @@ class LegalScreen extends StatelessWidget {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: text, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -269,9 +270,9 @@ class TermsOfServiceScreen extends StatelessWidget {
           '4. Especies y animales aptos para la Plataforma',
           'Garden está diseñada para el cuidado de mascotas domésticas comunes: principalmente perros y gatos, y en menor medida aves y roedores pequeños de tenencia doméstica legal en Bolivia.\n\n'
           'QUEDA EXPRESAMENTE PROHIBIDO registrar o solicitar servicios para:\n'
-          '✗ Fauna silvestre o especies protegidas, conforme a la Ley N° 1333 de Medio Ambiente y los convenios CITES suscritos por Bolivia.\n'
-          '✗ Animales exóticos o peligrosos no aptos para el hogar (serpientes venenosas, primates, felinos grandes, y similares).\n'
-          '✗ Cualquier especie cuya tenencia como mascota sea ilegal en el territorio boliviano.\n\n'
+          'Fauna silvestre o especies protegidas, conforme a la Ley N° 1333 de Medio Ambiente y los convenios CITES suscritos por Bolivia.\n'
+          'Animales exóticos o peligrosos no aptos para el hogar (serpientes venenosas, primates, felinos grandes, y similares).\n'
+          'Cualquier especie cuya tenencia como mascota sea ilegal en el territorio boliviano.\n\n'
           'Garden se reserva el derecho de rechazar, cancelar o eliminar sin reembolso cualquier Reserva que involucre una especie no permitida. Si se detecta tenencia ilegal de fauna silvestre, Garden podrá reportarlo a la Autoridad de Bosques y Tierra (ABT) o a la Defensoría de la Madre Tierra, además de suspender permanentemente la cuenta involucrada.',
         ),
 
@@ -323,16 +324,16 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '8. Derechos y obligaciones del Dueño de mascota',
           'El Dueño de mascota PUEDE:\n\n'
-          '✓ Buscar y comparar perfiles de cuidadores verificados con reseñas reales.\n'
-          '✓ Solicitar un Meet & Greet gratuito antes de confirmar cualquier reserva de hospedaje.\n'
-          '✓ Ver en tiempo real la ubicación GPS de su mascota durante los paseos.\n'
-          '✓ Recibir fotos y actualizaciones durante el servicio a través del chat integrado.\n'
-          '✓ Calificar al Cuidador con estrellas y dejar una reseña escrita al finalizar el servicio.\n'
-          '✓ Abrir una disputa dentro de las 24 horas siguientes a la finalización del servicio si considera que este no fue prestado correctamente.\n'
-          '✓ Solicitar acceso a las imágenes y registros de GPS de su servicio por hasta 30 días después de su finalización.\n'
-          '✓ Cancelar su cuenta y solicitar la eliminación de sus datos personales en cualquier momento.\n\n'
+          'Buscar y comparar perfiles de cuidadores verificados con reseñas reales.\n'
+          'Solicitar un Meet & Greet gratuito antes de confirmar cualquier reserva de hospedaje.\n'
+          'Ver en tiempo real la ubicación GPS de su mascota durante los paseos.\n'
+          'Recibir fotos y actualizaciones durante el servicio a través del chat integrado.\n'
+          'Calificar al Cuidador con estrellas y dejar una reseña escrita al finalizar el servicio.\n'
+          'Abrir una disputa dentro de las 24 horas siguientes a la finalización del servicio si considera que este no fue prestado correctamente.\n'
+          'Solicitar acceso a las imágenes y registros de GPS de su servicio por hasta 30 días después de su finalización.\n'
+          'Cancelar su cuenta y solicitar la eliminación de sus datos personales en cualquier momento.\n\n'
           'OBLIGACIONES DEL DUEÑO (de cumplimiento obligatorio antes de cada servicio):\n\n'
-          '⚠ Declaración completa de la mascota: El Dueño ESTÁ OBLIGADO a informar, antes de cada Reserva, todos los aspectos relevantes de su mascota, incluyendo sin limitarse a: raza, edad, peso, temperamento, comportamiento con extraños y otros animales, alergias alimentarias y ambientales, enfermedades crónicas o preexistentes, medicamentos en curso (dosis y horarios), vacunas al día, historial de mordeduras o agresiones, y cualquier trauma o fobia conocida.\n\n'
+          'Declaración completa de la mascota: El Dueño ESTÁ OBLIGADO a informar, antes de cada Reserva, todos los aspectos relevantes de su mascota, incluyendo sin limitarse a: raza, edad, peso, temperamento, comportamiento con extraños y otros animales, alergias alimentarias y ambientales, enfermedades crónicas o preexistentes, medicamentos en curso (dosis y horarios), vacunas al día, historial de mordeduras o agresiones, y cualquier trauma o fobia conocida.\n\n'
           'Esta declaración tiene carácter contractual. El incumplimiento total o parcial de esta obligación exime al Cuidador y a Garden de cualquier responsabilidad por incidentes derivados de información omitida o falsa, trasladando toda responsabilidad civil y económica al Dueño conforme al Art. 519 del Código Civil Boliviano (autonomía de la voluntad y buena fe contractual).',
         ),
 
@@ -340,49 +341,49 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '9. Prohibiciones para el Dueño de mascota',
           'El Dueño de mascota NO PUEDE:\n\n'
-          '✗ Acordar pagos directos con el Cuidador para evadir la Plataforma ni la comisión de Garden. Esto constituye incumplimiento grave y puede resultar en suspensión permanente de ambas cuentas.\n\n'
-          '✗ Proporcionar información falsa o incompleta sobre el comportamiento, estado de salud o vacunación de su mascota. Los daños causados por ocultamiento de información son responsabilidad exclusiva del Dueño.\n\n'
-          '✗ Entregar una mascota diferente a la registrada en la Reserva sin notificación previa al Cuidador.\n\n'
-          '✗ Solicitar al Cuidador que realice actividades no acordadas en la Reserva (ej.: compras, mensajería, tareas domésticas).\n\n'
-          '✗ Acosar, amenazar, insultar o discriminar a los Cuidadores por ningún medio dentro o fuera de la Plataforma.\n\n'
-          '✗ Publicar reseñas falsas, difamatorias o malintencionadas.\n\n'
-          '✗ Registrar más de una cuenta personal.\n\n'
-          '✗ Ceder o compartir el acceso a su cuenta con terceros.\n\n'
-          '✗ Usar la Plataforma para fines comerciales (reventa de servicios, agencias de mascotas, etc.) sin acuerdo escrito previo con Garden.\n\n'
-          '✗ OBLIGACIÓN DE ALIMENTACIÓN (Hospedaje y Guardería): Para servicios de Hospedaje y Guardería, el Dueño ESTÁ OBLIGADO a entregar al Cuidador la alimentación completa y pre-porcionada para toda la duración del servicio, junto con las instrucciones específicas de frecuencia y cantidad. El Cuidador NO puede proporcionar alimentos propios ni de otra fuente a la mascota, ya que esto puede causar trastornos digestivos, reacciones alérgicas o intoxicaciones. El incumplimiento de esta obligación (no traer alimento suficiente) exime al Cuidador de toda responsabilidad por afecciones gastrointestinales de la mascota durante el servicio.',
+          'Acordar pagos directos con el Cuidador para evadir la Plataforma ni la comisión de Garden. Esto constituye incumplimiento grave y puede resultar en suspensión permanente de ambas cuentas.\n\n'
+          'Proporcionar información falsa o incompleta sobre el comportamiento, estado de salud o vacunación de su mascota. Los daños causados por ocultamiento de información son responsabilidad exclusiva del Dueño.\n\n'
+          'Entregar una mascota diferente a la registrada en la Reserva sin notificación previa al Cuidador.\n\n'
+          'Solicitar al Cuidador que realice actividades no acordadas en la Reserva (ej.: compras, mensajería, tareas domésticas).\n\n'
+          'Acosar, amenazar, insultar o discriminar a los Cuidadores por ningún medio dentro o fuera de la Plataforma.\n\n'
+          'Publicar reseñas falsas, difamatorias o malintencionadas.\n\n'
+          'Registrar más de una cuenta personal.\n\n'
+          'Ceder o compartir el acceso a su cuenta con terceros.\n\n'
+          'Usar la Plataforma para fines comerciales (reventa de servicios, agencias de mascotas, etc.) sin acuerdo escrito previo con Garden.\n\n'
+          'OBLIGACIÓN DE ALIMENTACIÓN (Hospedaje y Guardería): Para servicios de Hospedaje y Guardería, el Dueño ESTÁ OBLIGADO a entregar al Cuidador la alimentación completa y pre-porcionada para toda la duración del servicio, junto con las instrucciones específicas de frecuencia y cantidad. El Cuidador NO puede proporcionar alimentos propios ni de otra fuente a la mascota, ya que esto puede causar trastornos digestivos, reacciones alérgicas o intoxicaciones. El incumplimiento de esta obligación (no traer alimento suficiente) exime al Cuidador de toda responsabilidad por afecciones gastrointestinales de la mascota durante el servicio.',
         ),
 
         // ── 10. QUÉ PUEDE HACER UN CUIDADOR ──────────────────────────────────
         _LegalSection(
           '10. Derechos y facultades del Cuidador',
           'El Cuidador PUEDE:\n\n'
-          '✓ Establecer sus propios precios, horarios y disponibilidad libremente.\n'
-          '✓ Aceptar o rechazar cualquier solicitud de Reserva sin necesidad de justificación.\n'
-          '✓ Cancelar una Reserva activa si detecta que la mascota representa un riesgo para su seguridad o la de otros animales a su cuidado, notificando inmediatamente a Garden.\n'
-          '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La tarifa de plataforma de Garden es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
-          '✓ Construir un perfil público con fotos, descripción y reseñas de sus servicios.\n'
-          '✓ Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
-          '✓ Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
-          '✓ Establecer límites razonables (máx. número de mascotas simultáneas, razas que no acepta, peso máximo).\n'
-          '✓ Recibir un comprobante de transacción registrado en blockchain por cada servicio completado.\n'
-          '✓ Negarse a alimentar a una mascota si el Dueño no proveyó alimento suficiente, reportando la situación a Garden a través de la app.',
+          'Establecer sus propios precios, horarios y disponibilidad libremente.\n'
+          'Aceptar o rechazar cualquier solicitud de Reserva sin necesidad de justificación.\n'
+          'Cancelar una Reserva activa si detecta que la mascota representa un riesgo para su seguridad o la de otros animales a su cuidado, notificando inmediatamente a Garden.\n'
+          'Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La tarifa de plataforma de Garden es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
+          'Construir un perfil público con fotos, descripción y reseñas de sus servicios.\n'
+          'Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
+          'Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
+          'Establecer límites razonables (máx. número de mascotas simultáneas, razas que no acepta, peso máximo).\n'
+          'Recibir un comprobante de transacción registrado en blockchain por cada servicio completado.\n'
+          'Negarse a alimentar a una mascota si el Dueño no proveyó alimento suficiente, reportando la situación a Garden a través de la app.',
         ),
 
         // ── 11. QUÉ NO PUEDE HACER UN CUIDADOR ──────────────────────────────
         _LegalSection(
           '11. Prohibiciones para el Cuidador',
           'El Cuidador NO PUEDE:\n\n'
-          '✗ Solicitar o aceptar pagos fuera de la Plataforma para servicios originados en Garden.\n'
-          '✗ Delegar el cuidado de la mascota a otra persona no registrada en Garden sin autorización expresa del Cliente y de Garden.\n'
-          '✗ Transportar a la mascota en vehículo sin las condiciones mínimas de seguridad (jaula o arnés homologado).\n'
-          '✗ Administrar medicamentos a la mascota sin instrucciones escritas del Dueño y del veterinario.\n'
-          '✗ Mezclar mascotas con animales enfermos o sin vacunas al día en el espacio de hospedaje.\n'
-          '✗ Publicar fotos o videos de las mascotas a su cuidado en redes sociales sin autorización expresa del Cliente.\n'
-          '✗ Prestar el servicio bajo los efectos del alcohol o de sustancias controladas. Sanción: suspensión inmediata.\n'
-          '✗ Abandono de mascota: dejar de atender a una mascota bajo su custodia constituye maltrato animal y puede ser denunciado ante la Defensoría de la Madre Tierra y el Gobierno Autónomo Municipal de Santa Cruz.\n'
-          '✗ Acosar, insultar o discriminar a los Clientes.\n'
-          '✗ Inflar artificialmente sus calificaciones mediante reseñas falsas o acuerdos con terceros.\n'
-          '✗ Usar las fotos, datos o información de las mascotas de los Clientes con fines distintos a la prestación del servicio.',
+          'Solicitar o aceptar pagos fuera de la Plataforma para servicios originados en Garden.\n'
+          'Delegar el cuidado de la mascota a otra persona no registrada en Garden sin autorización expresa del Cliente y de Garden.\n'
+          'Transportar a la mascota en vehículo sin las condiciones mínimas de seguridad (jaula o arnés homologado).\n'
+          'Administrar medicamentos a la mascota sin instrucciones escritas del Dueño y del veterinario.\n'
+          'Mezclar mascotas con animales enfermos o sin vacunas al día en el espacio de hospedaje.\n'
+          'Publicar fotos o videos de las mascotas a su cuidado en redes sociales sin autorización expresa del Cliente.\n'
+          'Prestar el servicio bajo los efectos del alcohol o de sustancias controladas. Sanción: suspensión inmediata.\n'
+          'Abandono de mascota: dejar de atender a una mascota bajo su custodia constituye maltrato animal y puede ser denunciado ante la Defensoría de la Madre Tierra y el Gobierno Autónomo Municipal de Santa Cruz.\n'
+          'Acosar, insultar o discriminar a los Clientes.\n'
+          'Inflar artificialmente sus calificaciones mediante reseñas falsas o acuerdos con terceros.\n'
+          'Usar las fotos, datos o información de las mascotas de los Clientes con fines distintos a la prestación del servicio.',
         ),
 
         // ── 12. RESPONSABILIDAD: MASCOTA LASTIMADA O FALLECIDA ───────────────
@@ -552,14 +553,14 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '24. Conducta prohibida y sanciones',
           'Está terminantemente prohibido para TODOS los usuarios:\n\n'
-          '✗ Acordar o realizar transacciones económicas fuera de la Plataforma por servicios originados en Garden (circunvención de plataforma). Primera infracción: suspensión de 90 días. Segunda infracción: suspensión permanente.\n\n'
-          '✗ Crear perfiles falsos, usar identidades de terceros o proporcionar documentos falsificados. Sanción: suspensión permanente y denuncia penal.\n\n'
-          '✗ Publicar reseñas, calificaciones o comentarios falsos o manipulados. Sanción: eliminación del contenido y suspensión.\n\n'
-          '✗ Acosar, amenazar, extorsionar o discriminar a otros usuarios por cualquier medio. Sanción: suspensión inmediata y denuncia ante el Ministerio Público si corresponde.\n\n'
-          '✗ Usar Garden para actividades ilegales, incluyendo tráfico de animales, lavado de activos o cualquier actividad penada por las leyes bolivianas. Sanción: suspensión permanente y denuncia a las autoridades.\n\n'
-          '✗ Usar fotografías del domicilio de otro usuario, obtenidas a través de la Plataforma, con fines de vigilancia, acecho o para facilitar delitos contra la propiedad (por ejemplo, "casar" una vivienda para un robo). Sanción: suspensión permanente inmediata y denuncia penal.\n\n'
-          '✗ Registrar cuentas múltiples para evadir sanciones previas.\n\n'
-          '✗ Intentar acceder, hackear o dañar los sistemas informáticos de Garden, lo cual constituye delito informático conforme a la Ley N° 164 de Telecomunicaciones de Bolivia.\n\n'
+          'Acordar o realizar transacciones económicas fuera de la Plataforma por servicios originados en Garden (circunvención de plataforma). Primera infracción: suspensión de 90 días. Segunda infracción: suspensión permanente.\n\n'
+          'Crear perfiles falsos, usar identidades de terceros o proporcionar documentos falsificados. Sanción: suspensión permanente y denuncia penal.\n\n'
+          'Publicar reseñas, calificaciones o comentarios falsos o manipulados. Sanción: eliminación del contenido y suspensión.\n\n'
+          'Acosar, amenazar, extorsionar o discriminar a otros usuarios por cualquier medio. Sanción: suspensión inmediata y denuncia ante el Ministerio Público si corresponde.\n\n'
+          'Usar Garden para actividades ilegales, incluyendo tráfico de animales, lavado de activos o cualquier actividad penada por las leyes bolivianas. Sanción: suspensión permanente y denuncia a las autoridades.\n\n'
+          'Usar fotografías del domicilio de otro usuario, obtenidas a través de la Plataforma, con fines de vigilancia, acecho o para facilitar delitos contra la propiedad (por ejemplo, "casar" una vivienda para un robo). Sanción: suspensión permanente inmediata y denuncia penal.\n\n'
+          'Registrar cuentas múltiples para evadir sanciones previas.\n\n'
+          'Intentar acceder, hackear o dañar los sistemas informáticos de Garden, lo cual constituye delito informático conforme a la Ley N° 164 de Telecomunicaciones de Bolivia.\n\n'
           'SUSPENSIÓN AUTOMÁTICA POR CALIFICACIÓN BAJA (Cuidadores): Si un Cuidador acumula 5 o más calificaciones de 1 o 2 estrellas en el historial de sus Reservas, su cuenta se suspende automáticamente como medida preventiva, sin necesidad de una revisión manual previa. Un administrador de Garden puede revisar el caso y reactivar la cuenta; desde el momento de esa reactivación, solo se cuentan las calificaciones bajas nuevas para una eventual suspensión automática posterior — las anteriores a la reactivación no se vuelven a contar.\n\n'
           'REPORTE DE AUSENCIA (NO-SHOW) BIDIRECCIONAL: Tanto el Cliente como el Cuidador pueden reportar que la otra parte no se presentó al servicio acordado, dentro de las 24 horas siguientes a la cancelación por no presentación. Si una de las partes ya abrió un reclamo por este motivo, la otra debe responder dentro de ese mismo proceso en la app en vez de abrir uno nuevo.',
         ),
@@ -631,9 +632,9 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '30. Contacto y soporte',
           'Para consultas, reportes o ejercicio de derechos:\n\n'
-          '📧 Email: contactogardenbo@gmail.com\n'
-          '📞 WhatsApp / Teléfono: +591 75933133\n'
-          '📍 Dirección: C. 6 Barrio Equipetrol, Santa Cruz de la Sierra, Bolivia\n\n'
+          'Email: contactogardenbo@gmail.com\n'
+          'WhatsApp / Teléfono: +591 75933133\n'
+          'Dirección: C. 6 Barrio Equipetrol, Santa Cruz de la Sierra, Bolivia\n\n'
           'Horario de atención: Lunes a Viernes, 8:00 a 18:00 (GMT-4, hora Bolivia).\n\n'
           '© 2026 Garden Bolivia. Todos los derechos reservados.',
         ),

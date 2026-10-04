@@ -321,7 +321,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Perfil actualizado correctamente'),
+            content: Text('Perfil actualizado correctamente'),
             backgroundColor: GardenColors.success,
             duration: Duration(seconds: 2),
           ),
@@ -449,7 +449,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                       color: GardenColors.primary,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                                    child: const GardenIcon(GIcon.foto, size: GIconSize.sm, color: Colors.white),
                                   ),
                                 ),
                               ),
@@ -598,7 +598,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 20),
+                  icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
                   onPressed: () => Navigator.pop(context),
                   tooltip: 'Volver',
                 ),
@@ -620,7 +620,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   const SizedBox(width: 6),
                   ElevatedButton.icon(
                     onPressed: _saveProfile,
-                    icon: const Icon(Icons.check_rounded, size: 16),
+                    icon: const GardenIcon(GIcon.hecho, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Guardar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
@@ -635,7 +635,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 ] else
                   ElevatedButton.icon(
                     onPressed: () => setState(() => _isEditing = true),
-                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
@@ -684,7 +684,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Sobre ti',
-                                          icon: Icons.edit_note_rounded,
+                                          icon: GIcon.editar,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
@@ -699,13 +699,12 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                               ),
                                               if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
                                             ],
-                                          ),
-                                        ),
+                                          )),
                                         const SizedBox(height: 16),
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Ubicación',
-                                          icon: Icons.location_on_outlined,
+                                          icon: GIcon.ubicacion,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
                                             child: Theme(
@@ -755,8 +754,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                                 onApartmentToggle: (val) => setState(() => _isApartment = val),
                                               ),
                                             ),
-                                          ),
-                                        ),
+                                          )),
                                       ],
                                     ),
                                   ),
@@ -770,35 +768,32 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Información personal',
-                                          icon: Icons.person_outline_rounded,
+                                          icon: GIcon.perfil,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
                                             child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
-                                          ),
-                                        ),
+                                          )),
                                         const SizedBox(height: 16),
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Datos de cobro',
-                                          icon: Icons.account_balance_rounded,
+                                          icon: GIcon.retiro,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
                                             child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
-                                          ),
-                                        ),
+                                          )),
                                         const SizedBox(height: 16),
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Estado del perfil',
-                                          icon: Icons.verified_outlined,
+                                          icon: GIcon.verificado,
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text('Estado actual', style: TextStyle(color: subtextColor, fontSize: 13)),
                                               _statusBadge(_profile?['status'] ?? ''),
                                             ],
-                                          ),
-                                        ),
+                                          )),
                                       ],
                                     ),
                                   ),
@@ -842,7 +837,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _saveProfile,
-                icon: const Icon(Icons.check_rounded, size: 18),
+                icon: const GardenIcon(GIcon.hecho, size: GIconSize.sm, inheritColor: true),
                 label: const Text('Guardar cambios', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: GardenColors.primary,
@@ -862,7 +857,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
             ),
             ElevatedButton.icon(
               onPressed: () => setState(() => _isEditing = true),
-              icon: const Icon(Icons.edit_rounded, size: 17),
+              icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true),
               label: const Text('Editar perfil', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: GardenColors.primary,
@@ -915,7 +910,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     child: Container(
                       width: 24, height: 24,
                       decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                      child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
                     ),
                   ),
                 ),
@@ -953,7 +948,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
   Widget _webCard(
     Color surface, Color borderColor, Color textColor, {
     required String title,
-    required IconData icon,
+    required GIcon icon,
     required Widget child,
     String? badge,
     Color? badgeColor,
@@ -971,7 +966,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: GardenColors.primary),
+              GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 8),
               Text(title, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
               if (badge != null) ...[
@@ -1040,7 +1035,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.lock_outline_rounded, color: GardenColors.secondary, size: 12),
+                    GardenIcon(GIcon.seguridad, size: GIconSize.xs, color: GardenColors.secondary),
                     SizedBox(width: 4),
                     Text('Solo visible para ti', style: TextStyle(color: GardenColors.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
                   ],
@@ -1064,16 +1059,14 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           children: [
             Expanded(
               child: _withdrawalMethodChip(
-                'Transferencia bancaria', Icons.account_balance_rounded, 'BANK_TRANSFER',
-                textColor, subtextColor, surfaceEl, borderColor,
-              ),
+                'Transferencia bancaria', GIcon.retiro, 'BANK_TRANSFER',
+                textColor, subtextColor, surfaceEl, borderColor),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _withdrawalMethodChip(
-                'QR de transferencia', Icons.qr_code_2_rounded, 'QR_TRANSFER',
-                textColor, subtextColor, surfaceEl, borderColor,
-              ),
+                'QR de transferencia', GIcon.pagarQr, 'QR_TRANSFER',
+                textColor, subtextColor, surfaceEl, borderColor),
             ),
           ],
         ),
@@ -1110,7 +1103,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                             ],
                           ),
                   ),
-                  Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
+                  GardenIcon(GIcon.desplegar, size: GIconSize.md, color: subtextColor),
                 ],
               ),
             ),
@@ -1149,7 +1142,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
   /// Chip seleccionable para elegir la modalidad de cobro (transferencia
   /// bancaria vs QR de transferencia) — mismo widget/estilo que en la billetera.
   Widget _withdrawalMethodChip(
-    String label, IconData icon, String method,
+    String label, GIcon icon, String method,
     Color textColor, Color subtextColor, Color surface, Color borderColor,
   ) {
     final isSelected = _withdrawalMethod == method;
@@ -1165,7 +1158,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: isSelected ? GardenColors.primary : subtextColor, size: 20),
+            GardenIcon(icon, size: GIconSize.md, color: isSelected ? GardenColors.primary : subtextColor),
             const SizedBox(height: 6),
             Text(
               label,
@@ -1209,9 +1202,9 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(11),
                     child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                        errorBuilder: (_, __, ___) => const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.error)),
                   )
-                : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
+                : GardenIcon(GIcon.pagarQr, size: GIconSize.lg, color: subtextColor.withValues(alpha: 0.4)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1234,7 +1227,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   onPressed: _uploadingQr ? null : _pickAndUploadQr,
                   icon: _uploadingQr
                       ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                      : const Icon(Icons.upload_rounded, size: 16),
+                      : const GardenIcon(GIcon.subir, size: GIconSize.sm, inheritColor: true),
                   label: Text(_uploadingQr ? 'Subiendo...' : (qrInfo != null ? 'Reemplazar QR' : 'Subir QR')),
                   style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
                 ),
@@ -1309,10 +1302,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                       color: isSelected ? GardenColors.primary.withValues(alpha: 0.15) : GardenColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      category == 'Bancos' ? Icons.account_balance_rounded : Icons.account_balance_wallet_rounded,
-                      color: isSelected ? GardenColors.primary : subtextColor, size: 18,
-                    ),
+                    child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor),
                   ),
                   title: Text(bank['name']!, style: TextStyle(
                     color: isSelected ? GardenColors.primary : textColor,
@@ -1320,7 +1310,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     fontSize: 14,
                   )),
                   subtitle: Text(GardenBanks.typeLabels[bank['type']] ?? '', style: TextStyle(color: subtextColor, fontSize: 11)),
-                  trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20) : null,
+                  trailing: isSelected ? const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary) : null,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -1352,7 +1342,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   decoration: InputDecoration(
                     hintText: 'Buscar...',
                     hintStyle: TextStyle(color: subtextColor),
-                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 20),
+                    prefixIcon: GardenIcon(GIcon.buscar, size: GIconSize.md, color: subtextColor),
                     filled: true, fillColor: surfaceEl,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1403,7 +1393,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.verified_user, color: GardenColors.success, size: 14),
+                    GardenIcon(GIcon.protegido, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                     SizedBox(width: 4),
                     Text('Verificada y bloqueada',
                       style: TextStyle(color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.bold)),

@@ -102,7 +102,7 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Protege tu billetera y, si sos cuidador, la ubicación exacta de tus clientes al gestionar un servicio.',
+            'Protege tu billetera y, si eres cuidador, la ubicación exacta de tus clientes al gestionar un servicio.',
             style: TextStyle(color: textColor, fontSize: 13),
           ),
           const SizedBox(height: 16),

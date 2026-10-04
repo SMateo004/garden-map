@@ -981,7 +981,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   color: GardenColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.smartphone_rounded, color: GardenColors.primary, size: 16),
+                child: const GardenIcon(GIcon.dispositivo, size: GIconSize.sm, color: GardenColors.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -995,7 +995,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               // de acertar con el dedo en mobile-web.
               IconButton(
                 onPressed: () => setState(() => _appBannerDismissed = true),
-                icon: Icon(Icons.close_rounded, size: 18, color: subtextColor),
+                icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 splashRadius: 20,
@@ -1012,20 +1012,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             children: [
               Expanded(
                 child: _storeBtn(
-                  icon: Icons.apple_rounded,
+                  icon: GIcon.marcaApple,
                   label: 'App Store',
                   onTap: () => _openUrl(_kAppStoreUrl),
-                  isDark: isDark,
-                ),
+                  isDark: isDark),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _storeBtn(
-                  icon: Icons.android_rounded,
+                  icon: GIcon.marcaAndroid,
                   label: 'Play Store',
                   onTap: () => _openUrl(_kPlayStoreUrl),
-                  isDark: isDark,
-                ),
+                  isDark: isDark),
               ),
             ],
           ),
@@ -1034,7 +1032,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _storeBtn({required IconData icon, required String label, required VoidCallback onTap, required bool isDark}) =>
+  Widget _storeBtn({required GIcon icon, required String label, required VoidCallback onTap, required bool isDark}) =>
     GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1046,7 +1044,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 15),
+            GardenIcon(icon, size: GIconSize.xs, color: Colors.white),
             const SizedBox(width: 6),
             Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
           ],
@@ -1171,8 +1169,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const Spacer(),
                   if (_authToken.isNotEmpty) ...[
                     NotificationBell(token: _authToken, baseUrl: _baseUrl),
-                    _appBarBtn(Icons.list_alt_rounded, 'Mis reservas', () => context.push('/my-bookings'), textColor),
-                    _appBarBtn(Icons.pets_rounded, 'Mis mascotas', () => context.push('/my-pets'), textColor),
+                    _appBarBtn(GIcon.lista, 'Mis reservas', () => context.push('/my-bookings'), textColor),
+                    _appBarBtn(GIcon.huella, 'Mis mascotas', () => context.push('/my-pets'), textColor),
                     const SizedBox(width: 4),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -1184,7 +1182,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(children: [
-                          const Icon(Icons.account_circle_outlined, size: 18, color: GardenColors.primary),
+                          const GardenIcon(GIcon.perfil, size: GIconSize.sm, color: GardenColors.primary),
                           const SizedBox(width: 6),
                           Text(_userName?.split(' ').first ?? 'Perfil',
                               style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
@@ -1225,8 +1223,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _appBarBtn(IconData icon, String tooltip, VoidCallback onTap, Color color) => IconButton(
-        icon: Icon(icon, color: color, size: 20),
+  Widget _appBarBtn(GIcon icon, String tooltip, VoidCallback onTap, Color color) => IconButton(
+        icon: GardenIcon(icon, size: GIconSize.md, color: color),
         onPressed: onTap,
         tooltip: tooltip,
       );
@@ -1246,7 +1244,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         children: [
           // Toggle filters button
           _toolbarToggleBtn(
-            icon: Icons.tune_rounded,
+            icon: GIcon.filtros,
             label: _showFilters ? 'Ocultar filtros' : 'Filtros',
             badge: _activeFilterCount,
             active: _showFilters,
@@ -1254,8 +1252,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               HapticFeedback.selectionClick();
               setState(() => _showFilters = !_showFilters);
             },
-            textColor: textColor,
-          ),
+            textColor: textColor),
           const SizedBox(width: 12),
 
           // Result count
@@ -1282,26 +1279,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.sort_rounded, size: 16, color: textColor),
+                  GardenIcon(GIcon.filtros, size: GIconSize.sm, color: textColor),
                   const SizedBox(width: 6),
                   Text(_sortLabel(_sortBy), style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w500)),
                   const SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: textColor),
+                  GardenIcon(GIcon.desplegar, size: GIconSize.sm, color: textColor),
                 ],
               ),
             ),
             itemBuilder: (_) => [
-              _sortMenuItem('rating_desc', 'Mejor valorados', Icons.star_rounded),
-              _sortMenuItem('price_asc', 'Precio: menor a mayor', Icons.arrow_upward_rounded),
-              _sortMenuItem('price_desc', 'Precio: mayor a menor', Icons.arrow_downward_rounded),
-              _sortMenuItem('experience', 'Más experiencia', Icons.workspace_premium_outlined),
+              _sortMenuItem('rating_desc', 'Mejor valorados', GIcon.estrella),
+              _sortMenuItem('price_asc', 'Precio: menor a mayor', GIcon.arriba),
+              _sortMenuItem('price_desc', 'Precio: mayor a menor', GIcon.abajo),
+              _sortMenuItem('experience', 'Más experiencia', GIcon.destacado),
             ],
           ),
           const SizedBox(width: 10),
 
           // Toggle map button
           _toolbarToggleBtn(
-            icon: Icons.map_outlined,
+            icon: GIcon.mapa,
             label: _showMap ? 'Cerrar mapa' : 'Ver mapa',
             badge: 0,
             active: _showMap,
@@ -1318,15 +1315,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 }
               });
             },
-            textColor: textColor,
-          ),
+            textColor: textColor),
         ],
       ),
     );
   }
 
   Widget _toolbarToggleBtn({
-    required IconData icon,
+    required GIcon icon,
     required String label,
     required int badge,
     required bool active,
@@ -1345,7 +1341,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: active ? GardenColors.primary : textColor),
+            GardenIcon(icon, size: GIconSize.sm, color: active ? GardenColors.primary : textColor),
             const SizedBox(width: 6),
             Text(label, style: TextStyle(fontSize: 13, color: active ? GardenColors.primary : textColor, fontWeight: FontWeight.w600)),
             if (badge > 0) ...[
@@ -1371,10 +1367,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
-  PopupMenuItem<String> _sortMenuItem(String value, String label, IconData icon) => PopupMenuItem(
+  PopupMenuItem<String> _sortMenuItem(String value, String label, GIcon icon) => PopupMenuItem(
         value: value,
         child: Row(children: [
-          Icon(icon, size: 16, color: GardenColors.primary),
+          GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary),
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontSize: 13)),
         ]),
@@ -1396,7 +1392,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
             child: Row(
               children: [
-                const Icon(Icons.tune_rounded, size: 18, color: GardenColors.primary),
+                const GardenIcon(GIcon.filtros, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Text('Filtros', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
                 if (_activeFilterCount > 0) ...[
@@ -1441,11 +1437,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       children: [
                         _serviceChip('Todos', 'todos', textColor),
                         const SizedBox(width: 8),
-                        _serviceChip('🦮 Paseo', 'paseo', textColor),
+                        _serviceChip('Paseo', 'paseo', textColor),
                         const SizedBox(width: 8),
-                        _serviceChip('🏠 Hospedaje', 'hospedaje', textColor),
+                        _serviceChip('Hospedaje', 'hospedaje', textColor),
                         const SizedBox(width: 8),
-                        _serviceChip('🏡 Guardería', 'guarderia', textColor),
+                        _serviceChip('Guardería', 'guarderia', textColor),
                       ],
                     ),
                   ),
@@ -1458,11 +1454,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        _petTypeChip(null, '🐾 Todos', textColor),
+                        _petTypeChip(null, 'Todos', textColor),
                         const SizedBox(width: 8),
-                        _petTypeChip('DOGS', '🐕 Perro', textColor),
+                        _petTypeChip('DOGS', 'Perro', textColor),
                         const SizedBox(width: 8),
-                        _petTypeChip('CATS', '🐱 Gato', textColor),
+                        _petTypeChip('CATS', 'Gato', textColor),
                       ],
                     ),
                   ),
@@ -1477,10 +1473,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     decoration: InputDecoration(
                       hintText: 'Nombre del cuidador...',
                       hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded, color: GardenColors.primary, size: 18),
+                      prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.sm, color: GardenColors.primary),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.close_rounded, size: 16, color: subtextColor),
+                              icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                               onPressed: () {
                                 _searchController.clear();
                                 setState(() => _searchQuery = '');
@@ -1527,8 +1523,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
                       ),
                       child: Row(children: [
-                        Icon(Icons.public_rounded, size: 14,
-                            color: _selectedZone == null ? GardenColors.primary : subtextColor),
+                        GardenIcon(GIcon.web, size: GIconSize.xs, color: _selectedZone == null ? GardenColors.primary : subtextColor),
                         const SizedBox(width: 8),
                         Text('Todas las zonas',
                             style: TextStyle(
@@ -1538,7 +1533,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             )),
                         if (_selectedZone == null) ...[
                           const Spacer(),
-                          const Icon(Icons.check_rounded, size: 14, color: GardenColors.primary),
+                          const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.primary),
                         ],
                       ]),
                     ),
@@ -1644,10 +1639,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   Wrap(
                     spacing: 6, runSpacing: 6,
                     children: [
-                      _sizeChip('SMALL', 'Pequeño 🐾', textColor),
-                      _sizeChip('MEDIUM', 'Mediano 🐕', textColor),
-                      _sizeChip('LARGE', 'Grande 🐕‍🦺', textColor),
-                      _sizeChip('GIANT', 'Gigante 🦮', textColor),
+                      _sizeChip('SMALL', 'Pequeño', textColor),
+                      _sizeChip('MEDIUM', 'Mediano', textColor),
+                      _sizeChip('LARGE', 'Grande', textColor),
+                      _sizeChip('GIANT', 'Gigante', textColor),
                     ],
                   ),
                   _divider(border),
@@ -1655,17 +1650,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   // ── Políticas ──
                   _sectionTitle('Políticas de aceptación', textColor),
                   const SizedBox(height: 4),
-                  _filterSwitch('Acepta perros agresivos', Icons.warning_amber_rounded, _filterAggressive, (v) {
+                  _filterSwitch('Acepta perros agresivos', GIcon.advertencia, _filterAggressive, (v) {
                     setState(() => _filterAggressive = v);
                     _refreshSheet?.call();
                     _loadCaregivers(reset: true);
                   }, textColor, subtextColor),
-                  _filterSwitch('Acepta cachorros', Icons.child_care_rounded, _filterPuppies, (v) {
+                  _filterSwitch('Acepta cachorros', GIcon.cachorro, _filterPuppies, (v) {
                     setState(() => _filterPuppies = v);
                     _refreshSheet?.call();
                     _loadCaregivers(reset: true);
                   }, textColor, subtextColor),
-                  _filterSwitch('Acepta perros seniors', Icons.elderly_rounded, _filterSeniors, (v) {
+                  _filterSwitch('Acepta perros seniors', GIcon.salud, _filterSeniors, (v) {
                     setState(() => _filterSeniors = v);
                     _refreshSheet?.call();
                     _loadCaregivers(reset: true);
@@ -1681,10 +1676,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   Wrap(
                     spacing: 6, runSpacing: 6,
                     children: [
-                      _simultaneousChip(null, 'Cualquiera 🐾', textColor),
-                      _simultaneousChip(1, 'Solo 1 🐕', textColor),
-                      _simultaneousChip(2, 'Mín. 2 🐕🐕', textColor),
-                      _simultaneousChip(3, '3 mascotas 🐕🐕🐕', textColor),
+                      _simultaneousChip(null, 'Cualquiera', textColor),
+                      _simultaneousChip(1, 'Solo 1', textColor),
+                      _simultaneousChip(2, 'Mín. 2', textColor),
+                      _simultaneousChip(3, '3 mascotas', textColor),
                     ],
                   ),
                   _divider(border),
@@ -1842,12 +1837,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             )),
       );
 
-  Widget _filterSwitch(String label, IconData icon, bool value, Function(bool) onChanged,
+  Widget _filterSwitch(String label, GIcon icon, bool value, Function(bool) onChanged,
       Color textColor, Color subtextColor) =>
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(children: [
-          Icon(icon, size: 16, color: value ? GardenColors.primary : subtextColor),
+          GardenIcon(icon, size: GIconSize.sm, color: value ? GardenColors.primary : subtextColor),
           const SizedBox(width: 8),
           Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 12))),
           Transform.scale(
@@ -2413,7 +2408,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
             child: Row(
               children: [
-                const Icon(Icons.map_rounded, size: 16, color: GardenColors.primary),
+                const GardenIcon(GIcon.mapa, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -2439,7 +2434,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.zoom_out_map_rounded, size: 12, color: GardenColors.primary),
+                        GardenIcon(GIcon.ampliar, size: GIconSize.xs, color: GardenColors.primary),
                         SizedBox(width: 4),
                         Text('Vista general', style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w600)),
                       ]),
@@ -2447,7 +2442,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                 const SizedBox(width: 4),
                 IconButton(
-                  icon: Icon(Icons.close_rounded, size: 18, color: subtextColor),
+                  icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                   onPressed: onClose ?? () => setState(() => _showMap = false),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),

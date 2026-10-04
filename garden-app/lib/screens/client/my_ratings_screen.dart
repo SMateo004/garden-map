@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class MyRatingsScreen extends StatefulWidget {
   const MyRatingsScreen({super.key});
@@ -99,8 +100,7 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
               color: GardenColors.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.star_outline_rounded, size: 40,
-              color: GardenColors.primary.withValues(alpha: 0.6)),
+            child: GardenIcon(GIcon.estrella, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
           ),
           const SizedBox(height: 18),
           Text('Aún no has calificado ningún servicio',
@@ -190,11 +190,7 @@ class _ReviewCard extends StatelessWidget {
           ]),
           const SizedBox(height: 12),
           // Stars
-          Row(children: List.generate(5, (i) => Icon(
-            i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
-            color: i < rating ? GardenColors.star : subtextColor,
-            size: 20,
-          ))),
+          Row(children: List.generate(5, (i) => GardenIcon(GIcon.estrella, size: GIconSize.md, state: i < rating ? GIconState.active : GIconState.idle, color: i < rating ? GardenColors.star : subtextColor))),
           if (comment != null && comment.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(comment, style: TextStyle(color: textColor, fontSize: 13, height: 1.5)),
@@ -210,7 +206,7 @@ class _ReviewCard extends StatelessWidget {
                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.reply_rounded, color: GardenColors.primary, size: 16),
+                const GardenIcon(GIcon.responder, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Expanded(child: Text(caregiverResponse,
                   style: TextStyle(color: textColor, fontSize: 12, fontStyle: FontStyle.italic, height: 1.4))),

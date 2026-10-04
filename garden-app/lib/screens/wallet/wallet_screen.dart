@@ -382,13 +382,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
             elevation: 0,
             title: Text('Mi billetera', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+              icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
               onPressed: () => context.pop(),
             ),
             actions: [
               IconButton(
                 tooltip: 'Invitá y ganá',
-                icon: Icon(Icons.card_giftcard_rounded, color: textColor, size: 20),
+                icon: GardenIcon(GIcon.regalo, size: GIconSize.md, state: GIconState.active, color: textColor),
                 onPressed: () => context.push('/referral'),
               ),
             ],
@@ -402,13 +402,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
-                      IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => context.pop()),
+                      IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor), onPressed: () => context.pop()),
                       const SizedBox(width: 6),
                       Text('Mi billetera', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                       const Spacer(),
                       IconButton(
                         tooltip: 'Invitá y ganá',
-                        icon: Icon(Icons.card_giftcard_rounded, color: textColor, size: 18),
+                        icon: GardenIcon(GIcon.regalo, size: GIconSize.sm, state: GIconState.active, color: textColor),
                         onPressed: () => context.push('/referral'),
                       ),
                     ],
@@ -472,7 +472,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                               Text('¿Tienes un código de regalo?',
                                 style: TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w700)),
                               Spacer(),
-                              Icon(Icons.arrow_forward_ios_rounded, color: GardenColors.star, size: 14),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: GardenColors.star),
                             ],
                           ),
                         ),
@@ -490,16 +490,14 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           children: [
                             Expanded(
                               child: _withdrawalMethodChip(
-                                'Transferencia bancaria', Icons.account_balance_rounded, 'BANK_TRANSFER',
-                                textColor, subtextColor, surface, borderColor,
-                              ),
+                                'Transferencia bancaria', GIcon.retiro, 'BANK_TRANSFER',
+                                textColor, subtextColor, surface, borderColor),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _withdrawalMethodChip(
-                                'QR de transferencia', Icons.qr_code_2_rounded, 'QR_TRANSFER',
-                                textColor, subtextColor, surface, borderColor,
-                              ),
+                                'QR de transferencia', GIcon.pagarQr, 'QR_TRANSFER',
+                                textColor, subtextColor, surface, borderColor),
                             ),
                           ],
                         ),
@@ -522,7 +520,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                   color: GardenColors.secondary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(Icons.account_balance_rounded, color: GardenColors.secondary, size: 22),
+                                child: const GardenIcon(GIcon.retiro, size: GIconSize.md, color: GardenColors.secondary),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -585,9 +583,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         const SizedBox(height: 16),
                         GardenButton(
                           label: 'Solicitar retiro',
-                          icon: Icons.arrow_upward_rounded,
-                          onPressed: () => _showWithdrawSheet(),
-                        ),
+                          gIcon: GIcon.arriba,
+                          onPressed: () => _showWithdrawSheet()),
                       const SizedBox(height: 32),
                       // SECCIÓN 3 — Historial de transacciones
                       Text('Historial', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
@@ -603,7 +600,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                   color: GardenColors.primary.withValues(alpha: 0.08),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(Icons.receipt_long_outlined, size: 32, color: GardenColors.primary.withValues(alpha: 0.6)),
+                                child: GardenIcon(GIcon.recibo, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
                               ),
                               const SizedBox(height: 16),
                               Text('Todavía no hay movimientos',
@@ -663,7 +660,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         children: [
           const Row(
             children: [
-              Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
+              GardenIcon(GIcon.billetera, size: GIconSize.sm, color: Colors.white70),
               SizedBox(width: 8),
               Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
             ],
@@ -705,7 +702,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   /// Chip seleccionable para elegir la modalidad de retiro (transferencia
   /// bancaria vs QR de transferencia). Persiste la elección en el backend.
   Widget _withdrawalMethodChip(
-    String label, IconData icon, String method,
+    String label, GIcon icon, String method,
     Color textColor, Color subtextColor, Color surface, Color borderColor,
   ) {
     final isSelected = _withdrawalMethod == method;
@@ -726,7 +723,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: isSelected ? GardenColors.primary : subtextColor, size: 20),
+            GardenIcon(icon, size: GIconSize.md, color: isSelected ? GardenColors.primary : subtextColor),
             const SizedBox(height: 6),
             Text(
               label,
@@ -781,14 +778,14 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                               key: const ValueKey('qr-visible'),
                               borderRadius: BorderRadius.circular(11),
                               child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                                  errorBuilder: (_, __, ___) => const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.error)),
                             )
                           // El QR es un dato de cobro escaneable — se oculta por
                           // defecto igual que el número de cuenta, y se revela
                           // con el mismo toque que el ojo de "Datos bancarios".
                           : Icon(Icons.visibility_off_rounded, key: const ValueKey('qr-hidden'), color: subtextColor.withValues(alpha: 0.5), size: 24),
                     )
-                  : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
+                  : GardenIcon(GIcon.pagarQr, size: GIconSize.lg, color: subtextColor.withValues(alpha: 0.4)),
             ),
           ),
           const SizedBox(width: 12),
@@ -836,7 +833,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   onPressed: _uploadingQr ? null : _pickAndUploadQr,
                   icon: _uploadingQr
                       ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                      : const Icon(Icons.upload_rounded, size: 16),
+                      : const GardenIcon(GIcon.subir, size: GIconSize.sm, inheritColor: true),
                   label: Text(_uploadingQr ? 'Subiendo...' : (qrInfo != null ? 'Reemplazar QR' : 'Subir QR')),
                   style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
                 ),
@@ -915,11 +912,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         children: [
           Row(
             children: [
-              const Icon(Icons.pets_rounded, color: _donorGold, size: 20),
+              const GardenIcon(GIcon.huella, size: GIconSize.md, state: GIconState.active, color: _donorGold),
               const SizedBox(width: 8),
               const Text('GARDEN DONADOR', style: TextStyle(color: _donorGold, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 2)),
               const Spacer(),
-              Icon(Icons.touch_app_outlined, color: Colors.white.withValues(alpha: 0.4), size: 16),
+              GardenIcon(GIcon.tocar, size: GIconSize.sm, color: Colors.white.withValues(alpha: 0.4)),
             ],
           ),
           const Spacer(),
@@ -995,7 +992,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           Center(
             child: Column(children: [
               const SizedBox(height: 40),
-              Icon(Icons.favorite_border_rounded, size: 48, color: subtextColor.withValues(alpha: 0.5)),
+              GardenIcon(GIcon.favorito, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.5)),
               const SizedBox(height: 12),
               Text('Aún no hiciste ninguna donación', style: TextStyle(color: subtextColor, fontSize: 14)),
             ]),
@@ -1012,7 +1009,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(color: _donorGold.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.favorite_rounded, color: _donorGold, size: 18),
+                  child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: _donorGold),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1032,7 +1029,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           Center(
             child: Column(children: [
               const SizedBox(height: 40),
-              Icon(Icons.storefront_outlined, size: 48, color: subtextColor.withValues(alpha: 0.5)),
+              GardenIcon(GIcon.empresa, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.5)),
               const SizedBox(height: 12),
               Text('Todavía no usaste tu código en ningún negocio', style: TextStyle(color: subtextColor, fontSize: 14), textAlign: TextAlign.center),
             ]),
@@ -1048,7 +1045,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(color: GardenColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.storefront_rounded, color: GardenColors.secondary, size: 18),
+                  child: const GardenIcon(GIcon.empresa, size: GIconSize.sm, color: GardenColors.secondary),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1119,7 +1116,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       Container(
                         width: 36, height: 36,
                         decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
-                        child: const Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                        child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
                       ),
                       const SizedBox(width: 10),
                       Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -1138,10 +1135,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          _withdrawalMethod == 'QR_TRANSFER' ? Icons.qr_code_2_rounded : Icons.account_balance_rounded,
-                          color: GardenColors.success, size: 20,
-                        ),
+                        GardenIcon(_withdrawalMethod == 'QR_TRANSFER' ? GIcon.pagarQr : GIcon.retiro, size: GIconSize.md, color: GardenColors.success),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -1186,7 +1180,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.verified_user_rounded, color: subtextColor.withValues(alpha: 0.7), size: 14),
+                      GardenIcon(GIcon.protegido, size: GIconSize.xs, state: GIconState.active, color: subtextColor.withValues(alpha: 0.7)),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1229,7 +1223,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         builder: (dCtx) => GardenGlassDialog(
                           title: const Row(
                             children: [
-                              Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                              GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
                               SizedBox(width: 8),
                               Text('¿Confirmar retiro?'),
                             ],
@@ -1285,7 +1279,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                             SnackBar(
                               content: const Row(
                                 children: [
-                                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                  GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: Colors.white),
                                   SizedBox(width: 10),
                                   Expanded(child: Text('¡Solicitud enviada! Revisa tus notificaciones para más detalles.')),
                                 ],
@@ -1353,7 +1347,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       Container(
                         width: 36, height: 36,
                         decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
-                        child: const Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                        child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
                       ),
                       const SizedBox(width: 10),
                       Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -1375,7 +1369,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.shield_outlined, color: GardenColors.success, size: 16),
+                        GardenIcon(GIcon.protegido, size: GIconSize.sm, color: GardenColors.success),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1425,7 +1419,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                     ],
                                   ),
                           ),
-                          Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
+                          GardenIcon(GIcon.desplegar, size: GIconSize.md, color: subtextColor),
                         ],
                       ),
                     ),
@@ -1490,7 +1484,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                               const SnackBar(
                                 content: Row(
                                   children: [
-                                    Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                                    GardenIcon(GIcon.verificado, size: GIconSize.md, state: GIconState.active, color: Colors.white),
                                     SizedBox(width: 10),
                                     Expanded(child: Text('Datos de cobro guardados de forma segura')),
                                   ],
@@ -1573,11 +1567,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           : GardenColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      category == 'Bancos' ? Icons.account_balance_rounded : Icons.account_balance_wallet_rounded,
-                      color: isSelected ? GardenColors.primary : subtextColor,
-                      size: 18,
-                    ),
+                    child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor),
                   ),
                   title: Text(bank['name']!,
                       style: TextStyle(
@@ -1587,7 +1577,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       )),
                   subtitle: Text(GardenBanks.typeLabels[bank['type']] ?? '',
                       style: TextStyle(color: subtextColor, fontSize: 11)),
-                  trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20) : null,
+                  trailing: isSelected ? const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary) : null,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -1616,7 +1606,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   decoration: InputDecoration(
                     hintText: 'Buscar...',
                     hintStyle: TextStyle(color: subtextColor),
-                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 20),
+                    prefixIcon: GardenIcon(GIcon.buscar, size: GIconSize.md, color: subtextColor),
                     filled: true, fillColor: surfaceEl,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1779,7 +1769,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     ),
                   )
                 : IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
+                    icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, inheritColor: true),
                     color: subtextColor,
                     tooltip: 'Cancelar solicitud',
                     onPressed: () => _cancelWithdrawal(t['id'] as String),

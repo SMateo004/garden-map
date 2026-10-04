@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 enum CameraFrameShape { oval, rectangle }
 
@@ -224,7 +225,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.no_photography_rounded, color: Colors.white.withValues(alpha: 0.54), size: 64),
+                GardenIcon(GIcon.sinImagen, size: GIconSize.hero, color: Colors.white.withValues(alpha: 0.54)),
                 const SizedBox(height: 16),
                 Text(_errorMsg!,
                     style: const TextStyle(color: Colors.white70),
@@ -304,8 +305,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 22),
+                    icon: const GardenIcon(GIcon.atras, size: GIconSize.md, color: Colors.white),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -322,13 +322,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
                   if (widget.lensDirection != CameraLensDirection.front)
                     IconButton(
                       onPressed: _toggleTorch,
-                      icon: Icon(
-                        _torchOn
-                            ? Icons.flashlight_on_rounded
-                            : Icons.flashlight_off_rounded,
-                        color: _torchOn ? GardenColors.warning : Colors.white,
-                        size: 28,
-                      ),
+                      icon: GardenIcon(GIcon.linterna, size: GIconSize.lg, color: _torchOn ? GardenColors.warning : Colors.white),
                       tooltip: _torchOn ? 'Apagar linterna' : 'Encender linterna',
                     ),
                 ],

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Pantalla de actualización obligatoria — bloquea el acceso a la app cuando
 /// la versión instalada es menor a `minAppVersion` (AppSettings).
@@ -130,7 +131,7 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.system_update_rounded, color: Colors.white, size: 52),
+                  child: const GardenIcon(GIcon.descargar, size: GIconSize.hero, color: Colors.white),
                 ),
                 const SizedBox(height: 40),
                 const Text(
@@ -159,7 +160,7 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: _openStore,
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      icon: const GardenIcon(GIcon.abrirFuera, size: GIconSize.sm, inheritColor: true),
                       label: const Text('Actualizar ahora'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4A90D9),
@@ -196,7 +197,7 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
                   onPressed: _checking ? null : _checkStatus,
                   icon: _checking
                       ? const GardenLoadingIndicator(size: 14, color: Colors.white54)
-                      : const Icon(Icons.refresh_rounded, color: Colors.white54, size: 16),
+                      : const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: Colors.white54),
                   label: Text(
                     _checking ? 'Verificando...' : 'Ya actualicé / verificar ahora',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),

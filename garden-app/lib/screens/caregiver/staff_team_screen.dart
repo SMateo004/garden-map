@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../services/caregiver_staff_service.dart';
+import '../../design/garden_icons.dart';
 
 /// "Mi equipo" — el dueño de una empresa invita empleados (código de un solo
 /// uso, compartido por WhatsApp/etc.) y administra quiénes tienen acceso
@@ -222,7 +223,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                                 ),
                                 IconButton(
                                   onPressed: () => _revokeInvite(invite['id'] as String),
-                                  icon: const Icon(Icons.close_rounded, size: 18),
+                                  icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, inheritColor: true),
                                   color: GardenColors.error,
                                   tooltip: 'Revocar',
                                 ),
@@ -273,7 +274,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                                   ),
                                 ),
                                 PopupMenuButton<String>(
-                                  icon: Icon(Icons.more_vert_rounded, color: subtextColor),
+                                  icon: GardenIcon(GIcon.masOpciones, size: GIconSize.lg, color: subtextColor),
                                   onSelected: (action) {
                                     final id = member['id'] as String;
                                     if (action == 'suspend') {
@@ -281,7 +282,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                                     } else if (action == 'reactivate') {
                                       _confirmAndRun('¿Reactivar?', 'Este empleado vuelve a tener acceso.', () => _service.reactivateStaffMember(id));
                                     } else if (action == 'remove') {
-                                      _confirmAndRun('¿Quitar del equipo?', 'Pierde el acceso de forma permanente. Podés volver a invitarlo más adelante.', () => _service.removeStaffMember(id));
+                                      _confirmAndRun('¿Quitar del equipo?', 'Pierde el acceso de forma permanente. Puedes volver a invitarlo más adelante.', () => _service.removeStaffMember(id));
                                     }
                                   },
                                   itemBuilder: (ctx) {

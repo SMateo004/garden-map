@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 // ── Data model ───────────────────────────────────────────────────────────────
 
 class TutorialStep {
-  final String emoji;
+  final GIcon icon;
   final String title;
   final String body;
 
@@ -18,7 +19,7 @@ class TutorialStep {
   final double spotlightRadius;
 
   const TutorialStep({
-    required this.emoji,
+    required this.icon,
     required this.title,
     required this.body,
     this.spotlightCenter,
@@ -404,7 +405,7 @@ class _StepCard extends StatelessWidget {
             // Emoji + progress dots
             Row(
               children: [
-                Text(step.emoji, style: const TextStyle(fontSize: 30)),
+                GardenIcon(step.icon, size: GIconSize.xl, state: GIconState.active),
                 const Spacer(),
                 Row(
                   children: List.generate(
@@ -493,7 +494,7 @@ class _StepCard extends StatelessWidget {
                       ],
                     ),
                     child: Text(
-                      isLast ? '¡Entendido! ✓' : 'Siguiente →',
+                      isLast ? '¡Entendido!' : 'Siguiente →',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,

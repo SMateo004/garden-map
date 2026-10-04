@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class MeetAndGreetScreen extends StatefulWidget {
   final String bookingId;
@@ -288,7 +289,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         backgroundColor: bg,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text('Meet & Greet', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 18)),
@@ -303,7 +304,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                  IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor), onPressed: () => Navigator.pop(context)),
                   const SizedBox(width: 6),
                   Text('Meet & Greet', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
@@ -356,7 +357,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
             color: GardenColors.primary.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: const Center(child: Text('🤝', style: TextStyle(fontSize: 48))),
+          child: const Center(child: GardenIcon(GIcon.meetGreet, size: GIconSize.hero, state: GIconState.active)),
         ),
         const SizedBox(height: 24),
         Text('Coordina el Meet & Greet',
@@ -373,9 +374,9 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
           spacing: 8, runSpacing: 8,
           alignment: WrapAlignment.center,
           children: [
-            _benefitChip('🐾 Conoce a la mascota'),
-            _benefitChip('🏠 ${widget.role == 'CAREGIVER' ? 'El dueño ve tu espacio' : 'Verifica el espacio'}'),
-            _benefitChip('✅ Confirma compatibilidad'),
+            _benefitChip('Conoce a la mascota'),
+            _benefitChip('${widget.role == 'CAREGIVER' ? 'El dueño ve tu espacio' : 'Verifica el espacio'}'),
+            _benefitChip('Confirma compatibilidad'),
           ],
         ),
         const SizedBox(height: 32),
@@ -388,7 +389,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
           ),
           child: Row(
             children: [
-              const Text('💡', style: TextStyle(fontSize: 18)),
+              const GardenIcon(GIcon.idea, size: GIconSize.sm, state: GIconState.active),
               const SizedBox(width: 10),
               Expanded(
                 child: Text('El Meet & Greet es opcional pero muy recomendado para hospedajes. Protege tanto al cuidador como a la mascota.',
@@ -400,11 +401,10 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         const SizedBox(height: 24),
         GardenButton(
           label: 'Proponer reunión',
-          icon: Icons.event_rounded,
+          gIcon: GIcon.calendario,
           height: 52,
           color: GardenColors.primary,
-          onPressed: _showProposalSheet,
-        ),
+          onPressed: _showProposalSheet),
       ],
     );
   }
@@ -435,7 +435,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
             color: GardenColors.warning.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
-          child: const Center(child: Text('📅', style: TextStyle(fontSize: 36))),
+          child: const Center(child: GardenIcon(GIcon.calendario, size: GIconSize.xl, state: GIconState.active)),
         ),
         const SizedBox(height: 20),
         Text('Propuesta pendiente', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -466,7 +466,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      modalidad == 'IN_PERSON' ? '📍 En persona' : '📹 Videollamada',
+                      modalidad == 'IN_PERSON' ? 'En persona' : 'Videollamada',
                       style: TextStyle(
                         color: modalidad == 'IN_PERSON' ? GardenColors.primary : GardenColors.accent,
                         fontWeight: FontWeight.w700, fontSize: 12,
@@ -488,39 +488,35 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
           // Quien propuso: solo puede cancelar su propuesta
           GardenButton(
             label: 'Cancelar propuesta',
-            icon: Icons.close_rounded,
+            gIcon: GIcon.cerrar,
             height: 48,
             color: GardenColors.error,
             outline: true,
-            onPressed: _submitting ? null : _cancel,
-          ),
+            onPressed: _submitting ? null : _cancel),
         ] else ...[
           // El otro: puede aceptar, contraproponer o cancelar
           GardenButton(
             label: 'Aceptar',
-            icon: Icons.check_rounded,
+            gIcon: GIcon.hecho,
             height: 52,
             color: GardenColors.success,
-            onPressed: _submitting ? null : _accept,
-          ),
+            onPressed: _submitting ? null : _accept),
           const SizedBox(height: 10),
           GardenButton(
             label: 'Proponer otra fecha',
-            icon: Icons.edit_calendar_rounded,
+            gIcon: GIcon.editar,
             height: 48,
             color: GardenColors.primary,
             outline: true,
-            onPressed: _showProposalSheet,
-          ),
+            onPressed: _showProposalSheet),
           const SizedBox(height: 10),
           GardenButton(
             label: 'Cancelar',
-            icon: Icons.close_rounded,
+            gIcon: GIcon.cerrar,
             height: 44,
             color: GardenColors.error,
             outline: true,
-            onPressed: _submitting ? null : _cancel,
-          ),
+            onPressed: _submitting ? null : _cancel),
         ],
       ],
     );
@@ -546,7 +542,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
           ),
           child: Row(
             children: [
-              const Text('🎉', style: TextStyle(fontSize: 24)),
+              const GardenIcon(GIcon.celebrar, size: GIconSize.lg, state: GIconState.active),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -587,7 +583,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                 ),
                 child: Row(
                   children: [
-                    Text(modalidad == 'IN_PERSON' ? '📍' : '📹', style: const TextStyle(fontSize: 20)),
+                    GardenIcon(modalidad == 'IN_PERSON' ? GIcon.ubicacion : GIcon.video, size: GIconSize.md, state: GIconState.active),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -619,7 +615,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         // Botón principal: ir al chat con banner de la fecha
         GardenButton(
           label: 'Abrir chat',
-          icon: Icons.chat_bubble_outline_rounded,
+          gIcon: GIcon.chat,
           height: 52,
           color: GardenColors.primary,
           onPressed: () {
@@ -638,27 +634,24 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                 ),
               ),
             );
-          },
-        ),
+          }),
         if (widget.role == 'CAREGIVER') ...[
           const SizedBox(height: 10),
           GardenButton(
             label: 'Marcar como completado',
-            icon: Icons.check_circle_outline_rounded,
+            gIcon: GIcon.confirmado,
             height: 48,
             color: GardenColors.success,
-            onPressed: _submitting ? null : _showCompleteSheet,
-          ),
+            onPressed: _submitting ? null : _showCompleteSheet),
         ],
         const SizedBox(height: 10),
         GardenButton(
           label: 'Cancelar Meet & Greet',
-          icon: Icons.close_rounded,
+          gIcon: GIcon.cerrar,
           height: 44,
           color: GardenColors.error,
           outline: true,
-          onPressed: _submitting ? null : _cancel,
-        ),
+          onPressed: _submitting ? null : _cancel),
       ],
     );
   }
@@ -672,7 +665,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
       return Column(
         children: [
           const SizedBox(height: 32),
-          const Text('⏳', style: TextStyle(fontSize: 48)),
+          const GardenIcon(GIcon.esperando, size: GIconSize.hero, state: GIconState.active),
           const SizedBox(height: 16),
           Text('Meet & Greet completado', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
@@ -696,7 +689,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
           ),
           child: Row(
             children: [
-              Text(approved ? '✅' : '❌', style: const TextStyle(fontSize: 28)),
+              GardenIcon(approved ? GIcon.confirmado : GIcon.cancelado, size: GIconSize.xl, state: GIconState.active, color: approved ? GardenColors.success : GardenColors.error),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -749,7 +742,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
     return Column(
       children: [
         const SizedBox(height: 40),
-        const Text('❌', style: TextStyle(fontSize: 56)),
+        const GardenIcon(GIcon.cancelado, size: GIconSize.hero, state: GIconState.active),
         const SizedBox(height: 20),
         Text('Meet & Greet cancelado', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
@@ -757,11 +750,10 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         const SizedBox(height: 28),
         GardenButton(
           label: 'Proponer nuevo Meet & Greet',
-          icon: Icons.event_rounded,
+          gIcon: GIcon.calendario,
           height: 52,
           color: GardenColors.primary,
-          onPressed: _showProposalSheet,
-        ),
+          onPressed: _showProposalSheet),
       ],
     );
   }
@@ -819,7 +811,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                   children: [
                     Expanded(
                       child: GardenButton(
-                        label: '✅ Sí, confirmado',
+                        label: 'Sí, confirmado',
                         height: 48,
                         color: GardenColors.success,
                         onPressed: () {
@@ -833,7 +825,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: GardenButton(
-                        label: '❌ No compatible',
+                        label: 'No compatible',
                         height: 48,
                         color: GardenColors.error,
                         outline: true,
@@ -929,9 +921,9 @@ class _ProposalSheetState extends State<_ProposalSheet> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _modalChip('IN_PERSON', '📍 En persona', textColor, borderColor)),
+              Expanded(child: _modalChip('IN_PERSON', 'En persona', textColor, borderColor)),
               const SizedBox(width: 10),
-              Expanded(child: _modalChip('VIDEO_CALL', '📹 Videollamada', textColor, borderColor)),
+              Expanded(child: _modalChip('VIDEO_CALL', 'Videollamada', textColor, borderColor)),
             ],
           ),
           const SizedBox(height: 16),
@@ -961,7 +953,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_today_rounded, size: 16, color: GardenColors.primary),
+                  const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                   const SizedBox(width: 10),
                   Text(dateLabel, style: TextStyle(color: _date == null ? subtextColor : textColor, fontSize: 14)),
                 ],
@@ -994,7 +986,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.access_time_rounded, size: 16, color: GardenColors.primary),
+                    const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                     const SizedBox(width: 10),
                     Text(timeLabel, style: TextStyle(color: _time == null ? subtextColor : textColor, fontSize: 14)),
                   ],
@@ -1033,7 +1025,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
                 contentPadding: const EdgeInsets.all(12),
-                prefixIcon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 18),
+                prefixIcon: const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
               ),
             ),
             const SizedBox(height: 12),
@@ -1058,11 +1050,10 @@ class _ProposalSheetState extends State<_ProposalSheet> {
 
             GardenButton(
               label: 'Enviar propuesta',
-              icon: Icons.send_rounded,
+              gIcon: GIcon.enviar,
               height: 52,
               color: GardenColors.primary,
-              onPressed: widget.submitting ? null : widget.onSubmit,
-            ),
+              onPressed: widget.submitting ? null : widget.onSubmit),
           ], // end if (_date != null && _time != null)
         ],
       ),

@@ -658,7 +658,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                   errorBuilder: (_, __, ___) => Container(
                     width: 72, height: 72,
                     color: GardenColors.primary.withValues(alpha: 0.1),
-                    child: const Icon(Icons.broken_image_outlined, color: GardenColors.primary, size: 24),
+                    child: const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.primary),
                   )),
               ),
               Positioned(
@@ -668,7 +668,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: const BoxDecoration(color: GardenColors.error, shape: BoxShape.circle),
-                    child: const Icon(Icons.close, color: Colors.white, size: 10),
+                    child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white),
                   ),
                 ),
               ),
@@ -686,7 +686,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               child: uploading
                   ? const Padding(padding: EdgeInsets.all(22),
                       child: GardenLoadingIndicator(color: GardenColors.primary))
-                  : const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 24),
+                  : const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary),
             ),
           ),
         ],
@@ -714,7 +714,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               children: [
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: subtextColor, size: 20),
+                  icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: subtextColor),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
@@ -749,9 +749,8 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                         : _photoUrl != null && _photoUrl!.isNotEmpty
                             ? ClipOval(child: Image.network(fixImageUrl(_photoUrl!),
                                 width: 90, height: 90, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.pets_rounded,
-                                  color: GardenColors.primary, size: 36)))
-                            : const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 36),
+                                errorBuilder: (_, __, ___) => const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary)))
+                            : const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.primary),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -869,11 +868,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                   ),
                 ),
                 child: Row(children: [
-                  Icon(
-                    _sterilized == true ? Icons.check_circle_rounded : Icons.circle_outlined,
-                    color: _sterilized == true ? GardenColors.success : subtextColor,
-                    size: 20,
-                  ),
+                  GardenIcon(_sterilized == true ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.md, state: _sterilized == true ? GIconState.active : GIconState.idle, color: _sterilized == true ? GardenColors.success : subtextColor),
                   const SizedBox(width: 10),
                   Text('Esterilizado/a',
                     style: TextStyle(
@@ -901,11 +896,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                   ),
                 ),
                 child: Row(children: [
-                  Icon(
-                    _isAggressive ? Icons.check_circle_rounded : Icons.circle_outlined,
-                    color: _isAggressive ? GardenColors.warning : subtextColor,
-                    size: 20,
-                  ),
+                  GardenIcon(_isAggressive ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.md, state: _isAggressive ? GIconState.active : GIconState.idle, color: _isAggressive ? GardenColors.warning : subtextColor),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text('Puede mostrar agresividad con extraños',

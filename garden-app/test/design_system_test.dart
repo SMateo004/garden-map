@@ -217,6 +217,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('inheritColor toma el color del IconTheme; la estrella activa va rellena', (tester) async {
+      const red = Color(0xFFFF0000);
+      await tester.pumpWidget(host(const IconTheme(
+        data: IconThemeData(color: red),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          GardenIcon(GIcon.buscar, inheritColor: true),
+          GardenIcon(GIcon.estrella, state: GIconState.active, color: red),
+        ]),
+      )));
+      await tester.pumpAndSettle();
+      final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
+      // buscar (idle): un glifo, con el color heredado.
+      expect(icons.first.color, red);
+      // estrella activa: relleno (duoSecondary) con opacidad completa, no 28 %.
+      final starFill = icons[1];
+      expect(starFill.color, red);
+    });
+
     testWidgets('servicio en vivo no anima si el sistema pide menos movimiento', (tester) async {
       await tester.pumpWidget(host(const GardenIcon(GIcon.paseo, live: true), reduceMotion: true));
       // pumpAndSettle fallaría por timeout si quedara un bucle corriendo.

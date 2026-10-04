@@ -6,6 +6,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -93,7 +94,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
                             border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                           ),
                           child: Row(children: [
-                            const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 18),
+                            const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.primary),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -128,7 +129,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
     );
   }
 
-  static const _serviceLabels = {'PASEO': '🐕 Paseo', 'HOSPEDAJE': '🏠 Hospedaje', 'GUARDERIA': '🐾 Guardería'};
+  static const _serviceLabels = {'PASEO': 'Paseo', 'HOSPEDAJE': 'Hospedaje', 'GUARDERIA': 'Guardería'};
 
   Widget _topicCard(Map<String, dynamic> t, Color textColor, Color subtextColor, Color surface, Color borderColor, {required bool mandatory}) {
     final completed = t['completedAt'] != null;
@@ -155,8 +156,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
                   color: (completed ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(completed ? Icons.check_rounded : Icons.play_circle_outline_rounded,
-                    color: completed ? GardenColors.success : GardenColors.primary),
+                child: GardenIcon(completed ? GIcon.hecho : GIcon.iniciar, size: GIconSize.lg, color: completed ? GardenColors.success : GardenColors.primary),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -167,7 +167,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
                       style: TextStyle(color: subtextColor, fontSize: 12)),
                 ]),
               ),
-              Icon(Icons.chevron_right_rounded, color: subtextColor),
+              GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
             ]),
           ),
         ),
@@ -303,7 +303,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(children: [
-                  const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 48),
+                  const GardenIcon(GIcon.confirmado, size: GIconSize.hero, state: GIconState.active, color: GardenColors.success),
                   const SizedBox(height: 12),
                   Text('¡Capacitación completada!', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 6),
@@ -330,7 +330,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                       ),
                       padding: const EdgeInsets.all(20),
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 32),
+                        const GardenIcon(GIcon.conflicto, size: GIconSize.xl, color: GardenColors.error),
                         const SizedBox(height: 10),
                         Text(
                           _videoError == YoutubeError.notEmbeddable || _videoError == YoutubeError.sameAsNotEmbeddable
@@ -348,7 +348,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                             final uri = Uri.parse(widget.topic['videoUrl'] as String);
                             if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
                           },
-                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                          icon: const GardenIcon(GIcon.abrirFuera, size: GIconSize.sm, inheritColor: true),
                           label: const Text('Ver en YouTube'),
                         ),
                       ]),
@@ -364,7 +364,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  _videoEnded ? '✓ Video visto completo' : 'Mira el video completo para continuar',
+                  _videoEnded ? 'Video visto completo' : 'Mira el video completo para continuar',
                   style: TextStyle(color: _videoEnded ? GardenColors.success : subtextColor, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 20),
@@ -382,7 +382,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.close_rounded, color: GardenColors.error, size: 18),
+                      const GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: GardenColors.error),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text('Respondiste ${_result!['correctCount']}/${_result!['total']} correctamente. Intenta de nuevo.',

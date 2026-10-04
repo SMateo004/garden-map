@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Una sola pantalla con dos modos:
 /// - Modo CREACIÓN: se llega desde el perfil de un cuidador con
@@ -97,12 +98,12 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
   Future<void> _submitCreate() async {
     if (_selectedDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Elegí al menos un día de la semana'), backgroundColor: GardenColors.warning));
+        content: Text('Elige al menos un día de la semana'), backgroundColor: GardenColors.warning));
       return;
     }
     if (_selectedPetIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Elegí al menos una mascota'), backgroundColor: GardenColors.warning));
+        content: Text('Elige al menos una mascota'), backgroundColor: GardenColors.warning));
       return;
     }
     HapticFeedback.mediumImpact();
@@ -124,7 +125,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
         if (mounted) {
           HapticFeedback.heavyImpact();
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✓ Paseo recurrente creado — vas a recibir el primero con unos días de anticipación'),
+            content: Text('Paseo recurrente creado — vas a recibir el primero con unos días de anticipación'),
             backgroundColor: GardenColors.success,
             duration: Duration(seconds: 4),
           ));
@@ -185,11 +186,11 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(children: [
-              const Icon(Icons.repeat_rounded, color: GardenColors.primary, size: 20),
+              const GardenIcon(GIcon.repetir, size: GIconSize.md, color: GardenColors.primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Elegí los días y horario — se genera y notifica automáticamente cada semana, con unos días de anticipación para que puedas pagarlo.',
+                  'Elige los días y horario — se genera y notifica automáticamente cada semana, con unos días de anticipación para que puedas pagarlo.',
                   style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4),
                 ),
               ),
@@ -296,9 +297,8 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           GardenButton(
             label: _submitting ? 'Creando...' : 'Crear paseo recurrente',
             loading: _submitting,
-            icon: Icons.repeat_rounded,
-            onPressed: _submitting ? null : _submitCreate,
-          ),
+            gIcon: GIcon.repetir,
+            onPressed: _submitting ? null : _submitCreate),
         ],
       ),
     );
@@ -315,9 +315,9 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.repeat_rounded, size: 44, color: subtextColor),
+              GardenIcon(GIcon.repetir, size: GIconSize.hero, color: subtextColor),
               const SizedBox(height: 16),
-              Text('Todavía no tenés paseos recurrentes',
+              Text('Todavía no tienes paseos recurrentes',
                   style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 8),
               Text('Configurá uno desde el perfil de tu cuidador favorito, en "Paseo recurrente".',
@@ -357,7 +357,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  const Icon(Icons.directions_walk, color: GardenColors.primary, size: 18),
+                  const GardenIcon(GIcon.paseo, size: GIconSize.sm, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text('Paseo con $caregiverName',

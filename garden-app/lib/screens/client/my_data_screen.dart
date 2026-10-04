@@ -547,7 +547,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                       child: Container(
                         width: 28, height: 28,
                         decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                        child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
                       ),
                     ),
                   ),
@@ -571,11 +571,11 @@ class _MyDataScreenState extends State<MyDataScreen> {
                     border: Border.all(color: borderColor.withValues(alpha: 0.5)),
                   ),
                   child: Row(children: [
-                    Icon(Icons.email_outlined, color: subtextColor, size: 20),
+                    GardenIcon(GIcon.correo, size: GIconSize.md, color: subtextColor),
                     const SizedBox(width: 12),
                     Expanded(child: Text(_userData!['email'] as String,
                       style: TextStyle(color: subtextColor, fontSize: 14))),
-                    const Icon(Icons.verified_outlined, color: GardenColors.success, size: 16),
+                    const GardenIcon(GIcon.verificado, size: GIconSize.sm, color: GardenColors.success),
                   ]),
                 )
               else
@@ -586,7 +586,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   decoration: fieldDeco('Correo electrónico', Icons.email_outlined, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
                     suffixIcon: const Tooltip(
                       message: 'Correo no verificado',
-                      child: Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
+                      child: GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
                     ),
                   ),
                 ),
@@ -617,7 +617,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 const SizedBox(width: 8),
                 if (_phoneVerified)
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.verified_outlined, color: GardenColors.success, size: 14),
+                    const GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.success),
                     const SizedBox(width: 3),
                     Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 11.5)),
                   ])
@@ -744,7 +744,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   border: Border.all(color: borderColor),
                 ),
                 child: Row(children: [
-                  Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                  GardenIcon(GIcon.cumpleanos, size: GIconSize.md, color: subtextColor),
                   const SizedBox(width: 12),
                   Text(
                     _dateOfBirth == null
@@ -780,7 +780,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
             // que se paga un servicio. Acepta tanto NIT como número de
             // Carnet (CI) — ambos son válidos para emitir la factura.
             Row(children: [
-              Icon(Icons.receipt_long_outlined, color: textColor, size: 16),
+              GardenIcon(GIcon.recibo, size: GIconSize.sm, color: textColor),
               const SizedBox(width: 6),
               Text('NIT o Carnet (facturación)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
             ]),
@@ -857,7 +857,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18),
+                        icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor),
                         onPressed: () => Navigator.of(context).pop(_pendingPhotoBytes != null),
                       ),
                       const SizedBox(width: 6),

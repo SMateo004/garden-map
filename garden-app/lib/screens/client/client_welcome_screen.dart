@@ -196,11 +196,8 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
                       // Botón acción
                       GardenButton(
                         label: _currentPage == 2 ? 'Empezar' : 'Siguiente',
-                        icon: _currentPage == 2
-                            ? Icons.rocket_launch_rounded
-                            : Icons.arrow_forward_rounded,
-                        onPressed: _nextPage,
-                      ),
+                        gIcon: _currentPage == 2 ? GIcon.lanzar : GIcon.avanzar,
+                        onPressed: _nextPage),
                     ],
                   ),
                 ),
@@ -309,7 +306,7 @@ class _Page1Illustration extends StatelessWidget {
               child: Row(
                 children: [
                   const SizedBox(width: 14),
-                  const Icon(Icons.search_rounded, color: GardenColors.primary, size: 16),
+                  const GardenIcon(GIcon.buscar, size: GIconSize.sm, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Text(
                     'Buscar cuidador en tu zona...',
@@ -364,7 +361,7 @@ class _Page1Illustration extends StatelessWidget {
               children: [
                 _FilterChip(label: 'Equipetrol', color: GardenColors.primary),
                 SizedBox(width: 6),
-                _FilterChip(label: '★ 4.5+', color: GardenColors.star),
+                _FilterChip(label: '4.5+', color: GardenColors.star),
                 SizedBox(width: 6),
                 _FilterChip(label: 'Pequeños', color: GardenColors.secondary),
               ],
@@ -440,7 +437,7 @@ class _MiniCaregiverCard extends StatelessWidget {
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded, color: GardenColors.star, size: 10),
+                        const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                         const SizedBox(width: 2),
                         Text(
                           rating,
@@ -489,7 +486,7 @@ class _MiniCaregiverCard extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified_rounded, color: GardenColors.success, size: 10),
+                  GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                   SizedBox(width: 4),
                   Text(
                     'Verificado IA',
@@ -567,11 +564,7 @@ class _Page2Illustration extends StatelessWidget {
                         width: 1.5,
                       ),
                     ),
-                    child: const Icon(
-                      Icons.lock_rounded,
-                      color: GardenColors.success,
-                      size: 26,
-                    ),
+                    child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, state: GIconState.active, color: GardenColors.success),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -623,11 +616,7 @@ class _Page2Illustration extends StatelessWidget {
               children: [
                 _MoneyBubble(amount: 'Bs.80', color: GardenColors.primary, label: 'Cliente paga'),
                 SizedBox(height: 6),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: GardenColors.success,
-                  size: 18,
-                ),
+                GardenIcon(GIcon.avanzar, size: GIconSize.sm, color: GardenColors.success),
               ],
             ),
           ),
@@ -637,11 +626,7 @@ class _Page2Illustration extends StatelessWidget {
             right: 0, bottom: 32,
             child: Column(
               children: [
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: GardenColors.success,
-                  size: 18,
-                ),
+                GardenIcon(GIcon.avanzar, size: GIconSize.sm, color: GardenColors.success),
                 SizedBox(height: 6),
                 _MoneyBubble(amount: 'Bs.80', color: GardenColors.success, label: 'Cuidador cobra'),
               ],
@@ -658,7 +643,7 @@ class _Page2Illustration extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: GardenShadows.primary,
               ),
-              child: const Icon(Icons.check, color: Colors.white, size: 16),
+              child: const GardenIcon(GIcon.hecho, size: GIconSize.sm, color: Colors.white),
             ),
           ),
         ],
@@ -827,7 +812,7 @@ class _Page3Illustration extends StatelessWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.circle, color: Colors.white, size: 6),
+                                GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: Colors.white),
                                 SizedBox(width: 3),
                                 Text(
                                   'EN VIVO',
@@ -865,7 +850,7 @@ class _Page3Illustration extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              '¡Todo bien! 🐾',
+                              '¡Todo bien!',
                               style: TextStyle(color: textColor, fontSize: 9),
                             ),
                           ),
@@ -884,7 +869,7 @@ class _Page3Illustration extends StatelessWidget {
                                 ),
                               ),
                               child: const Text(
-                                '¡Gracias! 😊',
+                                '¡Gracias!',
                                 style: TextStyle(color: Colors.white, fontSize: 9),
                               ),
                             ),

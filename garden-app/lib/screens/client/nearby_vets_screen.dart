@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../design/garden_icons.dart';
 
 /// Veterinarias cercanas a la dirección guardada del usuario (Mi Perfil).
 /// Pensada para casos de emergencia: mismo dato que usa el cuidador durante
@@ -107,7 +108,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         elevation: 0,
         title: Text('Veterinarias cercanas', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -130,7 +131,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                           child: GardenEmptyState(
                             type: GardenEmptyType.generic,
                             title: 'No pudimos encontrar veterinarias',
-                            subtitle: '$_errorMessage — revisá tu conexión y volvé a intentar.',
+                            subtitle: '$_errorMessage — revisa tu conexión y vuelve a intentar.',
                             ctaLabel: 'Reintentar',
                             onCta: _load,
                           ),
@@ -146,7 +147,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                               child: GardenEmptyState(
                                 type: GardenEmptyType.generic,
                                 title: 'Sin veterinarias cercanas',
-                                subtitle: 'Todavía no hay veterinarias cargadas en tu zona. Probá de nuevo más tarde.',
+                                subtitle: 'Todavía no hay veterinarias cargadas en tu zona. Prueba de nuevo más tarde.',
                                 ctaLabel: 'Actualizar',
                                 onCta: _load,
                               ),
@@ -176,7 +177,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                                       color: GardenColors.error.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: const Icon(Icons.local_hospital_rounded, color: GardenColors.error, size: 24),
+                                    child: const GardenIcon(GIcon.veterinaria, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
@@ -206,7 +207,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                                         color: GardenColors.success.withValues(alpha: 0.12),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.phone_rounded, color: GardenColors.success, size: 20),
+                                      child: const GardenIcon(GIcon.telefono, size: GIconSize.md, color: GardenColors.success),
                                     ),
                                   ),
                                 ],

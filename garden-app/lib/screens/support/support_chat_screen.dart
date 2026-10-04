@@ -3,6 +3,7 @@ import '../../services/auth_state.dart';
 import '../../services/support_chat_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Chat de soporte de Garden — reemplaza el botón de WhatsApp del Centro de
 /// Ayuda. Responde un asistente automático (Claude, grounded en el centro
@@ -81,7 +82,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: text, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Row(
@@ -91,7 +92,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               width: 34,
               height: 34,
               decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-              child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 18),
+              child: const GardenIcon(GIcon.soporte, size: GIconSize.sm, state: GIconState.active, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Column(
@@ -160,7 +161,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         padding: const EdgeInsets.all(10),
                         child: _service.sending
                             ? const SizedBox(width: 20, height: 20, child: GardenLoadingIndicator(size: 20, color: Colors.white))
-                            : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                            : const GardenIcon(GIcon.enviar, size: GIconSize.md, color: Colors.white),
                       ),
                     ),
                   ),
@@ -187,12 +188,12 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('👋', style: TextStyle(fontSize: 40)),
+            const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
             const SizedBox(height: 12),
             Text('¡Hola! ¿En qué te ayudamos?', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
             const SizedBox(height: 6),
             Text(
-              'Escribinos tu consulta — el asistente te responde al instante, y si hace falta, avisa a un asesor real.',
+              'Escríbenos tu consulta — el asistente te responde al instante, y si hace falta, avisa a un asesor real.',
               style: TextStyle(color: subtext, fontSize: 12.5, height: 1.4),
               textAlign: TextAlign.center,
             ),
@@ -230,7 +231,7 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final hh = time.hour.toString().padLeft(2, '0');
     final mm = time.minute.toString().padLeft(2, '0');
-    final label = senderRole == 'BOT' ? '🌿 Asistente' : senderRole == 'ADMIN' ? '🧑‍💼 Asesor Garden' : null;
+    final label = senderRole == 'BOT' ? 'Asistente' : senderRole == 'ADMIN' ? 'Asesor Garden' : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(

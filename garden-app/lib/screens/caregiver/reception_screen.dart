@@ -5,6 +5,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_clients_screen.dart';
 import 'walkin_visit_detail_screen.dart';
 import 'walkin_reports_screen.dart';
+import '../../design/garden_icons.dart';
 
 /// Dashboard de ocupación + CRM de mascotas walk-in — compartido entre el
 /// dueño ('caregiver') y el staff ('caregiver-staff'), mismos endpoints,
@@ -52,7 +53,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
     }
   }
 
-  String _serviceEmoji(String type) => type == 'HOSPEDAJE' ? '🏠' : '🏡';
+  GIcon _serviceIcon(String type) => type == 'HOSPEDAJE' ? GIcon.hospedaje : GIcon.guarderia;
 
   String _elapsed(DateTime since) {
     final diff = DateTime.now().difference(since);
@@ -98,7 +99,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
         final fab = FloatingActionButton.extended(
           onPressed: _openCheckInFlow,
           backgroundColor: GardenColors.primary,
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, color: Colors.white),
           label: const Text('Check-in walk-in', style: TextStyle(color: Colors.white)),
         );
 
@@ -118,7 +119,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.pets_rounded, color: summaryColor, size: 32),
+                            GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: summaryColor),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
@@ -150,13 +151,13 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.people_outline_rounded, color: GardenColors.primary, size: 20),
+                              GardenIcon(GIcon.equipo, size: GIconSize.md, color: GardenColors.primary),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text('Clientes y mascotas registradas',
                                     style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
                               ),
-                              Icon(Icons.chevron_right_rounded, color: subtextColor),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
                             ],
                           ),
                         ),
@@ -177,13 +178,13 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.bar_chart_rounded, color: GardenColors.primary, size: 20),
+                                GardenIcon(GIcon.estadisticas, size: GIconSize.md, color: GardenColors.primary),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text('Reportes de ocupación y caja',
                                       style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
                                 ),
-                                Icon(Icons.chevron_right_rounded, color: subtextColor),
+                                GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
                               ],
                             ),
                           ),
@@ -210,7 +211,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                             ),
                             child: Row(
                               children: [
-                                Text(_serviceEmoji(e['serviceType'] as String), style: const TextStyle(fontSize: 26)),
+                                GardenIcon(_serviceIcon(e['serviceType'] as String), size: GIconSize.lg, state: GIconState.active),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -331,7 +332,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
 
   Future<void> _createClientAndContinue() async {
     if (_newClientNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Ingresá el nombre del cliente');
+      GardenSnackBar.warning(context, 'Ingresa el nombre del cliente');
       return;
     }
     setState(() => _isLoading = true);
@@ -354,7 +355,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
 
   Future<void> _createPetAndContinue() async {
     if (_newPetNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Ingresá el nombre de la mascota');
+      GardenSnackBar.warning(context, 'Ingresa el nombre de la mascota');
       return;
     }
     setState(() => _isLoading = true);
@@ -419,7 +420,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
             elevation: 0,
             iconTheme: IconThemeData(color: textColor),
             title: Text(
-              _step == 0 ? 'Elegí o creá un cliente' : _step == 1 ? 'Elegí o creá una mascota' : 'Confirmar check-in',
+              _step == 0 ? 'Elige o crea un cliente' : _step == 1 ? 'Elige o crea una mascota' : 'Confirmar check-in',
               style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
             ),
           ),
@@ -447,7 +448,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         TextField(
           controller: _clientSearchCtrl,
           style: TextStyle(color: textColor),
-          decoration: deco('Buscar cliente...').copyWith(prefixIcon: const Icon(Icons.search_rounded)),
+          decoration: deco('Buscar cliente...').copyWith(prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.lg, inheritColor: true)),
           onChanged: (v) => _loadClients(search: v),
         ),
         const SizedBox(height: 12),
@@ -457,7 +458,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
               for (final c in _clients)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(child: Icon(Icons.person_outline_rounded)),
+                  leading: const CircleAvatar(child: GardenIcon(GIcon.perfil, size: GIconSize.lg, inheritColor: true)),
                   title: Text(c['name'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                   subtitle: Text('${(c['pets'] as List).length} mascota(s)', style: TextStyle(color: subtextColor, fontSize: 12)),
                   onTap: () => setState(() {
@@ -466,7 +467,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
                   }),
                 ),
               Divider(color: borderColor, height: 32),
-              Text('O creá uno nuevo', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
+              Text('O crea uno nuevo', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               TextField(controller: _newClientNameCtrl, style: TextStyle(color: textColor), decoration: deco('Nombre del cliente')),
               const SizedBox(height: 8),
@@ -489,7 +490,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         for (final p in pets)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const CircleAvatar(child: Icon(Icons.pets_rounded)),
+            leading: const CircleAvatar(child: GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, inheritColor: true)),
             title: Text(p['name'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
             onTap: () => setState(() {
               _selectedPet = p;
@@ -497,7 +498,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
             }),
           ),
         Divider(color: borderColor, height: 32),
-        Text('O agregá una mascota nueva', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
+        Text('O agrega una mascota nueva', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         TextField(controller: _newPetNameCtrl, style: TextStyle(color: textColor), decoration: deco('Nombre de la mascota')),
         const SizedBox(height: 8),
@@ -542,9 +543,10 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         Text('Tipo de servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, children: [
-          for (final (value, label, emoji) in [('HOSPEDAJE', 'Hospedaje', '🏠'), ('GUARDERIA', 'Guardería', '🏡'), ('PASEO', 'Paseo', '🐕')])
+          for (final (value, label, icon) in [('HOSPEDAJE', 'Hospedaje', GIcon.hospedaje), ('GUARDERIA', 'Guardería', GIcon.guarderia), ('PASEO', 'Paseo', GIcon.paseo)])
             ChoiceChip(
-              label: Text('$emoji $label'),
+              avatar: GardenIcon(icon, size: GIconSize.sm, state: GIconState.active),
+              label: Text(label),
               selected: _serviceType == value,
               onSelected: (_) => setState(() => _serviceType = value),
             ),

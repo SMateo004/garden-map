@@ -858,9 +858,7 @@ class _BookingScreenState extends State<BookingScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.timer_outlined,
-                      color: isSelected ? Colors.white : GardenColors.primary,
-                      size: 16),
+                  GardenIcon(GIcon.cronometro, size: GIconSize.sm, color: isSelected ? Colors.white : GardenColors.primary),
                   const SizedBox(width: 6),
                   Text(
                     '$minutes min',
@@ -1187,8 +1185,8 @@ class _BookingScreenState extends State<BookingScreen> {
                                   child: Text(discountLabel, style: const TextStyle(color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.w800)),
                                 ),
                               isSelected
-                                  ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20)
-                                  : Icon(Icons.radio_button_unchecked, color: ((atMax && !isSelected) || sizeNotAccepted) ? borderColor.withValues(alpha: 0.4) : subtextColor, size: 20),
+                                  ? const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary)
+                                  : GardenIcon(GIcon.pendiente, size: GIconSize.md, color: ((atMax && !isSelected) || sizeNotAccepted) ? borderColor.withValues(alpha: 0.4) : subtextColor),
                             ],
                           ),
                         ),
@@ -1245,8 +1243,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.info_outline_rounded,
-                                  color: GardenColors.primary, size: 18),
+                              const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.primary),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -1435,7 +1432,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       padding: const EdgeInsets.only(top: 8),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, size: 13, color: subtextColor),
+                          GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
                           const SizedBox(width: 5),
                           Text(
                             'Reservas disponibles para los próximos 30 días',
@@ -1464,7 +1461,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.edit_outlined, size: 16, color: GardenColors.primary),
+                                  GardenIcon(GIcon.editar, size: GIconSize.sm, color: GardenColors.primary),
                                   const SizedBox(width: 4),
                                   Text('Cambiar', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                                 ],
@@ -1485,7 +1482,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.access_time_rounded, color: GardenColors.primary, size: 20),
+                              const GardenIcon(GIcon.reloj, size: GIconSize.md, color: GardenColors.primary),
                               const SizedBox(width: 10),
                               Text(
                                 '${_selectedTimeSlot == 'MANANA' ? 'Mañana' : _selectedTimeSlot == 'TARDE' ? 'Tarde' : 'Noche'} · $_selectedStartTime',
@@ -1512,11 +1509,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                   }),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                        color: GardenColors.primary,
-                                        size: 20,
-                                      ),
+                                      GardenIcon(isSelected ? GIcon.seleccionado : GIcon.pendiente, size: GIconSize.md, state: isSelected ? GIconState.active : GIconState.idle, color: GardenColors.primary),
                                       const SizedBox(width: 8),
                                       Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
                                       const SizedBox(width: 8),
@@ -1719,7 +1712,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 13, color: subtextColor),
+                        GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
                         const SizedBox(width: 5),
                         Text(
                           'Reservas disponibles para los próximos 30 días',
@@ -1749,7 +1742,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.edit_outlined, size: 16, color: GardenColors.primary),
+                                GardenIcon(GIcon.editar, size: GIconSize.sm, color: GardenColors.primary),
                                 const SizedBox(width: 4),
                                 Text('Cambiar', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                               ],
@@ -1769,7 +1762,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.access_time_rounded, color: GardenColors.primary, size: 20),
+                            const GardenIcon(GIcon.reloj, size: GIconSize.md, color: GardenColors.primary),
                             const SizedBox(width: 10),
                             Text(
                               '${_selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'} · $_selectedStartTime',
@@ -1802,10 +1795,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                      color: GardenColors.primary, size: 20,
-                                    ),
+                                    GardenIcon(isSelected ? GIcon.seleccionado : GIcon.pendiente, size: GIconSize.md, state: isSelected ? GIconState.active : GIconState.idle, color: GardenColors.primary),
                                     const SizedBox(width: 8),
                                     Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
                                     const SizedBox(width: 8),
@@ -1836,7 +1826,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 13, color: subtextColor),
+                        GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
                         const SizedBox(width: 5),
                         Text(
                           'Reservas disponibles para los próximos 30 días',
@@ -1896,7 +1886,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_month_outlined, color: GardenColors.primary, size: 20),
+                          GardenIcon(GIcon.calendario, size: GIconSize.md, color: GardenColors.primary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -1917,7 +1907,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                         ],
                                       ),
                                     ),
-                                    Icon(Icons.arrow_forward, size: 16, color: subtextColor),
+                                    GardenIcon(GIcon.avanzar, size: GIconSize.sm, color: subtextColor),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1943,7 +1933,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               ],
                             ),
                           ),
-                          Icon(Icons.chevron_right, color: subtextColor, size: 20),
+                          GardenIcon(GIcon.siguiente, size: GIconSize.md, color: subtextColor),
                         ],
                       ),
                     ),
@@ -2272,7 +2262,7 @@ class _BookingScreenState extends State<BookingScreen> {
         const SizedBox(height: 4),
         Row(
           children: [
-            Icon(Icons.info_outline, size: 13, color: subtextColor),
+            GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
             const SizedBox(width: 5),
             Text(
               'Reservas disponibles para los próximos 30 días',
@@ -2983,7 +2973,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.lock_outline_rounded, size: 14, color: lockedText),
+                  GardenIcon(GIcon.seguridad, size: GIconSize.xs, color: lockedText),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -3016,7 +3006,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.location_on_outlined, size: 14, color: !_mgVirtual ? Colors.white : subtextColor),
+                          GardenIcon(GIcon.ubicacion, size: GIconSize.xs, color: !_mgVirtual ? Colors.white : subtextColor),
                           const SizedBox(width: 5),
                           Text('Presencial', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: !_mgVirtual ? Colors.white : subtextColor)),
                         ],
@@ -3039,7 +3029,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.video_call_outlined, size: 14, color: _mgVirtual ? Colors.white : subtextColor),
+                          GardenIcon(GIcon.video, size: GIconSize.xs, color: _mgVirtual ? Colors.white : subtextColor),
                           const SizedBox(width: 5),
                           Text('Virtual', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _mgVirtual ? Colors.white : subtextColor)),
                         ],
@@ -3106,7 +3096,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_today, size: 16, color: GardenColors.primary),
+                        const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -3120,7 +3110,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         if (_mgDate != null)
                           IconButton(
                             onPressed: () => setState(() => _mgDate = null),
-                            icon: Icon(Icons.close, size: 16, color: subtextColor),
+                            icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                             splashRadius: 20,
@@ -3149,7 +3139,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 // Header row: shows selected time + Cambiar button when collapsed
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 16, color: GardenColors.primary),
+                    const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                     const SizedBox(width: 8),
                     Text(
                       _mgTime != null
@@ -3265,10 +3255,10 @@ class _BookingScreenState extends State<BookingScreen> {
               decoration: InputDecoration(
                 hintText: 'Punto de encuentro',
                 hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                prefixIcon: const Icon(Icons.location_on, color: GardenColors.primary, size: 18),
+                prefixIcon: const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                 suffixIcon: _mgPlaceCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.close, size: 16, color: subtextColor),
+                        icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                         onPressed: () {
                           setState(() {
                             _mgPlaceCtrl.clear();
@@ -3316,8 +3306,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.place,
-                                size: 18, color: GardenColors.primary),
+                            const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -3367,7 +3356,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.video_call_outlined, size: 15, color: GardenColors.primary),
+                  const GardenIcon(GIcon.video, size: GIconSize.xs, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
                     'El M&G será por videollamada. Coordina el enlace con el cuidador por chat.',
@@ -3475,31 +3464,31 @@ class _BookingScreenState extends State<BookingScreen> {
         children: [
           Text('Resumen de reserva', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          _summaryRow(Icons.pets, selectedPets.length == 1 ? 'Mascota' : 'Mascotas', petName),
+          _summaryRow(GIcon.huella, selectedPets.length == 1 ? 'Mascota' : 'Mascotas', petName),
           // Multi-pet discount breakdown
           if (selectedPets.length >= 2) ...[
-            _summaryRow(Icons.sell_outlined, '2ª mascota', '${selectedPets[1]['name']} (−25%)'),
+            _summaryRow(GIcon.precio, '2ª mascota', '${selectedPets[1]['name']} (−25%)'),
           ],
           if (selectedPets.length >= 3) ...[
-            _summaryRow(Icons.sell_outlined, '3ª mascota', '${selectedPets[2]['name']} (−50%)'),
+            _summaryRow(GIcon.precio, '3ª mascota', '${selectedPets[2]['name']} (−50%)'),
           ],
-          _summaryRow(Icons.settings, 'Servicio', serviceDisplayName),
+          _summaryRow(GIcon.ajustes, 'Servicio', serviceDisplayName),
           if (_selectedService == 'PASEO')
-            _summaryRow(Icons.timer_outlined, 'Duración', '$_selectedDuration min'),
+            _summaryRow(GIcon.cronometro, 'Duración', '$_selectedDuration min'),
           if (_selectedService == 'GUARDERIA') ...[
-            _summaryRow(Icons.timer_outlined, 'Duración', '${_guarderiaSelectedDuration ~/ 60}h'),
+            _summaryRow(GIcon.cronometro, 'Duración', '${_guarderiaSelectedDuration ~/ 60}h'),
             if (_selectedTimeSlot != null)
-              _summaryRow(Icons.access_time, 'Horario', _selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'),
+              _summaryRow(GIcon.reloj, 'Horario', _selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'),
           ],
           if (fechaText.isNotEmpty)
-            _summaryRow(Icons.calendar_today, _isMultiDay ? 'Días' : 'Fecha', fechaText),
+            _summaryRow(GIcon.calendario, _isMultiDay ? 'Días' : 'Fecha', fechaText),
           if (_selectedService == 'PASEO' && _isMultiDay && _multiDayTimeSlot != null)
-            _summaryRow(Icons.access_time, 'Horario',
+            _summaryRow(GIcon.reloj, 'Horario',
                 _multiDayTimeSlot == 'MANANA' ? 'Mañana' : _multiDayTimeSlot == 'TARDE' ? 'Tarde' : 'Noche'),
           if (_selectedService == 'PASEO' && _isMultiDay && _multiDaySameTime && _multiDaySharedTime != null)
-            _summaryRow(Icons.schedule, 'Hora', _multiDaySharedTime!),
+            _summaryRow(GIcon.reloj, 'Hora', _multiDaySharedTime!),
           if (_selectedService == 'PASEO' && _isMultiDay && !_multiDaySameTime && _perDayTimes.isNotEmpty)
-            _summaryRow(Icons.schedule, 'Horas',
+            _summaryRow(GIcon.reloj, 'Horas',
                 _selectedDates.map((d) {
                   final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
                   const m = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -3507,13 +3496,13 @@ class _BookingScreenState extends State<BookingScreen> {
                   return '${d.day} ${m[d.month-1]}: $t';
                 }).join(' · ')),
           if (_selectedService == 'PASEO' && !_isMultiDay && _selectedStartTime != null)
-            _summaryRow(Icons.access_time, 'Hora', _selectedStartTime!),
+            _summaryRow(GIcon.reloj, 'Hora', _selectedStartTime!),
           // Desglose de servicios extra seleccionados
           if (_selectedExtraIds.isNotEmpty)
             ..._availableExtras.where((e) => _selectedExtraIds.contains(e['id'])).map((extra) {
               final pricePerDay = (extra['pricePerDay'] as num?)?.toDouble() ?? 0;
               final total = pricePerDay * _extraServiceDays;
-              return _summaryRow(Icons.add_circle_outline, extra['name'] as String? ?? 'Extra', 'Bs ${total.round()}');
+              return _summaryRow(GIcon.agregar, extra['name'] as String? ?? 'Extra', 'Bs ${total.round()}');
             }),
           const Divider(height: 24),
           Row(
@@ -3529,7 +3518,7 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _summaryRow(IconData icon, String label, String value) {
+  Widget _summaryRow(GIcon icon, String label, String value) {
     final isDark = themeNotifier.isDark;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -3537,7 +3526,7 @@ class _BookingScreenState extends State<BookingScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: GardenColors.primary),
+          GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
           const SizedBox(width: 8),
           Text('$label: ', style: TextStyle(color: subtextColor, fontSize: 13)),
           Text(value, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),

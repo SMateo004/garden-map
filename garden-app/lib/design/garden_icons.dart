@@ -51,6 +51,15 @@ enum GIcon {
   cerrar(Ph.x),
   filtros(Ph.slidersHorizontal),
   mapa(Ph.mapTrifold),
+  avanzar(Ph.arrowRight),
+  desplegar(Ph.caretDown),
+  plegar(Ph.caretUp),
+  arriba(Ph.arrowUp),
+  abajo(Ph.arrowDown),
+  abrirFuera(Ph.arrowSquareOut),
+  menu(Ph.list),
+  entrar(Ph.signIn),
+  inicioSesion(Ph.userCircle),
 
   // ── Servicios (iconos propios, ver garden_service_icon.dart) ──
   paseo.service(GardenService.paseo),
@@ -72,6 +81,7 @@ enum GIcon {
   vacuna(Ph.syringe),
   veterinaria(Ph.stethoscope),
   salud(Ph.heartbeat),
+  cachorro(Ph.baby),
 
   // ── Relato de la reserva (lo usa booking_story.dart) ──
   esperando(Ph.hourglassMedium),
@@ -83,6 +93,12 @@ enum GIcon {
   enRevision(Ph.scales),
   conflicto(Ph.warningCircle),
   emergencia(Ph.siren),
+  info(Ph.info),
+  advertencia(Ph.warning),
+  historial(Ph.clockCounterClockwise),
+  alarma(Ph.alarm),
+  iniciar(Ph.play),
+  pausar(Ph.pause),
 
   // ── Confianza ──
   identidadVerificada(Ph.identificationCard),
@@ -91,6 +107,11 @@ enum GIcon {
   verificado(Ph.sealCheck),
   seguridad(Ph.lockKey),
   huellaDigital(Ph.fingerprint),
+  protegido(Ph.shieldCheck),
+  desbloqueado(Ph.lockKeyOpen),
+  rostro(Ph.userFocus),
+  destacado(Ph.medal),
+  reportar(Ph.flag),
 
   // ── Dinero ──
   billetera(Ph.wallet),
@@ -101,6 +122,11 @@ enum GIcon {
   donar(Ph.handHeart),
   comision(Ph.percent),
   multa(Ph.gavel),
+  tarjeta(Ph.creditCard),
+  precio(Ph.tag),
+  recibo(Ph.receipt),
+  calculadora(Ph.calculator),
+  estadisticas(Ph.chartLineUp),
 
   // ── Comunicación ──
   chat(Ph.chatCircleDots),
@@ -116,13 +142,26 @@ enum GIcon {
   leido(Ph.checks),
   masOpciones(Ph.dotsThreeVertical),
   bloqueado(Ph.prohibit),
+  documento(Ph.fileText),
+  sinImagen(Ph.imageBroken),
+  subir(Ph.uploadSimple),
+  descargar(Ph.downloadSimple),
+  responder(Ph.arrowBendUpLeft),
+  miUbicacion(Ph.crosshair),
+  sinConexion(Ph.wifiSlash),
+  web(Ph.globe),
+  computadora(Ph.desktop),
+  invitar(Ph.userPlus),
+  meGusta(Ph.thumbsUp),
+  noMeGusta(Ph.thumbsDown),
+  anuncio(Ph.megaphone),
 
   // ── General ──
   reloj(Ph.clock),
   calendario(Ph.calendarBlank),
   cronometro(Ph.timer),
   distancia(Ph.path),
-  estrella(Ph.star),
+  estrella.solid(Ph.star),
   favorito(Ph.heart),
   agregar(Ph.plus),
   editar(Ph.pencilSimple),
@@ -138,13 +177,50 @@ enum GIcon {
   modoClaro(Ph.sun),
   modoOscuro(Ph.moon),
   tarde(Ph.sunHorizon),
-  salir(Ph.signOut);
+  salir(Ph.signOut),
+  hecho(Ph.check),
+  quitar(Ph.minusCircle),
+  seleccionado(Ph.radioButton),
+  casilla(Ph.square),
+  casillaMarcada(Ph.checkSquare),
+  empresa(Ph.storefront),
+  edificio(Ph.buildings),
+  habitacion(Ph.door),
+  trabajo(Ph.briefcase),
+  guia(Ph.bookOpen),
+  lista(Ph.listChecks),
+  categoria(Ph.squaresFour),
+  idea(Ph.lightbulb),
+  ia(Ph.sparkle),
+  apariencia(Ph.palette),
+  cumpleanos(Ph.cake),
+  peso(Ph.barbell),
+  medida(Ph.ruler),
+  sexo(Ph.genderIntersex),
+  clima(Ph.cloudSun),
+  linterna(Ph.flashlight),
+  ampliar(Ph.magnifyingGlassPlus),
+  intercambiar(Ph.arrowsLeftRight),
+  auto(Ph.car),
+  herramientas(Ph.wrench),
+  lanzar(Ph.rocketLaunch),
+  tocar(Ph.handTap),
+  sofa(Ph.couch),
+  desvincular(Ph.linkBreak),
+  marcaApple(Ph.appleLogo),
+  marcaAndroid(Ph.androidLogo),
+  marcaFacebook(Ph.facebookLogo);
 
-  const GIcon(PhGlyph this.glyph) : service = null;
-  const GIcon.service(GardenService this.service) : glyph = null;
+  const GIcon(PhGlyph this.glyph) : service = null, solid = false;
+  const GIcon.service(GardenService this.service) : glyph = null, solid = false;
+
+  /// Activo = relleno completo en vez de duotono. Solo para iconos que se
+  /// leen como "lleno / vacío" (la estrella de una calificación).
+  const GIcon.solid(PhGlyph this.glyph) : service = null, solid = true;
 
   final PhGlyph? glyph;
   final GardenService? service;
+  final bool solid;
 
   /// Icono de mascota según la especie que manda el backend.
   static GIcon forSpecies(String? species) {
@@ -174,6 +250,11 @@ class GardenIcon extends StatelessWidget {
   /// Solo para servicios: anima el icono en bucle (servicio en curso).
   final bool live;
 
+  /// Sin [color], toma el del IconTheme que lo rodea (dentro de un botón, el
+  /// del botón) en vez del texto secundario. Lo usa el código migrado desde
+  /// Icon() de Material para no cambiar colores heredados.
+  final bool inheritColor;
+
   const GardenIcon(
     this.icon, {
     super.key,
@@ -182,6 +263,7 @@ class GardenIcon extends StatelessWidget {
     this.color,
     this.semanticLabel,
     this.live = false,
+    this.inheritColor = false,
   });
 
   @override
@@ -201,6 +283,7 @@ class GardenIcon extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final active = state == GIconState.active;
     final ink = color ??
+        (inheritColor ? IconTheme.of(context).color : null) ??
         (active
             ? (isDark ? GardenColors.primaryLight : GardenColors.primary)
             : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary));
@@ -209,7 +292,7 @@ class GardenIcon extends StatelessWidget {
     final child = active
         // Duotono: relleno suave al 28 % debajo del trazo.
         ? Stack(alignment: Alignment.center, children: [
-            Icon(glyph.duoSecondary, size: size.px, color: ink.withValues(alpha: ink.a * 0.28)),
+            Icon(glyph.duoSecondary, size: size.px, color: icon.solid ? ink : ink.withValues(alpha: ink.a * 0.28)),
             Icon(glyph.duoPrimary, size: size.px, color: ink, semanticLabel: semanticLabel),
           ])
         : Icon(glyph.regular, size: size.px, color: ink, semanticLabel: semanticLabel);

@@ -6,6 +6,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../widgets/pet_profile_sheet.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Pantalla de solo lectura para que un cuidador vea las mascotas que ha
 /// cuidado (o va a cuidar). No incluye alta/edición/eliminación — el
@@ -84,7 +85,7 @@ class _CaregiverPetsScreenState extends State<CaregiverPetsScreen> {
             backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+              icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             title: Row(
@@ -96,7 +97,7 @@ class _CaregiverPetsScreenState extends State<CaregiverPetsScreen> {
                     color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
-                  child: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 18),
+                  child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                 ),
                 const SizedBox(width: 10),
                 Text('Mascotas', style: GardenText.h4.copyWith(color: textColor)),
@@ -185,7 +186,7 @@ class _CaregiverPetsScreenState extends State<CaregiverPetsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, color: subtextColor, size: 40),
+            GardenIcon(GIcon.conflicto, size: GIconSize.xl, color: subtextColor),
             const SizedBox(height: 12),
             Text('No se pudo cargar la información',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
@@ -275,12 +276,12 @@ class _PetCard extends StatelessWidget {
                 if (animalType == 'CATS') _pill('🐈 Gato', GardenColors.accent),
                 if (size != null && sizeLabels.containsKey(size))
                   _pill(sizeLabels[size]!, GardenColors.primaryLight),
-                if (isAggressive) _pill('⚡ Agresiva', GardenColors.error),
+                if (isAggressive) _pill('Agresiva', GardenColors.error),
                 if (specialNeeds != null && specialNeeds.isNotEmpty)
-                  _pill('⚠ Especial', GardenColors.warning),
+                  _pill('Especial', GardenColors.warning),
               ]),
             ])),
-            Icon(Icons.arrow_forward_ios_rounded, color: subtextColor, size: 14),
+            GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: subtextColor),
           ]),
         ),
       ),
@@ -288,7 +289,7 @@ class _PetCard extends StatelessWidget {
   }
 
   Widget _iconFallback() => const Center(
-    child: Icon(Icons.pets_rounded, color: GardenColors.primary, size: 28));
+    child: GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary));
 
   Widget _pill(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

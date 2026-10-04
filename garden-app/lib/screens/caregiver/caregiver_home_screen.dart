@@ -200,33 +200,33 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         prefKey: 'tutorial_caregiver_web_v1_$userId',
         stepsBuilder: (_, __) => [
           const TutorialStep(
-            emoji: '🌿',
+            icon: GIcon.huella,
             title: '¡Bienvenido a GARDEN!',
             body: 'En unos pasos rápidos te mostramos todo lo que necesitas para empezar a recibir reservas y ganar dinero cuidando mascotas.',
           ),
           TutorialStep(
-            emoji: '🏠',
+            icon: GIcon.inicio,
             title: 'Tu panel de inicio',
             body: 'Aquí ves tu resumen diario: reservas activas, estadísticas y alertas importantes.',
             targetKey: _webNavKeys[0],
             spotlightRadius: 44,
           ),
           TutorialStep(
-            emoji: '📅',
+            icon: GIcon.disponibilidad,
             title: 'Tu disponibilidad',
             body: 'Activa los días y horas en que puedes atender. Sin disponibilidad activa no apareces en el marketplace.',
             targetKey: _webNavKeys[1],
             spotlightRadius: 44,
           ),
           TutorialStep(
-            emoji: '📋',
+            icon: GIcon.reservas,
             title: 'Tus reservas',
             body: 'Aquí llegan todas las solicitudes. Responde en menos de 2 horas para mejorar tu posición en las búsquedas.',
             targetKey: _webNavKeys[2],
             spotlightRadius: 44,
           ),
           TutorialStep(
-            emoji: '👤',
+            icon: GIcon.perfil,
             title: 'Tu perfil y billetera',
             body: 'Edita tus fotos, precios y bio. En "Billetera" puedes ver tus ganancias y solicitar retiros cuando quieras.',
             targetKey: _webNavKeys[3],
@@ -243,30 +243,30 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
           return [
             const TutorialStep(
-              emoji: '🌿',
+              icon: GIcon.huella,
               title: '¡Bienvenido a GARDEN!',
               body: 'En unos pasos rápidos te mostramos todo lo que necesitas para empezar a recibir reservas y ganar dinero cuidando mascotas.',
             ),
             TutorialStep(
-              emoji: '🏠',
+              icon: GIcon.inicio,
               title: 'Tu panel de inicio',
               body: 'Aquí ves tu resumen diario: reservas activas, estadísticas y alertas importantes.',
               spotlightCenter: nav(0),
             ),
             TutorialStep(
-              emoji: '📅',
+              icon: GIcon.disponibilidad,
               title: 'Tu disponibilidad',
               body: 'Activa los días y horas en que puedes atender. Sin disponibilidad activa no apareces en el marketplace.',
               spotlightCenter: nav(1),
             ),
             TutorialStep(
-              emoji: '📋',
+              icon: GIcon.reservas,
               title: 'Tus reservas',
               body: 'Aquí llegan todas las solicitudes. Responde en menos de 2 horas para mejorar tu posición en las búsquedas.',
               spotlightCenter: nav(2),
             ),
             TutorialStep(
-              emoji: '👤',
+              icon: GIcon.perfil,
               title: 'Tu perfil y billetera',
               body: 'Edita tus fotos, precios y bio. En "Billetera" puedes ver tus ganancias y solicitar retiros cuando quieras.',
               spotlightCenter: nav(3),
@@ -313,11 +313,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => GardenGlassDialog(
-        title: Text(wasRejected ? 'Tu documento fue rechazado' : '¡Conseguí el badge Premium! 🌟'),
+        title: Text(wasRejected ? 'Tu documento fue rechazado' : 'Consigue el badge Premium'),
         content: Text(
           wasRejected
-              ? 'El documento de antecedentes que subiste no pudo aprobarse. Revisá el motivo en tus notificaciones y subí uno nuevo cuando puedas.'
-              : 'Subí tus antecedentes penales (FELCC/REJAP) y conseguí el badge de cuidador verificado — los dueños confían más y reservan más seguido con cuidadores Premium. Es opcional, pero te conviene.',
+              ? 'El documento de antecedentes que subiste no pudo aprobarse. Revisa el motivo en tus notificaciones y sube uno nuevo cuando puedas.'
+              : 'Sube tus antecedentes penales (FELCC/REJAP) y consigue el badge de cuidador verificado — los dueños confían más y reservan más seguido con cuidadores Premium. Es opcional, pero te conviene.',
         ),
         actions: [
           TextButton(
@@ -1148,7 +1148,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.star_rounded, color: GardenColors.star, size: 11),
+                            const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                             const SizedBox(width: 4),
                             Text(
                               rating.toStringAsFixed(1),
@@ -1179,7 +1179,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    const Icon(Icons.notifications_outlined, color: GardenColors.warning, size: 20),
+                    const GardenIcon(GIcon.notificaciones, size: GIconSize.md, color: GardenColors.warning),
                     Positioned(
                       top: 6, right: 6,
                       child: Container(
@@ -1308,7 +1308,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.notifications_active_rounded, color: GardenColors.error, size: 16),
+                const GardenIcon(GIcon.notificaciones, size: GIconSize.sm, state: GIconState.active, color: GardenColors.error),
                 const SizedBox(width: 6),
                 const Text('Esperando tu respuesta',
                   style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -1352,11 +1352,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Wrap(
                   spacing: 6,
                   children: [
-                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
+                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
-                      _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
+                      _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
                     if (!isMultiDayPending && startTime != null)
-                      _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
+                      _infoChip(startTime, GIcon.reloj, subtextColor, borderColor),
                   ],
                 ),
                 if (isMultiDayPending) ...[
@@ -1389,7 +1389,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      icon: const GardenIcon(GIcon.chat, size: GIconSize.lg, inheritColor: true),
                       label: const Text('Abrir chat'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1419,22 +1419,20 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   Expanded(
                     child: GardenButton(
                       label: 'Aceptar',
-                      icon: Icons.check_rounded,
+                      gIcon: GIcon.hecho,
                       height: 46,
                       color: GardenColors.success,
-                      onPressed: () => _respondBooking(bookingId, 'accept'),
-                    ),
+                      onPressed: () => _respondBooking(bookingId, 'accept')),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: GardenButton(
                       label: 'Rechazar',
-                      icon: Icons.close_rounded,
+                      gIcon: GIcon.cerrar,
                       height: 46,
                       color: GardenColors.error,
                       outline: true,
-                      onPressed: () => _respondBooking(bookingId, 'reject'),
-                    ),
+                      onPressed: () => _respondBooking(bookingId, 'reject')),
                   ),
                 ],
               ),
@@ -1626,11 +1624,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Wrap(
                   spacing: 6,
                   children: [
-                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
+                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
-                      _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
+                      _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
                     if (!isMultiDay && startTime != null)
-                      _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
+                      _infoChip(startTime, GIcon.reloj, subtextColor, borderColor),
                   ],
                 ),
                 if (isMultiDay) ...[
@@ -1648,11 +1646,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Expanded(
                   child: GardenButton(
                     label: 'Gestionar servicio',
-                    icon: Icons.pets_outlined,
+                    gIcon: GIcon.huella,
                     height: 46,
                     color: GardenColors.primary,
-                    onPressed: openService,
-                  ),
+                    onPressed: openService),
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
@@ -1665,7 +1662,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       side: BorderSide(color: GardenColors.primary.withValues(alpha: 0.5)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Icon(Icons.chat_bubble_outline_rounded, color: GardenColors.primary, size: 20),
+                    child: const GardenIcon(GIcon.chat, size: GIconSize.md, color: GardenColors.primary),
                   ),
                 ),
               ],
@@ -1676,7 +1673,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _infoChip(String label, IconData icon, Color subtextColor, Color borderColor) {
+  Widget _infoChip(String label, GIcon icon, Color subtextColor, Color borderColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1686,7 +1683,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: subtextColor),
+          GardenIcon(icon, size: GIconSize.xs, color: subtextColor),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
         ],
@@ -1713,7 +1710,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.calendar_month_rounded, size: 12, color: GardenColors.primary),
+              const GardenIcon(GIcon.calendario, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 5),
               Text(
                 'Horario por día',
@@ -1891,7 +1888,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ),
             )
           else
-            Icon(Icons.chevron_right, color: subtextColor),
+            GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
         ],
       ),
     ),
@@ -2125,7 +2122,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       Text('Bs ${_caregiverNetAmount(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
                       if (canOpen) ...[
                         const SizedBox(width: 6),
-                        const Icon(Icons.chevron_right_rounded, color: GardenColors.primary, size: 18),
+                        const GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: GardenColors.primary),
                       ],
                     ],
                   ),
@@ -2153,7 +2150,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.star_outline_rounded, color: GardenColors.star, size: 16),
+            const GardenIcon(GIcon.estrella, size: GIconSize.sm, color: GardenColors.star),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -2161,7 +2158,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 style: const TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: GardenColors.star, size: 16),
+            const GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: GardenColors.star),
           ],
         ),
       ),
@@ -2213,9 +2210,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           Text(_monthName(_calendarMonth),
               style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w700)),
           Row(children: [
-            _calNavBtn(Icons.chevron_left, () => _navigateCalendarMonth(-1)),
+            _calNavBtn(GIcon.atras, () => _navigateCalendarMonth(-1)),
             const SizedBox(width: 6),
-            _calNavBtn(Icons.chevron_right, () => _navigateCalendarMonth(1)),
+            _calNavBtn(GIcon.siguiente, () => _navigateCalendarMonth(1)),
           ]),
         ]),
         const SizedBox(height: 12),
@@ -2356,9 +2353,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final holidays = defaultSchedule['holidays'] as bool? ?? true;
 
     final items = [
-      {'key': 'weekdays',  'label': 'Lun – Vie', 'icon': Icons.work_outline_rounded,    'value': weekdays},
-      {'key': 'weekends',  'label': 'Sáb – Dom', 'icon': Icons.weekend_outlined,         'value': weekends},
-      {'key': 'holidays',  'label': 'Feriados',  'icon': Icons.celebration_outlined,     'value': holidays},
+      {'key': 'weekdays',  'label': 'Lun – Vie', 'icon': GIcon.trabajo,    'value': weekdays},
+      {'key': 'weekends',  'label': 'Sáb – Dom', 'icon': GIcon.sofa,         'value': weekends},
+      {'key': 'holidays',  'label': 'Feriados',  'icon': GIcon.celebrar,     'value': holidays},
     ];
 
     return Container(
@@ -2383,8 +2380,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
-                      Icon(item['icon'] as IconData,
-                        color: isEnabled ? GardenColors.primary : subtextColor, size: 20),
+                      GardenIcon(item['icon'] as GIcon,
+                        color: isEnabled ? GardenColors.primary : subtextColor, state: isEnabled ? GIconState.active : GIconState.idle),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(item['label'] as String,
@@ -2460,7 +2457,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     _computeDayStatuses();
   }
 
-  Widget _calNavBtn(IconData icon, VoidCallback onTap) {
+  Widget _calNavBtn(GIcon icon, VoidCallback onTap) {
     return TapScale(
       pressedScale: 0.88,
       onTap: onTap,
@@ -2470,7 +2467,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           color: GardenColors.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(9),
         ),
-        child: Icon(icon, color: GardenColors.primary, size: 20),
+        child: Center(child: GardenIcon(icon, color: GardenColors.primary)),
       ),
     );
   }
@@ -2493,9 +2490,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }();
 
     final blockDefs = [
-      {'key': 'morning',   'label': 'Mañana', 'icon': Icons.wb_sunny_rounded,    'ds': '08:00', 'de': '11:00'},
-      {'key': 'afternoon', 'label': 'Tarde',  'icon': Icons.wb_cloudy_rounded,   'ds': '13:00', 'de': '17:00'},
-      {'key': 'night',     'label': 'Noche',  'icon': Icons.nights_stay_rounded, 'ds': '19:00', 'de': '22:00'},
+      {'key': 'morning',   'label': 'Mañana', 'icon': GIcon.modoClaro,    'ds': '08:00', 'de': '11:00'},
+      {'key': 'afternoon', 'label': 'Tarde',  'icon': GIcon.tarde,   'ds': '13:00', 'de': '17:00'},
+      {'key': 'night',     'label': 'Noche',  'icon': GIcon.modoOscuro, 'ds': '19:00', 'de': '22:00'},
     ];
 
     return Container(
@@ -2514,7 +2511,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ? Map<String, dynamic>.from(rawBlock)
             : {'enabled': true, 'start': b['ds'], 'end': b['de']};
           final isEnabled = block['enabled'] == true;
-          final icon = b['icon'] as IconData;
+          final icon = b['icon'] as GIcon;
 
           return Column(
             children: [
@@ -2523,7 +2520,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(
                   children: [
-                    Icon(icon, color: isEnabled ? GardenColors.primary : subtextColor, size: 20),
+                    GardenIcon(icon, color: isEnabled ? GardenColors.primary : subtextColor, state: isEnabled ? GIconState.active : GIconState.idle),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -2636,7 +2633,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         border: Border.all(color: borderColor),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.access_time, color: GardenColors.primary, size: 16),
+                        const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 8),
                         Text(start, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
                       ]),
@@ -2670,7 +2667,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         border: Border.all(color: borderColor),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.access_time, color: GardenColors.primary, size: 16),
+                        const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 8),
                         Text(end, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
                       ]),
@@ -2837,9 +2834,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           'night': 'Noche',
         };
         final slotIcons = {
-          'morning': Icons.wb_sunny_outlined,
-          'afternoon': Icons.wb_cloudy_outlined,
-          'night': Icons.nightlight_outlined,
+          'morning': GIcon.modoClaro,
+          'afternoon': GIcon.tarde,
+          'night': GIcon.modoOscuro,
         };
 
         // Read slot state from availability each rebuild
@@ -2940,7 +2937,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(
                             children: [
-                              Icon(Icons.info_outline, size: 16, color: subtextColor),
+                              GardenIcon(GIcon.info, size: GIconSize.sm, color: subtextColor),
                               const SizedBox(width: 8),
                               Text('Tienes una reserva activa este día',
                                 style: TextStyle(color: subtextColor, fontSize: 13)),
@@ -2992,7 +2989,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: Row(
                                     children: [
-                                      Icon(slotIcons[key], size: 16, color: enabled ? GardenColors.primary : subtextColor),
+                                      GardenIcon(slotIcons[key]!, size: GIconSize.sm, color: enabled ? GardenColors.primary : subtextColor),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
@@ -3152,10 +3149,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   // Items de navegación del cuidador
   static const _navItems = [
-    (icon: Icons.home_outlined,           activeIcon: Icons.home_rounded,           label: 'Inicio'),
-    (icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Disponibilidad'),
-    (icon: Icons.list_alt_outlined,       activeIcon: Icons.list_alt_rounded,       label: 'Reservas'),
-    (icon: Icons.person_outline_rounded,  activeIcon: Icons.person_rounded,         label: 'Mi Perfil'),
+    (icon: GIcon.inicio,         label: 'Inicio'),
+    (icon: GIcon.disponibilidad, label: 'Disponibilidad'),
+    (icon: GIcon.reservas,       label: 'Reservas'),
+    (icon: GIcon.perfil,         label: 'Mi Perfil'),
   ];
 
   void _onTabTap(int i) {
@@ -3255,7 +3252,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                     style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
                                   ),
                                   const SizedBox(width: 4),
-                                  Icon(Icons.expand_more_rounded, size: 16, color: subtextColor),
+                                  GardenIcon(GIcon.desplegar, size: GIconSize.sm, color: subtextColor),
                                 ]),
                               ),
                             ),
@@ -3267,7 +3264,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 child: Padding(
                                   padding: const EdgeInsets.all(8),
-                                  child: Icon(Icons.logout_outlined, size: 18, color: subtextColor),
+                                  child: GardenIcon(GIcon.salir, size: GIconSize.sm, color: subtextColor),
                                 ),
                               ),
                             ),
@@ -3309,7 +3306,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             actions: [
               if (_caregiver?['isCompany'] == true)
                 IconButton(
-                  icon: Icon(Icons.meeting_room_outlined, color: subtextColor),
+                  icon: GardenIcon(GIcon.habitacion, size: GIconSize.lg, color: subtextColor),
                   tooltip: 'Recepción',
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const ReceptionScreen(apiPrefix: 'caregiver'),
@@ -3317,7 +3314,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ),
               NotificationBell(token: _caregiverToken, baseUrl: _baseUrl),
               IconButton(
-                icon: Icon(Icons.logout_outlined, color: subtextColor),
+                icon: GardenIcon(GIcon.salir, size: GIconSize.lg, color: subtextColor),
                 onPressed: _logout,
               ),
             ],
@@ -3430,9 +3427,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                             border: isActive ? Border.all(color: GardenColors.primary.withValues(alpha: 0.2)) : null,
                           ),
                           child: Row(children: [
-                            Icon(
-                              isActive ? tab.activeIcon : tab.icon,
-                              size: 18,
+                            GardenIcon(
+                              tab.icon,
+                              size: GIconSize.md,
+                              state: isActive ? GIconState.active : GIconState.idle,
                               color: isActive ? GardenColors.primary : subtextColor,
                             ),
                             const SizedBox(width: 12),
@@ -3457,9 +3455,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     padding: const EdgeInsets.all(10),
                     child: Column(
                       children: [
-                        _sidebarAction(Icons.account_balance_wallet_outlined, 'Mi billetera', subtextColor, () => context.push('/wallet')),
-                        _sidebarAction(Icons.pets_outlined, 'Mascotas', subtextColor, () => context.push('/caregiver/pets')),
-                        _sidebarAction(Icons.person_outline_rounded, 'Mi perfil', subtextColor, () => context.push('/profile')),
+                        _sidebarAction(GIcon.billetera, 'Mi billetera', subtextColor, () => context.push('/wallet')),
+                        _sidebarAction(GIcon.huella, 'Mascotas', subtextColor, () => context.push('/caregiver/pets')),
+                        _sidebarAction(GIcon.perfil, 'Mi perfil', subtextColor, () => context.push('/profile')),
                       ],
                     ),
                   ),
@@ -3473,14 +3471,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _sidebarAction(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _sidebarAction(GIcon icon, String label, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(children: [
-          Icon(icon, size: 17, color: color),
+          GardenIcon(icon, size: GIconSize.sm, color: color),
           const SizedBox(width: 12),
           Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
         ]),
@@ -3570,13 +3568,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final isSuspended = _caregiverStatus == 'SUSPENDED';
     final suspensionReason = _caregiver?['suspensionReason'] as String?;
 
-    final iconData = isSuspended
-        ? Icons.shield_outlined
+    final statusIcon = isSuspended
+        ? GIcon.protegido
         : isPendingReview
-            ? Icons.hourglass_top_rounded
+            ? GIcon.esperando
             : isRejected
-                ? Icons.cancel_outlined
-                : Icons.assignment_late_outlined;
+                ? GIcon.cancelado
+                : GIcon.documento;
 
     final gradientColors = isSuspended
         ? [const Color(0xFFE65100), const Color(0xFFBF360C)]
@@ -3629,7 +3627,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       ),
                     ],
                   ),
-                  child: Icon(iconData, color: Colors.white, size: 48),
+                  child: Center(child: GardenIcon(statusIcon, color: Colors.white, size: GIconSize.hero, state: GIconState.active)),
                 ),
                 const SizedBox(height: 28),
                 Text(
@@ -3680,7 +3678,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(isRejected ? Icons.edit_outlined : Icons.arrow_forward_rounded, size: 22),
+                        GardenIcon(isRejected ? GIcon.editar : GIcon.avanzar, size: GIconSize.md, inheritColor: true),
                         const SizedBox(width: 10),
                         Text(
                           isRejected ? 'Revisar mi perfil' : 'Continuar registro',
@@ -3931,14 +3929,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       color: GardenColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      booking['serviceType'] == 'PASEO'
-                          ? Icons.directions_walk_outlined
-                          : booking['serviceType'] == 'GUARDERIA'
-                              ? Icons.business_center_outlined
-                              : Icons.home_outlined,
-                      color: GardenColors.primary, size: 22,
-                    ),
+                    child: GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje), size: GIconSize.md, state: GIconState.active),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -3977,10 +3968,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                     ],
                   ),
                   const SizedBox(width: 8),
-                  Icon(
-                    _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: widget.subtextColor, size: 20,
-                  ),
+                  GardenIcon(_expanded ? GIcon.plegar : GIcon.desplegar, size: GIconSize.md, color: widget.subtextColor),
                 ],
               ),
             ),
@@ -4011,7 +3999,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                           children: [
                             Text('Ver perfil completo', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
                             const SizedBox(width: 3),
-                            const Icon(Icons.arrow_forward_ios_rounded, color: GardenColors.primary, size: 10),
+                            const GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: GardenColors.primary),
                           ],
                         ),
                       ),
@@ -4037,7 +4025,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                           color: GardenColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
+                        child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -4072,7 +4060,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                             color: GardenColors.warning.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
+                          child: const Text('Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
                         ),
                     ],
                   ),
@@ -4091,7 +4079,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline, size: 14, color: GardenColors.warning),
+                        const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.warning),
                         const SizedBox(width: 8),
                         Expanded(child: Text(booking['specialNeeds'] as String,
                           style: TextStyle(color: widget.subtextColor, fontSize: 12))),
@@ -4124,7 +4112,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.pets_rounded, size: 14, color: GardenColors.warning),
+                            const GardenIcon(GIcon.huella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.warning),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -4206,14 +4194,14 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                             style: TextStyle(color: widget.textColor, fontWeight: FontWeight.w600, fontSize: 14)),
                           if (booking['clientPhone'] != null)
                             Row(children: [
-                              Icon(Icons.phone_outlined, size: 12, color: widget.subtextColor),
+                              GardenIcon(GIcon.telefono, size: GIconSize.xs, color: widget.subtextColor),
                               const SizedBox(width: 4),
                               Text(booking['clientPhone'] as String,
                                 style: TextStyle(color: widget.subtextColor, fontSize: 12)),
                             ]),
                           if (booking['clientEmail'] != null)
                             Row(children: [
-                              Icon(Icons.email_outlined, size: 12, color: widget.subtextColor),
+                              GardenIcon(GIcon.correo, size: GIconSize.xs, color: widget.subtextColor),
                               const SizedBox(width: 4),
                               Expanded(child: Text(booking['clientEmail'] as String,
                                 style: TextStyle(color: widget.subtextColor, fontSize: 12),
@@ -4262,21 +4250,21 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
-                                const Text('🤝', style: TextStyle(fontSize: 15)),
+                                const GardenIcon(GIcon.meetGreet, size: GIconSize.xs, state: GIconState.active),
                                 const SizedBox(width: 8),
                                 Text('Meet & Greet programado',
                                     style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
                               ]),
                               const SizedBox(height: 6),
                               Row(children: [
-                                Icon(Icons.access_time_rounded, size: 13, color: widget.subtextColor),
+                                GardenIcon(GIcon.reloj, size: GIconSize.xs, color: widget.subtextColor),
                                 const SizedBox(width: 5),
                                 Text(dateLabel, style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w600)),
                               ]),
                               if (meetingPoint.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Row(children: [
-                                  Icon(Icons.location_on_outlined, size: 13, color: widget.subtextColor),
+                                  GardenIcon(GIcon.ubicacion, size: GIconSize.xs, color: widget.subtextColor),
                                   const SizedBox(width: 5),
                                   Expanded(child: Text(meetingPoint, style: TextStyle(color: widget.subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
                                 ]),
@@ -4320,22 +4308,20 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       Expanded(
                         child: GardenButton(
                           label: 'Aceptar',
-                          icon: Icons.check_rounded,
+                          gIcon: GIcon.hecho,
                           height: 42,
                           color: GardenColors.success,
-                          onPressed: () => widget.onRespond(booking['id'] as String, 'accept'),
-                        ),
+                          onPressed: () => widget.onRespond(booking['id'] as String, 'accept')),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: GardenButton(
                           label: 'Rechazar',
-                          icon: Icons.close_rounded,
+                          gIcon: GIcon.cerrar,
                           height: 42,
                           color: GardenColors.error,
                           outline: true,
-                          onPressed: () => widget.onRespond(booking['id'] as String, 'reject'),
-                        ),
+                          onPressed: () => widget.onRespond(booking['id'] as String, 'reject')),
                       ),
                     ],
                   ),
@@ -4346,8 +4332,8 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
-                    label: status == 'CONFIRMED' ? 'Gestionar servicio' : '🔴 Servicio en curso',
-                    icon: status == 'CONFIRMED' ? Icons.pets_outlined : Icons.play_circle_outline,
+                    label: status == 'CONFIRMED' ? 'Gestionar servicio' : 'Servicio en curso',
+                    gIcon: status == 'CONFIRMED' ? GIcon.huella : GIcon.iniciar,
                     height: 42,
                     color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
                     onPressed: () async {
@@ -4364,8 +4350,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       // cambiado (iniciado, finalizado, cancelado) mientras la
                       // pantalla de ejecución estaba abierta.
                       widget.onRefresh?.call();
-                    },
-                  ),
+                    }),
                 ),
 
               if (status == 'CONFIRMED')
@@ -4373,13 +4358,12 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
                     label: _isCancelling ? 'Enviando...' : 'Solicitar cancelación',
-                    icon: Icons.cancel_outlined,
+                    gIcon: GIcon.cancelado,
                     height: 40,
                     color: GardenColors.error,
                     outline: true,
                     loading: _isCancelling,
-                    onPressed: _isCancelling ? null : () => _showCancellationDialog(booking['id'] as String),
-                  ),
+                    onPressed: _isCancelling ? null : () => _showCancellationDialog(booking['id'] as String)),
                 ),
 
               // Verificar si hay disputa pendiente para el cuidador — ya sea
@@ -4390,7 +4374,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
-                    label: '⚠️ Responder disputa',
+                    label: 'Responder disputa',
                     height: 42,
                     color: GardenColors.warning,
                     onPressed: () async {
@@ -4462,7 +4446,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
                     label: status == 'PENDING_MG' ? 'Coordinar M&G por chat' : 'Abrir chat',
-                    icon: Icons.chat_outlined,
+                    gIcon: GIcon.chat,
                     outline: true,
                     height: 40,
                     onPressed: () => Navigator.of(context).push(
@@ -4476,8 +4460,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                           bookingStatus: booking['status'] as String?,
                         ),
                       ),
-                    ),
-                  ),
+                    )),
                 ),
 
               if (BookingHistoryDetail.appliesTo(status))
@@ -4610,11 +4593,7 @@ class _RateOwnerSheetState extends State<_RateOwnerSheet> {
                 onTap: () => setState(() => _rating = v),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    v <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: GardenColors.star,
-                    size: 44,
-                  ),
+                  child: GardenIcon(GIcon.estrella, size: GIconSize.hero, state: v <= _rating ? GIconState.active : GIconState.idle, color: GardenColors.star),
                 ),
               );
             }),
@@ -4662,9 +4641,8 @@ class _RateOwnerSheetState extends State<_RateOwnerSheet> {
           GardenButton(
             label: _isSubmitting ? 'Enviando...' : 'Enviar calificación',
             loading: _isSubmitting,
-            icon: Icons.star_rounded,
-            onPressed: _rating > 0 && !_isSubmitting ? _submit : null,
-          ),
+            gIcon: GIcon.estrella,
+            onPressed: _rating > 0 && !_isSubmitting ? _submit : null),
         ],
       ),
     );

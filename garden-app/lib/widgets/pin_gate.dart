@@ -33,7 +33,7 @@ Future<bool> requireSecurityPin(BuildContext context) async {
   if (biometricAvailable) {
     try {
       final ok = await auth.authenticate(
-        localizedReason: 'Confirmá tu identidad para continuar',
+        localizedReason: 'Confirma tu identidad para continuar',
         options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
       );
       if (ok) return true;
@@ -135,7 +135,7 @@ class _PinDialogState extends State<_PinDialog> {
             return;
           }
           setState(() => _error = result['locked'] == true
-              ? 'Demasiados intentos — esperá 15 minutos'
+              ? 'Demasiados intentos — espera 15 minutos'
               : 'PIN incorrecto');
         } else {
           setState(() => _error = data['error']?['message'] ?? 'Error al verificar');
@@ -154,7 +154,7 @@ class _PinDialogState extends State<_PinDialog> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
 
     return GardenGlassDialog(
-      title: Text(_needsSetup ? 'Creá tu PIN de seguridad' : 'Ingresá tu PIN'),
+      title: Text(_needsSetup ? 'Crea tu PIN de seguridad' : 'Ingresa tu PIN'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -6,10 +6,11 @@ import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
-const Map<String, String> _kEventEmoji = {
-  'FEEDING': '🍽️', 'WALK': '🚶', 'MEDICATION': '💊', 'BATH': '🛁',
-  'NOTE': '📝', 'PHOTO': '📷', 'INCIDENT': '⚠️', 'INCIDENT_RESOLVED': '✅',
+const Map<String, GIcon> _kEventIcon = {
+  'FEEDING': GIcon.comida, 'WALK': GIcon.paseo, 'MEDICATION': GIcon.medicina, 'BATH': GIcon.bano,
+  'NOTE': GIcon.nota, 'PHOTO': GIcon.foto, 'INCIDENT': GIcon.advertencia, 'INCIDENT_RESOLVED': GIcon.confirmado,
 };
 const Map<String, String> _kEventLabel = {
   'FEEDING': 'Alimentación', 'WALK': 'Paseo interno', 'MEDICATION': 'Medicación', 'BATH': 'Baño',
@@ -122,7 +123,11 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${_kEventEmoji[type]} ${_kEventLabel[type]}', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+                  Row(children: [
+                    GardenIcon(_kEventIcon[type] ?? GIcon.nota, size: GIconSize.lg, state: GIconState.active),
+                    const SizedBox(width: 8),
+                    Text('${_kEventLabel[type]}', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+                  ]),
                   if (type == 'PHOTO')
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -163,7 +168,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                             ? const Padding(padding: EdgeInsets.all(24), child: GardenLoadingIndicator(color: GardenColors.primary))
                             : photoUrl != null
                                 ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(fixImageUrl(photoUrl!), fit: BoxFit.cover))
-                                : const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 26),
+                                : const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
                       ),
                     ),
                   ],
@@ -174,7 +179,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                       label: 'Registrar',
                       onPressed: () {
                         if (requirePhoto && photoUrl == null) {
-                          GardenSnackBar.warning(ctx, 'Agregá una foto');
+                          GardenSnackBar.warning(ctx, 'Agrega una foto');
                           return;
                         }
                         if (requireNote && noteCtrl.text.trim().isEmpty) {
@@ -311,7 +316,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
               : FloatingActionButton.extended(
                   onPressed: _busy ? null : _checkOut,
                   backgroundColor: GardenColors.error,
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  icon: const GardenIcon(GIcon.salir, size: GIconSize.lg, color: Colors.white),
                   label: const Text('Check-out', style: TextStyle(color: Colors.white)),
                 ),
           body: _isLoading
@@ -327,7 +332,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                             child: Row(children: [
-                              Icon(Icons.history_rounded, size: 14, color: subtextColor),
+                              GardenIcon(GIcon.historial, size: GIconSize.xs, color: subtextColor),
                               const SizedBox(width: 6),
                               Text('Visita finalizada — solo lectura', style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600)),
                             ]),
@@ -354,7 +359,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                               InkWell(
                                 onTap: isClosed ? null : _editSpace,
                                 child: Row(children: [
-                                  Icon(Icons.meeting_room_outlined, size: 16, color: isClosed ? subtextColor : GardenColors.primary),
+                                  GardenIcon(GIcon.habitacion, size: GIconSize.sm, color: isClosed ? subtextColor : GardenColors.primary),
                                   const SizedBox(width: 6),
                                   Text(
                                     (v['spaceLabel'] as String?)?.isNotEmpty == true ? v['spaceLabel'] as String : (isClosed ? 'Sin espacio asignado' : 'Asignar espacio (ej. Jaula 4)'),
@@ -362,7 +367,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                                   ),
                                   if (!isClosed) ...[
                                     const SizedBox(width: 4),
-                                    const Icon(Icons.edit_outlined, size: 13, color: GardenColors.primary),
+                                    const GardenIcon(GIcon.editar, size: GIconSize.xs, color: GardenColors.primary),
                                   ],
                                 ]),
                               ),
@@ -378,7 +383,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                               child: ElevatedButton.icon(
                                 onPressed: _busy ? null : () => _addEvent('INCIDENT_RESOLVED'),
                                 style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success, foregroundColor: Colors.white),
-                                icon: const Icon(Icons.check_circle_outline_rounded),
+                                icon: const GardenIcon(GIcon.confirmado, size: GIconSize.lg, inheritColor: true),
                                 label: const Text('Marcar incidente como resuelto'),
                               ),
                             ),
@@ -397,7 +402,11 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                                     side: BorderSide(color: t == 'INCIDENT' ? GardenColors.warning : borderColor),
                                     foregroundColor: t == 'INCIDENT' ? GardenColors.warning : textColor,
                                   ),
-                                  child: Text('${_kEventEmoji[t]} ${_kEventLabel[t]}'),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    GardenIcon(_kEventIcon[t] ?? GIcon.nota, size: GIconSize.sm, inheritColor: true),
+                                    const SizedBox(width: 6),
+                                    Text('${_kEventLabel[t]}'),
+                                  ]),
                                 ),
                             ],
                           ),
@@ -421,7 +430,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(_kEventEmoji[e['type']] ?? '📝', style: const TextStyle(fontSize: 20)),
+                                  GardenIcon(_kEventIcon[e['type']] ?? GIcon.nota, size: GIconSize.md, state: GIconState.active),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(

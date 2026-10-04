@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -125,11 +126,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.construction_rounded,
-                        color: Colors.white,
-                        size: 52,
-                      ),
+                      child: const GardenIcon(GIcon.herramientas, size: GIconSize.hero, color: Colors.white),
                     ),
                   ),
                 ),
@@ -152,7 +149,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
 
                 // Mensaje
                 Text(
-                  'Estamos mejorando GARDEN para ti.\nVolvemos muy pronto 🚀',
+                  'Estamos mejorando GARDEN para ti.\nVolvemos muy pronto',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 15,
@@ -196,8 +193,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                   onPressed: _checking ? null : _checkStatus,
                   icon: _checking
                       ? const GardenLoadingIndicator(size: 14, color: Colors.white54)
-                      : const Icon(Icons.refresh_rounded,
-                          color: Colors.white54, size: 16),
+                      : const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: Colors.white54),
                   label: Text(
                     _checking ? 'Verificando...' : 'Verificar ahora',
                     style: TextStyle(

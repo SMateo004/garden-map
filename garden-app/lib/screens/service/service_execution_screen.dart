@@ -318,7 +318,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final endDay = DateTime(end.year, end.month, end.day);
       final daysLeft = endDay.difference(today).inDays;
       if (daysLeft < 0) {
-        return 'Día ${daysSinceStart} · ${(-daysLeft)} día${(-daysLeft) == 1 ? '' : 's'} de retraso ⚠️';
+        return 'Día ${daysSinceStart} · ${(-daysLeft)} día${(-daysLeft) == 1 ? '' : 's'} de retraso';
       }
       if (daysLeft == 0) return 'Día $daysSinceStart de ${totalDays ?? daysSinceStart} · ¡Último día!';
       return 'Día $daysSinceStart de ${totalDays ?? (daysSinceStart + daysLeft)} · $daysLeft día${daysLeft == 1 ? '' : 's'} restante${daysLeft == 1 ? '' : 's'}';
@@ -541,7 +541,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Row(
                 children: [
-                  Text('⚠️', style: TextStyle(fontSize: 22)),
+                  GardenIcon(GIcon.advertencia, size: GIconSize.md, state: GIconState.active),
                   SizedBox(width: 8),
                   Expanded(child: Text('GPS desactivado', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
                 ],
@@ -573,7 +573,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(
-                      '⚠️ El servicio se cancelará automáticamente y se aplicará un descuento por incumplimiento.',
+                      'El servicio se cancelará automáticamente y se aplicará un descuento por incumplimiento.',
                       style: TextStyle(fontSize: 12, color: GardenColors.error, height: 1.4),
                     ),
                   ),
@@ -851,7 +851,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             backgroundColor: Colors.transparent,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.close_rounded, color: textColor),
+              icon: GardenIcon(GIcon.cerrar, size: GIconSize.lg, color: textColor),
               onPressed: _exitServiceScreen,
             ),
             title: Text(
@@ -869,7 +869,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(children: [
-                      IconButton(icon: Icon(Icons.close_rounded, color: textColor, size: 18), onPressed: _exitServiceScreen),
+                      IconButton(icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: textColor), onPressed: _exitServiceScreen),
                       const SizedBox(width: 6),
                       Text(_getAppBarTitle(status), style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                     ]),
@@ -921,7 +921,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('⌛', style: TextStyle(fontSize: 48)),
+            const GardenIcon(GIcon.esperando, size: GIconSize.hero, state: GIconState.active),
             const SizedBox(height: 16),
             Text('Esperando actualización del estado...', 
               style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
@@ -997,7 +997,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                                   ),
-                                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
+                                  child: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: Colors.white),
                                 ),
                               ),
                               Container(
@@ -1015,7 +1015,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                       decoration: const BoxDecoration(color: Color(0xFFAA84F5), shape: BoxShape.circle),
                                     ),
                                     const SizedBox(width: 6),
-                                    const Text('⬡ Escrow listo',
+                                    const Text('Pago protegido',
                                       style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                                   ],
                                 ),
@@ -1167,7 +1167,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.priority_high_rounded, size: 15, color: GardenColors.warning),
+                                const GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: GardenColors.warning),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -1213,7 +1213,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               color: GardenColors.secondary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(GardenRadius.sm),
                             ),
-                            child: const Icon(Icons.map_rounded, color: GardenColors.secondary, size: 18),
+                            child: const GardenIcon(GIcon.mapa, size: GIconSize.sm, color: GardenColors.secondary),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -1258,7 +1258,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 color: GardenColors.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(GardenRadius.sm),
                               ),
-                              child: const Icon(Icons.checklist_rounded, color: GardenColors.primary, size: 16),
+                              child: const GardenIcon(GIcon.lista, size: GIconSize.sm, color: GardenColors.primary),
                             ),
                             const SizedBox(width: 10),
                             Text('Antes de iniciar',
@@ -1312,7 +1312,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
                               )
                             else
-                              const Icon(Icons.directions_car_filled_rounded, size: 15, color: GardenColors.primary),
+                              const GardenIcon(GIcon.auto, size: GIconSize.xs, color: GardenColors.primary),
                             const SizedBox(width: 6),
                             Text(
                               _isMarkingEnRoute ? 'Avisando...' : 'Avisar que voy en camino',
@@ -1335,7 +1335,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 children: [
                   enRouteChip,
                   GardenButton(
-                    label: _isMarkingArrived ? 'Marcando llegada...' : '📍  Ya llegué',
+                    label: _isMarkingArrived ? 'Marcando llegada...' : 'Ya llegué',
                     loading: _isMarkingArrived,
                     color: GardenColors.secondary,
                     onPressed: _isMarkingArrived ? null : _markArrived,
@@ -1376,11 +1376,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                     ),
                     child: Row(children: [
-                      Icon(
-                        isWebNonPro ? Icons.phone_android_rounded : Icons.info_outline_rounded,
-                        size: 16,
-                        color: isWebNonPro ? GardenColors.primary : GardenColors.warning,
-                      ),
+                      GardenIcon(isWebNonPro ? GIcon.dispositivo : GIcon.info, size: GIconSize.sm, color: isWebNonPro ? GardenColors.primary : GardenColors.warning),
                       const SizedBox(width: 8),
                       Expanded(child: Text(
                         blockReason,
@@ -1394,7 +1390,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                 ],
                 GardenButton(
-                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : (isGuarderia ? '🏡  Iniciar guardería' : '🏠  Iniciar hospedaje')),
+                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? 'Iniciar paseo' : (isGuarderia ? 'Iniciar guardería' : 'Iniciar hospedaje')),
                   loading: _isProcessing,
                   color: isBlocked
                       ? (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)
@@ -1437,7 +1433,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               shape: BoxShape.circle,
               border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
             ),
-            child: const Icon(Icons.check_rounded, size: 14, color: GardenColors.success),
+            child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.success),
           ),
           const SizedBox(width: 12),
           Text(text, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
@@ -1481,7 +1477,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.location_on_outlined, color: GardenColors.primary, size: 18),
+            const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, color: GardenColors.primary),
             const SizedBox(width: 8),
             Text('Dirección del dueño',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
@@ -1496,7 +1492,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, size: 14, color: subtextColor),
+                GardenIcon(GIcon.info, size: GIconSize.xs, color: subtextColor),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(reference,
@@ -1508,7 +1504,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           ],
           Row(
             children: [
-              Icon(Icons.location_on_outlined, size: 16, color: GardenColors.primary),
+              GardenIcon(GIcon.ubicacion, size: GIconSize.sm, color: GardenColors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1523,7 +1519,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.directions_rounded, size: 18),
+                icon: const GardenIcon(GIcon.mapa, size: GIconSize.sm, inheritColor: true),
                 label: const Text('Navegar al domicilio'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: GardenColors.primary,
@@ -1568,7 +1564,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
     Color bgColor;
     Color borderColor;
-    String emoji;
+    GIcon icon;
     String title;
     String subtitle;
     String btnLabel;
@@ -1576,42 +1572,42 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     if (status == null || status == 'PENDING_PROPOSAL') {
       bgColor = GardenColors.warning.withValues(alpha: 0.08);
       borderColor = GardenColors.warning.withValues(alpha: 0.35);
-      emoji = '🤝';
+      icon = GIcon.meetGreet;
       title = 'Meet & Greet recomendado';
       subtitle = 'Reúnete antes del hospedaje';
       btnLabel = 'Coordinar';
     } else if (status == 'PROPOSED') {
       bgColor = GardenColors.primary.withValues(alpha: 0.07);
       borderColor = GardenColors.primary.withValues(alpha: 0.3);
-      emoji = '📅';
+      icon = GIcon.calendario;
       title = 'Propuesta pendiente';
       subtitle = 'Hay una fecha propuesta';
       btnLabel = 'Ver';
     } else if (status == 'ACCEPTED') {
       bgColor = GardenColors.success.withValues(alpha: 0.08);
       borderColor = GardenColors.success.withValues(alpha: 0.3);
-      emoji = '✅';
+      icon = GIcon.confirmado;
       title = 'Meet & Greet confirmado';
       subtitle = 'Reunión confirmada';
       btnLabel = 'Ver';
     } else if (status == 'COMPLETED' && mg?['approved'] == true) {
       bgColor = GardenColors.success.withValues(alpha: 0.08);
       borderColor = GardenColors.success.withValues(alpha: 0.3);
-      emoji = '✅';
+      icon = GIcon.confirmado;
       title = 'Meet & Greet completado';
       subtitle = 'Compatibilidad confirmada';
       btnLabel = 'Ver';
     } else if (status == 'COMPLETED' && mg?['approved'] == false) {
       bgColor = GardenColors.error.withValues(alpha: 0.07);
       borderColor = GardenColors.error.withValues(alpha: 0.3);
-      emoji = '❌';
+      icon = GIcon.cancelado;
       title = 'Reserva cancelada';
       subtitle = 'Incompatibilidad detectada';
       btnLabel = 'Ver';
     } else {
       bgColor = GardenColors.warning.withValues(alpha: 0.08);
       borderColor = GardenColors.warning.withValues(alpha: 0.35);
-      emoji = '🤝';
+      icon = GIcon.meetGreet;
       title = 'Meet & Greet';
       subtitle = status;
       btnLabel = 'Ver';
@@ -1636,7 +1632,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
         child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 24)),
+            GardenIcon(icon, size: GIconSize.lg, state: GIconState.active),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1795,7 +1791,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             );
           }
 
-          Widget methodChip(String method, String label, IconData icon, {bool enabled = true}) {
+          Widget methodChip(String method, String label, GIcon icon, {bool enabled = true}) {
             final isSelected = selectedMethod == method;
             final chip = AnimatedContainer(
               duration: const Duration(milliseconds: 160),
@@ -1809,7 +1805,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                  GardenIcon(icon, size: GIconSize.sm, color: isSelected ? GardenColors.primary : subtextColor),
                   const SizedBox(width: 6),
                   Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
                 ],
@@ -1859,9 +1855,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 Text('Método de pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                 const SizedBox(height: 8),
                 Row(children: [
-                  methodChip('qr', 'QR', Icons.qr_code_rounded),
-                  methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
-                  methodChip('card', 'Tarjeta', Icons.credit_card_rounded, enabled: _cardPaymentEnabled),
+                  methodChip('qr', 'QR', GIcon.pagarQr),
+                  methodChip('manual', 'Transferencia', GIcon.retiro),
+                  methodChip('card', 'Tarjeta', GIcon.tarjeta, enabled: _cardPaymentEnabled),
                 ]),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -1994,7 +1990,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             );
           }
 
-          Widget methodChip(String method, String label, IconData icon, {bool enabled = true}) {
+          Widget methodChip(String method, String label, GIcon icon, {bool enabled = true}) {
             final isSelected = selectedMethod == method;
             final chip = AnimatedContainer(
               duration: const Duration(milliseconds: 160),
@@ -2008,7 +2004,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                  GardenIcon(icon, size: GIconSize.sm, color: isSelected ? GardenColors.primary : subtextColor),
                   const SizedBox(width: 6),
                   Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
                 ],
@@ -2070,9 +2066,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   Text('Método de pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                   const SizedBox(height: 8),
                   Row(children: [
-                    methodChip('qr', 'QR', Icons.qr_code_rounded),
-                    methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
-                    methodChip('card', 'Tarjeta', Icons.credit_card_rounded, enabled: _cardPaymentEnabled),
+                    methodChip('qr', 'QR', GIcon.pagarQr),
+                    methodChip('manual', 'Transferencia', GIcon.retiro),
+                    methodChip('card', 'Tarjeta', GIcon.tarjeta, enabled: _cardPaymentEnabled),
                   ]),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -2171,7 +2167,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                               ),
-                              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
+                              child: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: Colors.white),
                             ),
                           ),
                           const Spacer(),
@@ -2239,12 +2235,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => Container(
                                       color: GardenColors.primary.withValues(alpha: 0.1),
-                                      child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 28),
+                                      child: const GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
                                     ),
                                   )
                                 : Container(
                                     color: GardenColors.primary.withValues(alpha: 0.1),
-                                    child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 28),
+                                    child: const GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
                                   ),
                           ),
                         ),
@@ -2257,7 +2253,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               const SizedBox(height: 3),
                               if (caregiverRating != null)
                                 Row(children: [
-                                  const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                                  const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                                   const SizedBox(width: 3),
                                   Text(
                                     (caregiverRating as num).toStringAsFixed(1),
@@ -2278,7 +2274,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 color: GardenColors.primary.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.phone_rounded, color: GardenColors.primary, size: 20),
+                              child: const GardenIcon(GIcon.telefono, size: GIconSize.md, color: GardenColors.primary),
                             ),
                           ),
                       ],
@@ -2351,20 +2347,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         const SizedBox(height: 10),
                         ...[
                           if (isPaseo) ...[
-                            ('📍', 'Podrás ver la ubicación de tu mascota en tiempo real.'),
-                            ('📸', 'Tu cuidador subirá fotos durante el paseo.'),
-                            ('🔔', 'Te avisamos cuando el paseo termine.'),
+                            (GIcon.ubicacion, 'Podrás ver la ubicación de tu mascota en tiempo real.'),
+                            (GIcon.foto, 'Tu cuidador subirá fotos durante el paseo.'),
+                            (GIcon.notificaciones, 'Te avisamos cuando el paseo termine.'),
                           ] else ...[
-                            ('🏠', 'Tu mascota estará cuidada en un ambiente seguro.'),
-                            ('📸', 'Recibirás fotos y actualizaciones del servicio.'),
-                            ('🔔', 'Te avisamos si hay cualquier novedad.'),
+                            (GIcon.hospedaje, 'Tu mascota estará cuidada en un ambiente seguro.'),
+                            (GIcon.foto, 'Recibirás fotos y actualizaciones del servicio.'),
+                            (GIcon.notificaciones, 'Te avisamos si hay cualquier novedad.'),
                           ],
                         ].map((t) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(t.$1, style: const TextStyle(fontSize: 14)),
+                              GardenIcon(t.$1, size: GIconSize.sm, state: GIconState.active),
                               const SizedBox(width: 10),
                               Expanded(child: Text(t.$2, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
                             ],
@@ -2506,7 +2502,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               color: GardenColors.warning.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(GardenRadius.sm),
                             ),
-                            child: const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 17),
+                            child: const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -2540,7 +2536,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
                           ),
-                          icon: const Icon(Icons.phone_rounded, size: 18),
+                          icon: const GardenIcon(GIcon.telefono, size: GIconSize.sm, inheritColor: true),
                           label: const Text('Llamar al cuidador', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                         ),
                       ),
@@ -2586,7 +2582,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
-                                          const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
+                                          const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                                           const SizedBox(width: 3),
                                           Text(
                                             _booking?['caregiverRating'] != null
@@ -2616,7 +2612,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                                GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
                               ],
                             ),
                           ),
@@ -2643,7 +2639,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   ),
                                 ),
                               ),
-                              Icon(Icons.shield_outlined, color: GardenColors.polygon, size: 13),
+                              GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.polygon),
                               const SizedBox(width: 4),
                               Text('Pago en escrow',
                                 style: TextStyle(color: GardenColors.polygon, fontSize: 11.5, fontWeight: FontWeight.w600)),
@@ -2810,7 +2806,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 ],
                               ),
                             ),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                            const GardenIcon(GIcon.siguiente, size: GIconSize.md, color: Colors.white),
                           ],
                         ),
                       ),
@@ -2820,7 +2816,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       onPressed: _loadingExtension ? null : _showExtendTimeSheet,
                       icon: _loadingExtension
                           ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
-                          : const Icon(Icons.add_alarm_rounded, size: 18),
+                          : const GardenIcon(GIcon.alarma, size: GIconSize.sm, inheritColor: true),
                       label: Text(
                         _allowedExtensionMinutes == 0
                             ? 'Ampliar tiempo del paseo'
@@ -2843,7 +2839,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       onPressed: _loadingExtension ? null : _showExtendHospedajeSheet,
                       icon: _loadingExtension
                           ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
-                          : const Icon(Icons.nightlight_round, size: 18),
+                          : const GardenIcon(GIcon.modoOscuro, size: GIconSize.sm, state: GIconState.active, inheritColor: true),
                       label: const Text('Agregar noches al hospedaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
@@ -2910,7 +2906,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                           children: [
                                             Row(
                                               children: [
-                                                const Icon(Icons.access_time_rounded, color: Colors.white, size: 12),
+                                                const GardenIcon(GIcon.reloj, size: GIconSize.xs, color: Colors.white),
                                                 const SizedBox(width: 4),
                                                 Text(_formatEventTime(photo['timestamp'] as String? ?? ''),
                                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -2995,7 +2991,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.schedule_rounded, color: subtextColor, size: 18),
+                          GardenIcon(GIcon.reloj, size: GIconSize.sm, color: subtextColor),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -3011,7 +3007,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
                       icon: _markingEnd
                           ? const GardenLoadingIndicator(size: 16, color: GardenColors.success)
-                          : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                          : const GardenIcon(GIcon.confirmado, size: GIconSize.sm, inheritColor: true),
                       label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.success,
@@ -3030,7 +3026,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                          const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.success),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -3154,7 +3150,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                             ),
-                            child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
+                            child: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: Colors.white),
                           ),
                         ),
                         const Spacer(),
@@ -3173,7 +3169,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 decoration: const BoxDecoration(color: Color(0xFFAA84F5), shape: BoxShape.circle),
                               ),
                               const SizedBox(width: 6),
-                              const Text('⬡ Escrow activo',
+                              const Text('Pago protegido',
                                 style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                             ],
                           ),
@@ -3265,7 +3261,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.pause_circle_filled_rounded, color: GardenColors.error, size: 20),
+                              const GardenIcon(GIcon.pausar, size: GIconSize.md, state: GIconState.active, color: GardenColors.error),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -3291,7 +3287,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Icon(Icons.support_agent_rounded, color: GardenColors.error, size: 16),
+                                  const GardenIcon(GIcon.soporte, size: GIconSize.sm, state: GIconState.active, color: GardenColors.error),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -3308,7 +3304,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
                                 onPressed: _resolveIncidentCaregiver,
-                                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                                icon: const GardenIcon(GIcon.confirmado, size: GIconSize.sm, inheritColor: true),
                                 label: const Text('Resolver emergencia'),
                               ),
                             ),
@@ -3328,7 +3324,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.notifications_active_rounded, color: GardenColors.warning, size: 20),
+                          const GardenIcon(GIcon.notificaciones, size: GIconSize.md, state: GIconState.active, color: GardenColors.warning),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -3386,7 +3382,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               const SizedBox(height: 6),
                               Text(
                                 isPhotoMet
-                                    ? '✓ Requisito cumplido — puedes finalizar'
+                                    ? 'Requisito cumplido — puedes finalizar'
                                     : 'Faltan ${minPhotos - photoCount} foto${minPhotos - photoCount > 1 ? 's' : ''} para finalizar',
                                 style: TextStyle(
                                   color: isPhotoMet ? GardenColors.success : subtextColor,
@@ -3614,7 +3610,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 15),
+                              const GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: GardenColors.warning),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -3688,8 +3684,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             ),
                             child: Row(
                               children: [
-                                Icon(isHospedaje ? Icons.nightlight_round : Icons.add_alarm_rounded,
-                                  size: 14, color: GardenColors.primary),
+                                GardenIcon(isHospedaje ? GIcon.modoOscuro : GIcon.alarma, size: GIconSize.xs, state: isHospedaje ? GIconState.active : GIconState.idle, color: GardenColors.primary),
                                 const SizedBox(width: 8),
                                 Text(extLabel, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                 if (amount != null) ...[
@@ -3774,7 +3769,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
                           Row(
                             children: [
-                              const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                              const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                               const SizedBox(width: 3),
                               Text(
                                 _booking?['caregiverRating'] != null
@@ -3788,7 +3783,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Icon(Icons.phone_outlined, size: 13, color: subtextColor),
+                                GardenIcon(GIcon.telefono, size: GIconSize.xs, color: subtextColor),
                                 const SizedBox(width: 4),
                                 Text(_booking!['caregiverPhone'] as String,
                                   style: TextStyle(color: subtextColor, fontSize: 12)),
@@ -3827,12 +3822,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 borderColor: borderColor,
                 child: Column(
                   children: [
-                    _InfoRow('Tipo', _booking?['serviceType'] == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', textColor, subtextColor),
+                    _InfoRow('Tipo', GardenService.fromApi(_booking?['serviceType'] as String?)?.label ?? 'Hospedaje', textColor, subtextColor),
                     _InfoRow('Fecha', _booking?['walkDate'] ?? _booking?['startDate'] ?? '—', textColor, subtextColor),
                     if (_booking?['startTime'] != null)
                       _InfoRow('Hora', _booking!['startTime'] as String, textColor, subtextColor),
                     _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
-                    _InfoRow('Escrow', '⬡ Activo en Polygon', textColor, subtextColor),
+                    _InfoRow('Pago', 'Protegido hasta terminar', textColor, subtextColor),
                   ],
                 ),
               ),
@@ -3871,7 +3866,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 child: Container(
                   width: 36, height: 36,
                   decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                  child: const GardenIcon(GIcon.cerrar, size: GIconSize.md, color: Colors.white),
                 ),
               ),
             ),
@@ -3903,7 +3898,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 child: Container(
                   width: 36, height: 36,
                   decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                  child: const GardenIcon(GIcon.cerrar, size: GIconSize.md, color: Colors.white),
                 ),
               ),
             ),
@@ -3935,7 +3930,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         children: [
           Container(color: const Color(0xFF1A1A1A)),
           const Center(
-            child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 46),
+            child: GardenIcon(GIcon.iniciar, size: GIconSize.hero, state: GIconState.active, color: Colors.white),
           ),
           Positioned(
             top: 8, left: 8,
@@ -3946,7 +3941,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 borderRadius: BorderRadius.circular(GardenRadius.full),
               ),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.videocam_rounded, color: Colors.white, size: 11),
+                GardenIcon(GIcon.video, size: GIconSize.xs, color: Colors.white),
                 SizedBox(width: 3),
                 Text('VIDEO', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
               ]),
@@ -3961,7 +3956,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
         color: GardenColors.primary.withValues(alpha: 0.08),
-        child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 32)),
+        child: const Center(child: GardenIcon(GIcon.galeria, size: GIconSize.xl, color: GardenColors.primary)),
       ),
     );
   }
@@ -4021,7 +4016,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
                 duration: const Duration(milliseconds: 700),
-                curve: Curves.elasticOut,
+                curve: GardenMotion.pop,
                 builder: (_, v, child) => Transform.scale(scale: v, child: child),
                 child: Container(
                   width: 110, height: 110,
@@ -4034,7 +4029,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     shape: BoxShape.circle,
                     border: Border.all(color: GardenColors.success.withValues(alpha: 0.3), width: 2),
                   ),
-                  child: const Center(child: Text('🏆', style: TextStyle(fontSize: 52))),
+                  child: const Center(child: GardenIcon(GIcon.destacado, size: GIconSize.hero, state: GIconState.active)),
                 ),
               ),
               const SizedBox(height: 28),
@@ -4070,11 +4065,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                     const SizedBox(height: 14),
                     _InfoRow('Mascota', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
-                    _InfoRow('Servicio', switch (_booking?['serviceType']) {
-                      'PASEO' => '🦮 Paseo',
-                      'GUARDERIA' => '🏡 Guardería',
-                      _ => '🏠 Hospedaje',
-                    }, textColor, subtextColor),
+                    _InfoRow('Servicio', GardenService.fromApi(_booking?['serviceType'] as String?)?.label ?? 'Hospedaje', textColor, subtextColor),
                     _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
                     if (_booking?['serviceType'] == 'PASEO') ...[
                       Builder(builder: (_) {
@@ -4084,7 +4075,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         final distStr = distM < 1000
                             ? '${distM.toStringAsFixed(0)} m'
                             : '${(distM / 1000).toStringAsFixed(2)} km';
-                        return _InfoRow('📍 Recorrido', distStr, textColor, subtextColor);
+                        return _InfoRow('Recorrido', distStr, textColor, subtextColor);
                       }),
                     ],
                     const SizedBox(height: 10),
@@ -4098,7 +4089,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.check_circle_rounded, size: 13, color: GardenColors.success),
+                          const GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                           const SizedBox(width: 6),
                           const Text('Servicio verificado por GARDEN',
                             style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -4117,25 +4108,25 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: GardenColors.polygon.withValues(alpha: 0.06),
+                  color: GardenColors.primary.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(GardenRadius.lg),
-                  border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.2)),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
-                    const Text('⬡', style: TextStyle(fontSize: 20, color: GardenColors.polygon)),
+                    const GardenIcon(GIcon.pagoProtegido, size: GIconSize.md, color: GardenColors.primary, state: GIconState.active),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Pago en Polygon Amoy',
-                            style: TextStyle(color: GardenColors.polygon, fontWeight: FontWeight.w700, fontSize: 13)),
+                          const Text('Pago protegido',
+                            style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                           const SizedBox(height: 2),
                           Text(
                             isCaregiver
-                                ? 'Los fondos se liberarán a tu billetera automáticamente.'
-                                : 'El smart contract procesó el pago de forma segura.',
+                                ? 'El pago se libera a tu billetera al terminar el servicio.'
+                                : 'Tu pago queda protegido y se libera al cuidador al terminar.',
                             style: TextStyle(color: subtextColor, fontSize: 11, height: 1.4),
                           ),
                         ],
@@ -4241,7 +4232,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         errorBuilder: (_, __, ___) => Container(
                           width: 92, height: 92,
                           color: (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
-                          child: Icon(Icons.broken_image_outlined, color: subtextColor, size: 20),
+                          child: GardenIcon(GIcon.sinImagen, size: GIconSize.md, color: subtextColor),
                         ),
                       ),
                     ),
@@ -4283,14 +4274,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               point: track.first, width: 20, height: 20,
                               child: Container(
                                 decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
-                                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 12),
+                                child: const GardenIcon(GIcon.iniciar, size: GIconSize.xs, color: Colors.white),
                               ),
                             ),
                             Marker(
                               point: track.last, width: 20, height: 20,
                               child: Container(
                                 decoration: const BoxDecoration(color: GardenColors.error, shape: BoxShape.circle),
-                                child: const Icon(Icons.flag_rounded, color: Colors.white, size: 11),
+                                child: const GardenIcon(GIcon.reportar, size: GIconSize.xs, state: GIconState.active, color: Colors.white),
                               ),
                             ),
                           ]),
@@ -4474,12 +4465,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final understood = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 32),
+          icon: const GardenIcon(GIcon.info, size: GIconSize.xl, color: GardenColors.primary),
           title: const Text('No cierres la app durante el servicio'),
           content: const Text(
             'En iPhone, si cierras la app por completo (deslizándola desde el '
             'multitarea) se detiene el seguimiento GPS y el dueño deja de ver tu '
-            'ubicación en vivo. Podés minimizarla o usar otras apps con normalidad, '
+            'ubicación en vivo. Puedes minimizarla o usar otras apps con normalidad, '
             'solo evitá cerrarla del todo hasta terminar el servicio.',
           ),
           actions: [
@@ -4505,7 +4496,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            icon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 32),
+            icon: const GardenIcon(GIcon.ubicacion, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
             title: const Text('Ubicación en tiempo real durante el paseo'),
             content: const Text(
               'Garden usa tu ubicación GPS mientras un paseo está en curso — incluso '
@@ -4513,7 +4504,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               'la mascota pueda ver el recorrido en vivo en el mapa, igual que el '
               '"modo conductor" de una app de transporte. Esta transmisión ocurre '
               'solo durante el paseo activo y se detiene automáticamente al '
-              'finalizar el servicio. En la siguiente pantalla, elegí "Permitir '
+              'finalizar el servicio. En la siguiente pantalla, elige "Permitir '
               'todo el tiempo" para que el seguimiento no se corte.',
             ),
             actions: [
@@ -4552,7 +4543,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 32),
+          icon: const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
           title: const Text('Que se vea la mascota'),
           content: const Text(
             'Antes de iniciar, toma una foto donde se vea claramente a la '
@@ -4643,12 +4634,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.camera_alt_rounded),
+                leading: const GardenIcon(GIcon.foto, size: GIconSize.lg, inheritColor: true),
                 title: const Text('Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, ImageSource.camera),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_rounded),
+                leading: const GardenIcon(GIcon.galeria, size: GIconSize.lg, inheritColor: true),
                 title: const Text('Galería'),
                 onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               ),
@@ -4688,7 +4679,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         await _loadBooking();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('📸 Foto enviada al dueño'), backgroundColor: GardenColors.success),
+            const SnackBar(content: Text('Foto enviada al dueño'), backgroundColor: GardenColors.success),
           );
         }
       } else {
@@ -4718,7 +4709,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Solicitud enviada al cuidador'),
+            content: Text('Solicitud enviada al cuidador'),
             backgroundColor: GardenColors.success,
           ),
         );
@@ -4733,10 +4724,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // que el cuidador sea la parte cuestionada (posible robo/retención
   // indebida de la mascota). Solo el equipo de Garden lo recibe.
   static const _sosTypes = [
-    {'icon': '📵', 'label': 'No puedo contactar al cuidador'},
-    {'icon': '🐾', 'label': 'Sospecho que algo le pasó a mi mascota'},
-    {'icon': '🏠', 'label': 'El cuidador no está donde dijo que estaría'},
-    {'icon': '⚠️', 'label': 'Otra emergencia'},
+    {'icon': GIcon.telefono, 'label': 'No puedo contactar al cuidador'},
+    {'icon': GIcon.huella, 'label': 'Sospecho que algo le pasó a mi mascota'},
+    {'icon': GIcon.ubicacion, 'label': 'El cuidador no está donde dijo que estaría'},
+    {'icon': GIcon.advertencia, 'label': 'Otra emergencia'},
   ];
 
   Future<void> _reportSos(String label) async {
@@ -4751,7 +4742,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         // Confirmación (la alerta SÍ salió bien) — no es un error, por eso
         // NO usa GardenErrorDialog. El rojo original era solo para darle
         // urgencia visual de SOS, no para indicar que algo falló.
-        GardenSnackBar.warning(context, '🆘 Alerta enviada al equipo de Garden');
+        GardenSnackBar.warning(context, 'Alerta enviada al equipo de Garden');
       } else if (mounted) {
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al enviar la alerta');
       }
@@ -4790,13 +4781,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               Container(
                 width: 44, height: 44,
                 decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                child: const Icon(Icons.sos_rounded, color: GardenColors.error, size: 24),
+                child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
               ),
               const SizedBox(width: 12),
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('🆘 Reportar un problema', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text('Reportar un problema', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
                   Text('Esto alerta de inmediato al equipo de Garden.\nEl cuidador no se entera de este reporte.',
                       style: TextStyle(color: subtextColor, fontSize: 12, height: 1.3)),
                 ],
@@ -4821,7 +4812,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     border: Border.all(color: GardenColors.error.withValues(alpha: 0.25)),
                   ),
                   child: Row(children: [
-                    Text(item['icon'] as String, style: const TextStyle(fontSize: 18)),
+                    GardenIcon(item['icon'] as GIcon, state: GIconState.active, color: GardenColors.error),
                     const SizedBox(width: 10),
                     Expanded(child: Text(item['label'] as String, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600))),
                   ]),
@@ -4873,7 +4864,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.xl)),
         title: Text('¿Estás completamente seguro?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
         content: Text(
-          'Esta acción no se puede deshacer. Confirmá solo si el servicio realmente ya terminó.',
+          'Esta acción no se puede deshacer. Confirma solo si el servicio realmente ya terminó.',
           style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
         ),
         actions: [
@@ -4901,7 +4892,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true) {
         setState(() => _booking = data['data']);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Avisamos al cuidador que el servicio terminó'), backgroundColor: GardenColors.success),
+          const SnackBar(content: Text('Avisamos al cuidador que el servicio terminó'), backgroundColor: GardenColors.success),
         );
       } else {
         GardenErrorDialog.show(context, data['message'] ?? 'No se pudo marcar el servicio');
@@ -4950,7 +4941,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   color: GardenColors.warning.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.camera_alt_rounded, color: GardenColors.warning, size: 36),
+                child: const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.warning),
               ),
               const SizedBox(height: 16),
               Text('Faltan fotos', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -4962,7 +4953,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
               const SizedBox(height: 28),
               GardenButton(
-                label: '📸 Enviar foto ahora',
+                label: 'Enviar foto ahora',
                 color: GardenColors.primary,
                 onPressed: () {
                   Navigator.pop(ctx);
@@ -5015,7 +5006,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 color: GardenColors.success.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 36),
+              child: const GardenIcon(GIcon.confirmado, size: GIconSize.xl, state: GIconState.active, color: GardenColors.success),
             ),
             const SizedBox(height: 16),
             Text('¿Finalizar servicio?',
@@ -5191,7 +5182,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         await _loadBooking();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('🎥 Video enviado al dueño'), backgroundColor: GardenColors.success),
+            const SnackBar(content: Text('Video enviado al dueño'), backgroundColor: GardenColors.success),
           );
         }
       } else {
@@ -5231,7 +5222,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         _reminder1Shown = true;
         _persistReminderFlag(1);
         _showPhotoReminderBanner(
-          '📸 ¡Envía la primera foto!',
+          '¡Envía la primera foto!',
           isPaseo ? 'Han pasado 5 minutos. El dueño espera ver a su mascota.' : 'Han pasado 15 minutos sin fotos.',
         );
       }
@@ -5241,7 +5232,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     if (!isPaseo && !_reminder2Shown && photoCount < 2 && durationMin > 0 && elapsedMin >= durationMin ~/ 2) {
       _reminder2Shown = true;
       _persistReminderFlag(2);
-      _showPhotoReminderBanner('📸 ¡Foto de mitad del servicio!', 'Ya vas por la mitad del servicio.');
+      _showPhotoReminderBanner('¡Foto de mitad del servicio!', 'Ya vas por la mitad del servicio.');
     }
 
     // Reminder 3: before end
@@ -5251,7 +5242,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         _reminder3Shown = true;
         _persistReminderFlag(3);
         _showPhotoReminderBanner(
-          '📸 ¡Última foto antes de finalizar!',
+          '¡Última foto antes de finalizar!',
           isPaseo ? 'Quedan ~10 minutos. Envía la foto final.' : 'Quedan ~15 minutos. Envía la foto final.',
         );
       }
@@ -5275,7 +5266,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 color: GardenColors.warning.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.camera_alt_rounded, color: GardenColors.warning, size: 28),
+              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.warning),
             ),
             const SizedBox(height: 14),
             Text(title,
@@ -5319,12 +5310,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // ─────────────────────────────────────────────────────────────────────────
 
   static const _incidentTypes = [
-    {'icon': '🐾', 'label': 'Pelea con otro animal', 'type': 'ACCIDENT', 'color': 0xFFE53935},
-    {'icon': '🤕', 'label': 'Mascota lesionada', 'type': 'ACCIDENT', 'color': 0xFFE53935},
-    {'icon': '🤢', 'label': 'Vómito / Malestar', 'type': 'ILLNESS', 'color': 0xFFFF8F00},
-    {'icon': '🚗', 'label': 'Accidente de tráfico', 'type': 'ACCIDENT', 'color': 0xFFE53935},
-    {'icon': '😰', 'label': 'Mascota perdida', 'type': 'INCIDENT', 'color': 0xFFFF8F00},
-    {'icon': '⚡', 'label': 'Otra emergencia', 'type': 'INCIDENT', 'color': 0xFFE53935},
+    {'icon': GIcon.huella, 'label': 'Pelea con otro animal', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': GIcon.salud, 'label': 'Mascota lesionada', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': GIcon.medicina, 'label': 'Vómito / Malestar', 'type': 'ILLNESS', 'color': 0xFFFF8F00},
+    {'icon': GIcon.auto, 'label': 'Accidente de tráfico', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': GIcon.buscar, 'label': 'Mascota perdida', 'type': 'INCIDENT', 'color': 0xFFFF8F00},
+    {'icon': GIcon.emergencia, 'label': 'Otra emergencia', 'type': 'INCIDENT', 'color': 0xFFE53935},
   ];
 
   Future<void> _reportIncident(String incidentLabel, String eventType) async {
@@ -5341,7 +5332,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
         // Confirmación, no error — mismo caso que la alerta SOS de arriba.
-        GardenSnackBar.warning(context, '🚨 Emergencia reportada. El dueño fue notificado.');
+        GardenSnackBar.warning(context, 'Emergencia reportada. El dueño fue notificado.');
       } else if (mounted) {
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al reportar la emergencia');
       }
@@ -5555,13 +5546,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 Container(
                   width: 44, height: 44,
                   decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.emergency_rounded, color: GardenColors.error, size: 24),
+                  child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('🚨 Emergencia', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text('Emergencia', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
                     Text('El dueño será notificado al instante', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 )),
@@ -5596,7 +5587,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(item['icon'] as String, style: const TextStyle(fontSize: 18)),
+                          GardenIcon(item['icon'] as GIcon, state: GIconState.active, color: Color(item['color'] as int)),
                           const SizedBox(width: 8),
                           Flexible(child: Text(item['label'] as String, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600))),
                         ],
@@ -5659,7 +5650,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     Container(
                       width: 44, height: 44,
                       decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                      child: const Icon(Icons.crisis_alert_rounded, color: GardenColors.error, size: 24),
+                      child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, color: GardenColors.error),
                     ),
                     const SizedBox(width: 12),
                     Expanded(child: Column(
@@ -5678,7 +5669,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 14),
+                      const GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                       const SizedBox(width: 8),
                       Text('El dueño ya fue notificado', style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
                     ]),
@@ -5686,7 +5677,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   const SizedBox(height: 20),
 
                   // ── Sección: Veterinarias cercanas ──
-                  Text('🏥 Veterinarias cercanas', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  Text('Veterinarias cercanas', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
                   if (loadingVets)
                     const Center(child: Padding(padding: EdgeInsets.all(16), child: GardenLoadingIndicator()))
@@ -5703,7 +5694,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            const Icon(Icons.info_outline_rounded, color: Color(0xFF00897B), size: 16),
+                            const GardenIcon(GIcon.info, size: GIconSize.sm, color: Color(0xFF00897B)),
                             const SizedBox(width: 8),
                             Text('Sin veterinarias geo-registradas aún', style: TextStyle(color: const Color(0xFF00897B), fontSize: 12, fontWeight: FontWeight.w700)),
                           ]),
@@ -5729,7 +5720,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.1), shape: BoxShape.circle),
-                                  child: const Icon(Icons.phone_rounded, color: Color(0xFF00897B), size: 16),
+                                  child: const GardenIcon(GIcon.telefono, size: GIconSize.sm, color: Color(0xFF00897B)),
                                 ),
                               ),
                             ]),
@@ -5750,7 +5741,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         Container(
                           width: 38, height: 38,
                           decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.12), shape: BoxShape.circle),
-                          child: const Icon(Icons.local_hospital_rounded, color: Color(0xFF00897B), size: 18),
+                          child: const GardenIcon(GIcon.veterinaria, size: GIconSize.sm, state: GIconState.active, color: Color(0xFF00897B)),
                         ),
                         const SizedBox(width: 10),
                         Expanded(child: Column(
@@ -5770,7 +5761,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           child: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.phone_rounded, color: Color(0xFF00897B), size: 18),
+                            child: const GardenIcon(GIcon.telefono, size: GIconSize.sm, color: Color(0xFF00897B)),
                           ),
                         ),
                       ]),
@@ -5778,12 +5769,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   const SizedBox(height: 20),
                   // ── Sección: Emergencias nacionales ──
-                  Text('📞 Emergencias nacionales', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  Text('Emergencias nacionales', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
                   ...[
-                    {'label': '🚔 Policía Bolivia', 'number': '110'},
-                    {'label': '🚒 Bomberos', 'number': '119'},
-                    {'label': '🚑 Ambulancia', 'number': '118'},
+                    {'label': 'Policía Bolivia', 'number': '110'},
+                    {'label': 'Bomberos', 'number': '119'},
+                    {'label': 'Ambulancia', 'number': '118'},
                   ].map((e) => _EmergencyCallTile(
                     label: e['label']!, number: e['number']!,
                     isDark: isDark, textColor: textColor, subtextColor: subtextColor,
@@ -5791,10 +5782,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   const SizedBox(height: 20),
                   // ── Sección: GARDEN ──
-                  Text('🌿 Soporte GARDEN', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  Text('Soporte GARDEN', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
                   _EmergencyCallTile(
-                    label: '🌿 Emergencias GARDEN',
+                    label: 'Emergencias GARDEN',
                     number: '+59175933133',
                     numberDisplay: '+591 75933133',
                     isDark: isDark, textColor: textColor, subtextColor: subtextColor,
@@ -5989,7 +5980,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -6004,7 +5995,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -6089,11 +6080,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            _surveyRating >= 3 ? Icons.lock_open_rounded : Icons.lock_clock_rounded,
-                            color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
-                            size: 20,
-                          ),
+                          GardenIcon(_surveyRating >= 3 ? GIcon.desbloqueado : GIcon.seguridad, size: GIconSize.md, color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -6136,15 +6123,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       : null,
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('⬡ ', style: TextStyle(color: GardenColors.polygon, fontSize: 12)),
-                Text('Polygon Amoy Network',
-                  style: TextStyle(color: subtextColor, fontSize: 11)),
-              ],
             ),
           ],
         ),
@@ -6214,25 +6192,24 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(rating >= 3 ? '✅' : '⏳', style: const TextStyle(fontSize: 40)),
+                  child: GardenIcon(rating >= 3 ? GIcon.confirmado : GIcon.esperando, size: GIconSize.hero,
+                      color: rating >= 3 ? GardenColors.success : GardenColors.warning, state: GIconState.active),
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                rating >= 3 ? '¡Pago Liberado!' : 'Pago en Revisión',
+                rating >= 3 ? 'Pago liberado' : 'Pago en revisión',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
               Text(
                 rating >= 3
-                    ? 'El Smart Contract en Polygon Amoy ha liberado los fondos al cuidador exitosamente.'
+                    ? 'El pago se liberó a la billetera del cuidador.'
                     : 'Debido a la calificación, un administrador revisará el caso antes de liberar los fondos.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
               ),
-              const SizedBox(height: 32),
-              const GardenBadge(text: '⬡ Polygon Amoy Network', color: GardenColors.polygon),
               const SizedBox(height: 32),
               GardenButton(
                 label: 'Finalizar',
@@ -6290,7 +6267,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
               child: Column(
                 children: [
-                  const Text('🐾', style: TextStyle(fontSize: 52)),
+                  const GardenIcon(GIcon.huella, size: GIconSize.hero, state: GIconState.active),
                   const SizedBox(height: 16),
                   Text(
                     '¿Cómo fue el dueño de $petName?',
@@ -6322,11 +6299,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     builder: (_, s, child) => Transform.scale(scale: s, child: child),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: Icon(
-                        selected ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: selected ? GardenColors.star : borderColor,
-                        size: 52,
-                      ),
+                      child: GardenIcon(GIcon.estrella, size: GIconSize.hero, state: selected ? GIconState.active : GIconState.idle, color: selected ? GardenColors.star : borderColor),
                     ),
                   ),
                 );
@@ -6374,7 +6347,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -6399,7 +6372,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 absorbing: !(_caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating),
                 child: GardenButton(
                   label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
-                  icon: Icons.star_rounded,
+                  gIcon: GIcon.estrella,
                   loading: _isSubmittingCaregiverRating,
                   onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
                       ? _submitCaregiverRating
@@ -6513,7 +6486,7 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, color: Colors.white54, size: 40),
+            GardenIcon(GIcon.conflicto, size: GIconSize.xl, color: Colors.white54),
             SizedBox(height: 12),
             Text('No se pudo cargar el video', style: TextStyle(color: Colors.white70)),
           ],
@@ -6537,7 +6510,7 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
               child: Container(
                 width: 64, height: 64,
                 decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), shape: BoxShape.circle),
-                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
+                child: const GardenIcon(GIcon.iniciar, size: GIconSize.xl, color: Colors.white),
               ),
             ),
           ],
@@ -6841,7 +6814,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
   }
 
   Widget _buildQrImage(String url, double size) {
-    const fallback = Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary));
+    const fallback = Center(child: GardenIcon(GIcon.pagarQr, size: GIconSize.hero, color: GardenColors.primary));
     if (url.startsWith('data:image/')) {
       try {
         final comma = url.indexOf(',');
@@ -6868,7 +6841,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
         backgroundColor: bg,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: textColor),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text('Pagar extensión', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
@@ -6950,7 +6923,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
             child: widget.qrImageUrl != null && widget.qrImageUrl!.isNotEmpty
                 ? _buildQrImage(widget.qrImageUrl!, 230)
                 : const SizedBox(width: 230, height: 230,
-                    child: Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary))),
+                    child: Center(child: GardenIcon(GIcon.pagarQr, size: GIconSize.hero, color: GardenColors.primary))),
           ),
           const SizedBox(height: 20),
           Text(
@@ -6995,7 +6968,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
               duration: const Duration(milliseconds: 700),
-              curve: Curves.elasticOut,
+              curve: GardenMotion.pop,
               builder: (_, v, child) => Transform.scale(scale: v, child: child),
               child: Container(
                 width: 96, height: 96,
@@ -7004,7 +6977,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
                   shape: BoxShape.circle,
                   border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 3),
                 ),
-                child: const Icon(Icons.access_time_rounded, color: GardenColors.warning, size: 48),
+                child: const GardenIcon(GIcon.reloj, size: GIconSize.hero, color: GardenColors.warning),
               ),
             ),
             const SizedBox(height: 28),
@@ -7124,7 +7097,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
                 duration: const Duration(milliseconds: 800),
-                curve: Curves.elasticOut,
+                curve: GardenMotion.pop,
                 builder: (_, v, child) => Transform.scale(scale: v, child: child),
                 child: Container(
                   width: 96, height: 96,
@@ -7133,7 +7106,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 3),
                   ),
-                  child: const Icon(Icons.check_rounded, color: Colors.green, size: 52),
+                  child: const GardenIcon(GIcon.hecho, size: GIconSize.hero, color: Colors.green),
                 ),
               ),
               const SizedBox(height: 28),
@@ -7201,7 +7174,7 @@ class _EmergencyCallTile extends StatelessWidget {
                 color: accentColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.phone_rounded, color: accentColor, size: 18),
+              child: GardenIcon(GIcon.telefono, size: GIconSize.sm, color: accentColor),
             ),
             const SizedBox(width: 14),
             Expanded(

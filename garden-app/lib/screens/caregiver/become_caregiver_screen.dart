@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../client/my_data_screen.dart';
+import '../../design/garden_icons.dart';
 
 class BecomeCaregiverScreen extends StatefulWidget {
   const BecomeCaregiverScreen({super.key});
@@ -74,7 +75,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                 color: GardenColors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(GardenRadius.sm),
               ),
-              child: Icon(Icons.person_outline_rounded, color: GardenColors.warning, size: 20),
+              child: GardenIcon(GIcon.perfil, size: GIconSize.md, color: GardenColors.warning),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -103,7 +104,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  Icon(Icons.cancel_outlined, size: 16, color: GardenColors.error),
+                  GardenIcon(GIcon.cancelado, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 8),
                   Text(
                     field,
@@ -255,8 +256,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint),
           onPressed: () => context.go('/'),
         ),
         title: Row(
@@ -268,7 +268,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                 color: GardenColors.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(GardenRadius.sm),
               ),
-              child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
+              child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
             ),
             const SizedBox(width: 10),
             Text('Conviértete en Cuidador',
@@ -286,7 +286,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => context.go('/')),
+                  IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor), onPressed: () => context.go('/')),
                   const SizedBox(width: 6),
                   Text('Conviértete en Cuidador', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
@@ -334,7 +334,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 34),
+                    child: const GardenIcon(GIcon.favorito, size: GIconSize.xl, state: GIconState.active, color: Colors.white),
                   ),
                   const SizedBox(height: 18),
                   Text(

@@ -1766,7 +1766,7 @@ class _GardenErrorDialogContent extends StatelessWidget {
           color: const Color(0xFFC0392B).withValues(alpha: 0.12),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.error_rounded, color: Color(0xFFC0392B), size: 26),
+        child: const GardenIcon(GIcon.conflicto, size: GIconSize.lg, state: GIconState.active, color: Color(0xFFC0392B)),
       ),
       title: Text(title ?? 'Algo salió mal'),
       content: Text(message),

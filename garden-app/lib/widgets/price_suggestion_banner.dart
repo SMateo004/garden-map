@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
 import './garden_loading_indicator.dart';
+import '../design/garden_icons.dart';
 
 class PriceSuggestionBanner extends StatefulWidget {
   final String token;
@@ -64,7 +65,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
         setState(() => _suggestions.removeWhere((s) => s['id'] == id));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Precio actualizado exitosamente'),
+            content: Text('Precio actualizado exitosamente'),
             backgroundColor: GardenColors.success,
           ),
         );
@@ -119,8 +120,8 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    final trendEmoji = tendencia == 'rising' ? '📈' : tendencia == 'falling' ? '📉' : '➡️';
-    final serviceLabel = serviceType == 'PASEO' ? '🐕 Paseo' : serviceType == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje';
+    final trendLabel = tendencia == 'rising' ? 'en alza' : tendencia == 'falling' ? 'a la baja' : 'estable';
+    final serviceLabel = serviceType == 'PASEO' ? 'Paseo' : serviceType == 'GUARDERIA' ? 'Guardería' : 'Hospedaje';
     final confianzaColor = confianza == 'alta'
         ? GardenColors.success
         : confianza == 'media' ? GardenColors.warning : GardenColors.lightTextSecondary;
@@ -151,7 +152,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                     color: accentColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.auto_graph_rounded, color: accentColor, size: 18),
+                  child: GardenIcon(GIcon.estadisticas, size: GIconSize.sm, color: accentColor),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -160,7 +161,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                     children: [
                       Text('Sugerencia de precio IA',
                         style: TextStyle(color: accentColor, fontWeight: FontWeight.w800, fontSize: 13)),
-                      Text('$serviceLabel  $trendEmoji  $motivo',
+                      Text('$serviceLabel · $trendLabel · $motivo',
                         style: TextStyle(color: subtextColor, fontSize: 11)),
                     ],
                   ),
@@ -196,7 +197,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                         ],
                       ),
                     ),
-                    Icon(Icons.arrow_forward_rounded, color: accentColor, size: 20),
+                    GardenIcon(GIcon.avanzar, size: GIconSize.md, color: accentColor),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -242,7 +243,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🤖', style: TextStyle(fontSize: 14)),
+                      GardenIcon(GIcon.ia, size: GIconSize.sm, color: subtextColor),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(explicacion,

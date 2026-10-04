@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 enum _PanelState { cargando, exito, error }
 
@@ -222,7 +223,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
   Widget _buildErrorState() {
     return Column(
       children: [
-        const Icon(Icons.wifi_off, color: Colors.white, size: 48),
+        const GardenIcon(GIcon.sinConexion, size: GIconSize.hero, color: Colors.white),
         const SizedBox(height: 16),
         const Text(
           "No pudimos analizar esta disputa",

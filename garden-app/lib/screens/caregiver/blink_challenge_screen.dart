@@ -9,6 +9,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Blink liveness challenge for Flutter web (QR flow).
 ///
@@ -219,7 +220,7 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
               child: Material(
                 color: Colors.transparent,
                 child: IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                  icon: const GardenIcon(GIcon.cerrar, size: GIconSize.lg, color: Colors.white),
                   onPressed: () => Navigator.of(context).pop(null),
                   tooltip: 'Cancelar',
                 ),
@@ -346,7 +347,7 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 40),
+          const GardenIcon(GIcon.conflicto, size: GIconSize.xl, color: Colors.redAccent),
           const SizedBox(height: 12),
           Text(
             _errorMsg,
@@ -356,7 +357,7 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _retry,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
+            icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
             label: const Text('Reintentar', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: GardenColors.primary,

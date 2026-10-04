@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 class PrecioOnboardingCard extends StatefulWidget {
   final String zona;
@@ -172,11 +173,7 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
             ),
             child: Row(
               children: [
-                Icon(
-                  _hasMarketData ? Icons.bar_chart_rounded : Icons.info_outline_rounded,
-                  color: Colors.white60,
-                  size: 18,
-                ),
+                GardenIcon(_hasMarketData ? GIcon.estadisticas : GIcon.info, size: GIconSize.sm, color: Colors.white60),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(

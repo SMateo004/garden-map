@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../theme/garden_theme.dart';
 import './garden_loading_indicator.dart';
+import '../design/garden_icons.dart';
 
 /// Servicio principal al que puede asociarse un "servicio extra".
 class _ServicioPrincipal {
@@ -343,13 +344,13 @@ class _ServiceCard extends StatelessWidget {
             children: [
               TextButton.icon(
                 onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 16),
+                icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true),
                 label: const Text('Editar'),
               ),
               TextButton.icon(
                 onPressed: onDelete,
                 style: TextButton.styleFrom(foregroundColor: GardenColors.error),
-                icon: const Icon(Icons.delete_outline, size: 16),
+                icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, inheritColor: true),
                 label: const Text('Eliminar'),
               ),
             ],

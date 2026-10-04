@@ -258,7 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       color: GardenColors.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.mark_email_read_outlined, color: GardenColors.primary, size: 28),
+                    child: const GardenIcon(GIcon.correo, size: GIconSize.lg, color: GardenColors.primary),
                   ),
                   const SizedBox(height: 16),
                   Text('Verifica tu correo',
@@ -389,7 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Container(
                   width: 56, height: 56,
                   decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.delete_forever_outlined, color: GardenColors.error, size: 28),
+                  child: const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error),
                 ),
                 const SizedBox(height: 16),
                 Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
@@ -550,8 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ],
                       ),
                     ),
-                    Icon(Icons.chevron_right_rounded,
-                        color: GardenColors.warning, size: 18),
+                    GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: GardenColors.warning),
                   ],
                 ),
               ),
@@ -681,7 +680,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
-                  child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 18),
+                  child: const GardenIcon(GIcon.perfil, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                 ),
                 const SizedBox(width: 10),
                 Text('Mi Perfil', style: GardenText.h4.copyWith(color: textColor)),
@@ -691,7 +690,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             actions: [
               if (_token.isNotEmpty)
                 IconButton(
-                  icon: Icon(Icons.logout_rounded, color: hintColor, size: 20),
+                  icon: GardenIcon(GIcon.salir, size: GIconSize.md, color: hintColor),
                   onPressed: _logout,
                 ),
             ],
@@ -710,7 +709,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Text('Mi Perfil', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                       const Spacer(),
                       if (_token.isNotEmpty)
-                        IconButton(icon: Icon(Icons.logout_rounded, color: hintColor, size: 18), onPressed: _logout, tooltip: 'Cerrar sesión'),
+                        IconButton(icon: GardenIcon(GIcon.salir, size: GIconSize.sm, color: hintColor), onPressed: _logout, tooltip: 'Cerrar sesión'),
                     ],
                   ),
                 ),
@@ -738,7 +737,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(height: 60),
-          const Icon(Icons.person_outline, size: 80, color: GardenColors.primary),
+          const GardenIcon(GIcon.perfil, size: GIconSize.hero, color: GardenColors.primary),
           const SizedBox(height: 16),
           const Text('Inicia sesión para ver tu perfil',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -825,7 +824,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.email_outlined, size: 12, color: subtextColor),
+                        GardenIcon(GIcon.correo, size: GIconSize.xs, color: subtextColor),
                         const SizedBox(width: 5),
                         Flexible(
                           child: Text(
@@ -836,7 +835,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                         const SizedBox(width: 6),
                         if (user['emailVerified'] == true)
-                          const Icon(Icons.verified_rounded, size: 14, color: GardenColors.success)
+                          const GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success)
                         else
                           GestureDetector(
                             onTap: _sendVerificationEmail,
@@ -901,7 +900,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           Padding(
                             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                             child: Row(children: [
-                              const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 15),
+                              const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
                               const SizedBox(width: 8),
                               Text('Información de cuenta',
                                   style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -936,7 +935,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            const Icon(Icons.palette_outlined, color: GardenColors.primary, size: 15),
+                            const GardenIcon(GIcon.apariencia, size: GIconSize.xs, color: GardenColors.primary),
                             const SizedBox(width: 8),
                             Text('Apariencia',
                                 style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -1105,7 +1104,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     color: GardenColors.error.withValues(alpha: 0.09),
                                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                                   ),
-                                  child: const Icon(Icons.logout_rounded, color: GardenColors.error, size: 17),
+                                  child: const GardenIcon(GIcon.salir, size: GIconSize.sm, color: GardenColors.error),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
@@ -1198,7 +1197,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.email_outlined, size: 12, color: subtextColor),
+                        GardenIcon(GIcon.correo, size: GIconSize.xs, color: subtextColor),
                         const SizedBox(width: 5),
                         Flexible(
                           child: Text(
@@ -1209,7 +1208,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                         const SizedBox(width: 6),
                         if (user['emailVerified'] == true)
-                          const Icon(Icons.verified_rounded, size: 14, color: GardenColors.success)
+                          const GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success)
                         else
                           GestureDetector(
                             onTap: _sendVerificationEmail,
@@ -1341,7 +1340,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         color: GardenColors.primary.withValues(alpha: 0.09),
                         borderRadius: BorderRadius.circular(GardenRadius.sm),
                       ),
-                      child: const Icon(Icons.palette_outlined, color: GardenColors.primary, size: 17),
+                      child: const GardenIcon(GIcon.apariencia, size: GIconSize.sm, color: GardenColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Text('Apariencia',
@@ -1505,8 +1504,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   color: GardenColors.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.pending_actions_rounded,
-                    color: GardenColors.primary, size: 18),
+                child: const GardenIcon(GIcon.esperando, size: GIconSize.sm, color: GardenColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1573,8 +1571,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 decoration: BoxDecoration(
                     color: GardenColors.error.withValues(alpha: 0.10),
                     shape: BoxShape.circle),
-                child: const Icon(Icons.cancel_outlined,
-                    color: GardenColors.error, size: 26),
+                child: const GardenIcon(GIcon.cancelado, size: GIconSize.lg, color: GardenColors.error),
               ),
               const SizedBox(height: 14),
               Text('¿Abandonar el registro?',

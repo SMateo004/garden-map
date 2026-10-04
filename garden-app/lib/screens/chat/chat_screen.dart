@@ -279,7 +279,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        Icon(Icons.calendar_today, size: 16, color: GardenColors.primary),
+                        GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Text(
                           selectedDate != null ? '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}' : 'Seleccionar fecha',
@@ -306,7 +306,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        Icon(Icons.access_time, size: 16, color: GardenColors.primary),
+                        GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Text(
                           selectedTime != null
@@ -343,7 +343,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     decoration: InputDecoration(
                       hintText: 'Punto de encuentro',
                       hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: Icon(Icons.location_on, color: GardenColors.primary, size: 18),
+                      prefixIcon: GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
+import '../../design/garden_icons.dart';
 
 /// Lista de artículos dentro de una categoría del Centro de Ayuda.
 class HelpCategoryScreen extends StatelessWidget {
@@ -24,7 +25,7 @@ class HelpCategoryScreen extends StatelessWidget {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: text, size: 20),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -67,7 +68,7 @@ class HelpCategoryScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(Icons.chevron_right_rounded, color: subtext, size: 20),
+                    GardenIcon(GIcon.siguiente, size: GIconSize.md, color: subtext),
                   ],
                 ),
               ),

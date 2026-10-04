@@ -12,6 +12,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/ai_write_assist.dart';
 import '../../widgets/extra_services_editor.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -134,7 +135,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, size: 14, color: GardenColors.warning),
+          const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.warning),
           const SizedBox(width: 6),
           Expanded(child: Text(warning, style: const TextStyle(color: GardenColors.warning, fontSize: 11.5))),
         ],
@@ -220,33 +221,33 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   List<String> _apiServicesOffered = [];
 
   static const _placeSections = [
-    ('sala',         '🛋️ Sala / Área principal',  true),
-    ('descanso',     '🛏️ Zona de descanso',        true),
-    ('alimentacion', '🍽️ Área de alimentación',    true),
-    ('jardin',       '🌿 Jardín / Patio',           false),
-    ('juego',        '🎾 Área de juego',            false),
+    ('sala',         'Sala / Área principal',  true),
+    ('descanso',     'Zona de descanso',        true),
+    ('alimentacion', 'Área de alimentación',    true),
+    ('jardin',       'Jardín / Patio',           false),
+    ('juego',        'Área de juego',            false),
   ];
 
   static const _homeTypes = ['HOUSE', 'APARTMENT', 'FINCA', 'LOCAL'];
   static const _homeTypeLabels = {
-    'HOUSE': '🏠 Casa',
-    'APARTMENT': '🏢 Apartamento',
-    'FINCA': '🌾 Finca',
-    'LOCAL': '🏪 Local',
+    'HOUSE': 'Casa',
+    'APARTMENT': 'Apartamento',
+    'FINCA': 'Finca',
+    'LOCAL': 'Local',
   };
 
   static const _petTypes = ['DOGS', 'CATS'];
   static const _petTypeLabels = {
-    'DOGS': '🐶 Perros',
-    'CATS': '🐱 Gatos',
+    'DOGS': 'Perros',
+    'CATS': 'Gatos',
   };
 
   static const _petSizes = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT'];
   static const _petSizeLabels = {
-    'SMALL': '🐾 Pequeño (<5kg)',
-    'MEDIUM': '🐕 Mediano (5-20kg)',
-    'LARGE': '🦮 Grande (20-40kg)',
-    'GIANT': '🐘 Gigante (+40kg)',
+    'SMALL': 'Pequeño (<5kg)',
+    'MEDIUM': 'Mediano (5-20kg)',
+    'LARGE': 'Grande (20-40kg)',
+    'GIANT': 'Gigante (+40kg)',
   };
 
   /// true cuando el cuidador seleccionó 0 años de experiencia.
@@ -573,8 +574,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(children: [
-                  Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                      size: 18, color: done ? GardenColors.success : subtextColor.withValues(alpha: 0.5)),
+                  GardenIcon(done ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.sm, state: done ? GIconState.active : GIconState.idle, color: done ? GardenColors.success : subtextColor.withValues(alpha: 0.5)),
                   const SizedBox(width: 10),
                   Expanded(child: Text(label, style: TextStyle(color: done ? textColor : subtextColor, fontSize: 13.5))),
                 ]),
@@ -1042,7 +1042,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   // hay vía de auto-aprobación, ver caregiver-profile.service.ts submitNitDocument.
   Future<void> _pickAndUploadNit() async {
     if (_nitNumberCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Ingresá el número de NIT antes de subir el documento');
+      GardenSnackBar.warning(context, 'Ingresa el número de NIT antes de subir el documento');
       return;
     }
     final source = await showModalBottomSheet<String>(
@@ -1122,7 +1122,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         children: [
           Row(
             children: [
-              Icon(Icons.receipt_long_outlined, color: subtextColor, size: 20),
+              GardenIcon(GIcon.recibo, size: GIconSize.md, color: subtextColor),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1192,17 +1192,17 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           Text('Subir documento', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           ListTile(
-            leading: const Icon(Icons.camera_alt_outlined, color: GardenColors.primary),
+            leading: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
             title: const Text('Tomar foto'),
             onTap: () => Navigator.pop(ctx, 'camera'),
           ),
           ListTile(
-            leading: const Icon(Icons.photo_library_outlined, color: GardenColors.primary),
+            leading: const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary),
             title: const Text('Elegir de galería'),
             onTap: () => Navigator.pop(ctx, 'gallery'),
           ),
           ListTile(
-            leading: const Icon(Icons.picture_as_pdf_outlined, color: GardenColors.primary),
+            leading: const GardenIcon(GIcon.documento, size: GIconSize.lg, color: GardenColors.primary),
             title: const Text('Subir PDF'),
             onTap: () => Navigator.pop(ctx, 'pdf'),
           ),
@@ -1232,7 +1232,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Widget _documentStatusRow({
-    required IconData icon,
+    required GIcon icon,
     required String title,
     required String subtitle,
     required bool verified,
@@ -1245,7 +1245,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
       child: Row(
         children: [
-          Icon(icon, color: subtextColor, size: 20),
+          GardenIcon(icon, size: GIconSize.md, color: subtextColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1256,11 +1256,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               ],
             ),
           ),
-          Icon(
-            verified ? Icons.check_circle_rounded : Icons.hourglass_empty_rounded,
-            color: verified ? GardenColors.success : subtextColor,
-            size: 20,
-          ),
+          GardenIcon(verified ? GIcon.confirmado : GIcon.esperando, size: GIconSize.md, state: verified ? GIconState.active : GIconState.idle, color: verified ? GardenColors.success : subtextColor),
         ],
       ),
     );
@@ -1283,7 +1279,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         children: [
           Row(
             children: [
-              Icon(Icons.gavel_outlined, color: subtextColor, size: 20),
+              GardenIcon(GIcon.multa, size: GIconSize.md, color: subtextColor),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1302,7 +1298,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             children: [
               TextButton.icon(
                 onPressed: _showAntecedentesInfoDialog,
-                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                icon: const GardenIcon(GIcon.info, size: GIconSize.sm, inheritColor: true),
                 label: const Text('¿Cómo lo obtengo?', style: TextStyle(fontSize: 12.5)),
               ),
               const Spacer(),
@@ -1334,20 +1330,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _documentStatusRow(
-          icon: Icons.badge_outlined,
+          icon: GIcon.identidadVerificada,
           title: 'Identidad',
           subtitle: 'Verificada al registrarte',
           verified: _identityVerified,
-          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-        ),
+          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
         const SizedBox(height: 10),
         _documentStatusRow(
-          icon: Icons.credit_card_outlined,
+          icon: GIcon.tarjeta,
           title: 'Cédula de Identidad',
           subtitle: 'Verificada al registrarte',
           verified: _identityVerified,
-          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-        ),
+          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
         const SizedBox(height: 10),
         _antecedentesRow(textColor, subtextColor, borderColor),
         if (_ic) ...[
@@ -1480,7 +1474,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 20),
+                  icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
                   onPressed: () => Navigator.pop(context),
                   tooltip: 'Volver',
                 ),
@@ -1524,7 +1518,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   const SizedBox(width: 6),
                   ElevatedButton.icon(
                     onPressed: _saveAllData,
-                    icon: const Icon(Icons.check_rounded, size: 16),
+                    icon: const GardenIcon(GIcon.hecho, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Guardar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
@@ -1539,7 +1533,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 ] else
                   ElevatedButton.icon(
                     onPressed: () => setState(() => _isEditing = true),
-                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
@@ -1574,31 +1568,29 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             // Servicios y precios — redesignado con cards por servicio
                             _webSection(surface, borderColor, textColor,
                               title: 'Servicios y precios',
-                              icon: Icons.sell_outlined,
-                              child: _buildServicesPricesSection(surface, borderColor, textColor, subtextColor),
-                            ),
+                              icon: GIcon.precio,
+                              child: _buildServicesPricesSection(surface, borderColor, textColor, subtextColor)),
                             const SizedBox(height: 14),
 
                             // Servicios extra — solo para cuentas EMPRESA
                             if (_ic) ...[
                               _webSection(surface, borderColor, textColor,
                                 title: 'Servicios extra',
-                                icon: Icons.add_business_outlined,
+                                icon: GIcon.empresa,
                                 child: IgnorePointer(
                                   ignoring: !_isEditing,
                                   child: Opacity(
                                     opacity: _isEditing ? 1 : 0.6,
                                     child: ExtraServicesEditor(token: _caregiverToken, baseUrl: _baseUrl),
                                   ),
-                                ),
-                              ),
+                                )),
                               const SizedBox(height: 14),
                             ],
 
                             if (_needsSpaceSection) ...[
                               _webSection(surface, borderColor, textColor,
                                 title: 'Tu espacio',
-                                icon: Icons.home_outlined,
+                                icon: GIcon.inicio,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1608,15 +1600,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     IgnorePointer(ignoring: !_isEditing, child: _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v))),
                                     IgnorePointer(ignoring: !_isEditing, child: _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v))),
                                   ],
-                                ),
-                              ),
+                                )),
                               const SizedBox(height: 14),
                             ],
 
                             if (widget.showPhotos) ...[
                               _webSection(surface, borderColor, textColor,
                                 title: 'Fotos del cuidador en acción',
-                                icon: Icons.photo_library_outlined,
+                                icon: GIcon.galeria,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1630,13 +1621,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                       const Padding(padding: EdgeInsets.only(bottom: 8), child: LinearProgressIndicator(color: GardenColors.primary)),
                                     IgnorePointer(ignoring: !_isEditing, child: _buildCaregiverPhotoGrid(borderColor)),
                                   ],
-                                ),
-                              ),
+                                )),
                               if (_needsPlacePhotos) ...[
                                 const SizedBox(height: 14),
                                 _webSection(surface, borderColor, textColor,
                                   title: 'Fotos del espacio',
-                                  icon: Icons.home_work_outlined,
+                                  icon: GIcon.empresa,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -1656,8 +1646,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                         ),
                                       ),
                                     ],
-                                  ),
-                                ),
+                                  )),
                               ],
                             ],
                           ],
@@ -1673,7 +1662,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                           children: [
                             _webSection(surface, borderColor, textColor,
                               title: 'Mascotas que aceptas',
-                              icon: Icons.pets_rounded,
+                              icon: GIcon.huella,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1700,13 +1689,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
+                              )),
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
                               title: 'Preguntas frecuentes',
-                              icon: Icons.help_outline_rounded,
+                              icon: GIcon.ayuda,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1723,13 +1711,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   _viewOrInput(_requirementsController, 'Ej: Correa, vacunas al día, bolsas para recoger...',
                                     maxLines: 2, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
                                 ],
-                              ),
-                            ),
+                              )),
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
                               title: _lExpTitle,
-                              icon: Icons.workspace_premium_outlined,
+                              icon: GIcon.destacado,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1772,7 +1759,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                                         ),
                                         child: Row(children: [
-                                          const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 15),
+                                          const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
                                           const SizedBox(width: 8),
                                           Expanded(child: Text(
                                             'Empezas como cuidador nuevo — completa los campos abajo para presentarte a los dueños.',
@@ -1790,13 +1777,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2, coherenceKey: 'whatDiffers', aiField: 'whatDiffers')),
                                   ],
                                 ],
-                              ),
-                            ),
+                              )),
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
                               title: _lPoliciesTitle,
-                              icon: Icons.policy_outlined,
+                              icon: GIcon.legal,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1832,15 +1818,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     IgnorePointer(ignoring: !_isEditing, child: _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor)),
                                   ],
                                 ],
-                              ),
-                            ),
+                              )),
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
                               title: 'Documentos',
-                              icon: Icons.folder_shared_outlined,
-                              child: _buildDocumentsSectionContent(textColor, subtextColor, borderColor),
-                            ),
+                              icon: GIcon.documento,
+                              child: _buildDocumentsSectionContent(textColor, subtextColor, borderColor)),
                             const SizedBox(height: 32),
                           ],
                         ),
@@ -1860,9 +1844,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Widget _buildServicesPricesSection(Color surface, Color borderColor, Color textColor, Color subtextColor) {
     const allServices = ['PASEO', 'HOSPEDAJE', 'GUARDERIA'];
     const serviceData = {
-      'PASEO':      ('🦮', 'Paseo de mascotas'),
-      'HOSPEDAJE':  ('🏠', 'Hospedaje'),
-      'GUARDERIA':  ('🐾', 'Guardería diurna'),
+      'PASEO':      (GIcon.paseo, 'Paseo de mascotas'),
+      'HOSPEDAJE':  (GIcon.hospedaje, 'Hospedaje'),
+      'GUARDERIA':  (GIcon.guarderia, 'Guardería diurna'),
     };
     final List<(String, TextEditingController)> paseoRows = [
       ('Paseo de 30 minutos  (media hora)', _pricePerWalk30Controller),
@@ -1879,7 +1863,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       key: _keyServicesPrices,
       children: allServices.map((s) {
         final info = serviceData[s]!;
-        final (emoji, name) = info;
+        final (icon, name) = info;
         final isActive = _effectiveServices.contains(s);
         final rows = s == 'PASEO' ? paseoRows : s == 'HOSPEDAJE' ? hospedajeRows : guarderiaRows;
 
@@ -1902,7 +1886,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                 child: Row(children: [
-                  Text(emoji, style: TextStyle(fontSize: 20, color: isActive ? null : Colors.grey)),
+                  GardenIcon(icon, size: GIconSize.md, state: isActive ? GIconState.active : GIconState.idle, color: isActive ? null : Colors.grey),
                   const SizedBox(width: 10),
                   Text(name, style: TextStyle(
                     color: isActive ? textColor : subtextColor,
@@ -2056,7 +2040,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Widget _webSection(
     Color surface, Color borderColor, Color textColor, {
     required String title,
-    required IconData icon,
+    required GIcon icon,
     required Widget child,
   }) {
     return Container(
@@ -2072,7 +2056,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: GardenColors.primary),
+              GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 8),
               Text(title, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
             ],
@@ -2312,7 +2296,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 18),
+                    const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -2368,10 +2352,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Kit de bienvenida — polera + gorra Garden. La talla es lo único
             // que se pide acá; el envío se coordina después por separado.
-            _sectionTitle('🎁 Kit de bienvenida', textColor),
+            _sectionTitle('Kit de bienvenida', textColor),
             Text(
               'Te vamos a enviar una polera y una gorra oficiales de Garden a tu domicilio, sin costo. '
-              'Llegan en 1-3 días hábiles y coordinamos el horario de entrega con vos por tus datos de contacto.',
+              'Llegan en 1-3 días hábiles y coordinamos el horario de entrega contigo por tus datos de contacto.',
               style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 14),
@@ -2662,7 +2646,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 children: [
                   Text('Ver qué falta', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
                   SizedBox(width: 4),
-                  Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 14),
+                  GardenIcon(GIcon.avanzar, size: GIconSize.xs, color: Colors.white),
                 ],
               ),
             ),
@@ -2731,7 +2715,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               child: Text(label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
             ),
             IconButton(
-              icon: const Icon(Icons.remove_circle_outline_rounded),
+              icon: const GardenIcon(GIcon.quitar, size: GIconSize.lg, inheritColor: true),
               color: enabled && value > 1 ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
               onPressed: enabled && value > 1 ? () => onChanged(value - 1) : null,
             ),
@@ -2741,7 +2725,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
             ),
             IconButton(
-              icon: const Icon(Icons.add_circle_outline_rounded),
+              icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, inheritColor: true),
               color: enabled && !atCap ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
               onPressed: enabled && !atCap ? () => onChanged(value + 1) : null,
             ),
@@ -2800,7 +2784,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isSel) ...[
-                  const Icon(Icons.check_rounded, color: GardenColors.primary, size: 14),
+                  const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.primary),
                   const SizedBox(width: 4),
                 ],
                 ConstrainedBox(
@@ -2837,7 +2821,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             onTap: _addCaregiverPhoto,
             child: Container(
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), style: BorderStyle.solid)),
-              child: const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary),
+              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
             ),
           );
         }
@@ -2856,7 +2840,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 14),
+                  child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white),
                 ),
               ),
             ),
@@ -2911,7 +2895,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                           child: Container(
                             padding: const EdgeInsets.all(3),
                             decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 12),
+                            child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white),
                           ),
                         ),
                       ),
@@ -2931,11 +2915,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: required && photos.isEmpty ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
                       ),
-                      child: Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary,
-                        size: 28,
-                      ),
+                      child: GardenIcon(GIcon.galeria, size: GIconSize.lg, color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary),
                     ),
                   ),
                 ),
@@ -2958,7 +2938,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             onTap: _addPhoto,
             child: Container(
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor, style: BorderStyle.solid)),
-              child: const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary),
+              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
             ),
           );
         }
@@ -2983,7 +2963,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  child: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: Colors.white),
                 ),
               ),
             ),

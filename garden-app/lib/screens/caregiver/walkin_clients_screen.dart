@@ -4,6 +4,7 @@ import '../../services/caregiver_crm_service.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_client_detail_screen.dart';
+import '../../design/garden_icons.dart';
 
 /// Lista + buscador de clientes walk-in (CRM interno, sin dinero de por
 /// medio). Punto de entrada para ver/editar fichas y su historial —
@@ -94,7 +95,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
                   label: 'Crear cliente',
                   onPressed: () async {
                     if (nameCtrl.text.trim().isEmpty) {
-                      GardenSnackBar.warning(ctx, 'Ingresá el nombre del cliente');
+                      GardenSnackBar.warning(ctx, 'Ingresa el nombre del cliente');
                       return;
                     }
                     try {
@@ -144,7 +145,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
           floatingActionButton: FloatingActionButton.extended(
             onPressed: _openNewClientSheet,
             backgroundColor: GardenColors.primary,
-            icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+            icon: const GardenIcon(GIcon.invitar, size: GIconSize.lg, color: Colors.white),
             label: const Text('Nuevo cliente', style: TextStyle(color: Colors.white)),
           ),
           body: SafeArea(
@@ -158,7 +159,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
                     decoration: InputDecoration(
                       hintText: 'Buscar cliente...',
                       hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded),
+                      prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.lg, inheritColor: true),
                       filled: true,
                       fillColor: surface,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -187,13 +188,13 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
                                     final c = _clients[i];
                                     final pets = (c['pets'] as List?) ?? [];
                                     return ListTile(
-                                      leading: const CircleAvatar(child: Icon(Icons.person_outline_rounded)),
+                                      leading: const CircleAvatar(child: GardenIcon(GIcon.perfil, size: GIconSize.lg, inheritColor: true)),
                                       title: Text(c['name'] as String? ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                                       subtitle: Text(
                                         '${pets.length} mascota(s)${(c['phone'] as String?)?.isNotEmpty == true ? ' · ${c['phone']}' : ''}',
                                         style: TextStyle(color: subtextColor, fontSize: 12),
                                       ),
-                                      trailing: Icon(Icons.chevron_right_rounded, color: subtextColor),
+                                      trailing: GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
                                       onTap: () async {
                                         await Navigator.of(context).push(
                                           MaterialPageRoute(

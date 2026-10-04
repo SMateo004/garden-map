@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/garden_theme.dart';
 import 'caregiver_contract_content.dart';
+import '../../design/garden_icons.dart';
 
 /// Paso de contrato de cuidador reutilizable — pantalla completa con
 /// scroll-to-accept, usada como último paso en professional_register_screen.dart
@@ -105,16 +106,12 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
                         border: Border.all(color: (_scrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.3)),
                       ),
                       child: Row(children: [
-                        Icon(
-                          _scrolledToEnd ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                          color: _scrolledToEnd ? GardenColors.success : GardenColors.primary,
-                          size: 20,
-                        ),
+                        GardenIcon(_scrolledToEnd ? GIcon.confirmado : GIcon.info, size: GIconSize.md, state: _scrolledToEnd ? GIconState.active : GIconState.idle, color: _scrolledToEnd ? GardenColors.success : GardenColors.primary),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _scrolledToEnd
-                                ? 'Llegaste al final. Ya podés aceptar el contrato.'
+                                ? 'Llegaste al final. Ya puedes aceptar el contrato.'
                                 : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
                             style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
                           ),
@@ -134,7 +131,7 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.keyboard_double_arrow_down_rounded, color: subtextColor, size: 16),
+                    GardenIcon(GIcon.desplegar, size: GIconSize.sm, color: subtextColor),
                     const SizedBox(width: 6),
                     Text('Desliza para leer todo el contrato',
                         style: TextStyle(fontSize: 12, color: subtextColor, fontWeight: FontWeight.w600)),

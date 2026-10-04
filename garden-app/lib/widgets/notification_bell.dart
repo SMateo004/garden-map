@@ -459,11 +459,7 @@ class _NotificationRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: subtextColor.withValues(alpha: 0.4),
-            ),
+            GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor.withValues(alpha: 0.4)),
           ],
         ),
       ),
@@ -631,7 +627,7 @@ class _NotificationDetailDialog extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        icon: const Icon(Icons.menu_book_rounded, size: 18),
+                        icon: const GardenIcon(GIcon.guia, size: GIconSize.sm, inheritColor: true),
                         label: const Text('Ver guía completa', style: TextStyle(fontWeight: FontWeight.w700)),
                         onPressed: () {
                           Navigator.of(context).pop();
@@ -705,11 +701,7 @@ class _EmptyNotifications extends StatelessWidget {
                 color: GardenColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                size: 36,
-                color: GardenColors.primary,
-              ),
+              child: const GardenIcon(GIcon.notificaciones, size: GIconSize.xl, color: GardenColors.primary),
             ),
             const SizedBox(height: 16),
             Text(

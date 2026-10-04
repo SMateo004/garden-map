@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
 import './garden_loading_indicator.dart';
+import '../design/garden_icons.dart';
 
 /// Muestra el perfil completo de una mascota en un bottom sheet.
 /// Si se pasa [bookingId], se obtiene de GET /api/caregiver/bookings/:bookingId/pet.
@@ -127,7 +128,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
               child: Row(
                 children: [
-                  const Icon(Icons.pets, color: GardenColors.primary, size: 20),
+                  const GardenIcon(GIcon.huella, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Text(
                     'Perfil de ${widget.petName}',
@@ -140,7 +141,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                   const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.of(context).pop(),
-                    child: Icon(Icons.close, color: subtextColor, size: 22),
+                    child: GardenIcon(GIcon.cerrar, size: GIconSize.md, color: subtextColor),
                   ),
                 ],
               ),
@@ -217,7 +218,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                     color: GardenColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Center(child: Icon(Icons.pets, color: GardenColors.primary, size: 48)),
+                  child: const Center(child: GardenIcon(GIcon.huella, size: GIconSize.hero, state: GIconState.active, color: GardenColors.primary)),
                 ),
               ),
             ),
@@ -231,7 +232,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                 color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(60),
               ),
-              child: const Center(child: Icon(Icons.pets, color: GardenColors.primary, size: 48)),
+              child: const Center(child: GardenIcon(GIcon.huella, size: GIconSize.hero, state: GIconState.active, color: GardenColors.primary)),
             ),
           ),
 
@@ -263,19 +264,19 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
           runSpacing: 8,
           children: [
             if (pet['age'] != null)
-              _infoChip(context, Icons.cake_outlined, '${pet['age']} años', chipBg, textColor),
+              _infoChip(context, GIcon.cumpleanos, '${pet['age']} años', chipBg, textColor),
             if (pet['size'] != null)
-              _infoChip(context, Icons.straighten, sizeLabel(pet['size'] as String?), chipBg, textColor),
+              _infoChip(context, GIcon.medida, sizeLabel(pet['size'] as String?), chipBg, textColor),
             if (pet['gender'] != null)
-              _infoChip(context, Icons.transgender, genderLabel(pet['gender'] as String?), chipBg, textColor),
+              _infoChip(context, GIcon.sexo, genderLabel(pet['gender'] as String?), chipBg, textColor),
             if (pet['weight'] != null)
-              _infoChip(context, Icons.monitor_weight_outlined, '${pet['weight']} kg', chipBg, textColor),
+              _infoChip(context, GIcon.peso, '${pet['weight']} kg', chipBg, textColor),
             if (pet['color'] != null)
-              _infoChip(context, Icons.palette_outlined, pet['color'] as String, chipBg, textColor),
+              _infoChip(context, GIcon.apariencia, pet['color'] as String, chipBg, textColor),
             if (pet['sterilized'] == true)
-              _infoChip(context, Icons.check_circle_outline, 'Esterilizado/a', chipBg, GardenColors.success),
+              _infoChip(context, GIcon.confirmado, 'Esterilizado/a', chipBg, GardenColors.success),
             if (pet['microchipNumber'] != null)
-              _infoChip(context, Icons.qr_code, 'Chip: ${pet['microchipNumber']}', chipBg, textColor),
+              _infoChip(context, GIcon.pagarQr, 'Chip: ${pet['microchipNumber']}', chipBg, textColor),
           ],
         ),
 
@@ -294,7 +295,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 16),
+                const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -348,7 +349,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                     width: 100,
                     height: 100,
                     color: GardenColors.primary.withValues(alpha: 0.08),
-                    child: const Icon(Icons.broken_image_outlined, color: GardenColors.primary),
+                    child: const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.primary),
                   ),
                 ),
               ),
@@ -380,7 +381,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                         width: 110,
                         height: 110,
                         color: GardenColors.success.withValues(alpha: 0.08),
-                        child: const Icon(Icons.vaccines, color: GardenColors.success),
+                        child: const GardenIcon(GIcon.vacuna, size: GIconSize.lg, color: GardenColors.success),
                       ),
                     ),
                     Positioned(
@@ -392,7 +393,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                           color: GardenColors.success.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Icon(Icons.vaccines, color: Colors.white, size: 12),
+                        child: const GardenIcon(GIcon.vacuna, size: GIconSize.xs, color: Colors.white),
                       ),
                     ),
                   ],
@@ -417,7 +418,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.insert_drive_file_outlined, size: 16, color: GardenColors.primary),
+                  const GardenIcon(GIcon.documento, size: GIconSize.sm, color: GardenColors.primary),
                   const SizedBox(width: 8),
                   Text(
                     'Documento ${e.key + 1}',
@@ -434,7 +435,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
     );
   }
 
-  Widget _infoChip(BuildContext context, IconData icon, String label, Color bg, Color color) {
+  Widget _infoChip(BuildContext context, GIcon icon, String label, Color bg, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -444,7 +445,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          GardenIcon(icon, size: GIconSize.xs, color: color),
           const SizedBox(width: 5),
           Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
         ],

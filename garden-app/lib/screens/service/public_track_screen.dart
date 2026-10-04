@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Vista pública de solo lectura para el link de "compartir viaje en vivo"
 /// (ver GardenColors/booking_screen: el dueño genera este link desde el
@@ -111,7 +112,7 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('🐾', style: TextStyle(fontSize: 18)),
+                const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active),
                 const SizedBox(width: 8),
                 Text('Garden — seguimiento en vivo',
                     style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
@@ -138,11 +139,7 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              finished ? Icons.check_circle_outline_rounded : Icons.link_off_rounded,
-              size: 44,
-              color: subtextColor,
-            ),
+            GardenIcon(finished ? GIcon.confirmado : GIcon.desvincular, size: GIconSize.hero, color: subtextColor),
             const SizedBox(height: 16),
             Text(
               finished
@@ -180,7 +177,7 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: const BoxDecoration(color: GardenColors.lime, shape: BoxShape.circle),
-                child: const Icon(Icons.pets_rounded, color: GardenColors.primaryDark, size: 18),
+                child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primaryDark),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -202,7 +199,7 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.circle, size: 7, color: GardenColors.success),
+                  GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: GardenColors.success),
                   SizedBox(width: 5),
                   Text('En vivo',
                       style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
@@ -237,7 +234,7 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
                         point: _track.last,
                         width: 36,
                         height: 36,
-                        child: const Icon(Icons.pets_rounded, color: GardenColors.accent, size: 32),
+                        child: const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.accent),
                       ),
                     ]),
                   ],

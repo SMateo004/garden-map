@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design/garden_icons.dart';
 
 /// Contenido del Centro de Ayuda — Garden Bolivia.
 ///
@@ -566,10 +567,10 @@ const List<HelpCategory> helpCenterCategories = [
           ),
           HelpSection(
             heading: 'Los tres resultados posibles',
-            body: '✅ A favor del cuidador: el pago retenido se libera a su '
+            body: 'A favor del cuidador: el pago retenido se libera a su '
                 'billetera.\n'
-                '❌ A favor del cliente: se procesa un reembolso completo.\n'
-                '⚖️ Resolución parcial: se aplica una solución intermedia '
+                'A favor del cliente: se procesa un reembolso completo.\n'
+                'Resolución parcial: se aplica una solución intermedia '
                 'entre ambas partes.',
           ),
           HelpSection(

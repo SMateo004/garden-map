@@ -217,7 +217,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         _socketConnected = true;
         _socketWatchdog?.cancel();
         _pollTimer?.cancel(); // socket conectó: detener polling si estaba activo
-        debugPrint('GPS: Socket conectado ✓');
+        debugPrint('GPS: Socket conectado');
         _socket!.emit('join_booking', widget.bookingId);
       });
       _socket!.onConnectError((data) {

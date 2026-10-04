@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../design/garden_icons.dart';
 
 class SlotConflictScreen extends StatefulWidget {
   final String bookingId;
@@ -162,7 +163,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: GardenColors.error, size: 28),
+                    const GardenIcon(GIcon.advertencia, size: GIconSize.lg, color: GardenColors.error),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -197,12 +198,11 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                   label: _selectedDate == null
                       ? 'Seleccionar fecha'
                       : _formatDate(_selectedDate!),
-                  icon: Icons.calendar_today_rounded,
+                  icon: GIcon.calendario,
                   onTap: () => _pickDate(),
                   textColor: textColor,
                   subtextColor: subtextColor,
-                  surface: surface,
-                ),
+                  surface: surface),
                 const SizedBox(height: 24),
                 _sectionLabel('Bloque horario', textColor),
                 const SizedBox(height: 10),
@@ -273,12 +273,11 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                   label: _startDate == null
                       ? 'Seleccionar fecha de inicio'
                       : _formatDate(_startDate!),
-                  icon: Icons.calendar_today_rounded,
+                  icon: GIcon.calendario,
                   onTap: () => _pickDate(isStart: true),
                   textColor: textColor,
                   subtextColor: subtextColor,
-                  surface: surface,
-                ),
+                  surface: surface),
                 const SizedBox(height: 20),
                 _sectionLabel('Nueva fecha de fin', textColor),
                 const SizedBox(height: 10),
@@ -286,13 +285,12 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                   label: _endDate == null
                       ? 'Seleccionar fecha de fin'
                       : _formatDate(_endDate!),
-                  icon: Icons.event_rounded,
+                  icon: GIcon.calendario,
                   onTap: _startDate == null ? null : () => _pickDate(isStart: false),
                   textColor: textColor,
                   subtextColor: subtextColor,
                   surface: surface,
-                  disabled: _startDate == null,
-                ),
+                  disabled: _startDate == null),
               ],
 
               if (_errorMessage != null) ...[
@@ -305,7 +303,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: GardenColors.error, size: 18),
+                      const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.error),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -322,15 +320,14 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
 
               GardenButton(
                 label: _isSubmitting ? 'Confirmando...' : 'Confirmar nueva hora',
-                icon: Icons.check_circle_outline_rounded,
+                gIcon: GIcon.confirmado,
                 onPressed: (_canConfirm && !_isSubmitting)
                     ? () {
                         HapticFeedback.mediumImpact();
                         _confirm();
                       }
                     : null,
-                loading: _isSubmitting,
-              ),
+                loading: _isSubmitting),
 
               const SizedBox(height: 12),
               Center(
@@ -354,7 +351,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
 
   Widget _dateTile({
     required String label,
-    required IconData icon,
+    required GIcon icon,
     required VoidCallback? onTap,
     required Color textColor,
     required Color subtextColor,
@@ -379,7 +376,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, color: disabled ? subtextColor.withValues(alpha: 0.4) : GardenColors.primary, size: 20),
+            GardenIcon(icon, size: GIconSize.md, color: disabled ? subtextColor.withValues(alpha: 0.4) : GardenColors.primary),
             const SizedBox(width: 12),
             Text(
               label,
@@ -389,8 +386,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
               ),
             ),
             const Spacer(),
-            Icon(Icons.chevron_right_rounded,
-                color: disabled ? subtextColor.withValues(alpha: 0.3) : subtextColor, size: 20),
+            GardenIcon(GIcon.siguiente, size: GIconSize.md, color: disabled ? subtextColor.withValues(alpha: 0.3) : subtextColor),
           ],
         ),
       ),

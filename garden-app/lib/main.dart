@@ -81,6 +81,7 @@ import 'services/icon_schedule_service.dart';
 import 'utils/web_redirect.dart';
 import 'package:http/http.dart' as http;
 import './widgets/garden_loading_indicator.dart';
+import 'design/garden_icons.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -1140,7 +1141,7 @@ class _GardenErrorWidget extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🐾', style: TextStyle(fontSize: 48)),
+              const GardenIcon(GIcon.huella, size: GIconSize.hero, state: GIconState.active),
               const SizedBox(height: 16),
               Text(
                 'Algo salió mal',

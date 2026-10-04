@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_state.dart';
 import '../../theme/garden_theme.dart';
+import '../../design/garden_icons.dart';
 
 /// Guía completa para nuevos cuidadores GARDEN.
 /// Ruta pública: /guia-cuidador — accesible desde el correo de bienvenida.
@@ -25,9 +26,9 @@ class CaregiverGuideScreen extends StatelessWidget {
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          icon: const GardenIcon(GIcon.soporte, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
           title: const Text('Iniciá sesión para chatear'),
-          content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión.'),
+          content: const Text('Para hablar con nuestro equipo de soporte primero necesitas iniciar sesión.'),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
             FilledButton(
@@ -89,7 +90,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Center(
-                                  child: Text('🌿', style: TextStyle(fontSize: 40)),
+                                  child: GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -136,21 +137,21 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 1. CÓMO FUNCIONA GARDEN
-                          _sectionHeader('1. ¿Cómo funciona GARDEN?', '⚙️', textColor),
+                          _sectionHeader('1. ¿Cómo funciona GARDEN?', GIcon.ajustes, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
-                            _step('🐾', 'Dueños publican su mascota', 'Los clientes buscan cuidadores en el marketplace y te envían una solicitud de reserva.', textColor, subtextColor),
+                            _step(GIcon.huella, 'Dueños publican su mascota', 'Los clientes buscan cuidadores en el marketplace y te envían una solicitud de reserva.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('📅', 'Tú decides si aceptas', 'Revisas la solicitud, la info de la mascota y aceptas o rechazas según tu disponibilidad.', textColor, subtextColor),
+                            _step(GIcon.calendario, 'Tú decides si aceptas', 'Revisas la solicitud, la info de la mascota y aceptas o rechazas según tu disponibilidad.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('✅', 'El cliente paga y confirma', 'El pago se procesa en la app. Nada de efectivo al inicio — todo queda registrado.', textColor, subtextColor),
+                            _step(GIcon.confirmado, 'El cliente paga y confirma', 'El pago se procesa en la app. Nada de efectivo al inicio — todo queda registrado.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('🌟', 'Completas el servicio y cobras', 'Al finalizar el servicio, el dinero entra automáticamente a tu billetera GARDEN.', textColor, subtextColor),
+                            _step(GIcon.estrella, 'Completas el servicio y cobras', 'Al finalizar el servicio, el dinero entra automáticamente a tu billetera GARDEN.', textColor, subtextColor),
                           ]),
                           const SizedBox(height: 32),
 
                           // 2. CÓMO GANAS DINERO
-                          _sectionHeader('2. ¿Cómo ganas dinero?', '💰', textColor),
+                          _sectionHeader('2. ¿Cómo ganas dinero?', GIcon.billetera, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
                             Padding(
@@ -175,22 +176,22 @@ class CaregiverGuideScreen extends StatelessWidget {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('Ejemplo real', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 13)),
+                                        Text('Ejemplo: tu precio → lo que recibes', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 13)),
                                         const SizedBox(height: 12),
-                                        _earningRow('Hospedaje (1 noche)', 'Bs 200', 'Bs 180', textColor, subtextColor),
+                                        _earningRow('Hospedaje (1 noche)', 'Bs 200', 'Bs 200', textColor, subtextColor),
                                         const SizedBox(height: 8),
-                                        _earningRow('Paseo 60 min', 'Bs 80', 'Bs 72', textColor, subtextColor),
+                                        _earningRow('Paseo 60 min', 'Bs 80', 'Bs 80', textColor, subtextColor),
                                         const SizedBox(height: 8),
-                                        _earningRow('Guardería (día)', 'Bs 120', 'Bs 108', textColor, subtextColor),
+                                        _earningRow('Guardería (día)', 'Bs 120', 'Bs 120', textColor, subtextColor),
                                         const SizedBox(height: 12),
                                         Container(height: 1, color: GardenColors.primary.withValues(alpha: 0.15)),
                                         const SizedBox(height: 10),
-                                        Text('Los precios son solo de referencia. Tú decides qué cobrar.', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                        Text('La tarifa de GARDEN y los impuestos se suman aparte al precio que paga el cliente. Los montos son solo de referencia: tú decides qué cobrar.', style: TextStyle(color: subtextColor, fontSize: 11)),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-                                  _infoChip(Icons.trending_up_rounded, '¡Recibes íntegro tu precio! No se descuenta nada de lo que fijas.', GardenColors.success, isDark),
+                                  _infoChip(GIcon.estadisticas, '¡Recibes íntegro tu precio! No se descuenta nada de lo que fijas.', GardenColors.success, isDark),
                                 ],
                               ),
                             ),
@@ -198,21 +199,21 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 3. CÓMO RECIBES RESERVAS
-                          _sectionHeader('3. ¿Cómo recibes reservas?', '📩', textColor),
+                          _sectionHeader('3. ¿Cómo recibes reservas?', GIcon.correo, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
-                            _step('🟢', 'Activa tu disponibilidad', 'Ve a Inicio → Disponibilidad y marca los días y horarios en que puedes atender. Sin disponibilidad activa, no apareces en el marketplace.', textColor, subtextColor),
+                            _step(GIcon.disponibilidad, 'Activa tu disponibilidad', 'Ve a Inicio → Disponibilidad y marca los días y horarios en que puedes atender. Sin disponibilidad activa, no apareces en el marketplace.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('🔔', 'Recibe una notificación', 'Cuando un dueño te envíe una solicitud, recibirás un push y una notificación dentro de la app.', textColor, subtextColor),
+                            _step(GIcon.notificaciones, 'Recibe una notificación', 'Cuando un dueño te envíe una solicitud, recibirás un push y una notificación dentro de la app.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('📋', 'Revisa la solicitud', 'Entra a "Mis Reservas" y verás todos los detalles: mascota, fechas, notas especiales y el monto.', textColor, subtextColor),
+                            _step(GIcon.reservas, 'Revisa la solicitud', 'Entra a "Mis Reservas" y verás todos los detalles: mascota, fechas, notas especiales y el monto.', textColor, subtextColor),
                             _divider(borderColor),
-                            _step('✅ / ❌', 'Acepta o rechaza (24 horas)', 'Tienes 24 horas para responder. Si no respondes, la solicitud se cancela automáticamente. Responder rápido mejora tu ranking.', textColor, subtextColor),
+                            _step(GIcon.confirmado, 'Acepta o rechaza (24 horas)', 'Tienes 24 horas para responder. Si no respondes, la solicitud se cancela automáticamente. Responder rápido mejora tu ranking.', textColor, subtextColor),
                           ]),
                           const SizedBox(height: 32),
 
                           // 4. CÓMO COBRAS TU DINERO
-                          _sectionHeader('4. ¿Cómo cobras tu dinero?', '🏦', textColor),
+                          _sectionHeader('4. ¿Cómo cobras tu dinero?', GIcon.retiro, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
                             Padding(
@@ -227,7 +228,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                     style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
                                   ),
                                   const SizedBox(height: 20),
-                                  _withdrawStep('1', 'Ve a la sección Billetera (ícono 💳 en tu perfil)', textColor, subtextColor),
+                                  _withdrawStep('1', 'Ve a la sección Billetera de tu perfil', textColor, subtextColor),
                                   const SizedBox(height: 12),
                                   _withdrawStep('2', 'Registra tu cuenta bancaria, Tigo Money o código QR', textColor, subtextColor),
                                   const SizedBox(height: 12),
@@ -235,7 +236,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   const SizedBox(height: 12),
                                   _withdrawStep('4', 'El equipo GARDEN procesa tu retiro en 1-3 días hábiles', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _infoChip(Icons.info_outline_rounded, 'Bancos disponibles: Banco Unión, BCP, Banco Fassil, Tigo Money, entre otros.', GardenColors.primary, isDark),
+                                  _infoChip(GIcon.info, 'Bancos disponibles: Banco Unión, BCP, Banco Fassil, Tigo Money, entre otros.', GardenColors.primary, isDark),
                                 ],
                               ),
                             ),
@@ -243,7 +244,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 5. REGLAS Y RESPONSABILIDADES
-                          _sectionHeader('5. Reglas y responsabilidades', '📋', textColor),
+                          _sectionHeader('5. Reglas y responsabilidades', GIcon.reservas, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
                             Padding(
@@ -251,19 +252,19 @@ class CaregiverGuideScreen extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _ruleItem('🐾', 'Bienestar de la mascota primero', 'La seguridad y bienestar del animal es tu responsabilidad total durante el servicio. Cualquier emergencia debe comunicarse al dueño de inmediato.', textColor, subtextColor),
+                                  _ruleItem(GIcon.huella, 'Bienestar de la mascota primero', 'La seguridad y bienestar del animal es tu responsabilidad total durante el servicio. Cualquier emergencia debe comunicarse al dueño de inmediato.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('📸', 'Fotos de actualización', 'Envía fotos o videos al cliente durante el servicio. Los clientes que reciben actualizaciones dejan mejores reseñas.', textColor, subtextColor),
+                                  _ruleItem(GIcon.foto, 'Fotos de actualización', 'Envía fotos o videos al cliente durante el servicio. Los clientes que reciben actualizaciones dejan mejores reseñas.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('⏰', 'Cumple los horarios', 'Si acordaste un horario, respétalo. Cancelaciones de último minuto afectan tu calificación y visibilidad en el marketplace.', textColor, subtextColor),
+                                  _ruleItem(GIcon.alarma, 'Cumple los horarios', 'Si acordaste un horario, respétalo. Cancelaciones de último minuto afectan tu calificación y visibilidad en el marketplace.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('🚫', 'Cero maltrato o negligencia', 'El maltrato animal está terminantemente prohibido y resulta en suspensión permanente de tu cuenta sin posibilidad de apelación.', textColor, subtextColor),
+                                  _ruleItem(GIcon.bloqueado, 'Cero maltrato o negligencia', 'El maltrato animal está terminantemente prohibido y resulta en suspensión permanente de tu cuenta sin posibilidad de apelación.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('📞', 'Comunicación dentro de la app', 'Toda la comunicación con clientes debe realizarse a través del chat de GARDEN para protección de ambas partes.', textColor, subtextColor),
+                                  _ruleItem(GIcon.telefono, 'Comunicación dentro de la app', 'Toda la comunicación con clientes debe realizarse a través del chat de GARDEN para protección de ambas partes.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('⭐', 'Calificación mínima', 'Si acumulas 5 o más calificaciones de 1-2 ⭐, tu cuenta se suspende automáticamente como medida preventiva. Podés pedirle al equipo GARDEN que revise tu caso y reactive tu cuenta.', textColor, subtextColor),
+                                  _ruleItem(GIcon.estrella, 'Calificación mínima', 'Si acumulas 5 o más calificaciones de 1 o 2 estrellas, tu cuenta se suspende automáticamente como medida preventiva. Puedes pedirle al equipo GARDEN que revise tu caso y reactive tu cuenta.', textColor, subtextColor),
                                   const SizedBox(height: 16),
-                                  _ruleItem('🙅', 'Si el cliente no se presenta', 'Si un dueño no aparece para el servicio acordado, tenés hasta 24 horas después de la cancelación para reportarlo desde "Mis Reservas" y así proteger tu calificación y tu tiempo.', textColor, subtextColor),
+                                  _ruleItem(GIcon.bloqueado, 'Si el cliente no se presenta', 'Si un dueño no aparece para el servicio acordado, tienes hasta 24 horas después de la cancelación para reportarlo desde "Mis Reservas" y así proteger tu calificación y tu tiempo.', textColor, subtextColor),
                                 ],
                               ),
                             ),
@@ -271,7 +272,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 6. MANUAL DE USO RÁPIDO
-                          _sectionHeader('6. Manual de uso rápido', '📱', textColor),
+                          _sectionHeader('6. Manual de uso rápido', GIcon.dispositivo, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
                             Padding(
@@ -279,17 +280,17 @@ class CaregiverGuideScreen extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _manualItem(Icons.home_rounded, 'Inicio', 'Tu dashboard principal. Ve tus reservas activas, disponibilidad y estado del perfil de un vistazo.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.inicio, 'Inicio', 'Tu dashboard principal. Ve tus reservas activas, disponibilidad y estado del perfil de un vistazo.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(Icons.calendar_month_rounded, 'Disponibilidad', 'Marca los días y horarios en que puedes atender. Solo apareces en búsquedas cuando tienes disponibilidad activa.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.calendario, 'Disponibilidad', 'Marca los días y horarios en que puedes atender. Solo apareces en búsquedas cuando tienes disponibilidad activa.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(Icons.list_alt_rounded, 'Mis Reservas', 'Gestiona todas tus solicitudes pendientes, reservas activas e historial de servicios.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.lista, 'Mis Reservas', 'Gestiona todas tus solicitudes pendientes, reservas activas e historial de servicios.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(Icons.account_balance_wallet_rounded, 'Billetera', 'Consulta tu saldo disponible y solicita retiros a tu cuenta bancaria o Tigo Money. Protegida con un PIN de 4 dígitos (o huella/Face ID) que vos configurás — te lo pedimos cada vez que entrás.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.billetera, 'Billetera', 'Consulta tu saldo disponible y solicita retiros a tu cuenta bancaria o Tigo Money. Protegida con un PIN de 4 dígitos (o huella/Face ID) que vos configurás — te lo pedimos cada vez que entrás.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(Icons.person_outline_rounded, 'Mi Perfil', 'Edita tu bio, fotos, servicios y tarifas. Un perfil completo y con buenas fotos recibe 3x más solicitudes.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.perfil, 'Mi Perfil', 'Edita tu bio, fotos, servicios y tarifas. Un perfil completo y con buenas fotos recibe 3x más solicitudes.', textColor, subtextColor, borderColor),
                                   const SizedBox(height: 14),
-                                  _manualItem(Icons.star_outline_rounded, 'Reseñas', 'Ve las valoraciones de clientes anteriores. Las reseñas positivas son tu mejor publicidad.', textColor, subtextColor, borderColor),
+                                  _manualItem(GIcon.estrella, 'Reseñas', 'Ve las valoraciones de clientes anteriores. Las reseñas positivas son tu mejor publicidad.', textColor, subtextColor, borderColor),
                                 ],
                               ),
                             ),
@@ -297,7 +298,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 7. CONSEJOS PARA MÁS RESERVAS
-                          _sectionHeader('7. Consejos para tener más reservas', '🚀', textColor),
+                          _sectionHeader('7. Consejos para tener más reservas', GIcon.lanzar, textColor),
                           const SizedBox(height: 12),
                           _card(surface, borderColor, [
                             Padding(
@@ -305,19 +306,19 @@ class CaregiverGuideScreen extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _tipItem('📷', 'Sube fotos de calidad', 'Cuidadores con fotos profesionales reciben hasta 5 veces más solicitudes. Muestra tu hogar, el espacio donde atenderás y tú con mascotas.', textColor, subtextColor),
+                                  _tipItem(GIcon.foto, 'Sube fotos de calidad', 'Cuidadores con fotos profesionales reciben hasta 5 veces más solicitudes. Muestra tu hogar, el espacio donde atenderás y tú con mascotas.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('✍️', 'Escribe una bio convincente', 'Describe tu experiencia, por qué te gustan los animales y qué te diferencia. Los clientes buscan confianza, no solo precio.', textColor, subtextColor),
+                                  _tipItem(GIcon.editar, 'Escribe una bio convincente', 'Describe tu experiencia, por qué te gustan los animales y qué te diferencia. Los clientes buscan confianza, no solo precio.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('⚡', 'Responde rápido', 'Responder solicitudes en menos de 2 horas mejora tu posición en el marketplace. GARDEN premia la rapidez.', textColor, subtextColor),
+                                  _tipItem(GIcon.cronometro, 'Responde rápido', 'Responder solicitudes en menos de 2 horas mejora tu posición en el marketplace. GARDEN premia la rapidez.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('📅', 'Mantén tu disponibilidad actualizada', 'Actualiza tu calendario cada semana. Si tu disponibilidad está vacía o desactualizada, pierdes oportunidades.', textColor, subtextColor),
+                                  _tipItem(GIcon.calendario, 'Mantén tu disponibilidad actualizada', 'Actualiza tu calendario cada semana. Si tu disponibilidad está vacía o desactualizada, pierdes oportunidades.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('💬', 'Pide reseñas con amabilidad', 'Al finalizar cada servicio, puedes pedir amablemente al cliente que deje una reseña. Las primeras 5 reseñas son cruciales.', textColor, subtextColor),
+                                  _tipItem(GIcon.chat, 'Pide reseñas con amabilidad', 'Al finalizar cada servicio, puedes pedir amablemente al cliente que deje una reseña. Las primeras 5 reseñas son cruciales.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('💲', 'Precio competitivo al inicio', 'Si eres nuevo sin reseñas, un precio ligeramente menor al promedio de tu zona te ayuda a conseguir tus primeros clientes.', textColor, subtextColor),
+                                  _tipItem(GIcon.precio, 'Precio competitivo al inicio', 'Si eres nuevo sin reseñas, un precio ligeramente menor al promedio de tu zona te ayuda a conseguir tus primeros clientes.', textColor, subtextColor),
                                   const SizedBox(height: 14),
-                                  _tipItem('🛡️', 'Subí tus antecedentes penales (opcional)', 'Desde tu perfil podés subir tu certificado FELCC/REJAP para conseguir el distintivo "Antecedentes verificados" — genera más confianza y no es obligatorio para operar.', textColor, subtextColor),
+                                  _tipItem(GIcon.protegido, 'Sube tus antecedentes penales (opcional)', 'Desde tu perfil puedes subir tu certificado FELCC/REJAP para conseguir el distintivo "Antecedentes verificados" — genera más confianza y no es obligatorio para operar.', textColor, subtextColor),
                                 ],
                               ),
                             ),
@@ -325,7 +326,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                           const SizedBox(height: 32),
 
                           // 8. SOPORTE
-                          _sectionHeader('8. Contacto y soporte', '🆘', textColor),
+                          _sectionHeader('8. Contacto y soporte', GIcon.soporte, textColor),
                           const SizedBox(height: 12),
                           Container(
                             decoration: BoxDecoration(
@@ -348,7 +349,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 20),
                                 _contactButton(
-                                  icon: Icons.chat_rounded,
+                                  icon: GIcon.chat,
                                   label: 'Chatear con soporte',
                                   subtitle: 'Te respondemos lo antes posible',
                                   color: GardenColors.primary,
@@ -356,7 +357,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 _contactButton(
-                                  icon: Icons.email_outlined,
+                                  icon: GIcon.correo,
                                   label: 'Email',
                                   subtitle: 'contactogardenbo@gmail.com',
                                   color: GardenColors.primary,
@@ -373,7 +374,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.access_time_rounded, color: GardenColors.warning, size: 18),
+                                      const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.warning),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
@@ -393,7 +394,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                           Center(
                             child: Column(
                               children: [
-                                const Text('🌿', style: TextStyle(fontSize: 32)),
+                                const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
                                 const SizedBox(height: 8),
                                 Text(
                                   'GARDEN — Cuidadores de confianza',
@@ -401,7 +402,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '¡Gracias por ser parte de nuestra familia! 🐾',
+                                  '¡Gracias por ser parte de nuestra familia!',
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                               ],
@@ -424,14 +425,14 @@ class CaregiverGuideScreen extends StatelessWidget {
 
   Widget _indexCard(Color surface, Color border, Color text, Color subtext) {
     final items = [
-      ('⚙️', '¿Cómo funciona GARDEN?'),
-      ('💰', '¿Cómo ganas dinero?'),
-      ('📩', '¿Cómo recibes reservas?'),
-      ('🏦', '¿Cómo cobras tu dinero?'),
-      ('📋', 'Reglas y responsabilidades'),
-      ('📱', 'Manual de uso rápido'),
-      ('🚀', 'Consejos para más reservas'),
-      ('🆘', 'Contacto y soporte'),
+      (GIcon.ajustes, '¿Cómo funciona GARDEN?'),
+      (GIcon.billetera, '¿Cómo ganas dinero?'),
+      (GIcon.correo, '¿Cómo recibes reservas?'),
+      (GIcon.retiro, '¿Cómo cobras tu dinero?'),
+      (GIcon.reservas, 'Reglas y responsabilidades'),
+      (GIcon.dispositivo, 'Manual de uso rápido'),
+      (GIcon.lanzar, 'Consejos para más reservas'),
+      (GIcon.soporte, 'Contacto y soporte'),
     ];
     return Container(
       decoration: BoxDecoration(
@@ -448,7 +449,7 @@ class CaregiverGuideScreen extends StatelessWidget {
           ...items.map((i) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(children: [
-              Text(i.$1, style: const TextStyle(fontSize: 16)),
+              GardenIcon(i.$1, size: GIconSize.sm, state: GIconState.active),
               const SizedBox(width: 10),
               Text(i.$2, style: TextStyle(color: subtext, fontSize: 14)),
             ]),
@@ -458,10 +459,10 @@ class CaregiverGuideScreen extends StatelessWidget {
     );
   }
 
-  Widget _sectionHeader(String title, String emoji, Color textColor) {
+  Widget _sectionHeader(String title, GIcon icon, Color textColor) {
     return Row(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 24)),
+        GardenIcon(icon, size: GIconSize.lg, state: GIconState.active),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -484,7 +485,7 @@ class CaregiverGuideScreen extends StatelessWidget {
     );
   }
 
-  Widget _step(String icon, String title, String desc, Color text, Color subtext) {
+  Widget _step(GIcon icon, String title, String desc, Color text, Color subtext) {
     return Padding(
       padding: const EdgeInsets.all(18),
       child: Row(
@@ -497,7 +498,7 @@ class CaregiverGuideScreen extends StatelessWidget {
               color: GardenColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Center(child: Text(icon, style: const TextStyle(fontSize: 18))),
+            child: Center(child: GardenIcon(icon, state: GIconState.active)),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -523,13 +524,13 @@ class CaregiverGuideScreen extends StatelessWidget {
         Expanded(child: Text(service, style: TextStyle(color: subtext, fontSize: 13))),
         const SizedBox(width: 8),
         Text(clientPays, style: TextStyle(color: subtext, fontSize: 13)),
-        const Icon(Icons.arrow_forward_rounded, size: 14, color: GardenColors.primary),
+        const GardenIcon(GIcon.avanzar, size: GIconSize.xs, color: GardenColors.primary),
         Text(youReceive, style: const TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w800)),
       ],
     );
   }
 
-  Widget _infoChip(IconData icon, String text, Color color, bool isDark) {
+  Widget _infoChip(GIcon icon, String text, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -540,7 +541,7 @@ class CaregiverGuideScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 16),
+          GardenIcon(icon, color: color, size: GIconSize.sm),
           const SizedBox(width: 8),
           Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12, height: 1.4))),
         ],
@@ -572,11 +573,14 @@ class CaregiverGuideScreen extends StatelessWidget {
     );
   }
 
-  Widget _ruleItem(String emoji, String title, String desc, Color text, Color subtext) {
+  Widget _ruleItem(GIcon icon, String title, String desc, Color text, Color subtext) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: GardenIcon(icon, state: GIconState.active),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -592,7 +596,7 @@ class CaregiverGuideScreen extends StatelessWidget {
     );
   }
 
-  Widget _manualItem(IconData icon, String title, String desc, Color text, Color subtext, Color border) {
+  Widget _manualItem(GIcon icon, String title, String desc, Color text, Color subtext, Color border) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -603,7 +607,7 @@ class CaregiverGuideScreen extends StatelessWidget {
             color: GardenColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Icon(icon, color: GardenColors.primary, size: 22),
+          child: Center(child: GardenIcon(icon, color: GardenColors.primary, size: GIconSize.md, state: GIconState.active)),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -620,11 +624,14 @@ class CaregiverGuideScreen extends StatelessWidget {
     );
   }
 
-  Widget _tipItem(String emoji, String title, String desc, Color text, Color subtext) {
+  Widget _tipItem(GIcon icon, String title, String desc, Color text, Color subtext) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: GardenIcon(icon, state: GIconState.active),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -641,7 +648,7 @@ class CaregiverGuideScreen extends StatelessWidget {
   }
 
   Widget _contactButton({
-    required IconData icon,
+    required GIcon icon,
     required String label,
     required String subtitle,
     required Color color,
@@ -662,7 +669,7 @@ class CaregiverGuideScreen extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 24),
+              child: Center(child: GardenIcon(icon, color: color, size: GIconSize.lg, state: GIconState.active)),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -675,7 +682,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, color: color.withValues(alpha: 0.5), size: 14),
+            GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: color.withValues(alpha: 0.5)),
           ],
         ),
       ),

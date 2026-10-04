@@ -1191,7 +1191,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Row(children: [
-            Icon(Icons.error_outline, color: GardenColors.error),
+            GardenIcon(GIcon.conflicto, size: GIconSize.lg, color: GardenColors.error),
             SizedBox(width: 8),
             Text('Error al registrarse'),
           ]),
@@ -1448,9 +1448,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
     final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
 
-    InputDecoration _field(String hint, IconData icon) => InputDecoration(
+    InputDecoration _field(String hint, GIcon icon) => InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: subtextColor, size: 20),
+      prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
     );
 
     return SingleChildScrollView(
@@ -1470,29 +1470,29 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Row(children: [
             Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
                 inputFormatters: [noDigitsFormatter],
-                decoration: _field('Nombre', Icons.person_outlined))),
+                decoration: _field('Nombre', GIcon.perfil))),
             const SizedBox(width: 12),
             Expanded(child: TextFormField(controller: _lastNameController, style: TextStyle(color: textColor),
                 inputFormatters: [noDigitsFormatter],
-                decoration: _field('Apellido', Icons.person_outline))),
+                decoration: _field('Apellido', GIcon.perfil))),
           ]),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep0Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
-              style: TextStyle(color: textColor), decoration: _field('Correo electrónico', Icons.email_outlined)),
+              style: TextStyle(color: textColor), decoration: _field('Correo electrónico', GIcon.correo)),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep0Password, height: 0),
           TextFormField(controller: _passwordController, obscureText: true,
-              style: TextStyle(color: textColor), decoration: _field('Contraseña (mínimo 8 caracteres)', Icons.lock_outlined)),
+              style: TextStyle(color: textColor), decoration: _field('Contraseña (mínimo 8 caracteres)', GIcon.seguridad)),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep0Phone, height: 0),
           TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
               readOnly: _phoneVerifiedLocked,
               style: TextStyle(color: textColor),
-              decoration: _field('Teléfono (ej: 76543210)', Icons.phone_outlined).copyWith(
+              decoration: _field('Teléfono (ej: 76543210)', GIcon.telefono).copyWith(
                 suffixIcon: _phoneVerifiedLocked ? const Padding(padding: EdgeInsets.all(14), child: GardenIcon(GIcon.verificado, state: GIconState.active, size: GIconSize.sm, color: GardenColors.success)) : null,
               )),
           if (_phoneVerifiedLocked)
@@ -1588,7 +1588,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 border: Border.all(color: _dateOfBirth != null ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
               ),
               child: Row(children: [
-                Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                GardenIcon(GIcon.cumpleanos, size: GIconSize.md, color: subtextColor),
                 const SizedBox(width: 12),
                 Text(
                   _dateOfBirth == null ? 'Fecha de nacimiento' : _formatDate(_dateOfBirth!),
@@ -1596,7 +1596,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 ),
                 const Spacer(),
                 if (_dateOfBirth != null)
-                  const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 18),
+                  const GardenIcon(GIcon.confirmado, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
               ]),
             ),
           ),
@@ -1697,7 +1697,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
             ),
             child: Row(children: [
-              const Icon(Icons.info_outline, color: GardenColors.primary, size: 15),
+              const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 8),
               Expanded(child: Text(
                 '8 dígitos, empieza con 6 o 7',
@@ -1749,7 +1749,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.keyboard_double_arrow_down_rounded, color: GardenColors.primary, size: 15),
+                const GardenIcon(GIcon.desplegar, size: GIconSize.xs, color: GardenColors.primary),
                 const SizedBox(width: 6),
                 Text('Desliza hasta el final para poder aceptar',
                     style: TextStyle(fontSize: 11.5, color: GardenColors.primary, fontWeight: FontWeight.w700)),
@@ -1773,16 +1773,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               border: Border.all(color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.3)),
             ),
             child: Row(children: [
-              Icon(
-                _contractScrolledToEnd ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                color: _contractScrolledToEnd ? GardenColors.success : GardenColors.primary,
-                size: 20,
-              ),
+              GardenIcon(_contractScrolledToEnd ? GIcon.confirmado : GIcon.info, size: GIconSize.md, state: _contractScrolledToEnd ? GIconState.active : GIconState.idle, color: _contractScrolledToEnd ? GardenColors.success : GardenColors.primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   _contractScrolledToEnd
-                      ? 'Llegaste al final. Ya podés aceptar el contrato.'
+                      ? 'Llegaste al final. Ya puedes aceptar el contrato.'
                       : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
                   style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
                 ),
@@ -1818,10 +1814,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Container(
             width: 56, height: 56,
             decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: const Icon(Icons.lock_outline_rounded, color: GardenColors.primary, size: 28),
+            child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, color: GardenColors.primary),
           ),
           const SizedBox(height: 16),
-          Text('Creá tu PIN de seguridad',
+          Text('Crea tu PIN de seguridad',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 6),
           Text(
@@ -1950,7 +1946,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
               ),
               child: Row(children: [
-                const Icon(Icons.info_outline, color: GardenColors.primary, size: 15),
+                const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   'Estas fotos se mostrarán al final de tu perfil, organizadas por sección.',
@@ -2093,13 +2089,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       children: [
         ...uploaded.asMap().entries.map((e) => _photoCell(
           child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover),
-          badge: const Icon(Icons.check, color: Colors.white, size: 12),
+          badge: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white),
           badgeColor: GardenColors.success,
           onRemove: () => onRemoveUploaded(e.value),
         )),
         ...local.asMap().entries.map((e) => _photoCell(
           child: Image.memory(e.value.bytes, fit: BoxFit.cover),
-          badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 12),
+          badge: const GardenIcon(GIcon.subir, size: GIconSize.xs, color: Colors.white),
           badgeColor: GardenColors.warning,
           onRemove: () => onRemoveLocal(e.key),
         )),
@@ -2113,7 +2109,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
               ),
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 28),
+                const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary),
                 const SizedBox(height: 4),
                 Text('Añadir', style: TextStyle(color: subtextColor, fontSize: 10)),
               ]),
@@ -2136,7 +2132,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         padding: const EdgeInsets.only(right: 8),
         child: SizedBox(width: 72, height: 72, child: _photoCell(
           child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover),
-          badge: const Icon(Icons.check, color: Colors.white, size: 11),
+          badge: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white),
           badgeColor: GardenColors.success,
           onRemove: () => setState(() => _placePhotoUrls[section]?.remove(e.value)),
         )),
@@ -2145,7 +2141,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         padding: const EdgeInsets.only(right: 8),
         child: SizedBox(width: 72, height: 72, child: _photoCell(
           child: Image.memory(e.value.bytes, fit: BoxFit.cover),
-          badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 11),
+          badge: const GardenIcon(GIcon.subir, size: GIconSize.xs, color: Colors.white),
           badgeColor: GardenColors.warning,
           onRemove: () => setState(() { final l = _localPlacePhotos[section]; l?.removeAt(e.key); }),
         )),
@@ -2160,7 +2156,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
             ),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 22),
+              const GardenIcon(GIcon.foto, size: GIconSize.md, color: GardenColors.primary),
               const SizedBox(height: 3),
               Text('Foto', style: TextStyle(color: subtextColor, fontSize: 9)),
             ]),
@@ -2182,7 +2178,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         child: Container(
           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
           padding: const EdgeInsets.all(3),
-          child: const Icon(Icons.close, color: Colors.white, size: 11),
+          child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white),
         ),
       )),
     ]);
@@ -2242,7 +2238,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 Container(
                   width: 20, height: 20,
                   decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                  child: const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                  child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white),
                 ),
               ],
             ],
@@ -2540,7 +2536,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 6),
           Row(children: [
-            const Icon(Icons.info_outline, color: GardenColors.primary, size: 14),
+            const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
             const SizedBox(width: 6),
             Expanded(child: Text('Rango de precio configurado por GARDEN', style: TextStyle(fontSize: 12, color: subtextColor))),
           ]),
@@ -2769,17 +2765,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
           const Text('Sobre ti y tu método', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          TextFormField(controller: _bioDetailController, maxLines: 4, decoration: const InputDecoration(hintText: 'Biografía detallada: tu experiencia, método de cuidado, formaciones...', prefixIcon: Padding(padding: EdgeInsets.only(bottom: 64), child: Icon(Icons.person_pin, color: kTextSecondary)), alignLabelWithHint: true)),
+          TextFormField(controller: _bioDetailController, maxLines: 4, decoration: const InputDecoration(hintText: 'Biografía detallada: tu experiencia, método de cuidado, formaciones...', prefixIcon: Padding(padding: EdgeInsets.only(bottom: 64), child: GardenIcon(GIcon.ubicacion, size: GIconSize.lg, color: kTextSecondary)), alignLabelWithHint: true)),
           const SizedBox(height: 8),
-          TextFormField(controller: _whyCaregiverController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Por qué quieres ser cuidador?', prefixIcon: Icon(Icons.help_outline, color: kTextSecondary))),
+          TextFormField(controller: _whyCaregiverController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Por qué quieres ser cuidador?', prefixIcon: GardenIcon(GIcon.ayuda, size: GIconSize.lg, color: kTextSecondary))),
           const SizedBox(height: 8),
-          TextFormField(controller: _whatDiffersController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Qué te diferencia de otros?', prefixIcon: Icon(Icons.star_outline, color: kTextSecondary))),
+          TextFormField(controller: _whatDiffersController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Qué te diferencia de otros?', prefixIcon: GardenIcon(GIcon.estrella, size: GIconSize.lg, color: kTextSecondary))),
           const SizedBox(height: 8),
-          TextFormField(controller: _handleAnxiousController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Cómo manejas ansiedad?', prefixIcon: Icon(Icons.pets, color: kTextSecondary))),
+          TextFormField(controller: _handleAnxiousController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Cómo manejas ansiedad?', prefixIcon: GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, color: kTextSecondary))),
           const SizedBox(height: 8),
-          TextFormField(controller: _emergencyResponseController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Qué harías en emergencia?', prefixIcon: Icon(Icons.warning_amber_rounded, color: kTextSecondary))),
+          TextFormField(controller: _emergencyResponseController, maxLines: 2, decoration: const InputDecoration(hintText: '¿Qué harías en emergencia?', prefixIcon: GardenIcon(GIcon.advertencia, size: GIconSize.lg, color: kTextSecondary))),
           const SizedBox(height: 8),
-          TextFormField(controller: _typicalDayController, maxLines: 2, decoration: const InputDecoration(hintText: 'Describe un día típico', prefixIcon: Icon(Icons.calendar_today, color: kTextSecondary))),
+          TextFormField(controller: _typicalDayController, maxLines: 2, decoration: const InputDecoration(hintText: 'Describe un día típico', prefixIcon: GardenIcon(GIcon.calendario, size: GIconSize.lg, color: kTextSecondary))),
           const SizedBox(height: 24),
         ]
       )
@@ -2848,7 +2844,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.camera_alt_outlined, size: 56, color: subtextColor),
+                              GardenIcon(GIcon.foto, size: GIconSize.hero, color: subtextColor),
                               const SizedBox(height: 10),
                               Text('Subir foto', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600, fontSize: 14)),
                             ],
@@ -2868,7 +2864,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
               ),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.success),
                 SizedBox(width: 8),
                 Text('¡Excelente elección! Estás listo para empezar.',
                     style: TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -2884,7 +2880,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a armar tu perfil',
-        subtitle: 'Son 4 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son 4 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -3092,7 +3088,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               children: [
                                 if (_currentStep > 0)
                                   IconButton(
-                                    icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18),
+                                    icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor),
                                     onPressed: _prevStep,
                                     tooltip: 'Paso anterior',
                                     padding: EdgeInsets.zero,

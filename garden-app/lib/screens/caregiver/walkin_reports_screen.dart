@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Reportes de negocio — solo dueño (nunca montado para staff, ni en el
 /// backend ni acá). Ocupación histórica + cierre de caja de walk-ins, mismo
@@ -103,7 +104,7 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
             elevation: 0,
             title: Text('Reportes', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
             iconTheme: IconThemeData(color: textColor),
-            actions: [IconButton(onPressed: _pickRange, icon: const Icon(Icons.date_range_rounded), color: GardenColors.primary)],
+            actions: [IconButton(onPressed: _pickRange, icon: const GardenIcon(GIcon.calendario, size: GIconSize.lg, inheritColor: true), color: GardenColors.primary)],
           ),
           body: _isLoading
               ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))

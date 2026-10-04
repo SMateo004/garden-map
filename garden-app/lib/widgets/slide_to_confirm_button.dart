@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
 import './garden_loading_indicator.dart';
+import '../design/garden_icons.dart';
 
 /// Botón deslizante de confirmación.
 /// El usuario debe arrastrar el thumb de izquierda a derecha hasta el
@@ -153,8 +154,7 @@ class _SlideToConfirmButtonState extends State<SlideToConfirmButton>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.chevron_right_rounded,
-                                  size: 18, color: widget.color.withValues(alpha: 0.7)),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: widget.color.withValues(alpha: 0.7)),
                               const SizedBox(width: 4),
                               Text(
                                 widget.label,
@@ -165,8 +165,7 @@ class _SlideToConfirmButtonState extends State<SlideToConfirmButton>
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Icon(Icons.chevron_right_rounded,
-                                  size: 18, color: widget.color.withValues(alpha: 0.7)),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: widget.color.withValues(alpha: 0.7)),
                             ],
                           ),
                         ),

@@ -8,6 +8,8 @@ import '../../services/caregiver_crm_service.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_visit_detail_screen.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
 
 /// Ficha completa de una mascota walk-in — mismos campos/agrupamiento que
 /// el formulario de mascota real (my_pets_screen.dart _PetFormSheet), pero
@@ -187,16 +189,8 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
     }
   }
 
-  String _serviceEmoji(String type) {
-    switch (type) {
-      case 'HOSPEDAJE':
-        return '🏠';
-      case 'GUARDERIA':
-        return '🏡';
-      default:
-        return '🐕';
-    }
-  }
+  GIcon _serviceIcon(String type) =>
+      GIcon.forService(GardenService.fromApi(type) ?? GardenService.paseo);
 
   String _fmtDate(String iso) {
     final d = DateTime.parse(iso).toLocal();
@@ -236,10 +230,10 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
               prefixIcon: icon != null ? Icon(icon, color: GardenColors.primary, size: 18) : null,
             );
 
-        Widget sectionHeader(String emoji, String title) => Padding(
+        Widget sectionHeader(GIcon icon, String title) => Padding(
               padding: const EdgeInsets.only(top: 16, bottom: 12),
               child: Row(children: [
-                Text(emoji, style: const TextStyle(fontSize: 16)),
+                GardenIcon(icon, size: GIconSize.sm, state: GIconState.active),
                 const SizedBox(width: 8),
                 Text(title, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                 const SizedBox(width: 8),
@@ -272,7 +266,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                   border: Border.all(color: active ? activeColor.withValues(alpha: 0.4) : borderColor),
                 ),
                 child: Row(children: [
-                  Icon(active ? Icons.check_circle_rounded : Icons.circle_outlined, color: active ? activeColor : subtextColor, size: 20),
+                  GardenIcon(active ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.md, state: active ? GIconState.active : GIconState.idle, color: active ? activeColor : subtextColor),
                   const SizedBox(width: 10),
                   Expanded(child: Text(label, style: TextStyle(color: active ? activeColor : textColor, fontWeight: FontWeight.w600, fontSize: 14))),
                 ]),
@@ -295,7 +289,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                               width: 72,
                               height: 72,
                               color: GardenColors.primary.withValues(alpha: 0.1),
-                              child: const Icon(Icons.broken_image_outlined, color: GardenColors.primary, size: 24))),
+                              child: const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.primary))),
                     ),
                     Positioned(
                       top: 2,
@@ -305,7 +299,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(3),
                           decoration: const BoxDecoration(color: GardenColors.error, shape: BoxShape.circle),
-                          child: const Icon(Icons.close, color: Colors.white, size: 10),
+                          child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white),
                         ),
                       ),
                     ),
@@ -322,7 +316,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                   ),
                   child: uploading
                       ? const Padding(padding: EdgeInsets.all(22), child: GardenLoadingIndicator(color: GardenColors.primary))
-                      : const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 24),
+                      : const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary),
                 ),
               ),
             ],
@@ -363,15 +357,15 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                                           width: 90,
                                           height: 90,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 36)))
-                                  : const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 36),
+                                          errorBuilder: (_, __, ___) => const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary)))
+                                  : const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.primary),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text('Foto de perfil', style: TextStyle(color: subtextColor, fontSize: 11)),
                     ]),
                   ),
-                  sectionHeader('🐾', 'Información básica'),
+                  sectionHeader(GIcon.huella, 'Información básica'),
                   TextFormField(
                     controller: _nameCtrl,
                     style: TextStyle(color: textColor),
@@ -382,9 +376,9 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                   Text('Tipo de mascota', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Row(children: [
-                    chip('🐕 Perro', _animalType == 'DOGS', () => setState(() => _animalType = _animalType == 'DOGS' ? null : 'DOGS')),
+                    chip('Perro', _animalType == 'DOGS', () => setState(() => _animalType = _animalType == 'DOGS' ? null : 'DOGS')),
                     const SizedBox(width: 10),
-                    chip('🐈 Gato', _animalType == 'CATS', () => setState(() => _animalType = _animalType == 'CATS' ? null : 'CATS')),
+                    chip('Gato', _animalType == 'CATS', () => setState(() => _animalType = _animalType == 'CATS' ? null : 'CATS')),
                   ]),
                   const SizedBox(height: 12),
                   Row(children: [
@@ -425,13 +419,13 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                   ]),
                   const SizedBox(height: 12),
                   TextFormField(controller: _colorCtrl, style: TextStyle(color: textColor), decoration: fieldDeco('Color / pelaje', icon: Icons.palette_outlined)),
-                  sectionHeader('💉', 'Salud e identificación'),
+                  sectionHeader(GIcon.vacuna, 'Salud e identificación'),
                   Text('Género', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Row(children: [
-                    chip('♂ Macho', _gender == 'MALE', () => setState(() => _gender = _gender == 'MALE' ? null : 'MALE')),
+                    chip('Macho', _gender == 'MALE', () => setState(() => _gender = _gender == 'MALE' ? null : 'MALE')),
                     const SizedBox(width: 10),
-                    chip('♀ Hembra', _gender == 'FEMALE', () => setState(() => _gender = _gender == 'FEMALE' ? null : 'FEMALE')),
+                    chip('Hembra', _gender == 'FEMALE', () => setState(() => _gender = _gender == 'FEMALE' ? null : 'FEMALE')),
                   ]),
                   const SizedBox(height: 14),
                   toggle('Esterilizado/a', _sterilized == true, GardenColors.success, () => setState(() => _sterilized = !(_sterilized ?? false))),
@@ -446,7 +440,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                     maxLines: 2,
                     decoration: fieldDeco('Necesidades especiales / alergias (opcional)', icon: Icons.medical_services_outlined),
                   ),
-                  sectionHeader('📷', 'Fotos adicionales'),
+                  sectionHeader(GIcon.galeria, 'Fotos adicionales'),
                   Text('Para conocer mejor a la mascota. Máx. 4 fotos.', style: TextStyle(color: subtextColor, fontSize: 12)),
                   const SizedBox(height: 10),
                   photoGrid(
@@ -455,7 +449,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                     () => _pickInto(() => _extraPhotos, (v) => _extraPhotos = v, (b) => _uploadingExtra = b, 4, 'fotos adicionales'),
                     (i) => setState(() => _extraPhotos = [..._extraPhotos]..removeAt(i)),
                   ),
-                  sectionHeader('🔬', 'Fotos de vacunas (opcional)'),
+                  sectionHeader(GIcon.vacuna, 'Fotos de vacunas (opcional)'),
                   Text('Fotos del carnet de vacunación.', style: TextStyle(color: subtextColor, fontSize: 12)),
                   const SizedBox(height: 10),
                   photoGrid(
@@ -464,7 +458,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                     () => _pickInto(() => _vaccinePhotos, (v) => _vaccinePhotos = v, (b) => _uploadingVaccine = b, 4, 'fotos de vacunas'),
                     (i) => setState(() => _vaccinePhotos = [..._vaccinePhotos]..removeAt(i)),
                   ),
-                  sectionHeader('📋', 'Documentos (opcional)'),
+                  sectionHeader(GIcon.documento, 'Documentos (opcional)'),
                   Text('Pedigree, registros veterinarios u otros documentos.', style: TextStyle(color: subtextColor, fontSize: 12)),
                   const SizedBox(height: 10),
                   photoGrid(
@@ -474,7 +468,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                     (i) => setState(() => _documents = [..._documents]..removeAt(i)),
                   ),
                   if (_isEditing) ...[
-                    sectionHeader('🕓', 'Historial de visitas'),
+                    sectionHeader(GIcon.historial, 'Historial de visitas'),
                     if (_loadingHistory)
                       const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: GardenLoadingIndicator(color: GardenColors.primary)))
                     else if (_visits.isEmpty)
@@ -498,7 +492,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                               border: Border.all(color: borderColor),
                             ),
                             child: Row(children: [
-                              Text(_serviceEmoji(v['serviceType'] as String), style: const TextStyle(fontSize: 20)),
+                              GardenIcon(_serviceIcon(v['serviceType'] as String), size: GIconSize.md, state: GIconState.active),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
@@ -512,7 +506,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                                   ],
                                 ),
                               ),
-                              Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
                             ]),
                           ),
                         ),

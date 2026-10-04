@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'secure_storage_service.dart';
+import '../design/garden_icons.dart';
 
 /// In-app notification polling service for web.
 /// On mobile, FCM handles push — this service only activates on kIsWeb.
@@ -189,7 +190,7 @@ class _WebToastState extends State<_WebToast> with SingleTickerProviderStateMixi
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🌿', style: TextStyle(fontSize: 20)),
+                  const GardenIcon(GIcon.huella, size: GIconSize.md, state: GIconState.active),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -207,7 +208,7 @@ class _WebToastState extends State<_WebToast> with SingleTickerProviderStateMixi
                   ),
                   GestureDetector(
                     onTap: widget.onDismiss,
-                    child: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.5), size: 16),
+                    child: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: Colors.white.withValues(alpha: 0.5)),
                   ),
                 ],
               ),

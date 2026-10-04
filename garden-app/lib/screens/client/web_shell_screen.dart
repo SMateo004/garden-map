@@ -11,6 +11,7 @@ import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
 import '../../services/auth_state.dart';
 import '../../utils/web_redirect.dart';
+import '../../design/garden_icons.dart';
 
 /// Shell de navegación para el cliente en WEB.
 /// Muestra las pestañas en el header (AppBar) en lugar de la barra inferior.
@@ -262,13 +263,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                                 style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                               const SizedBox(width: 6),
-                              Icon(
-                                _authToken.isNotEmpty
-                                    ? Icons.account_circle_outlined
-                                    : Icons.login_outlined,
-                                size: 18,
-                                color: GardenColors.primary,
-                              ),
+                              GardenIcon(_authToken.isNotEmpty ? GIcon.perfil : GIcon.entrar, size: GIconSize.sm, color: GardenColors.primary),
                             ]),
                           ),
                         ),
@@ -319,7 +314,7 @@ class _HelpFooterBar extends StatelessWidget {
               const Spacer(),
               TextButton.icon(
                 onPressed: () => context.push('/help-center'),
-                icon: const Icon(Icons.help_outline_rounded, size: 18, color: GardenColors.primary),
+                icon: const GardenIcon(GIcon.ayuda, size: GIconSize.sm, color: GardenColors.primary),
                 label: const Text(
                   'Centro de Ayuda',
                   style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),

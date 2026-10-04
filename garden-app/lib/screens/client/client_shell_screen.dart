@@ -54,32 +54,32 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
         Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
         return [
           const TutorialStep(
-            emoji: '🌿',
+            icon: GIcon.huella,
             title: '¡Bienvenido a GARDEN!',
             body: 'Tu app para encontrar cuidadores de confianza para tu mascota. Te mostramos cómo funciona en segundos.',
           ),
           TutorialStep(
-            emoji: '🔍',
+            icon: GIcon.buscar,
             title: 'Encuentra cuidadores',
             body: 'Busca y filtra cuidadores por servicio, zona y disponibilidad. Compara perfiles y reserva el que más te convenza.',
             spotlightCenter: nav(0),
           ),
           TutorialStep(
-            emoji: '📅',
+            icon: GIcon.reservas,
             title: 'Tus reservas',
             body: 'Sigue en tiempo real todas tus reservas: activas, pendientes de confirmación e historial de servicios pasados.',
             spotlightCenter: nav(1),
           ),
           TutorialStep(
-            emoji: '🐾',
+            icon: GIcon.mascotas,
             title: 'Tus mascotas',
             body: 'Registra a tus peludos con su foto, vacunas y necesidades especiales para que el cuidador llegue preparado.',
             spotlightCenter: nav(2),
           ),
           TutorialStep(
-            emoji: '👤',
+            icon: GIcon.perfil,
             title: 'Tu perfil',
-            body: 'Gestiona tu cuenta, tus datos y preferencias. ¡Todo listo para tu primera reserva! 🎉',
+            body: 'Gestiona tu cuenta, tus datos y preferencias. ¡Todo listo para tu primera reserva!',
             spotlightCenter: nav(3),
           ),
         ];

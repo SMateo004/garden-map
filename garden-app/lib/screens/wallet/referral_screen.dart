@@ -196,7 +196,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                         const SizedBox(height: 20),
                         Text('¿Alguien te invitó?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
-                        Text('Cargá su código antes de tu primer servicio para que los dos ganen.',
+                        Text('Carga su código antes de tu primer servicio para que los dos ganen.',
                             style: TextStyle(color: subtextColor, fontSize: 12)),
                         const SizedBox(height: 10),
                         Row(

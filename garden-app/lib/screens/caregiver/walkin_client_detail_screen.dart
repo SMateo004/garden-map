@@ -3,6 +3,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_pet_form_screen.dart';
+import '../../design/garden_icons.dart';
 
 /// Ficha de un cliente walk-in: datos editables + lista de sus mascotas.
 class WalkInClientDetailScreen extends StatefulWidget {
@@ -152,7 +153,7 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
               if (c != null)
                 IconButton(
                   onPressed: _openEditSheet,
-                  icon: const Icon(Icons.edit_outlined),
+                  icon: const GardenIcon(GIcon.editar, size: GIconSize.lg, inheritColor: true),
                   color: GardenColors.primary,
                 ),
             ],
@@ -162,7 +163,7 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
               : FloatingActionButton.extended(
                   onPressed: () => _openPetForm(),
                   backgroundColor: GardenColors.primary,
-                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, color: Colors.white),
                   label: const Text('Agregar mascota', style: TextStyle(color: Colors.white)),
                 ),
           body: _isLoading
@@ -221,11 +222,11 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
                                         ? NetworkImage(fixImageUrl(p['photoUrl'] as String))
                                         : null,
                                     child: (p['photoUrl'] as String?)?.isNotEmpty != true
-                                        ? const Icon(Icons.pets_rounded, color: GardenColors.primary)
+                                        ? const GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary)
                                         : null,
                                   ),
                                   title: Text(p['name'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
-                                  trailing: Icon(Icons.chevron_right_rounded, color: subtextColor),
+                                  trailing: GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
                                   onTap: () => _openPetForm(existing: p),
                                 ),
                               ),

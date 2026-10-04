@@ -41,6 +41,7 @@ import '../../widgets/estimated_earnings_banner.dart';
 import 'phone_verification_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
+import '../../design/garden_icons.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
   /// When true, the screen queries the backend on load to jump straight to
@@ -106,9 +107,9 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   // ── Paso 3: Servicios ──────────────────────────────────────────────────────
   final List<String> _services = [];
   static const _serviceOptions = [
-    ('PASEO',      '🦮', 'Paseo'),
-    ('HOSPEDAJE',  '🏠', 'Hospedaje'),
-    ('GUARDERIA',  '🏡', 'Guardería'),
+    ('PASEO',      GIcon.paseo, 'Paseo'),
+    ('HOSPEDAJE',  GIcon.hospedaje, 'Hospedaje'),
+    ('GUARDERIA',  GIcon.guarderia, 'Guardería'),
   ];
 
   /// businessType ya no se pregunta aparte — se infiere de los servicios
@@ -138,11 +139,11 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   bool _uploadingPlacePhoto = false;
 
   static const _placeSections = [
-    ('sala',         '🛋️ Sala / Área principal',   true),
-    ('descanso',     '🛏️ Zona de descanso',         true),
-    ('alimentacion', '🍽️ Área de alimentación',     true),
-    ('jardin',       '🌿 Jardín / Patio',            false),
-    ('juego',        '🎾 Área de juego',             false),
+    ('sala',         'Sala / Área principal',   true),
+    ('descanso',     'Zona de descanso',         true),
+    ('alimentacion', 'Área de alimentación',     true),
+    ('jardin',       'Jardín / Patio',            false),
+    ('juego',        'Área de juego',             false),
   ];
 
   // ── Paso 6: Precios ────────────────────────────────────────────────────────
@@ -843,7 +844,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a registrar tu empresa',
-        subtitle: 'Son 6 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son 6 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -900,7 +901,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         elevation: 0,
         leading: _currentStep > 0
             ? IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+                icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
                 onPressed: () => setState(() => _currentStep--),
               )
             : null,
@@ -1007,7 +1008,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.business_rounded, color: GardenColors.primary, size: 48),
+        const GardenIcon(GIcon.empresa, size: GIconSize.hero, color: GardenColors.primary),
         const SizedBox(height: 16),
         Text('Registro para empresas', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
@@ -1035,9 +1036,9 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 18),
+                GardenIcon(GIcon.confirmado, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
                 SizedBox(width: 8),
-                Text('✓ Código válido', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w600)),
+                Text('Código válido', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -1066,7 +1067,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           controller: _passwordCtrl,
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
-            icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+            icon: GardenIcon(_obscurePassword ? GIcon.ocultar : GIcon.ver, size: GIconSize.md, inheritColor: true),
             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
@@ -1143,7 +1144,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         Text('Selecciona todos los servicios que tu empresa brinda.',
             style: TextStyle(color: subtextColor, fontSize: 14)),
         const SizedBox(height: 24),
-        for (final (key, emoji, label) in _serviceOptions)
+        for (final (key, icon, label) in _serviceOptions)
           GestureDetector(
             onTap: () => setState(() => _services.contains(key) ? _services.remove(key) : _services.add(key)),
             child: AnimatedContainer(
@@ -1160,12 +1161,12 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
               ),
               child: Row(
                 children: [
-                  Text(emoji, style: const TextStyle(fontSize: 28)),
+                  GardenIcon(icon, size: GIconSize.xl, state: GIconState.active),
                   const SizedBox(width: 14),
                   Text(label, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   if (_services.contains(key))
-                    const Icon(Icons.check_circle_rounded, color: GardenColors.primary),
+                    const GardenIcon(GIcon.confirmado, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
                 ],
               ),
             ),
@@ -1218,7 +1219,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         const SizedBox(height: 24),
 
         // Caregiver photos = service photos for companies
-        Text('📸 Fotos de servicios', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+        Text('Fotos de servicios', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         Text('Muestra tu empresa en acción '
             '(mín. ${_services.length == 1 && _services.contains('PASEO') ? 2 : 4}, máx. 6)',
@@ -1229,7 +1230,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
 
         if (_needsPlacePhotos) ...[
           const SizedBox(height: 28),
-          Text('🏠 Fotos del lugar', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('Fotos del lugar', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text('Muestra las instalaciones por secciones',
               style: TextStyle(color: subtextColor, fontSize: 13)),
@@ -1259,7 +1260,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             child: Container(
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4))),
-              child: const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary),
+              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
             ),
           );
         }
@@ -1270,7 +1271,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             Positioned(right: 4, top: 4, child: GestureDetector(
               onTap: () => setState(() => _caregiverPhotoUrls.removeAt(i)),
               child: Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 14)),
+                  child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
             )),
           ]);
         }
@@ -1281,7 +1282,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           Positioned(right: 4, top: 4, child: GestureDetector(
             onTap: () => setState(() => _localCaregiverPhotos.removeAt(li)),
             child: Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                child: const Icon(Icons.close, color: Colors.white, size: 14)),
+                child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
           )),
         ]);
       },
@@ -1315,7 +1316,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
                   Positioned(right: 2, top: 2, child: GestureDetector(
                     onTap: () => setState(() { final l = List<String>.from(urls)..removeAt(i); _placePhotoUrls[key] = l; }),
                     child: Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                        child: const Icon(Icons.close, color: Colors.white, size: 12)),
+                        child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
                   )),
                 ])),
               for (int i = 0; i < locals.length; i++)
@@ -1325,7 +1326,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
                   Positioned(right: 2, top: 2, child: GestureDetector(
                     onTap: () => setState(() { final l = List.from(locals)..removeAt(i); _localPlacePhotos[key] = l.cast(); }),
                     child: Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                        child: const Icon(Icons.close, color: Colors.white, size: 12)),
+                        child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
                   )),
                 ])),
               if (canAdd)
@@ -1337,8 +1338,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: required && total == 0 ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
                     ),
-                    child: Icon(Icons.add_photo_alternate_outlined,
-                        color: required && total == 0 ? GardenColors.error : GardenColors.primary, size: 28),
+                    child: GardenIcon(GIcon.galeria, size: GIconSize.lg, color: required && total == 0 ? GardenColors.error : GardenColors.primary),
                   ),
                 ),
             ],
@@ -1359,14 +1359,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             style: TextStyle(color: subtextColor, fontSize: 14)),
         const SizedBox(height: 24),
         if (_services.contains('HOSPEDAJE'))
-          _buildPriceCard('Hospedaje', '/ noche', '🏠', _precioHospedaje, (v) => setState(() => _precioHospedaje = v), textColor, subtextColor, surface, borderColor,
+          _buildPriceCard('Hospedaje', '/ noche', GIcon.hospedaje, _precioHospedaje, (v) => setState(() => _precioHospedaje = v), textColor, subtextColor, surface, borderColor,
               min: _hospMin, max: _hospMax),
         if (_services.contains('PASEO'))
-          _buildPriceCard('Paseo (1 hora)', '/ hora', '🦮', _precioPaseo, (v) => setState(() => _precioPaseo = v), textColor, subtextColor, surface, borderColor,
+          _buildPriceCard('Paseo (1 hora)', '/ hora', GIcon.paseo, _precioPaseo, (v) => setState(() => _precioPaseo = v), textColor, subtextColor, surface, borderColor,
               min: _paseoMin, max: _paseoMax,
               note: 'El precio de 30 min será la mitad: Bs ${(_precioPaseo / 2).round()}'),
         if (_services.contains('GUARDERIA'))
-          _buildPriceCard('Guardería', '/ día', '🏡', _precioGuarderia, (v) => setState(() => _precioGuarderia = v), textColor, subtextColor, surface, borderColor,
+          _buildPriceCard('Guardería', '/ día', GIcon.guarderia, _precioGuarderia, (v) => setState(() => _precioGuarderia = v), textColor, subtextColor, surface, borderColor,
               min: _guarMin, max: _guarMax),
         if (_authToken.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -1381,7 +1381,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     );
   }
 
-  Widget _buildPriceCard(String titulo, String unidad, String emoji, double value,
+  Widget _buildPriceCard(String titulo, String unidad, GIcon emoji, double value,
       ValueChanged<double> onChanged, Color textColor, Color subtextColor, Color surface, Color borderColor,
       {String? note, double min = 10, double max = 400}) {
     final clampedValue = value.clamp(min, max);
@@ -1393,7 +1393,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text(emoji, style: const TextStyle(fontSize: 22)),
+            GardenIcon(emoji, size: GIconSize.md, state: GIconState.active),
             const SizedBox(width: 8),
             Text(titulo, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
             const Spacer(),
@@ -1444,7 +1444,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
               ),
               child: _localLogo == null && _logoUrl == null
                   ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 36),
+                      const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.primary),
                       const SizedBox(height: 8),
                       Text('Subir logo', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                     ])
@@ -1457,7 +1457,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           Center(
             child: TextButton.icon(
               onPressed: _pickLogo,
-              icon: const Icon(Icons.edit_outlined, size: 16, color: GardenColors.primary),
+              icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, color: GardenColors.primary),
               label: const Text('Cambiar logo', style: TextStyle(color: GardenColors.primary)),
             ),
           ),

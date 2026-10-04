@@ -343,7 +343,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
             elevation: 0,
             title: Text('Resolución de disputa', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
             leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: textColor),
+              icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: textColor),
               onPressed: () => Navigator.pop(context),
             ),
           ),
@@ -505,7 +505,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                               )),
                           ),
                           if (selected)
-                            const Icon(Icons.check_circle_rounded, color: GardenColors.error, size: 20),
+                            const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.error),
                         ],
                       ),
                     ),
@@ -550,10 +550,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
           ),
           child: GardenButton(
             label: 'Enviar reporte',
-            icon: Icons.send_rounded,
+            gIcon: GIcon.enviar,
             color: GardenColors.error,
-            onPressed: _selectedReasons.isEmpty ? null : _submitClientReport,
-          ),
+            onPressed: _selectedReasons.isEmpty ? null : _submitClientReport),
         ),
       ],
     );
@@ -642,7 +641,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                               )),
                           ),
                           if (selected)
-                            const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20),
+                            const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
                         ],
                       ),
                     ),
@@ -661,9 +660,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
           ),
           child: GardenButton(
             label: 'Enviar mi versión',
-            icon: Icons.send_rounded,
-            onPressed: _selectedReasons.isEmpty ? null : _submitCaregiverResponse,
-          ),
+            gIcon: GIcon.enviar,
+            onPressed: _selectedReasons.isEmpty ? null : _submitCaregiverResponse),
         ),
       ],
     );
@@ -756,7 +754,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                               )),
                           ),
                           if (selected)
-                            const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20),
+                            const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
                         ],
                       ),
                     ),
@@ -775,9 +773,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
           ),
           child: GardenButton(
             label: 'Enviar mi versión',
-            icon: Icons.send_rounded,
-            onPressed: _selectedReasons.isEmpty ? null : _submitClientResponse,
-          ),
+            gIcon: GIcon.enviar,
+            onPressed: _selectedReasons.isEmpty ? null : _submitClientResponse),
         ),
       ],
     );
@@ -866,7 +863,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                               )),
                           ),
                           if (selected)
-                            const Icon(Icons.check_circle_rounded, color: GardenColors.error, size: 20),
+                            const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.error),
                         ],
                       ),
                     ),
@@ -885,10 +882,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
           ),
           child: GardenButton(
             label: 'Enviar reporte',
-            icon: Icons.send_rounded,
+            gIcon: GIcon.enviar,
             color: GardenColors.error,
-            onPressed: _selectedReasons.isEmpty ? null : _submitCaregiverReport,
-          ),
+            onPressed: _selectedReasons.isEmpty ? null : _submitCaregiverReport),
         ),
       ],
     );
@@ -1071,7 +1067,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                         color: GardenColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.auto_awesome, color: GardenColors.primary, size: 16),
+                      child: const GardenIcon(GIcon.ia, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                     ),
                     const SizedBox(width: 10),
                     Text('Análisis de GARDEN IA', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
@@ -1098,7 +1094,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.lightbulb_outline, color: GardenColors.secondary, size: 18),
+                      GardenIcon(GIcon.idea, size: GIconSize.sm, color: GardenColors.secondary),
                       SizedBox(width: 8),
                       Text('Recomendaciones para mejorar', style: TextStyle(color: GardenColors.secondary, fontWeight: FontWeight.w700, fontSize: 14)),
                     ],
@@ -1151,9 +1147,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
           GardenButton(
             label: 'Ver mi billetera',
-            icon: Icons.account_balance_wallet_outlined,
-            onPressed: () => context.push('/wallet'),
-          ),
+            gIcon: GIcon.billetera,
+            onPressed: () => context.push('/wallet')),
           const SizedBox(height: 12),
           GardenButton(
             label: 'Ir al inicio',
@@ -1195,7 +1190,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.verified_user_rounded, color: color, size: 18),
+              GardenIcon(GIcon.protegido, size: GIconSize.sm, state: GIconState.active, color: color),
               const SizedBox(width: 8),
               Text('Resultado de la apelación', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
             ]),
@@ -1220,7 +1215,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
         ),
         child: Row(children: [
-          const Icon(Icons.gavel_rounded, color: GardenColors.primary, size: 20),
+          const GardenIcon(GIcon.multa, size: GIconSize.md, color: GardenColors.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1245,11 +1240,10 @@ class _DisputeScreenState extends State<DisputeScreen> {
           const SizedBox(height: 10),
           GardenButton(
             label: 'Apelar esta decisión',
-            icon: Icons.gavel_rounded,
+            gIcon: GIcon.multa,
             outline: true,
             color: GardenColors.warning,
-            onPressed: () => setState(() { _step = 3; }),
-          ),
+            onPressed: () => setState(() { _step = 3; })),
         ],
       );
     }
@@ -1270,7 +1264,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.gavel_rounded, color: GardenColors.warning, size: 24),
+            const GardenIcon(GIcon.multa, size: GIconSize.lg, color: GardenColors.warning),
             const SizedBox(width: 10),
             Expanded(child: Text('Apelar la decisión', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800))),
           ]),
@@ -1325,11 +1319,10 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
           GardenButton(
             label: 'Enviar apelación',
-            icon: Icons.send_rounded,
+            gIcon: GIcon.enviar,
             color: GardenColors.warning,
             loading: _submittingAppeal,
-            onPressed: _submittingAppeal ? null : _submitAppeal,
-          ),
+            onPressed: _submittingAppeal ? null : _submitAppeal),
           const SizedBox(height: 12),
           GardenButton(
             label: 'Cancelar',

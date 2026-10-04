@@ -35,6 +35,7 @@ import 'combined_verification_step.dart';
 import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
 import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
+import '../../design/garden_icons.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -468,7 +469,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         context: context,
         builder: (_) => AlertDialog(
           title: const Row(children: [
-            Icon(Icons.error_outline, color: Colors.red),
+            GardenIcon(GIcon.conflicto, size: GIconSize.lg, color: Colors.red),
             SizedBox(width: 8),
             Text('Error'),
           ]),
@@ -768,7 +769,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Row(children: [
-              Text('🌿', style: TextStyle(fontSize: 32)),
+              GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
               SizedBox(width: 16),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Registro Profesional', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -790,9 +791,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             style: TextStyle(color: textColor, letterSpacing: 2, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               hintText: 'Código de registro',
-              prefixIcon: Icon(Icons.vpn_key_outlined, color: subtextColor, size: 20),
+              prefixIcon: GardenIcon(GIcon.seguridad, size: GIconSize.md, color: subtextColor),
               suffixIcon: _codeValid
-                  ? const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20)
+                  ? const GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.success)
                   : null,
             ),
             onChanged: (_) {
@@ -808,7 +809,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
             ),
             child: const Row(children: [
-              Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 18),
+              GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.primary),
               SizedBox(width: 10),
               Expanded(child: Text(
                 'Este registro es para cuidadores profesionales verificados. No necesitarás subir documentos de identidad.',
@@ -884,7 +885,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               hintText: 'Describe tu experiencia con animales (mínimo 50 caracteres)',
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(bottom: 60),
-                child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                child: GardenIcon(GIcon.documento, size: GIconSize.md, color: subtextColor),
               ),
               alignLabelWithHint: true,
             ),
@@ -895,7 +896,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   }
 
   Widget _buildStep2(Color textColor, Color subtextColor, Color borderColor, Color surfaceEl) {
-    Widget serviceCard(String service, String emoji, String label) {
+    Widget serviceCard(String service, GIcon icon, String label) {
       final selected = _servicesOffered.contains(service);
       return GestureDetector(
         onTap: () => setState(() {
@@ -909,7 +910,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             border: Border.all(color: selected ? GardenColors.primary : borderColor, width: selected ? 2 : 1),
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(emoji, style: const TextStyle(fontSize: 36)),
+            GardenIcon(icon, size: GIconSize.xl, state: GIconState.active),
             const SizedBox(height: 10),
             Text(label, style: TextStyle(
               color: selected ? GardenColors.primary : textColor,
@@ -932,11 +933,11 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         Text('Servicios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
         Row(children: [
-          Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
+          Expanded(child: serviceCard('HOSPEDAJE', GIcon.hospedaje, 'Hospedaje')),
           const SizedBox(width: 12),
-          Expanded(child: serviceCard('PASEO', '🦮', 'Paseo')),
+          Expanded(child: serviceCard('PASEO', GIcon.paseo, 'Paseo')),
           const SizedBox(width: 12),
-          Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
+          Expanded(child: serviceCard('GUARDERIA', GIcon.guarderia, 'Guardería')),
         ]),
         const SizedBox(height: 16),
         EstimatedEarningsBanner(
@@ -954,7 +955,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           dropdownColor: surfaceEl,
           style: TextStyle(color: textColor, fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(Icons.location_city_outlined, color: subtextColor, size: 20),
+            prefixIcon: GardenIcon(GIcon.edificio, size: GIconSize.md, color: subtextColor),
           ),
           items: _cities.map((c) => DropdownMenuItem(
             value: c.id,
@@ -976,7 +977,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           dropdownColor: surfaceEl,
           style: TextStyle(color: textColor, fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(Icons.location_on_outlined, color: subtextColor, size: 20),
+            prefixIcon: GardenIcon(GIcon.ubicacion, size: GIconSize.md, color: subtextColor),
           ),
           hint: Text('Selecciona tu zona', style: TextStyle(color: subtextColor)),
           items: _zones.map((z) => DropdownMenuItem(
@@ -1002,7 +1003,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                     border: Border.all(color: _homeType == 'HOUSE' ? GardenColors.primary : borderColor),
                   ),
                   alignment: Alignment.center,
-                  child: Text('Casa 🏡', style: TextStyle(
+                  child: Text('Casa', style: TextStyle(
                     color: _homeType == 'HOUSE' ? Colors.white : textColor,
                     fontWeight: _homeType == 'HOUSE' ? FontWeight.bold : FontWeight.normal,
                   )),
@@ -1021,7 +1022,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                     border: Border.all(color: _homeType == 'APARTMENT' ? GardenColors.primary : borderColor),
                   ),
                   alignment: Alignment.center,
-                  child: Text('Departamento 🏢', style: TextStyle(
+                  child: Text('Departamento', style: TextStyle(
                     color: _homeType == 'APARTMENT' ? Colors.white : textColor,
                     fontWeight: _homeType == 'APARTMENT' ? FontWeight.bold : FontWeight.normal,
                   )),
@@ -1080,9 +1081,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         Wrap(
           spacing: 8, runSpacing: 8,
           children: [
-            {'label': 'Mañana ☀️', 'value': 'MORNING'},
-            {'label': 'Tarde 🌤️', 'value': 'AFTERNOON'},
-            {'label': 'Noche 🌙', 'value': 'NIGHT'},
+            {'label': 'Mañana', 'value': 'MORNING'},
+            {'label': 'Tarde', 'value': 'AFTERNOON'},
+            {'label': 'Noche', 'value': 'NIGHT'},
           ].map((item) {
             final val = item['value']!;
             final selected = _times.contains(val);
@@ -1147,13 +1148,13 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                 Positioned(top: 8, right: 8,
                     child: Container(decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
                         padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.check, color: Colors.white, size: 14))),
+                        child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white))),
                 Positioned(bottom: 8, right: 8,
                     child: GestureDetector(
                       onTap: () => setState(() => _photoUrls.removeAt(index)),
                       child: Container(decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
                           padding: const EdgeInsets.all(4),
-                          child: const Icon(Icons.close, color: Colors.white, size: 14)),
+                          child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
                     )),
               ]);
             }
@@ -1166,13 +1167,13 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                 Positioned(top: 8, right: 8,
                     child: Container(decoration: BoxDecoration(color: Colors.orange.shade700, shape: BoxShape.circle),
                         padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 14))),
+                        child: const GardenIcon(GIcon.subir, size: GIconSize.xs, color: Colors.white))),
                 Positioned(bottom: 8, right: 8,
                     child: GestureDetector(
                       onTap: () => setState(() => _localPhotos.removeAt(localIndex)),
                       child: Container(decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
                           padding: const EdgeInsets.all(4),
-                          child: const Icon(Icons.close, color: Colors.white, size: 14)),
+                          child: const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: Colors.white)),
                     )),
               ]);
             }
@@ -1185,7 +1186,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                   border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                 ),
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 40),
+                  const GardenIcon(GIcon.galeria, size: GIconSize.xl, color: GardenColors.primary),
                   const SizedBox(height: 8),
                   Text('Añadir foto', style: TextStyle(color: subtextColor, fontSize: 12)),
                 ]),
@@ -1206,7 +1207,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   }
 
   Widget _buildPriceCard({
-    required String titulo, required String unidad, required String emoji,
+    required String titulo, required String unidad, required GIcon emoji,
     required double value, required ValueChanged<double> onChanged,
   }) {
     const double sliderMin = 50.0;
@@ -1227,7 +1228,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
+          GardenIcon(emoji, size: GIconSize.md, state: GIconState.active),
           const SizedBox(width: 8),
           Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
         ]),
@@ -1277,7 +1278,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             borderRadius: BorderRadius.circular(16),
           ),
           child: const Row(children: [
-            Icon(Icons.payments_outlined, color: Colors.white, size: 36),
+            GardenIcon(GIcon.billetera, size: GIconSize.xl, color: Colors.white),
             SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Elige tus precios', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -1289,17 +1290,17 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         ),
         const SizedBox(height: 24),
         if (offersHospedaje) ...[
-          _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠',
+          _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: GIcon.hospedaje,
               value: _precioHospedaje, onChanged: (v) => setState(() => _precioHospedaje = v)),
           if (offersPaseo || offersGuarderia) const SizedBox(height: 20),
         ],
         if (offersPaseo) ...[
-          _buildPriceCard(titulo: 'Paseo', unidad: '/ 1 hora', emoji: '🦮',
+          _buildPriceCard(titulo: 'Paseo', unidad: '/ 1 hora', emoji: GIcon.paseo,
               value: _precioPaseo, onChanged: (v) => setState(() => _precioPaseo = v)),
           if (offersGuarderia) const SizedBox(height: 20),
         ],
         if (offersGuarderia)
-          _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡',
+          _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: GIcon.guarderia,
               value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
       ]),
     );
@@ -1334,7 +1335,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                   : (_profilePhotoUrl != null
                       ? Image.network(fixImageUrl(_profilePhotoUrl!), fit: BoxFit.cover)
                       : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.camera_alt_outlined, size: 56, color: subtextColor),
+                          GardenIcon(GIcon.foto, size: GIconSize.hero, color: subtextColor),
                           const SizedBox(height: 10),
                           Text('Subir foto', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600, fontSize: 14)),
                         ])),
@@ -1353,7 +1354,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
             ),
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+              GardenIcon(GIcon.confirmado, size: GIconSize.md, state: GIconState.active, color: GardenColors.success),
               SizedBox(width: 8),
               Text('¡Excelente elección! Estás listo para continuar.',
                   style: TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1368,7 +1369,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a armar tu perfil',
-        subtitle: 'Son 4 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son 4 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -1536,7 +1537,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                                   child: Container(
                                     padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)),
-                                    child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: subtextColor),
+                                    child: GardenIcon(GIcon.atras, size: GIconSize.xs, color: subtextColor),
                                   ),
                                 )
                               else
