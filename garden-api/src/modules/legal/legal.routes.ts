@@ -136,17 +136,17 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
   {
     title: '6. Comisiones, precios y estructura de pagos',
     body: 'PRECIOS: Los Cuidadores establecen libremente sus tarifas en Bolivianos (Bs.). El precio que publica el Cuidador es el monto íntegro que recibirá por el servicio.\n\n'
-      + 'COMISIÓN DE PLATAFORMA: Garden cobra una comisión del 10% que se AÑADE sobre el precio establecido por el Cuidador. Esta comisión es pagada por el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
-      + 'EJEMPLO: Si el Cuidador cobra Bs. 100 por un servicio, el Cliente paga Bs. 110 (precio del Cuidador + 10% de comisión Garden). El Cuidador recibe íntegramente sus Bs. 100.\n\n'
+      + 'TARIFA DE PLATAFORMA: Garden suma al precio establecido por el Cuidador una tarifa de plataforma que varía según el servicio y el Cuidador o empresa. Está incluida en el precio que el Cliente ve en la app, la paga el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
+      + 'EJEMPLO (los porcentajes pueden variar): si el Cuidador cobra Bs. 100 por un servicio, el Cliente ve un precio de Bs. 110 (precio del Cuidador + tarifa de plataforma) y al pagar se suman los impuestos de ley (16%: Bs. 18), para un total de Bs. 128. El Cuidador recibe íntegramente sus Bs. 100.\n\n'
       + 'DISTRIBUCIÓN DEL PAGO:\n'
       + '  → El Cuidador fija su precio (ej.: Bs. 100).\n'
-      + '  → El Cliente paga el precio del Cuidador + 10% de comisión Garden (ej.: Bs. 110).\n'
+      + '  → El Cliente ve el precio del Cuidador + tarifa de plataforma (ej.: Bs. 110) y al pagar se suman los impuestos de ley (ej.: Bs. 18), para un total de Bs. 128.\n'
       + '  → El Cuidador recibe el 100% de su precio establecido (ej.: Bs. 100).\n'
-      + '  → Garden retiene el 10% de comisión (ej.: Bs. 10).\n'
+      + '  → Garden retiene la tarifa de plataforma (ej.: Bs. 10) y destina los impuestos cobrados al pago de sus obligaciones tributarias (ej.: Bs. 18).\n'
       + '  → El pago al Cuidador se libera de inmediato si el Cliente confirma la finalización del servicio, o automáticamente a las 24 horas de finalizado el servicio si el Cliente no confirma ni abre una disputa.\n\n'
       + 'SMART CONTRACT: Cada Reserva genera un contrato inteligente en la red Polygon que registra: monto pagado, identidad de las partes (hash), fechas del servicio y condiciones acordadas. Este registro es permanente, público y no puede ser alterado por ninguna de las partes ni por Garden.\n\n'
       + 'VERIFICACIÓN DEL PAGO: Mientras Garden completa la integración directa con el sistema bancario (QR interbancario SIP), la confirmación de que un pago fue efectivamente transferido puede realizarse mediante revisión manual por parte del equipo de Garden, en lugar de una confirmación automática instantánea del banco. Esto no cambia el monto que pagas ni tus derechos de reembolso — solo el tiempo que puede tomar la confirmación mientras esta integración esté en curso.\n\n'
-      + 'IVA E IMPUESTOS: Los precios de los Cuidadores deben incluir el IVA (13%) según la normativa tributaria boliviana. Garden emite facturas electrónicas por su comisión al amparo de la Ley N° 812 (Factura Electrónica) y las disposiciones del Servicio de Impuestos Nacionales (SIN).\n\n'
+      + 'IVA E IMPUESTOS: Los impuestos de ley (IVA 13% e IT 3%, 16% en total) se muestran por separado en el detalle de pago y se suman al precio del servicio; no se descuentan al Cuidador. Garden emite las facturas electrónicas que correspondan al amparo de la Ley N° 812 (Factura Electrónica) y las disposiciones del Servicio de Impuestos Nacionales (SIN).\n\n'
       + 'PROPINAS: Los Clientes pueden dejar propinas voluntarias al finalizar el servicio. Las propinas van íntegramente al Cuidador (0% de comisión sobre propinas).',
   },
   {
@@ -199,7 +199,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + '✓ Establecer sus propios precios, horarios y disponibilidad libremente.\n'
       + '✓ Aceptar o rechazar cualquier solicitud de Reserva sin necesidad de justificación.\n'
       + '✓ Cancelar una Reserva activa si detecta que la mascota representa un riesgo para su seguridad o la de otros animales a su cuidado, notificando inmediatamente a Garden.\n'
-      + '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La comisión de Garden (10%) es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
+      + '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La tarifa de plataforma de Garden es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
       + '✓ Construir un perfil público con fotos, descripción y reseñas de sus servicios.\n'
       + '✓ Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
       + '✓ Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
@@ -238,7 +238,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + 'Garden mantiene un Fondo de Garantía de hasta Bs. 2.000 por incidente, sujeto a disponibilidad y verificación, destinado a cubrir gastos veterinarios de emergencia en situaciones donde el incidente NO sea producto de negligencia del Cuidador (accidente fortuito, causa desconocida, condición preexistente no informada). Este fondo es una garantía voluntaria de Garden y no constituye reconocimiento de responsabilidad.\n\n'
       + 'SI SE DETERMINA NEGLIGENCIA DEL CUIDADOR:\n'
       + 'Si la investigación de Garden determina que el incidente fue causado por negligencia comprobable del Cuidador (descuido, abandono, falta de agua o alimentación, violencia, sustancias tóxicas accesibles en su domicilio), el Cuidador deberá cubrir el 100% de los gastos veterinarios documentados. En estos casos el Fondo de Garantía Garden no aplica — la responsabilidad económica recae íntegramente sobre el Cuidador. Garden retendrá los montos correspondientes de los próximos pagos del Cuidador hasta saldar la deuda. Para montos superiores a Bs. 5.000, Garden actuará como mediador ante instancias civiles.\n\n'
-      + 'Esta estructura (comisión del 10%) existe precisamente para sostener el Fondo de Garantía y proteger a los Clientes en casos donde el incidente no sea negligencia del Cuidador.\n\n'
+      + 'Esta estructura (tarifa de plataforma) existe precisamente para sostener el Fondo de Garantía y proteger a los Clientes en casos donde el incidente no sea negligencia del Cuidador.\n\n'
       + 'Fundamento legal: Art. 984 del Código Civil Boliviano (D.L. N° 12760) — responsabilidad por daño causado por culpa o negligencia.\n\n'
       + 'SITUACIONES DONDE EL CUIDADOR NO ES RESPONSABLE:\n'
       + '• Condición médica preexistente no declarada por el Dueño en la Reserva.\n'
@@ -403,7 +403,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + 'LIMITACIÓN GENERAL DE RESPONSABILIDAD:\n'
       + '• Garden NO garantiza la calidad, seguridad ni resultado de los servicios prestados por los Cuidadores.\n\n'
       + '• Garden NO asume responsabilidad por daños, lesiones, pérdidas o fallecimiento de mascotas, salvo los casos expresamente cubiertos por el Fondo de Garantía Garden (Sección 12), sujeto siempre a disponibilidad y verificación.\n\n'
-      + '• La responsabilidad máxima de Garden ante cualquier reclamación que le sea atribuible directamente está limitada al monto de comisión cobrado en la Reserva en disputa.\n\n'
+      + '• La responsabilidad máxima de Garden ante cualquier reclamación que le sea atribuible directamente está limitada al monto de la tarifa de plataforma cobrado en la Reserva en disputa.\n\n'
       + '• Garden no es responsable por interrupciones del servicio causadas por fuerza mayor, fallas de terceros proveedores (internet, energía eléctrica, blockchain), errores de facturación no maliciosos que sean corregidos al detectarse, o ataques cibernéticos externos.\n\n'
       + '• Garden no es responsable por el uso que los Cuidadores o Clientes hagan de la información intercambiada fuera de la Plataforma.\n\n'
       + 'MEDIACIÓN VOLUNTARIA: El hecho de que Garden ofrezca un proceso de mediación y un Fondo de Garantía (Sección 12) es un acto voluntario de buena fe y no constituye, en ningún caso, reconocimiento de responsabilidad legal.',

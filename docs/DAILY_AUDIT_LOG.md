@@ -2125,8 +2125,11 @@ Detalle de pago: «Servicio», «Impuestos (IVA e IT · 16 %)» (+ donación) �
 soporte y prompt de disputas ya no citan «10 %».
 
 ### Pendiente / decisiones abiertas
-- **Texto legal** (`legal.routes.ts`, `legal_screen.dart`, contrato del cuidador): dice «comisión del 10 %»
-  y que los precios incluyen IVA. NO se tocó — requiere revisión legal/contable.
+- **Texto legal** (`legal.routes.ts`, `legal_screen.dart`, `caregiver_contract_content.dart`): ya no cita
+  «comisión del 10 %» ni que los precios incluyen IVA; ahora habla de «tarifa de plataforma» variable
+  y de impuestos (16 %) que se suman al precio y no se descuentan al cuidador (ejemplo Bs 100 → 110 →
+  +18 = 128). Es redacción mía: **debe revisarla un abogado/contador antes de publicarla** y decidir si
+  exige que los usuarios vuelvan a aceptar los términos.
 - Cálculo contable del impuesto sobre el total (no solo sobre la comisión) es decisión explícita del
   founder; revisar con el contador antes de facturar (SIAT).
 - Reembolso parcial por política (50 %, etc.) devuelve el % del total con impuesto incluido; la
