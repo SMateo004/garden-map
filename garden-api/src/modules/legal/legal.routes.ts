@@ -11,7 +11,7 @@ import { Router } from 'express';
  * no es lo que piden las tiendas.
  */
 
-const LAST_UPDATED = 'Julio 2026';
+const LAST_UPDATED = 'Octubre 2026';
 
 const SECTIONS: Array<{ title: string; body: string }> = [
   {
@@ -46,6 +46,7 @@ const SECTIONS: Array<{ title: string; body: string }> = [
       + '• Entre clientes y cuidadores: nombre, foto y datos de la reserva visibles para ambas partes.\n'
       + '• Proveedores de servicio: Cloudinary (almacenamiento de imágenes), Firebase (notificaciones push), Resend (correos electrónicos), AWS Rekognition (verificación de identidad y detección de vida), Anthropic/Claude (análisis automatizado de fotos y evidencia en disputas). Todos operan bajo acuerdos de confidencialidad.\n'
       + '• Pagos: se procesan mediante QR bancario (Sistema de Pagos Instantáneos - SIP) cuando esté disponible, o mediante transferencia bancaria con verificación manual de Garden mientras esa integración esté en curso.\n'
+      + '• Registro público en blockchain: de cada Reserva pagada se publican en la red principal de Polygon su identificador interno, una referencia seudónima de cada parte (calculada con una clave secreta de Garden), el monto, las fechas y cómo terminó; de los perfiles, la referencia seudónima, el rol y si la identidad está verificada. Nunca nombres, teléfonos, correos, direcciones ni fotos. Por tratarse de una blockchain pública esos registros no se pueden borrar, ni siquiera si eliminas tu cuenta; sin la clave de Garden no permiten identificarte (ver Términos, sección 19).\n'
       + '• Autoridades: solo cuando la ley boliviana lo exija con orden judicial válida.',
   },
   {
@@ -87,7 +88,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
     title: '1. Quiénes somos y qué es Garden',
     body: 'Garden Bolivia ("Garden", "la Plataforma", "nosotros") es una plataforma tecnológica de intermediación que conecta a dueños de mascotas ("Clientes" o "Dueños") con personas que ofrecen servicios de cuidado de animales domésticos ("Cuidadores") en Santa Cruz de la Sierra, Bolivia.\n\n'
       + 'Garden NO es una empresa de cuidado de mascotas ni empleadora de cuidadores. Actuamos exclusivamente como intermediario tecnológico que facilita el encuentro entre oferta y demanda, procesa pagos de forma segura y ofrece herramientas de comunicación y seguimiento del servicio.\n\n'
-      + 'Nos respaldamos en tecnología blockchain (red Polygon) para registrar contratos de servicio de manera inmutable y transparente, garantizando que ninguna de las partes pueda modificar retroactivamente los términos acordados.',
+      + 'Además, registramos cada Reserva pagada en la red principal de Polygon, una blockchain pública: el pago, las extensiones, cómo terminó el servicio y el veredicto de las disputas quedan en un registro que ninguna de las partes, ni Garden, puede modificar después (ver sección 19).',
   },
   {
     title: '2. Definiciones clave',
@@ -95,7 +96,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + '• CUIDADOR: persona natural mayor de 18 años, verificada por Garden, que ofrece servicios de cuidado de mascotas a través de la Plataforma. Los Cuidadores son prestadores de servicios independientes, NO empleados ni dependientes de Garden.\n\n'
       + '• RESERVA: acuerdo de servicio entre un Cliente y un Cuidador, confirmado y pagado a través de la Plataforma.\n\n'
       + '• SERVICIO: cualquier modalidad de cuidado de mascotas ofrecida en la Plataforma (hospedaje, guardería, paseo).\n\n'
-      + '• SMART CONTRACT: contrato inteligente desplegado en la red Polygon que registra los términos de cada Reserva (precio, fechas, condiciones) de forma inmutable. Una vez confirmada la Reserva, sus términos no pueden modificarse unilateralmente.\n\n'
+      + '• SMART CONTRACT: programa público de Garden desplegado en la red principal de Polygon que registra los datos esenciales de cada Reserva pagada (monto, fechas, tipo de servicio y cómo terminó). No custodia dinero: los pagos se procesan fuera de la blockchain. Lo registrado no se puede modificar ni borrar.\n\n'
       + '• BILLETERA GARDEN: saldo virtual en Bolivianos acumulado en la cuenta del usuario, producto de reembolsos u otros créditos otorgados por Garden.\n\n'
       + '• COMISIÓN DE PLATAFORMA: tarifa que Garden cobra sobre el valor de cada Reserva por el uso de la infraestructura tecnológica, procesamiento de pagos y garantías del servicio.\n\n'
       + '• FONDO DE GARANTÍA GARDEN: reserva económica administrada por Garden destinada a cubrir situaciones excepcionales contempladas en estos Términos, sujeta a disponibilidad y verificación previa de cada caso.',
@@ -144,7 +145,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + '  → El Cuidador recibe el 100% de su precio establecido (ej.: Bs. 100).\n'
       + '  → Garden retiene la tarifa de plataforma (ej.: Bs. 10) y destina los impuestos cobrados al pago de sus obligaciones tributarias (ej.: Bs. 18).\n'
       + '  → El pago al Cuidador se libera de inmediato si el Cliente confirma la finalización del servicio, o automáticamente a las 24 horas de finalizado el servicio si el Cliente no confirma ni abre una disputa.\n\n'
-      + 'SMART CONTRACT: Cada Reserva genera un contrato inteligente en la red Polygon que registra: monto pagado, identidad de las partes (hash), fechas del servicio y condiciones acordadas. Este registro es permanente, público y no puede ser alterado por ninguna de las partes ni por Garden.\n\n'
+      + 'REGISTRO EN BLOCKCHAIN: Cuando se confirma el pago de una Reserva, Garden la registra en un smart contract de la red principal de Polygon con el monto pagado, las fechas, el tipo de servicio y una referencia seudónima de cada parte (no sus datos personales). Ese registro es público y no puede ser alterado por ninguna de las partes ni por Garden. El dinero no pasa por la blockchain.\n\n'
       + 'VERIFICACIÓN DEL PAGO: Mientras Garden completa la integración directa con el sistema bancario (QR interbancario SIP), la confirmación de que un pago fue efectivamente transferido puede realizarse mediante revisión manual por parte del equipo de Garden, en lugar de una confirmación automática instantánea del banco. Esto no cambia el monto que pagas ni tus derechos de reembolso — solo el tiempo que puede tomar la confirmación mientras esta integración esté en curso.\n\n'
       + 'IVA E IMPUESTOS: Los impuestos de ley (IVA 13% e IT 3%, 16% en total) se muestran por separado en el detalle de pago y se suman al precio del servicio; no se descuentan al Cuidador. Garden emite las facturas electrónicas que correspondan al amparo de la Ley N° 812 (Factura Electrónica) y las disposiciones del Servicio de Impuestos Nacionales (SIN).\n\n'
       + 'PROPINAS: Los Clientes pueden dejar propinas voluntarias al finalizar el servicio. Las propinas van íntegramente al Cuidador (0% de comisión sobre propinas).',
@@ -204,7 +205,7 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + '✓ Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
       + '✓ Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
       + '✓ Establecer límites razonables (máx. número de mascotas simultáneas, razas que no acepta, peso máximo).\n'
-      + '✓ Recibir un comprobante de transacción registrado en blockchain por cada servicio completado.\n'
+      + '✓ Ver en el detalle de cada Reserva pagada, una vez cerrada, el comprobante de su registro en blockchain, con el enlace a la transacción en polygonscan.com.\n'
       + '✓ Negarse a alimentar a una mascota si el Dueño no proveyó alimento suficiente, reportando la situación a Garden a través de la app.',
   },
   {
@@ -309,19 +310,23 @@ const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
       + 'Si ninguna parte está satisfecha con la resolución de Garden, pueden recurrir a la Defensa del Consumidor (Ley N° 453) o a los tribunales civiles de Santa Cruz de la Sierra. Garden colaborará con las autoridades proporcionando todos los registros disponibles.',
   },
   {
-    title: '19. Smart Contracts y tecnología blockchain',
-    body: 'Garden utiliza la red blockchain Polygon para registrar los contratos de cada Reserva de forma descentralizada e inmutable.\n\n'
-      + 'QUÉ SE REGISTRA EN BLOCKCHAIN:\n'
-      + '• Hash de identidad de ambas partes (no datos personales directos).\n'
-      + '• Valor acordado del servicio.\n'
-      + '• Fechas y tipo de servicio.\n'
-      + '• Confirmación de pago y de finalización.\n'
-      + '• Resultado de disputas si las hubiere.\n\n'
-      + 'QUÉ IMPLICA ESTO PARA EL USUARIO:\n'
-      + '• Los términos de la Reserva no pueden ser alterados retroactivamente por ninguna de las partes.\n'
-      + '• Existe un registro permanente y verificable de cada servicio completado, accesible por el usuario a través de su panel.\n'
-      + '• En caso de litigio judicial, el registro blockchain puede ser presentado como evidencia documental.\n\n'
-      + 'LIMITACIÓN: El registro blockchain es una herramienta de transparencia y no reemplaza las obligaciones legales establecidas en el Código Civil Boliviano ni en ninguna otra norma aplicable.',
+    title: '19. Registro en blockchain (red principal de Polygon)',
+    body: 'Desde el 4 de octubre de 2026, Garden registra cada Reserva pagada en la red principal de Polygon (Polygon PoS), una blockchain pública. Lo hacen dos smart contracts de Garden con el código publicado y verificado en polygonscan.com. No custodian dinero: los pagos se procesan fuera de la blockchain.\n\n'
+      + 'QUÉ SE REGISTRA:\n'
+      + '• El identificador interno de la Reserva.\n'
+      + '• Una referencia seudónima de cada parte: un código derivado de su identificador interno con una clave secreta de Garden. Desde la blockchain no se puede llegar a su nombre, teléfono, correo ni a ningún otro dato personal.\n'
+      + '• Tipo de servicio, monto pagado (en bolivianos) y fechas del servicio.\n'
+      + '• Cada extensión del servicio, con el nuevo monto.\n'
+      + '• Cómo terminó: servicio completado (con la calificación de 1 a 5 si el Dueño calificó, o sin calificación), cancelación (con un código de motivo y el monto reembolsado) o veredicto de una disputa (resultado y montos; también el de la apelación, si la hay).\n'
+      + '• De los perfiles: la referencia seudónima, el rol (Dueño o Cuidador) y si la identidad fue verificada.\n\n'
+      + 'QUÉ NO SE REGISTRA: nombres de personas ni de mascotas, teléfonos, correos, direcciones, fotos, mensajes del chat, comentarios de reseñas ni el texto de los análisis de disputas.\n\n'
+      + 'DÓNDE VES TU COMPROBANTE: en el detalle de cada Reserva terminada, cancelada o rechazada (sección "Pago e historial"), el Dueño y el Cuidador ven "Registrada en blockchain" con el enlace a cada transacción en polygonscan.com. Mientras una transacción no se confirma, la Reserva muestra "Registro pendiente" y el sistema reintenta solo hasta completarlo. En Datos de la cuenta figuran la red y la dirección del contrato.\n\n'
+      + 'DESDE CUÁNDO APLICA: a las Reservas pagadas desde el 4 de octubre de 2026. Las Reservas anteriores no tienen registro en blockchain, y así lo indica su detalle. Las reservas de prueba que crea el equipo de Garden no se registran.\n\n'
+      + 'QUÉ IMPLICA PARA EL USUARIO:\n'
+      + '• Lo registrado no puede ser alterado ni borrado por ninguna de las partes ni por Garden. Los hechos posteriores (una extensión, una cancelación, el resultado de una apelación) se agregan como registros nuevos.\n'
+      + '• Cualquiera puede verificar el registro en polygonscan.com con el enlace del comprobante.\n'
+      + '• En caso de litigio, el registro puede presentarse como evidencia documental; su valor probatorio lo determina la autoridad competente.\n\n'
+      + 'LIMITACIÓN: El registro en blockchain es una herramienta de transparencia y no reemplaza las obligaciones legales establecidas en el Código Civil Boliviano ni en ninguna otra norma aplicable. Una falla de la red Polygon o de sus proveedores puede demorar un registro, pero no afecta tu Reserva ni tu pago.',
   },
   {
     title: '20. Verificación de identidad de Cuidadores',
