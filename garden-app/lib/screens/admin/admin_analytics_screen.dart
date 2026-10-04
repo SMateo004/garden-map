@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../design/phosphor_glyphs.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -91,7 +92,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 ),
             ]),
           ),
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Actualizar'),
+          IconButton(onPressed: _load, icon: Icon(Ph.arrowsClockwise.regular), tooltip: 'Actualizar'),
         ]),
       ),
       Expanded(

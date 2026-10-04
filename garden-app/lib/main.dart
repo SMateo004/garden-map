@@ -926,13 +926,13 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-    Analytics.instance.onLifecycle(state);
   // Presencia ("en línea" en el chat): conectada mientras la app está en
   // primer plano, desconectada al pasar a background — así el estado que ve
   // el otro participante refleja si la app está realmente activa, no solo
   // si en algún momento se abrió.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    Analytics.instance.onLifecycle(state);
     if (state == AppLifecycleState.resumed) {
       PresenceService.instance.connect();
       _refreshNextBookingWidget();

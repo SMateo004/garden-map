@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../design/phosphor_glyphs.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -159,7 +160,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       borderColor: borderColor,
                       textColor: textColor,
                       subtextColor: subtextColor,
-                      icon: Icons.insights_outlined,
+                      icon: Ph.heartbeat.regular,
                       title: 'Ayúdanos a mejorar',
                       subtitle: 'Datos anónimos de uso (pantallas y tiempos) para mejorar la app. Nunca incluyen tus datos personales.',
                       value: Analytics.instance.enabled,

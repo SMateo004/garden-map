@@ -1039,7 +1039,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Blockchain', Icons.link_rounded),
     ('Verif. de NIT', Icons.receipt_long_rounded),
     ('Comisiones', Ph.scales.regular),
-    ('Analítica', Icons.insights_rounded),
+    ('Analítica', Ph.heartbeat.regular),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1055,8 +1055,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25, 29]),
     ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24, 28]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
-    ('Analítica', Icons.insights_outlined, [30]),
-    ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27]),
+    ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27, 30]),
   ];
 
   Widget _buildIndexedStackBody(Color surface, Color textColor, Color subtextColor, Color borderColor) {

@@ -9,7 +9,6 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
 import { getAdminSummary } from '../analytics/analytics.service.js';
-
 import pricingAdminRouter from '../pricing/pricing.admin.js';
 
 const router = Router();
@@ -17,13 +16,13 @@ const router = Router();
 router.use(authMiddleware);
 router.use(requireRole('ADMIN'));
 
-/** Códigos promocionales — sin UI propia todavía (ver comentario en el
 /** Analítica de producto: uso de la app, embudo, preferencias y negocio. ?range=7d|30d|90d|365d */
 router.get('/analytics/summary', asyncHandler(async (req, res) => {
   const data = await getAdminSummary(String(req.query.range ?? '30d'));
   res.json({ success: true, data });
 }));
 
+/** Códigos promocionales — sin UI propia todavía (ver comentario en el
  * schema de Prisma), administrable vía estas rutas + curl/Postman. */
 router.get('/promo-codes', promoCodeController.list);
 router.post('/promo-codes', promoCodeController.create);
