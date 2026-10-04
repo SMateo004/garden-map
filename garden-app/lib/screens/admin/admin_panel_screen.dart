@@ -2634,7 +2634,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? (amount * 0.10);
       totalRevenue += amount;
       totalCommission += commission;
-      totalCaregiversPaid += amount - commission;
+      // taxAmount = impuestos (IVA+IT) incluidos en totalAmount; no son del cuidador ni de Garden.
+      final tax = double.tryParse(p['taxAmount']?.toString() ?? '0') ?? 0;
+      totalCaregiversPaid += amount - commission - tax;
       final paidAt = p['paidAt'] as String?;
       if (paidAt != null) {
         try {
@@ -2777,7 +2779,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       // commissionAmount = lo que Garden cobra (10% del precio del cuidador, sumado encima)
       // caregiverPayout  = totalAmount − commissionAmount = precio original del cuidador
       final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? (amount * 0.10);
-      final caregiverPayout = amount - commission;
+      final tax = double.tryParse(p['taxAmount']?.toString() ?? '0') ?? 0;
+      final caregiverPayout = amount - commission - tax;
       final svcType2 = p['serviceType'] as String? ?? '';
       final isPaseo = svcType2 == 'PASEO';
       final isGuarderia2 = svcType2 == 'GUARDERIA';
