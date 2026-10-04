@@ -18,14 +18,22 @@ import { type PaseoSlot, parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/
 import { PHOTO_COUNT, MAX_BIO_CHARS } from './caregiver.validation.js';
 import logger from '../../shared/logger.js';
 import { blockchainService } from '../../services/blockchain.service.js';
-import { getNumericSetting } from '../../utils/settings-cache.js';
+import { getPricingConfig, resolveCommissionPct, type PricedService } from '../pricing/pricing.service.js';
 
 const cache = getCache();
 
-/** Lee la comisión configurada por el admin (con cache 30 s). */
-async function getMarkupRate(): Promise<number> {
-  const pct = await getNumericSetting('platformCommissionPct', 10);
-  return pct / 100;
+/** Comisión (como tasa) aplicable a un cuidador para un servicio. */
+type RateFor = (caregiverId: string, service: PricedService) => number;
+
+/**
+ * Resuelve la comisión por servicio y por cuidador/empresa (ver pricing.service.ts).
+ * Los precios que ve el cliente en listados/perfiles NO incluyen impuestos: esos se
+ * agregan en el detalle de pago. Config con cache corto; el admin invalida los
+ * listados al guardar (admin.pricing).
+ */
+async function getRateResolver(): Promise<RateFor> {
+  const cfg = await getPricingConfig();
+  return (caregiverId, service) => resolveCommissionPct(cfg, service, caregiverId || null) / 100;
 }
 
 /**
@@ -72,7 +80,10 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   const cached = await cache.get<PaginatedCaregivers>(cacheKey);
   if (cached) return applyCoordJitter(cached);
 
-  const markupRate = await getMarkupRate();
+  const rateFor = await getRateResolver();
+  // Los filtros por rango de precio se traducen a precio del cuidador con la tasa del
+  // servicio (sin override por cuidador/empresa: aproximación en el borde de cada rango).
+  const markupRate = rateFor('', 'HOSPEDAJE');
 
   const zones: Zone[] | undefined = Array.isArray(zone)
     ? (zone as Zone[])
@@ -276,10 +287,10 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       services: c.servicesOffered,
       rating: c.rating,
       reviewCount: c.reviewCount,
-      pricePerDay: applyMarkup(c.pricePerDay, markupRate),
-      pricePerWalk30: applyMarkup(c.pricePerWalk30, markupRate),
-      pricePerWalk60: applyMarkup(c.pricePerWalk60, markupRate),
-      pricePerGuarderia: applyMarkup(c.pricePerGuarderia, markupRate),
+      pricePerDay: applyMarkup(c.pricePerDay, rateFor(c.id, 'HOSPEDAJE')),
+      pricePerWalk30: applyMarkup(c.pricePerWalk30, rateFor(c.id, 'PASEO')),
+      pricePerWalk60: applyMarkup(c.pricePerWalk60, rateFor(c.id, 'PASEO')),
+      pricePerGuarderia: applyMarkup(c.pricePerGuarderia, rateFor(c.id, 'GUARDERIA')),
       guarderiaIncludeWalk: (c as any).guarderiaIncludeWalk ?? false,
       verified: c.verified,
       antecedentesVerified: (c as any).antecedentesStatus === 'LIMPIO',
@@ -399,7 +410,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
   const cached = await cache.get<CaregiverDetail>(cacheKey);
   if (cached) return cached;
 
-  const markupRate = await getMarkupRate();
+  const rateFor = await getRateResolver();
 
   // Solo visibles para clientes: APPROVED + verified, no suspendido.
   // Empresas quedan verified:true antes de terminar el wizard (ver
@@ -550,10 +561,10 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     services: profile.servicesOffered,
     rating: profile.rating,
     reviewCount: profile.reviewCount,
-    pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
-    pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
-    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
+    pricePerDay: applyMarkup(profile.pricePerDay, rateFor(profile.id, 'HOSPEDAJE')),
+    pricePerWalk30: applyMarkup(profile.pricePerWalk30, rateFor(profile.id, 'PASEO')),
+    pricePerWalk60: applyMarkup(profile.pricePerWalk60, rateFor(profile.id, 'PASEO')),
+    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, rateFor(profile.id, 'GUARDERIA')),
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
     antecedentesVerified: (profile as any).antecedentesStatus === 'LIMPIO',
@@ -621,7 +632,8 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({
       id: e.id,
       name: e.name,
-      pricePerDay: applyMarkup(e.pricePerDay, markupRate),
+      // Un extra puede aplicar a varios servicios; se muestra con la comisión del primero.
+      pricePerDay: applyMarkup(e.pricePerDay, rateFor(profile.id, ((e.appliesTo?.[0] as PricedService | undefined) ?? 'HOSPEDAJE'))),
       appliesTo: e.appliesTo,
     })),
     memberSince: profile.createdAt.toISOString(),
@@ -1203,8 +1215,8 @@ export async function createCaregiverProfile(
     include: { user: { select: { firstName: true, lastName: true, profilePicture: true } } },
   });
 
-  const markupRate = await getMarkupRate();
-  return mapProfileToListItem(profile, markupRate);
+  const rateFor = await getRateResolver();
+  return mapProfileToListItem(profile, rateFor);
 }
 
 /**
@@ -1267,12 +1279,12 @@ export async function upsertCaregiverProfile(
   }
 
   return {
-    profile: mapProfileToListItem(result.profile, await getMarkupRate()),
+    profile: mapProfileToListItem(result.profile, await getRateResolver()),
     created: result.created,
   };
 }
 
-function mapProfileToListItem(profile: any, markupRate: number): CaregiverListItem {
+function mapProfileToListItem(profile: any, rateFor: RateFor): CaregiverListItem {
   const p = profile;
   return {
     id: profile.id,
@@ -1287,10 +1299,10 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     services: profile.servicesOffered,
     rating: profile.rating,
     reviewCount: profile.reviewCount,
-    pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
-    pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
-    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
+    pricePerDay: applyMarkup(profile.pricePerDay, rateFor(profile.id, 'HOSPEDAJE')),
+    pricePerWalk30: applyMarkup(profile.pricePerWalk30, rateFor(profile.id, 'PASEO')),
+    pricePerWalk60: applyMarkup(profile.pricePerWalk60, rateFor(profile.id, 'PASEO')),
+    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, rateFor(profile.id, 'GUARDERIA')),
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
     antecedentesVerified: (profile as any).antecedentesStatus === 'LIMPIO',

@@ -67,7 +67,7 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
       where: { id: earning.bookingId! },
       select: {
         id: true, totalAmount: true, commissionAmount: true, commissionAmountBeforePromo: true,
-        walletPaymentAmount: true, petName: true, serviceType: true,
+        taxAmount: true, walletPaymentAmount: true, petName: true, serviceType: true,
       },
     });
     if (!booking) continue;
@@ -86,6 +86,9 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
     if (marketingExpense > 0) lines.push({ accountId: accountMap.get(ACCOUNT.GASTO_MARKETING_PROMOS)!, debit: marketingExpense, credit: 0 });
     lines.push({ accountId: accountMap.get(ACCOUNT.BILLETERA_CUIDADORES)!, debit: 0, credit: caregiverCut });
     lines.push({ accountId: accountMap.get(ACCOUNT.INGRESO_COMISION)!, debit: 0, credit: grossCommission });
+    // Impuestos (IVA+IT) cobrados al cliente: pasivo con el fisco, no ingreso de GARDEN.
+    const taxAmount = Number(booking.taxAmount ?? 0);
+    if (taxAmount > 0) lines.push({ accountId: accountMap.get(ACCOUNT.IMPUESTOS_POR_PAGAR)!, debit: 0, credit: taxAmount });
 
     const svcLabel = booking.serviceType === 'PASEO' ? 'paseo' : booking.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
     await createEntryIfBalanced(

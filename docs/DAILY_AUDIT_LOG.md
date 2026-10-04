@@ -2084,3 +2084,63 @@ El hallazgo de la carrera en `startPhoneChange` de esta corrida (impacto bajo, p
 autorización de teléfono). Siguen pendientes de corridas anteriores: antecedentes del cuidador
 (auto-aprobación por IA sin humano, 2026-10-02) y Meet & Greet sin reembolso en incompatibilidad
 (2026-10-02).
+
+---
+
+## 2026-10-03 (noche) — Comisión variable por servicio/empresa + impuestos 16 % (cambio de modelo de dinero)
+
+**Pedido del founder:** (1) el detalle de pago debe mostrar el 16 % (IVA 13 % + IT 3 %) **extra** sobre el
+total, sin mencionar la comisión al usuario; por ahora se tributa sobre TODO el monto (más adelante,
+solo sobre la comisión de GARDEN); (2) comisiones distintas por servicio y personalizadas para
+empresas, editables desde una pestaña nueva del admin.
+
+### Modelo de dinero (nuevo, `garden-api/src/modules/pricing/pricing.service.ts`)
+- `comisionado = round(precio_cuidador × (1 + comisión))`; `impuesto = round(comisionado × tasa)`;
+  `Booking.totalAmount = comisionado + impuesto` (lo que el cliente paga). Enteros en Bs.
+- Se agregó `Booking.taxAmount` (default 0, aditivo). **`totalAmount` YA incluye el impuesto** → QR, SIP,
+  billetera, tarjeta, reembolsos de monto completo y notificaciones siguen cobrando/devolviendo
+  `totalAmount` sin cambios (el reembolso devuelve también el impuesto).
+- Lo que recibe el cuidador pasó de `total − comisión` a **`total − comisión − impuesto`**
+  (`caregiverNetOf`). Sitios corregidos: liberación de pago (3 caminos en booking.service), disputas
+  (`applyResolution`, apelación admin), job de pagos atascados (server.ts), overtime, extensiones,
+  estadísticas financieras del admin y el libro contable (nueva cuenta 2300 «Impuestos por pagar»,
+  sin ella los asientos AUTO_PAYMENT dejaban de cuadrar).
+- Reservas anteriores: `taxAmount = 0` → todas las fórmulas dan el mismo resultado que antes.
+- Comisión: override del cuidador/empresa para el servicio > override «ALL» > comisión global del
+  servicio (`commissionPctPaseo|Guardería|Hospedaje`) > `platformCommissionPct` (10). Tabla nueva
+  `caregiver_commission_overrides`. Tasa de impuestos en `taxRatePct` (default 16). Rango válido 0–50.
+- Extensiones (paseo/hospedaje, QR/SIP/manual) cotizan con comisión + impuesto del servicio y guardan
+  `extraCommission`/`extraTax` en el evento; al confirmar se suman a la reserva. Mensajes al
+  cuidador muestran su neto, no el bruto.
+
+### Admin (`Admin > Comisiones`, `GET/PUT /api/admin/pricing…`)
+Comisión por defecto y por servicio, impuestos, comisiones personalizadas (buscador de empresas/
+cuidadores), simulador. Validación 0–50 % del lado servidor (cierra también E3 para este camino),
+`AuditLog` en cada cambio, invalida cache de listados de cuidadores. Los precios de listados/perfiles
+usan la comisión del cuidador y servicio (sin impuestos: se suman en el detalle de pago).
+
+### Cliente / textos
+Detalle de pago: «Servicio», «Impuestos (IVA e IT · 16 %)» (+ donación) → Total; ya no muestra comisión.
+`platformCommissionPct` dejó de ser pública. Ayuda, guía del cuidador, T&C de registro, bot de
+soporte y prompt de disputas ya no citan «10 %».
+
+### Pendiente / decisiones abiertas
+- **Texto legal** (`legal.routes.ts`, `legal_screen.dart`, contrato del cuidador): dice «comisión del 10 %»
+  y que los precios incluyen IVA. NO se tocó — requiere revisión legal/contable.
+- Cálculo contable del impuesto sobre el total (no solo sobre la comisión) es decisión explícita del
+  founder; revisar con el contador antes de facturar (SIAT).
+- Reembolso parcial por política (50 %, etc.) devuelve el % del total con impuesto incluido; la
+  contabilización de impuestos devueltos en el libro (cuenta 2300) no está implementada.
+- Cambiar `taxRatePct` o una comisión afecta solo reservas nuevas y extensiones futuras (las
+  extensiones usan la tasa vigente, igual que antes con la comisión global).
+- Filtros de precio del marketplace usan la comisión del servicio sin override por empresa
+  (aproximación en el borde de cada rango).
+- **Deploy:** Render corre `prisma db push` al arrancar → crea `taxAmount` y la tabla nueva solos.
+  No se aplicó nada a producción desde esta sesión.
+
+### Verificación
+`tsc` limpio en lo tocado; tests: `pricing.test.ts` (invariantes de dinero), `booking.pricing.test.ts`
+(extensiones), `payment.idempotency`, `caregiver.service`, `admin.service`, `booking.service` pasan.
+Fallan `liveness.binding`, `verification.submit.binding`, `professional-invite` y `auth.service`:
+código de otras sesiones sin commitear, sin relación con precios. No se probó contra producción
+(el esquema no está aplicado allí).

@@ -8,6 +8,7 @@ import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 
 // Use the shared Prisma singleton — avoids a separate connection pool per module
+import { caregiverNetOf } from '../pricing/pricing.service.js';
 import prisma from '../../config/database.js';
 import { maybeAutoSuspendForLowRating } from '../booking-service/booking.service.js';
 
@@ -705,7 +706,7 @@ INSTRUCCIONES DEL JUEZ (OBLIGATORIAS — no negociables):
    - CLIENT_WINS → si el cuidador falló, no completó el servicio, o el dueño tiene evidencia.
 3. PARTIAL solo como ÚLTIMO RECURSO absoluto: únicamente si las pruebas objetivas son completamente idénticas en peso para ambos lados y es imposible determinar un responsable. Esto debe ser muy raro.
 7. Siempre incluye qué evidencia específica fue DETERMINANTE en tu decisión.
-8. La comisión de GARDEN (10%) se mantiene en cualquier veredicto.
+8. La comisión de GARDEN y los impuestos se mantienen en cualquier veredicto (salvo CLIENT_WINS, que reembolsa el total pagado).
 ${b.cancellationSource === 'NO_SHOW' ? `
 ━━━━━━━━━━━━━━━━━━━━━━━
 REGLAS ESPECÍFICAS PARA DISPUTAS DE NO-SHOW (esta reserva es una — reemplazan
@@ -806,8 +807,8 @@ Responde SOLO en este formato JSON exacto (sin texto adicional):
 // ---------------------------------------------------------------------------
 export async function applyResolution(bookingId: string, resolution: any, booking: any) {
   const totalAmount = Number(booking.totalAmount);
-  const commission = Number(booking.commissionAmount ?? totalAmount * 0.10);
-  const netAmount = totalAmount - commission; // 90% del total
+  // Lo que le corresponde al cuidador: total − comisión − impuestos (los impuestos los retiene GARDEN).
+  const netAmount = caregiverNetOf(booking);
   const caregiverUserId = booking.caregiver.userId;
   const clientId = booking.clientId;
 
@@ -976,7 +977,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
         data: {
           userId: clientId,
           title: '✅ Reembolso aprobado',
-          message: `GARDEN IA analizó el caso y aprobó tu reembolso de Bs ${totalAmount.toFixed(2)} (monto completo incluyendo comisión).`,
+          message: `GARDEN IA analizó el caso y aprobó tu reembolso de Bs ${totalAmount.toFixed(2)} (el monto completo de tu pago).`,
           type: 'SYSTEM',
         },
       });

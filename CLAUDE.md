@@ -119,6 +119,11 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
   `SELECT ... FOR UPDATE` dentro de una `$transaction` — sin esto, dos requests concurrentes
   duplican/triplican créditos. Patrón ya establecido en varios lados de `booking.service.ts` y
   `admin.service.ts`; copiá ese patrón, no inventes uno nuevo.
+- **Total, comisión e impuestos (desde 2026-10-03):** `Booking.totalAmount` es lo que paga el cliente
+  e INCLUYE el impuesto (IVA+IT, `taxAmount`). Lo del cuidador es `total − commissionAmount −
+  taxAmount` — usa `caregiverNetOf()` de `modules/pricing/pricing.service.ts`, nunca restes solo la
+  comisión. Comisión y tasa se resuelven con `getCommissionRate(servicio, caregiverId)` /
+  `getTaxRate()` (editables en Admin > Comisiones); la comisión nunca se muestra al cliente.
 - SIP (pago QR bancario boliviano) — código completo en `src/services/sip.service.ts`, gateado
   por `SIP_ENABLED`. Mientras estén vacías las credenciales del banco, el sistema cae a un QR
   placeholder local (solo en dev) o bloquea el pago con alerta a admins (en producción). No es un

@@ -26,6 +26,8 @@ import 'admin_cities_screen.dart';
 import 'admin_trainings_screen.dart';
 import 'admin_test_booking_screen.dart';
 import 'admin_finance_screen.dart';
+import 'admin_pricing_screen.dart';
+import '../../design/phosphor_glyphs.dart';
 import 'admin_support_screen.dart';
 import 'admin_blockchain_screen.dart';
 import 'payment_qr_admin_screen.dart';
@@ -1005,7 +1007,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // Fuente única de verdad para las 15 secciones — usada tanto por el chip
   // bar horizontal (mobile) como por el sidebar agrupado (web). El índice de
   // cada entrada es el mismo que su posición en _buildIndexedStackBody().
-  static const List<(String, IconData)> _tabs = [
+  static final List<(String, IconData)> _tabs = [
     ('Cuidadores', Icons.person_search_rounded),
     ('Solicitudes', Icons.pending_actions_rounded),
     ('Reservas', Icons.calendar_month_outlined),
@@ -1035,6 +1037,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Soporte', Icons.support_agent_rounded),
     ('Blockchain', Icons.link_rounded),
     ('Verif. de NIT', Icons.receipt_long_rounded),
+    ('Comisiones', Ph.scales.regular),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1046,8 +1049,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 29]),
-    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 30]),
+    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25, 29]),
     ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24, 28]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27]),
@@ -1086,6 +1089,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminSupportScreen(adminToken: _adminToken),
         AdminBlockchainScreen(adminToken: _adminToken),
         AdminNitVerificationsScreen(adminToken: _adminToken),
+        AdminPricingScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );

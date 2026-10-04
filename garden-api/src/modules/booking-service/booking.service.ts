@@ -62,11 +62,11 @@ const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
 const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
 import { getNumericSetting } from '../../utils/settings-cache.js';
+import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf } from '../pricing/pricing.service.js';
 
 /** Lee los parámetros del negocio desde AppSettings (con cache 30s). */
 async function getBookingSettings() {
     const [
-        commissionPct,
         hospedajeAdminFee,
         hospedaje100h,
         hospedaje50h,
@@ -79,7 +79,6 @@ async function getBookingSettings() {
         hospedajeMinAdvanceHoras,
         guarderiaMinAdvanceHoras,
     ] = await Promise.all([
-        getNumericSetting('platformCommissionPct',         10),
         getNumericSetting('hospedajeRefundAdminFeeBS',     10),
         getNumericSetting('hospedajeRefund100Horas',       48),
         getNumericSetting('hospedajeRefund50Horas',        24),
@@ -93,7 +92,6 @@ async function getBookingSettings() {
         getNumericSetting('guarderiaMinAdvanceHoras',      24),
     ]);
     return {
-        COMMISSION_RATE:                commissionPct / 100,
         HOSPEDAJE_REFUND_ADMIN_FEE_BS:  hospedajeAdminFee,
         HOSPEDAJE_REFUND_100_HOURS:     hospedaje100h,
         HOSPEDAJE_REFUND_50_HOURS:      hospedaje50h,
@@ -612,11 +610,17 @@ export async function createBooking(
       totalAmount += extrasTotal;
     }
 
+    // Comisión variable (por servicio / cuidador-empresa) + impuestos sobre el total —
+    // ver pricing.service.ts. totalAmount queda con el impuesto incluido: es lo que el
+    // cliente paga en QR, billetera y tarjeta sin que esos flujos cambien.
     const subtotal = totalAmount;
-    totalAmount = Math.round(subtotal * (1 + cfg.COMMISSION_RATE));
-    const commissionAmount = totalAmount - subtotal;
-    // Client sees the unit price with markup
-    pricePerUnit = Math.round(pricePerUnit * (1 + cfg.COMMISSION_RATE));
+    const commissionRate = await getCommissionRate(body.serviceType, body.caregiverId);
+    const charge = computeClientCharge(subtotal, commissionRate, await getTaxRate());
+    totalAmount = charge.total;
+    const commissionAmount = charge.commission;
+    const taxAmount = charge.tax;
+    // Client sees the unit price with markup (sin impuestos — se agregan en el detalle de pago)
+    pricePerUnit = Math.round(pricePerUnit * (1 + commissionRate));
 
     const allPetNames = orderedPets.map(p => p.name).join(', ');
 
@@ -629,6 +633,7 @@ export async function createBooking(
       totalAmount: new Prisma.Decimal(totalAmount),
       pricePerUnit: new Prisma.Decimal(pricePerUnit),
       commissionAmount: new Prisma.Decimal(commissionAmount),
+      taxAmount: new Prisma.Decimal(taxAmount),
       petCount,
       petName: allPetNames, // comma-separated for display in notifications/lists
       petBreed: pet.breed ?? null,
@@ -2545,11 +2550,13 @@ export async function extendBooking(
     const totalDaysNew = Math.ceil((newEndNorm.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
     // Derive original caregiver price from the marked-up pricePerUnit
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const commissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+    const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, commissionRate);
 
     const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
-    const totalAmountNew = Math.round(subtotalCaregiver * (1 + cfg.COMMISSION_RATE));
-    const commissionAmount = totalAmountNew - subtotalCaregiver;
+    const charge = computeClientCharge(subtotalCaregiver, commissionRate, await getTaxRate());
+    const totalAmountNew = charge.total;
+    const commissionAmount = charge.commission;
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
@@ -2558,6 +2565,7 @@ export async function extendBooking(
         totalDays: totalDaysNew,
         totalAmount: new Prisma.Decimal(totalAmountNew),
         commissionAmount: new Prisma.Decimal(commissionAmount),
+        taxAmount: new Prisma.Decimal(charge.tax),
       },
     });
 
@@ -2641,11 +2649,13 @@ export async function changeDatesBooking(
     const totalDaysNew = Math.ceil((endNorm.getTime() - startNorm.getTime()) / (24 * 60 * 60 * 1000));
     // Derive original caregiver price
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const commissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+    const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, commissionRate);
 
     const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
-    const totalAmountNew = Math.round(subtotalCaregiver * (1 + cfg.COMMISSION_RATE));
-    const commissionAmount = totalAmountNew - subtotalCaregiver;
+    const charge = computeClientCharge(subtotalCaregiver, commissionRate, await getTaxRate());
+    const totalAmountNew = charge.total;
+    const commissionAmount = charge.commission;
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
@@ -2655,6 +2665,7 @@ export async function changeDatesBooking(
         totalDays: totalDaysNew,
         totalAmount: new Prisma.Decimal(totalAmountNew),
         commissionAmount: new Prisma.Decimal(commissionAmount),
+        taxAmount: new Prisma.Decimal(charge.tax),
       },
     });
 
@@ -2694,10 +2705,13 @@ export async function requestWalkExtensionPayment(
   if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('Solo se puede extender un paseo en curso');
 
   const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+  const commissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+  const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, commissionRate);
   const ratePerMinCaregiver = pricePerUnitCaregiver / 60;
   const extraBase = Math.round(ratePerMinCaregiver * additionalMinutes);
-  const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+  // Comisión + impuestos (16%) sobre la extensión, igual que en la reserva original.
+  const extraCharge = computeClientCharge(extraBase, commissionRate, await getTaxRate());
+  const extraTotal = extraCharge.total;
   // FIX (auditoría 2026-09-30, E2): se calcula y persiste la comisión de
   // Garden sobre este monto UNA sola vez, acá, al momento de cotizar la
   // extensión — antes cada confirmación (QR, SIP, aprobación manual)
@@ -2708,7 +2722,8 @@ export async function requestWalkExtensionPayment(
   // respecto a lo cotizado acá. Mismo principio "calcular una vez y
   // persistir" ya usado para el booking original (commissionAmount se fija
   // al crear la reserva y nunca se recalcula al pagar).
-  const extraCommission = extraTotal - extraBase;
+  const extraCommission = extraCharge.commission;
+  const extraTax = extraCharge.tax;
 
   const extensionId = crypto.randomUUID();
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
@@ -2735,6 +2750,7 @@ export async function requestWalkExtensionPayment(
       additionalMinutes,
       extraAmount: extraTotal,
       extraCommission,
+      extraTax,
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
@@ -2769,6 +2785,7 @@ export async function requestWalkExtensionPayment(
     additionalMinutes,
     extraAmount: extraTotal,
     extraCommission,
+    extraTax,
     method: 'manual',
     paymentId: manualPaymentId,
     timestamp: new Date().toISOString(),
@@ -2807,6 +2824,8 @@ export async function confirmWalkExtensionQr(
   let caregiverUserId: string | null = null;
   let additionalMinutes = 0;
   let extraAmount = 0;
+  let extraCommissionApplied = 0;
+  let extraTaxApplied = 0;
   let newTotal = 0;
   let extPetName: string | null = null;
 
@@ -2824,13 +2843,14 @@ export async function confirmWalkExtensionQr(
       where: { id: bookingId, clientId }, // ← ownership check: only the booking's client can confirm
       select: {
         id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
-        duration: true, totalAmount: true, commissionAmount: true, pricePerUnit: true,
+        duration: true, totalAmount: true, commissionAmount: true, taxAmount: true, pricePerUnit: true,
         petName: true, serviceEvents: true,
       },
     });
 
     if (!booking) throw new BookingNotFoundError(bookingId); // covers both not-found AND unauthorized
     if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El paseo ya no está en curso');
+    const legacyRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
 
     const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
     const pendingIdx = events.findIndex(
@@ -2851,20 +2871,25 @@ export async function confirmWalkExtensionQr(
     // Aplicar extensión
     // FIX (auditoría 2026-09-30, E2): usar la comisión ya calculada y
     // persistida al solicitar la extensión (pending.extraCommission), no
-    // recalcularla con cfg.COMMISSION_RATE vigente ACÁ — puede haber
+    // recalcularla con la comisión vigente ACÁ — puede haber
     // cambiado durante la ventana de 15 min del QR, lo que corría cuánto le
     // llega al cuidador vs. a Garden de un monto (extraAmount) que el
     // cliente ya pagó fijo. Fallback a la fórmula vieja solo para eventos
     // PENDING creados antes de este fix (no tienen extraCommission guardado).
     const extraCommission = pending.extraCommission ?? (() => {
       const pricePerUnitClient = Number(booking.pricePerUnit);
-      const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+      const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, legacyRate);
       return extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
     })();
+    // Impuesto persistido al cotizar; eventos anteriores al impuesto no lo tienen (0).
+    const extraTax = Number(pending.extraTax ?? 0);
+    extraCommissionApplied = extraCommission;
+    extraTaxApplied = extraTax;
 
     const newDuration = (booking.duration ?? 60) + additionalMinutes;
     newTotal = Number(booking.totalAmount) + extraAmount;
     const newCommission = Number(booking.commissionAmount) + extraCommission;
+    const newTax = Number(booking.taxAmount) + extraTax;
 
     // Reemplazar PENDING → EXTENSION_CONFIRMED
     events[pendingIdx] = {
@@ -2883,6 +2908,7 @@ export async function confirmWalkExtensionQr(
         duration: newDuration,
         totalAmount: new Prisma.Decimal(newTotal),
         commissionAmount: new Prisma.Decimal(newCommission),
+        taxAmount: new Prisma.Decimal(newTax),
         serviceEvents: events,
       },
     });
@@ -2897,7 +2923,7 @@ export async function confirmWalkExtensionQr(
         data: {
           userId: caregiver.userId,
           title: '⏱️ Extensión de paseo confirmada',
-          message: `El cliente pagó ${additionalMinutes} min adicionales para el paseo de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount} adicionales.`,
+          message: `El cliente pagó ${additionalMinutes} min adicionales para el paseo de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount - extraCommission - extraTax} adicionales para ti.`,
           type: 'SERVICE_EXTENSION',
         },
       });
@@ -2908,7 +2934,7 @@ export async function confirmWalkExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '⏱️ Te compraron más tiempo', `+${additionalMinutes} min con ${extPetName ?? 'tu paseo'} · Bs ${extraAmount} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId })
+    sendPushToUser(caregiverUserId, '⏱️ Te compraron más tiempo', `+${additionalMinutes} min con ${extPetName ?? 'tu paseo'} · Bs ${extraAmount - extraCommissionApplied - extraTaxApplied} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId })
       .catch(() => {});
   }
 
@@ -2932,7 +2958,7 @@ export async function checkHospedajeExtensionAvailability(
   const [booking, cfg] = await Promise.all([
     prisma.booking.findFirst({
       where: { id: bookingId, clientId },
-      select: { id: true, serviceType: true, status: true, pricePerUnit: true, petCount: true, bookingExtras: { select: { pricePerDay: true } } },
+      select: { id: true, serviceType: true, status: true, pricePerUnit: true, caregiverId: true, petCount: true, bookingExtras: { select: { pricePerDay: true } } },
     }),
     getBookingSettings(),
   ]);
@@ -2944,8 +2970,11 @@ export async function checkHospedajeExtensionAvailability(
   // Precio por noche que realmente se cobra al extender (con extras y
   // descuento multi-mascota, ya con comisión) — debe coincidir con
   // requestHospedajeExtensionPayment, que usa el mismo helper.
-  const perDayCaregiver = hospedajeExtensionPerDayCaregiver(booking, cfg.COMMISSION_RATE);
-  return { availableDays: cfg.HOSPEDAJE_MAX_EXTENSION_DAYS, pricePerDay: Math.round(perDayCaregiver * (1 + cfg.COMMISSION_RATE)) };
+  const commissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+  const perDayCaregiver = hospedajeExtensionPerDayCaregiver(booking, commissionRate);
+  // Con impuestos incluidos: es lo que se cobra por noche al extender.
+  const perDay = computeClientCharge(perDayCaregiver, commissionRate, await getTaxRate());
+  return { availableDays: cfg.HOSPEDAJE_MAX_EXTENSION_DAYS, pricePerDay: perDay.total };
 }
 
 /** Descuento multi-mascota — mismo criterio que createBooking (100%/75%/50%). */
@@ -2960,7 +2989,7 @@ function hospedajeExtensionPerDayCaregiver(
   booking: { pricePerUnit: unknown; petCount: number | null; bookingExtras: Array<{ pricePerDay: unknown }> },
   commissionRate: number
 ): number {
-  const base = Math.round(Number(booking.pricePerUnit) / (1 + commissionRate));
+  const base = caregiverUnitFromPriced(Number(booking.pricePerUnit), commissionRate);
   const petMultiplier = PET_DISCOUNT_FACTORS.slice(0, Math.max(1, booking.petCount ?? 1)).reduce((a, b) => a + b, 0);
   const extrasPerDay = booking.bookingExtras.reduce((sum, e) => sum + Number(e.pricePerDay), 0);
   return base * petMultiplier + extrasPerDay;
@@ -2986,12 +3015,15 @@ export async function requestHospedajeExtensionPayment(
   if (booking.serviceType !== ServiceType.HOSPEDAJE) throw new BookingValidationError('Solo se puede extender un hospedaje');
   if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('Solo se puede extender un hospedaje en curso');
 
-  const extraBase = Math.round(hospedajeExtensionPerDayCaregiver(booking, cfg.COMMISSION_RATE) * additionalDays);
-  const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+  const commissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+  const extraBase = Math.round(hospedajeExtensionPerDayCaregiver(booking, commissionRate) * additionalDays);
+  const extraCharge = computeClientCharge(extraBase, commissionRate, await getTaxRate());
+  const extraTotal = extraCharge.total;
   // FIX (auditoría 2026-09-30, E2): ver comentario equivalente en
   // requestWalkExtensionPayment — se persiste la comisión calculada acá para
   // que la confirmación no la recalcule con una tasa que pudo cambiar.
-  const extraCommission = extraTotal - extraBase;
+  const extraCommission = extraCharge.commission;
+  const extraTax = extraCharge.tax;
 
   const extensionId = crypto.randomUUID();
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
@@ -3012,6 +3044,7 @@ export async function requestHospedajeExtensionPayment(
       additionalDays,
       extraAmount: extraTotal,
       extraCommission,
+      extraTax,
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
@@ -3034,6 +3067,7 @@ export async function requestHospedajeExtensionPayment(
     additionalDays,
     extraAmount: extraTotal,
     extraCommission,
+    extraTax,
     method: 'manual',
     paymentId: manualPaymentId,
     timestamp: new Date().toISOString(),
@@ -3065,6 +3099,8 @@ export async function confirmHospedajeExtensionQr(
   let caregiverUserId: string | null = null;
   let additionalDays = 0;
   let extraAmount = 0;
+  let extraCommissionApplied = 0;
+  let extraTaxApplied = 0;
   let newTotal = 0;
   let extPetName: string | null = null;
 
@@ -3080,13 +3116,14 @@ export async function confirmHospedajeExtensionQr(
       where: { id: bookingId, clientId }, // ← ownership check
       select: {
         id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
-        endDate: true, totalDays: true, totalAmount: true, commissionAmount: true,
+        endDate: true, totalDays: true, totalAmount: true, commissionAmount: true, taxAmount: true,
         pricePerUnit: true, petName: true, serviceEvents: true,
       },
     });
 
     if (!booking) throw new BookingNotFoundError(bookingId); // covers not-found AND unauthorized
     if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El hospedaje ya no está en curso');
+    const legacyRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
 
     const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
     const pendingIdx = events.findIndex(
@@ -3108,9 +3145,12 @@ export async function confirmHospedajeExtensionQr(
     // confirmWalkExtensionQr — usar la comisión ya persistida al solicitar.
     const extraCommission = pending.extraCommission ?? (() => {
       const pricePerUnitClient = Number(booking.pricePerUnit);
-      const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+      const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, legacyRate);
       return extraAmount - pricePerUnitCaregiver * additionalDays;
     })();
+    const extraTax = Number(pending.extraTax ?? 0);
+    extraCommissionApplied = extraCommission;
+    extraTaxApplied = extraTax;
 
     const newEndDate = new Date(booking.endDate!);
     newEndDate.setDate(newEndDate.getDate() + additionalDays);
@@ -3138,6 +3178,7 @@ export async function confirmHospedajeExtensionQr(
 
     newTotal = Number(booking.totalAmount) + extraAmount;
     const newCommission = Number(booking.commissionAmount) + extraCommission;
+    const newTax = Number(booking.taxAmount) + extraTax;
 
     events[pendingIdx] = {
       type: 'EXTENSION_CONFIRMED',
@@ -3156,6 +3197,7 @@ export async function confirmHospedajeExtensionQr(
         totalDays: newTotalDays,
         totalAmount: new Prisma.Decimal(newTotal),
         commissionAmount: new Prisma.Decimal(newCommission),
+        taxAmount: new Prisma.Decimal(newTax),
         serviceEvents: events,
       },
     });
@@ -3170,7 +3212,7 @@ export async function confirmHospedajeExtensionQr(
         data: {
           userId: caregiver.userId,
           title: '🏠 Hospedaje extendido',
-          message: `El cliente agregó ${additionalDays} noche${additionalDays > 1 ? 's' : ''} al hospedaje de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount} adicionales.`,
+          message: `El cliente agregó ${additionalDays} noche${additionalDays > 1 ? 's' : ''} al hospedaje de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount - extraCommission - extraTax} adicionales para ti.`,
           type: 'SERVICE_EXTENSION',
         },
       });
@@ -3181,7 +3223,7 @@ export async function confirmHospedajeExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '🏠 Se alargó el hospedaje', `${extPetName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
+    sendPushToUser(caregiverUserId, '🏠 Se alargó el hospedaje', `${extPetName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount - extraCommissionApplied - extraTaxApplied} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
   }
 
   // Registro en blockchain (asíncrono, con retry + alerta al admin si se agotan los intentos)
@@ -4692,7 +4734,13 @@ export async function concludeService(
         ratePerMin = Number(booking.totalAmount) / Number(booking.duration ?? 60);
       }
       overtimeFeeGross    = Math.round(overtimeMins * ratePerMin * 100) / 100;
-      overtimeFeeCaregiver = Math.round(overtimeFeeGross * (1 - cfg.COMMISSION_RATE) * 100) / 100;
+      // El cargo (prorrateo del total) ya incluye el impuesto de la reserva; el cuidador
+      // cobra su parte del monto SIN impuesto (misma fórmula de siempre sobre ese monto).
+      const bookingTaxBase = Number(booking.totalAmount) - Number(booking.taxAmount);
+      const bookingTaxRate = bookingTaxBase > 0 ? Number(booking.taxAmount) / bookingTaxBase : 0;
+      const overtimeCommissionRate = await getCommissionRate(booking.serviceType, booking.caregiverId);
+      overtimeFeeCaregiver =
+        Math.round((overtimeFeeGross / (1 + bookingTaxRate)) * (1 - overtimeCommissionRate) * 100) / 100;
 
       // Cobrar al cliente (puede quedar negativo — se recupera en la próxima reserva)
       const updatedClient = await tx.user.update({
@@ -4985,8 +5033,8 @@ export async function confirmReceiptByClient(
       return bookingToResponse(updated!);
     }
 
-    // Calcular el monto a transferir (Total - Comisión)
-    const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+    // Calcular el monto a transferir (Total - Comisión - Impuestos)
+    const amount = caregiverNetOf(booking);
 
     // Leer userId del cuidador para acceder a la billetera unificada
     const caregiverProfile = await tx.caregiverProfile.findUnique({
@@ -5181,7 +5229,7 @@ export async function autoReleasePayment(
     });
     if (claimed.count === 0) return; // otro proceso ya lo liberó
 
-    const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+    const amount = caregiverNetOf(booking);
 
     const caregiverProfileAR = await tx.caregiverProfile.findUnique({
       where: { id: booking.caregiverId },
@@ -5685,7 +5733,7 @@ export async function autoPayoutExpiredReviews() {
 
   for (const booking of expired) {
     try {
-      const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+      const amount = caregiverNetOf(booking);
       await prisma.$transaction(async (tx) => {
         // Atomic claim ANTES de tocar el balance — evita doble pago si este job
         // corre superpuesto con autoReleasePayment() (cron horario, 24h por
@@ -5757,7 +5805,7 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
       select: {
         id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
         duration: true, endDate: true, totalDays: true,
-        totalAmount: true, commissionAmount: true, pricePerUnit: true,
+        totalAmount: true, commissionAmount: true, taxAmount: true, pricePerUnit: true,
         petName: true, serviceEvents: true,
       },
     });
@@ -5786,7 +5834,12 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
     loggedExtensionId = extensionId;
     loggedServiceType = booking.serviceType;
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const pricePerUnitCaregiver = caregiverUnitFromPriced(
+      pricePerUnitClient,
+      await getCommissionRate(booking.serviceType, booking.caregiverId)
+    );
+    // Impuesto persistido al cotizar la extensión (0 en eventos anteriores al impuesto).
+    const extraTax = Number(pending.extraTax ?? 0);
 
     events[pendingIdx] = {
       type: 'EXTENSION_CONFIRMED',
@@ -5809,31 +5862,35 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
       // confirmWalkExtensionQr) en vez de recalcularla con la tasa vigente
       // en este callback, que puede diferir de la vigente al cotizar.
       const extraCommission = pending.extraCommission ?? (extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes));
+      const extraNet = extraAmount - extraCommission - extraTax;
       updateData = {
         duration: (booking.duration ?? 60) + additionalMinutes,
         totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
         commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+        taxAmount: new Prisma.Decimal(Number(booking.taxAmount) + extraTax),
         serviceEvents: events,
       };
       pushTitle = '⏱️ Te compraron más tiempo';
-      pushBody = `+${additionalMinutes} min con ${booking.petName ?? 'tu paseo'} · Bs ${extraAmount} extra ya son tuyos`;
-      notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+      pushBody = `+${additionalMinutes} min con ${booking.petName ?? 'tu paseo'} · Bs ${extraNet} extra ya son tuyos`;
+      notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraNet} adicionales para ti — ${booking.petName ?? 'mascota'}.`;
     } else {
       const additionalDays: number = pending.additionalDays;
       // FIX (auditoría 2026-09-30, E2): ver comentario equivalente arriba.
       const extraCommission = pending.extraCommission ?? (extraAmount - pricePerUnitCaregiver * additionalDays);
       const newEndDate = new Date(booking.endDate!);
       newEndDate.setDate(newEndDate.getDate() + additionalDays);
+      const extraNet = extraAmount - extraCommission - extraTax;
       updateData = {
         endDate: newEndDate,
         totalDays: (booking.totalDays ?? 1) + additionalDays,
         totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
         commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+        taxAmount: new Prisma.Decimal(Number(booking.taxAmount) + extraTax),
         serviceEvents: events,
       };
       pushTitle = '🏠 Se alargó el hospedaje';
-      pushBody = `${booking.petName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount} extra ya son tuyos`;
-      notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+      pushBody = `${booking.petName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraNet} extra ya son tuyos`;
+      notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraNet} adicionales para ti — ${booking.petName ?? 'mascota'}.`;
     }
 
     await tx.booking.update({ where: { id: bookingId }, data: updateData });

@@ -342,12 +342,8 @@ const PUBLIC_SETTING_KEYS = new Set([
   // servidor, después de todo el diálogo de confirmación. Pública por el
   // mismo motivo que las políticas de reembolso de arriba.
   'montoMinimoRetiro',
-  // FIX (auditoría 2026-10-01, F1): el diálogo de T&C del registro
-  // (register_screen.dart) tenía "20%" hardcodeado, desactualizado respecto
-  // al resto de la app y al default real del backend (10%, configurable).
-  // Pública para que el registro (sin auth todavía) la pueda traer en vivo y
-  // no vuelva a desalinearse si un admin la cambia.
-  'platformCommissionPct',
+  // platformCommissionPct YA NO es pública (2026-10-03): la comisión varía por servicio y
+  // cuidador/empresa y no se muestra a los usuarios — ver pricing.service.ts.
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -390,7 +386,6 @@ app.get('/api/settings', async (_req, res) => {
       paseoRefund100Horas: 12,
       paseoRefund50Horas: 6,
       montoMinimoRetiro: 50,
-      platformCommissionPct: 10,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

@@ -4490,7 +4490,9 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
 String _caregiverNetAmount(Map<String, dynamic> booking) {
   final total = double.tryParse(booking['totalAmount']?.toString() ?? '0') ?? 0;
   final commission = double.tryParse(booking['commissionAmount']?.toString() ?? '0') ?? 0;
-  final net = total - commission;
+  // Los impuestos (IVA + IT) van incluidos en el total que paga el cliente; no son del cuidador.
+  final tax = double.tryParse(booking['taxAmount']?.toString() ?? '0') ?? 0;
+  final net = total - commission - tax;
   return net > 0 ? net.toStringAsFixed(0) : (total > 0 ? total.toStringAsFixed(0) : '—');
 }
 

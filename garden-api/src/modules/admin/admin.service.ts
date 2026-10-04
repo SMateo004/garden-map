@@ -23,6 +23,7 @@ import * as notificationService from '../../services/notification.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import * as authService from '../auth/auth.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { getCommissionRate, getTaxRate, caregiverUnitFromPriced, caregiverNetOf } from '../pricing/pricing.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -1032,9 +1033,15 @@ export async function createTestBooking(
   }
   if (!petName) throw new BadRequestError('Falta el nombre de la mascota');
 
-  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
+  // input.totalAmount es el total final que "paga" el cliente; se descompone igual que una
+  // reserva real: total = precio con comisión + impuestos (pricing.service.ts).
+  const adminCommissionRate = await getCommissionRate(input.serviceType, caregiverProfile.id);
+  const adminTaxRate = await getTaxRate();
   const totalAmount = Math.round(input.totalAmount * 100) / 100;
-  const commissionAmount = Math.round(totalAmount * (commissionPct / 100) * 100) / 100;
+  const taxAmount = Math.round((totalAmount * adminTaxRate) / (1 + adminTaxRate) * 100) / 100;
+  const pricedAmount = totalAmount - taxAmount;
+  const commissionAmount =
+    Math.round((pricedAmount - pricedAmount / (1 + adminCommissionRate)) * 100) / 100;
 
   const booking = await prisma.$transaction(async (tx) => {
     const created = await tx.booking.create({
@@ -1049,8 +1056,9 @@ export async function createTestBooking(
         petAge,
         petSize: petSize as never,
         totalAmount,
-        pricePerUnit: totalAmount,
+        pricePerUnit: pricedAmount,
         commissionAmount,
+        taxAmount,
         paidAt: input.paid ? new Date() : null,
         createdByAdmin: true,
         ...(input.serviceType === 'HOSPEDAJE'
@@ -1389,8 +1397,7 @@ export async function resolveDisputeAppeal(
   if (dispute.status !== 'APPEALED') throw new BadRequestError('Esta disputa no está en apelación');
 
   const totalAmount = Number(booking.totalAmount);
-  const commission = Number((booking as any).commissionAmount ?? totalAmount * 0.10);
-  const netAmount = totalAmount - commission;
+  const netAmount = caregiverNetOf(booking);
   const caregiverUserId = (booking as any).caregiver.userId;
   const clientId = booking.clientId;
 
@@ -1711,12 +1718,13 @@ export async function approveExtensionPayment(
 
     const evt = events[idx];
     const { extraAmount } = evt;
-    const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
-    const COMMISSION_RATE = commissionPct / 100;
+    const COMMISSION_RATE = await getCommissionRate(booking.serviceType, booking.caregiverId);
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+    const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, COMMISSION_RATE);
     const newTotal = Number(booking.totalAmount) + extraAmount;
     const newCommission = Number(booking.commissionAmount);
+    // Impuesto persistido al cotizar la extensión (0 en eventos anteriores al impuesto).
+    const newTax = Number(booking.taxAmount) + Number(evt.extraTax ?? 0);
 
     isHospedaje = booking.serviceType === 'HOSPEDAJE';
     let bookingUpdate: Record<string, any>;
@@ -1736,6 +1744,7 @@ export async function approveExtensionPayment(
         totalDays: (booking.totalDays ?? 1) + additionalDays,
         totalAmount: new Prisma.Decimal(newTotal),
         commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+        taxAmount: new Prisma.Decimal(newTax),
       };
       const n = additionalDays === 1 ? 'noche' : 'noches';
       clientMsg = `Se aprobó tu extensión de +${additionalDays} ${n} de hospedaje.`;
@@ -1753,6 +1762,7 @@ export async function approveExtensionPayment(
         duration: (booking.duration ?? 60) + additionalMinutes,
         totalAmount: new Prisma.Decimal(newTotal),
         commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+        taxAmount: new Prisma.Decimal(newTax),
       };
       clientMsg = `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`;
       caregiverMsg = `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`;
@@ -1962,7 +1972,11 @@ export async function getReservationDetail(bookingId: string) {
 
   const totalAmount = Number(booking.totalAmount);
   const commissionAmount = Number(booking.commissionAmount);
-  const caregiverPayout = totalAmount - commissionAmount;
+  const taxAmount = Number((booking as any).taxAmount ?? 0);
+  const caregiverPayout = totalAmount - commissionAmount - taxAmount;
+  // % de comisión efectivo de esta reserva (varía por servicio / cuidador): comisión / precio del cuidador.
+  const commissionBase = totalAmount - commissionAmount - taxAmount;
+  const commissionPercent = commissionBase > 0 ? Math.round((commissionAmount / commissionBase) * 1000) / 10 : 0;
 
   const u = booking.caregiver.user;
   const c = booking.client;
@@ -2002,7 +2016,8 @@ export async function getReservationDetail(bookingId: string) {
     totalAmount,
     pricePerUnit: Number(booking.pricePerUnit),
     commissionAmount,
-    commissionPercent: 10,
+    commissionPercent,
+    taxAmount,
     caregiverPayoutAmount: caregiverPayout,
     walletPaymentAmount: Number((booking as any).walletPaymentAmount ?? 0),
     donationAmount: Number(booking.donationAmount ?? 0),
@@ -2137,6 +2152,7 @@ export async function getPaymentsHistory(page = 1, limit = 50) {
         petName: true,
         totalAmount: true,
         commissionAmount: true,
+        taxAmount: true,
         paidAt: true,
         serviceType: true,
         startDate: true,
@@ -2167,6 +2183,7 @@ export async function getPaymentsHistory(page = 1, limit = 50) {
       petName: b.petName,
       totalAmount: Number(b.totalAmount),
       commissionAmount: Number(b.commissionAmount),
+      taxAmount: Number(b.taxAmount ?? 0),
       paidAt: b.paidAt?.toISOString() ?? null,
       paymentMethod,
       serviceType: b.serviceType,
@@ -2924,26 +2941,27 @@ export async function getFinancialStats() {
   // ── Reservas completadas ─────────────────────────────────────
   // commissionAmount = ganancia GARDEN por reserva (10% del precio del cuidador)
   // totalAmount      = lo que pagó el cliente
-  // totalAmount - commissionAmount = lo que recibe el cuidador
+  // taxAmount        = impuestos (IVA+IT) cobrados al cliente, incluidos en totalAmount: GARDEN los tributa, no son ingreso
+  // totalAmount - commissionAmount - taxAmount = lo que recibe el cuidador
   const [allCompleted, monthCompleted, lastMonthCompleted, yearCompleted] = await Promise.all([
     prisma.booking.aggregate({
       where: { status: 'COMPLETED' },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfMonth } },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfYear } },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
   ]);
@@ -3012,12 +3030,12 @@ export async function getFinancialStats() {
   const [paseoStats, hospedajeStats] = await Promise.all([
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceType: 'PASEO' },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceType: 'HOSPEDAJE' },
-      _sum: { totalAmount: true, commissionAmount: true },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
   ]);
@@ -3025,7 +3043,8 @@ export async function getFinancialStats() {
   // ── Cálculos finales ─────────────────────────────────────────
   const grossBilled        = Number(allCompleted._sum.totalAmount ?? 0);      // total facturado a clientes
   const gardenCommissions  = Number(allCompleted._sum.commissionAmount ?? 0); // ganancia real GARDEN (10%)
-  const caregiverPayouts   = grossBilled - gardenCommissions;                  // lo que reciben cuidadores
+  const taxesCollected     = Number(allCompleted._sum.taxAmount ?? 0);        // impuestos a tributar (no son ingreso)
+  const caregiverPayouts   = grossBilled - gardenCommissions - taxesCollected; // lo que reciben cuidadores
   const refundsToClients   = Number(refundStats._sum.refundAmount ?? 0);      // devoluciones (≠ ganancia)
   const refundCommLost     = Number(refundStats._sum.commissionAmount ?? 0);  // comisiones perdidas por cancelaciones
   // netGardenIncome: solo resta marketing real (gift codes). refundCommLost son comisiones
@@ -3052,6 +3071,7 @@ export async function getFinancialStats() {
     summary: {
       grossBilled,
       gardenCommissions,
+      taxesCollected,
       caregiverPayouts,
       netGardenIncome,
       thisMonthGardenIncome: thisMonthGardenInc,
@@ -3085,13 +3105,13 @@ export async function getFinancialStats() {
         count: paseoStats._count,
         billedToClient: Number(paseoStats._sum.totalAmount ?? 0),
         gardenEarnings: Number(paseoStats._sum.commissionAmount ?? 0),
-        caregiverEarnings: Number(paseoStats._sum.totalAmount ?? 0) - Number(paseoStats._sum.commissionAmount ?? 0),
+        caregiverEarnings: Number(paseoStats._sum.totalAmount ?? 0) - Number(paseoStats._sum.commissionAmount ?? 0) - Number(paseoStats._sum.taxAmount ?? 0),
       },
       hospedaje: {
         count: hospedajeStats._count,
         billedToClient: Number(hospedajeStats._sum.totalAmount ?? 0),
         gardenEarnings: Number(hospedajeStats._sum.commissionAmount ?? 0),
-        caregiverEarnings: Number(hospedajeStats._sum.totalAmount ?? 0) - Number(hospedajeStats._sum.commissionAmount ?? 0),
+        caregiverEarnings: Number(hospedajeStats._sum.totalAmount ?? 0) - Number(hospedajeStats._sum.commissionAmount ?? 0) - Number(hospedajeStats._sum.taxAmount ?? 0),
       },
     },
     monthlyChart: monthlyData,
@@ -3106,7 +3126,7 @@ export async function getFinancialStats() {
     incomeStatement: {
       revenues: {
         commissionsEarned: gardenCommissions,
-        description: `GARDEN cobra ${currentCommissionPct}% sobre el precio del cuidador por cada servicio completado (tarifa vigente — configurable en Admin > Técnico > Comisión GARDEN)`,
+        description: `GARDEN cobra una comisión sobre el precio del cuidador que varía por servicio y por cuidador/empresa (tarifa por defecto vigente: ${currentCommissionPct}% — configurable en Admin > Comisiones e impuestos). Los impuestos cobrados al cliente (Bs ${taxesCollected.toFixed(2)}) se tributan aparte y no son ingreso.`,
       },
       expenses: {
         refundedCommissions: refundCommLost,
@@ -3131,6 +3151,8 @@ export async function getFinancialStats() {
       liabilities: {
         pendingWithdrawals: Number(pendingWd?._sum.amount ?? 0),
         processingWithdrawals: Number(processingWd?._sum.amount ?? 0),
+        // Impuestos cobrados a clientes pendientes de tributar (informativo: no hay registro de pagos al SIN todavía).
+        taxesCollected,
         total: Number(pendingWd?._sum.amount ?? 0) + Number(processingWd?._sum.amount ?? 0),
       },
       equity: {

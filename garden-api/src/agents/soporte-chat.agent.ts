@@ -30,7 +30,7 @@ async function buildKnowledgeBase(): Promise<string> {
     paseo100h,
     paseo50h,
     autoReleaseHoras,
-    commissionPct,
+    taxRatePct,
     qrValidityMinutes,
     montoMinimoRetiro,
   ] = await Promise.all([
@@ -40,7 +40,7 @@ async function buildKnowledgeBase(): Promise<string> {
     getNumericSetting('paseoRefund100Horas', 12),
     getNumericSetting('paseoRefund50Horas', 6),
     getNumericSetting('autoReleasePaymentHoras', 24),
-    getNumericSetting('platformCommissionPct', 10),
+    getNumericSetting('taxRatePct', 16),
     getNumericSetting('qrValidityMinutes', 15),
     getNumericSetting('montoMinimoRetiro', 50),
   ]);
@@ -55,7 +55,7 @@ async function buildKnowledgeBase(): Promise<string> {
 - Meet & Greet: reunión gratuita de 20-30 min (presencial o videollamada), se coordina desde el chat de la reserva con botón "Proponer Meet & Greet". Cancelar después de un Meet & Greet ya realizado no da reembolso.
 
 # PAGOS
-- Comisión de plataforma: ${commissionPct}% sobre el precio del cuidador, la paga el cliente aparte. Si el cuidador cobra Bs 100, el cliente paga Bs ${100 + commissionPct}; el cuidador recibe sus Bs 100 completos.
+- Precio final: el precio que ve el cliente en la app ya incluye el servicio de Garden (varía según el servicio y el cuidador/empresa; NO des un porcentaje ni lo desgloses). En el detalle de pago se suman los impuestos de ley (IVA + IT, ${taxRatePct}% sobre el precio mostrado) y ese es el total a pagar. El cuidador recibe íntegro el precio que él mismo fijó.
 - El pago se libera al cuidador de inmediato si el cliente confirma que el servicio terminó bien, o automático a las ${autoReleaseHoras}h de finalizado el servicio si el cliente no confirma ni abre disputa.
 - QR bancario: válido ${qrValidityMinutes} minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante).
 - Billetera Garden: saldo interno, se acumula sobre todo por reembolsos. Se puede combinar con QR si no cubre el total.
@@ -68,7 +68,7 @@ async function buildKnowledgeBase(): Promise<string> {
 # SER CUIDADOR
 - Registro gratuito, wizard de varios pasos que guarda el progreso si cierras la app a la mitad. Requiere: mayor de 18 años, datos + dirección, foto de perfil, servicios y zona, precios (Bs 15-400 típico, rango por zona), disponibilidad, fotos (mín. 2, más fotos del espacio si ofrece Hospedaje/Guardería), bio + cuestionario, verificación de identidad (CI + prueba de vida con reconocimiento facial AWS Rekognition), verificación de teléfono y correo.
 - Verificación de identidad: normalmente instantánea; si no se confirma automático, pasa a revisión manual (24-48h). Si falla, reintentar con buena luz, CI nítida y completa, rostro centrado sin lentes oscuros/gorra.
-- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe (el ${commissionPct}% de comisión lo paga el cliente aparte). Cambiar el precio solo afecta reservas nuevas.
+- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe (el servicio de Garden y los impuestos los paga el cliente aparte). Cambiar el precio solo afecta reservas nuevas.
 
 # DISPUTAS Y PROBLEMAS
 - Se activa calificando con menos de 3 estrellas al finalizar un servicio — retiene el pago automáticamente y habilita "abrir disputa". Plazo para abrir la disputa: ${autoReleaseHoras}h desde que terminó el servicio; pasado ese plazo el pago se libera al cuidador y ya no se puede reclamar.

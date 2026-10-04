@@ -41,6 +41,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 import { createServer } from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
+import { caregiverNetOf } from './modules/pricing/pricing.service.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { shutdownAnalytics } from './shared/analytics.js';
@@ -328,7 +329,7 @@ async function start() {
             { dispute: { status: { notIn: ['PENDING_CAREGIVER', 'PENDING_CLIENT', 'PENDING_AI', 'APPEALED'] } } },
           ],
         } as any,
-        select: { id: true, caregiverId: true, totalAmount: true, commissionAmount: true },
+        select: { id: true, caregiverId: true, totalAmount: true, commissionAmount: true, taxAmount: true },
       });
 
       for (const booking of stuckBookings) {
@@ -354,8 +355,7 @@ async function start() {
             // (2) no creaba ningún WalletTransaction — el pago quedaba
             // invisible en el historial del cuidador. Se agrega, con el mismo
             // patrón de lock + balance real que el resto del proyecto.
-            const commission = Number(booking.commissionAmount ?? Number(booking.totalAmount) * 0.10);
-            const amount = Number(booking.totalAmount) - commission;
+            const amount = caregiverNetOf(booking);
             await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${caregiverProfile.userId} FOR UPDATE`;
             const updated = await tx.user.update({
               where: { id: caregiverProfile.userId },

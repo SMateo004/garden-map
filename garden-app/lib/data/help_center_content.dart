@@ -97,10 +97,10 @@ const List<HelpCategory> helpCenterCategories = [
           HelpSection(
             heading: '5. Paga tu reserva',
             body: 'Puedes pagar con tu Billetera Garden (si tienes saldo), con '
-                'QR bancario, o combinando ambos. El precio final incluye el '
-                'monto que fija el cuidador más la comisión de plataforma del '
-                '10%. Por ejemplo: si el cuidador cobra Bs 100, tú pagas Bs 110 '
-                '— el cuidador recibe sus Bs 100 completos.',
+                'QR bancario, o combinando ambos. El precio que ves ya incluye '
+                'el servicio de la plataforma; al pagar, en el detalle se suman '
+                'aparte los impuestos de ley (IVA e IT), y ese es el total a '
+                'pagar. El cuidador recibe íntegro el precio que fijó.',
           ),
           HelpSection(
             heading: '6. Espera la confirmación del cuidador',
@@ -192,29 +192,27 @@ const List<HelpCategory> helpCenterCategories = [
   HelpCategory(
     id: 'pagos',
     title: 'Pagos',
-    description: 'Comisión, QR bancario, Billetera Garden y donaciones',
+    description: 'Precio, impuestos, QR bancario, Billetera Garden y donaciones',
     icon: Icons.qr_code_scanner_rounded,
     articles: [
       HelpArticle(
         id: 'como-funciona-pago',
-        title: 'Cómo funciona el pago y la comisión de Garden',
-        excerpt: 'Por qué pagas un poco más del precio del cuidador.',
-        keywords: ['comision', 'precio', 'cuanto cuesta', '10%'],
+        title: 'Cómo funciona el pago',
+        excerpt: 'Qué incluye el precio y qué impuestos se suman al pagar.',
+        keywords: ['precio', 'cuanto cuesta', 'impuestos', 'iva', 'it', 'total'],
         sections: [
           HelpSection(
             body: 'Cada cuidador fija libremente el precio de su servicio. '
-                'Garden añade una comisión de plataforma del 10% sobre ese '
-                'precio, que paga el cliente. Esta comisión cubre el '
-                'procesamiento seguro del pago, el fondo de garantía, el '
-                'soporte, la verificación de identidad de los cuidadores y el '
+                'El precio que ves en la app incluye el servicio de la '
+                'plataforma: procesamiento seguro del pago, fondo de garantía, '
+                'soporte, verificación de identidad de los cuidadores y '
                 'mantenimiento de la app.',
           ),
           HelpSection(
-            heading: 'Ejemplo',
-            body: 'Si el cuidador cobra Bs 100 por su servicio, tú pagas Bs '
-                '110 en total (Bs 100 + 10% de comisión). El cuidador recibe '
-                'sus Bs 100 completos — Garden se queda únicamente con los Bs '
-                '10 de comisión.',
+            heading: 'Impuestos',
+            body: 'Al pagar, el detalle muestra el servicio y, aparte, los '
+                'impuestos de ley (IVA e IT), que se suman al total. El '
+                'cuidador recibe íntegro el precio que él fijó.',
           ),
           HelpSection(
             heading: '¿Cuándo recibe el cuidador su pago?',
@@ -418,7 +416,7 @@ const List<HelpCategory> helpCenterCategories = [
             body: 'Fijas tu propio precio para cada servicio que ofreces, '
                 'dentro de un rango mínimo y máximo que define Garden por '
                 'zona (normalmente entre Bs 15 y Bs 400). Este es el monto que '
-                'recibes íntegro — la comisión del 10% la paga el cliente '
+                'recibes íntegro — el servicio de Garden y los impuestos los paga el cliente '
                 'aparte.',
           ),
           HelpSection(
@@ -506,7 +504,7 @@ const List<HelpCategory> helpCenterCategories = [
           HelpSection(
             heading: 'Recuerda',
             body: 'El precio que fijas es el monto íntegro que recibes — el '
-                'cliente paga ese precio más el 10% de comisión de Garden. Si '
+                'cliente paga además el servicio de Garden y los impuestos. Si '
                 'subes o bajas tu precio, se aplica a las reservas nuevas '
                 'desde ese momento, no afecta reservas ya confirmadas.',
           ),

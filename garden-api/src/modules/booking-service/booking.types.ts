@@ -6,6 +6,10 @@ export interface BookingCreateResult {
   totalAmount: string;
   pricePerUnit: string;
   commissionAmount: string;
+  /** Impuestos (IVA + IT) ya incluidos en totalAmount — el detalle de pago los muestra aparte. */
+  taxAmount: string;
+  /** % de impuestos aplicado a esta reserva (derivado de la propia reserva). */
+  taxRatePct: number;
   qrId: string | null;
   qrImageUrl: string | null;
   /** Derivado de qrImageUrl — dice al cliente cómo renderizarlo: 'base64'
@@ -139,6 +143,14 @@ function deriveQrImageType(qrImageUrl: string | null | undefined): 'base64' | 'u
   return 'url';
 }
 
+/** % de impuestos de una reserva: impuesto / (total antes de promo − impuesto). */
+function derivedTaxRatePct(b: any): number {
+  const total = Number(b.totalAmount ?? 0);
+  const tax = Number(b.taxAmount ?? 0);
+  const preBase = total + Number(b.promoDiscountAmount ?? 0) - tax;
+  return tax > 0 && preBase > 0 ? Math.round((tax / preBase) * 1000) / 10 : 0;
+}
+
 export function bookingToResponse(b: any): BookingCreateResult {
   const res: BookingCreateResult = {
     id: b.id,
@@ -146,6 +158,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     totalAmount: String(b.totalAmount),
     pricePerUnit: String(b.pricePerUnit),
     commissionAmount: String(b.commissionAmount),
+    taxAmount: String(b.taxAmount ?? 0),
+    taxRatePct: derivedTaxRatePct(b),
     qrId: b.qrId,
     qrImageUrl: b.qrImageUrl,
     qrImageType: deriveQrImageType(b.qrImageUrl),

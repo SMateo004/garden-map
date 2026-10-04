@@ -161,7 +161,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   Text('Tú fijas tus propios precios', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Defines cuánto cobrar por cada servicio desde el paso de Precio en tu configuración. GARDEN retiene una comisión del 10% como tarifa de plataforma — el 90% restante es tuyo.',
+                                    'Defines cuánto cobrar por cada servicio desde el paso de Precio en tu configuración. El servicio de GARDEN y los impuestos los paga el cliente aparte: tú recibes íntegro el precio que fijas.',
                                     style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
                                   ),
                                   const SizedBox(height: 20),
@@ -190,7 +190,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-                                  _infoChip(Icons.trending_up_rounded, '¡Sin comisión adicional! Solo 10% fijo por reserva completada.', GardenColors.success, isDark),
+                                  _infoChip(Icons.trending_up_rounded, '¡Recibes íntegro tu precio! No se descuenta nada de lo que fijas.', GardenColors.success, isDark),
                                 ],
                               ),
                             ),

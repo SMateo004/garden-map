@@ -470,7 +470,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                     settingKey: 'cardPaymentEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
                   _buildNumericTile(icon: Icons.percent_rounded, iconColor: Colors.green,
-                    title: 'Comisión GARDEN', subtitle: 'Porcentaje aplicado a cada reserva',
+                    title: 'Comisión GARDEN por defecto', subtitle: 'Se usa en servicios sin comisión propia. Por servicio y por empresa: pestaña Comisiones',
                     settingKey: 'platformCommissionPct', unit: '%', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                   _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.cyan,

@@ -9,6 +9,8 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
 
+import pricingAdminRouter from '../pricing/pricing.admin.js';
+
 const router = Router();
 
 router.use(authMiddleware);
@@ -26,6 +28,9 @@ router.get('/support/threads/:threadId/messages', supportChatController.getThrea
 router.post('/support/threads/:threadId/reply', supportChatController.reply);
 router.post('/support/threads/:threadId/read', supportChatController.markRead);
 router.post('/support/threads/:threadId/resolve', supportChatController.resolve);
+
+/** Comisiones variables por servicio / cuidador-empresa e impuestos (ver pricing.admin.ts). */
+router.use('/pricing', pricingAdminRouter);
 
 /** Libro contable / finanzas — reporte gerencial mensual para socios. */
 router.get('/ledger/accounts', ledgerController.getAccounts);

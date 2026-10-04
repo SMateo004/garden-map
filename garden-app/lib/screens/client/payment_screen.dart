@@ -535,15 +535,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   double get _totalAmount => _serviceAmount + _donationAmount;
 
-  // ── Desglose de tarifa (solo para el resumen final, ver _buildPaymentBody) ──
-  // Valores reales del booking ya calculados server-side (booking.service.ts,
-  // COMMISION_RATE configurable) — nunca se hardcodea un %.
-  double get _serviceCommission {
-    final raw = _booking?['commissionAmount'];
+  // ── Desglose del pago (solo para el resumen final, ver _buildPaymentBody) ──
+  // Valores reales de la reserva ya calculados en el servidor (pricing.service.ts):
+  // el total YA incluye los impuestos; acá se muestran aparte. La comisión de
+  // Garden va dentro del precio del servicio y no se menciona. Nunca se
+  // hardcodea un %.
+  double get _taxAmount {
+    final raw = _booking?['taxAmount'];
     return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
   }
 
-  double get _serviceSubtotal => (_serviceAmount - _serviceCommission).clamp(0, double.infinity);
+  double get _taxRatePct {
+    final raw = _booking?['taxRatePct'];
+    return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+  }
+
+  double get _serviceBeforeTax => (_serviceAmount - _taxAmount).clamp(0, double.infinity);
+
+  String get _taxRateLabel {
+    final r = _taxRatePct;
+    return r == r.roundToDouble() ? r.toInt().toString() : r.toStringAsFixed(1);
+  }
 
   bool get _walletCoversAll => _useWallet && _totalAmount > 0 && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
@@ -1912,23 +1924,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         Text('Bs ${_totalAmount.toStringAsFixed(2)}',
                             style: const TextStyle(
                                 color: GardenColors.primary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                        if (_donationAmount > 0)
+                        if (_donationAmount > 0 && _taxAmount <= 0)
                           Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
                               style: TextStyle(color: subtextColor, fontSize: 11)),
                       ]),
                     ],
                   ),
-                  // ── Desglose de tarifa — solo acá, en el resumen final
-                  // antes de pagar. Valores reales del booking (nunca un %
-                  // hardcodeado), como pediste: precio del servicio y
-                  // comisión de Garden, sin IVA (eso queda interno).
-                  if (_booking != null) ...[
+                  // ── Desglose del pago — solo acá, en el resumen final antes de
+                  // pagar: servicio + impuestos (IVA e IT) = total. Valores
+                  // reales de la reserva, nunca un % hardcodeado.
+                  if (_booking != null && _taxAmount > 0) ...[
                     const SizedBox(height: 12),
                     Divider(height: 1, color: GardenColors.primary.withValues(alpha: 0.15)),
                     const SizedBox(height: 10),
-                    _feeBreakdownLine('Precio del servicio', _serviceSubtotal, subtextColor),
+                    _feeBreakdownLine('Servicio', _serviceBeforeTax, subtextColor),
                     const SizedBox(height: 4),
-                    _feeBreakdownLine('Comisión Garden', _serviceCommission, subtextColor),
+                    _feeBreakdownLine('Impuestos (IVA e IT · $_taxRateLabel%)', _taxAmount, subtextColor),
+                    if (_donationAmount > 0) ...[
+                      const SizedBox(height: 4),
+                      _feeBreakdownLine('Donación', _donationAmount, subtextColor),
+                    ],
                   ],
                 ],
               ),

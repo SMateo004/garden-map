@@ -7,6 +7,7 @@ export const CHART_OF_ACCOUNTS: Array<{ code: string; name: string; type: Ledger
 
   { code: '2100', name: 'Billeteras de clientes', type: LedgerAccountType.PASIVO },
   { code: '2200', name: 'Billeteras de cuidadores', type: LedgerAccountType.PASIVO },
+  { code: '2300', name: 'Impuestos por pagar (IVA + IT)', type: LedgerAccountType.PASIVO },
 
   { code: '3100', name: 'Capital / aportes de socios', type: LedgerAccountType.PATRIMONIO },
   { code: '3200', name: 'Utilidades retenidas', type: LedgerAccountType.PATRIMONIO },
@@ -25,6 +26,7 @@ export const ACCOUNT = {
   BANCO: '1100',
   BILLETERA_CLIENTES: '2100',
   BILLETERA_CUIDADORES: '2200',
+  IMPUESTOS_POR_PAGAR: '2300',
   CAPITAL: '3100',
   UTILIDADES_RETENIDAS: '3200',
   INGRESO_COMISION: '4100',

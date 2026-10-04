@@ -374,6 +374,7 @@ model CaregiverProfile {
   infractions                     CaregiverInfraction[]
   trainingProgress                CaregiverTrainingProgress[]
   extraServices                   ExtraService[]
+  commissionOverrides             CaregiverCommissionOverride[]
   staffMembers                    CaregiverStaffMember[]
   staffInvites                    CaregiverStaffInvite[]
   walkInClients                   WalkInClient[]
@@ -612,6 +613,12 @@ model Booking {
   totalAmount                Decimal          @db.Decimal(10, 2)
   pricePerUnit               Decimal          @db.Decimal(10, 2)
   commissionAmount           Decimal          @db.Decimal(10, 2)
+  /// Impuestos (IVA 13% + IT 3%) que el cliente paga ENCIMA del precio con comisión.
+  /// YA está incluido en totalAmount (lo que el cliente realmente paga); lo que le
+  /// llega al cuidador es totalAmount - commissionAmount - taxAmount. GARDEN lo
+  /// retiene para tributarlo — no es ingreso de GARDEN. 0 en reservas anteriores
+  /// a la introducción del impuesto.
+  taxAmount                  Decimal          @default(0) @db.Decimal(10, 2)
   stripeCheckoutSessionId    String?          @unique
   stripePaymentIntentId      String?
   stripeEventId              String?          @unique // Idempotencia: un evento Stripe no se procesa dos veces
@@ -827,6 +834,25 @@ model ExtraService {
 
   @@index([caregiverId])
   @@map("extra_services")
+}
+
+/// Comisión de GARDEN personalizada para un cuidador/empresa. `serviceType` es un
+/// ServiceType ('PASEO' | 'GUARDERIA' | 'HOSPEDAJE') o 'ALL' (todos los servicios).
+/// Precedencia (pricing.service.ts): override del servicio > override 'ALL' >
+/// comisión global del servicio > platformCommissionPct. Se edita desde Admin.
+model CaregiverCommissionOverride {
+  id          String           @id @default(uuid())
+  caregiverId String
+  serviceType String           @db.VarChar(12)
+  /// Porcentaje sobre el precio del cuidador (0–50).
+  pct         Decimal          @db.Decimal(5, 2)
+  updatedBy   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  caregiver   CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([caregiverId, serviceType])
+  @@map("caregiver_commission_overrides")
 }
 
 /// Snapshot de un servicio extra seleccionado en una reserva — conserva

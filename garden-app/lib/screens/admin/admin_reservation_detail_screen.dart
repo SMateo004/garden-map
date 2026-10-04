@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../design/phosphor_glyphs.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -577,7 +578,8 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final d = _data!;
     final total = (d['totalAmount'] as num?)?.toDouble() ?? 0.0;
     final commission = (d['commissionAmount'] as num?)?.toDouble() ?? 0.0;
-    final caregiversPayout = (d['caregiverPayoutAmount'] as num?)?.toDouble() ?? (total - commission);
+    final tax = (d['taxAmount'] as num?)?.toDouble() ?? 0.0;
+    final caregiversPayout = (d['caregiverPayoutAmount'] as num?)?.toDouble() ?? (total - commission - tax);
     final walletPayment = (d['walletPaymentAmount'] as num?)?.toDouble() ?? 0.0;
     final txs = (d['walletTransactions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     // % real de ESTA reserva (no un valor fijo) — Comisión GARDEN es
@@ -587,9 +589,11 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     // commissionAmount/totalAmount de esta reserva, que sí refleja la tarifa
     // real que aplicó al momento de pagarse.
     final commissionPct = total > 0 ? (commission / total * 100) : 0.0;
+    final taxPct = total > 0 ? (tax / total * 100) : 0.0;
     final caregiverPct = total > 0 ? (caregiversPayout / total * 100) : 0.0;
     final commissionFlex = (commissionPct.round()).clamp(0, 100);
-    final caregiverFlex = (100 - commissionFlex).clamp(0, 100);
+    final taxFlex = (taxPct.round()).clamp(0, 100);
+    final caregiverFlex = (100 - commissionFlex - taxFlex).clamp(0, 100);
 
     return ListView(padding: const EdgeInsets.all(16), children: [
 
@@ -625,6 +629,10 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
             _payRow('Pago al cuidador (${caregiverPct.toStringAsFixed(0)}%)', caregiversPayout, GardenColors.success, Icons.person_rounded),
             Divider(height: 1, color: borderColor),
             _payRow('Comisión Garden (${commissionPct.toStringAsFixed(0)}%)', commission, GardenColors.primary, Icons.eco_rounded),
+            if (tax > 0) ...[
+              Divider(height: 1, color: borderColor),
+              _payRow('Impuestos IVA + IT (${taxPct.toStringAsFixed(0)}%)', tax, GardenColors.warning, Ph.scales.regular),
+            ],
           ]),
         ),
         const SizedBox(height: 12),
@@ -640,12 +648,19 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
               flex: commissionFlex,
               child: Container(height: 10, color: GardenColors.primary),
             ),
+            if (taxFlex > 0)
+              Flexible(
+                flex: taxFlex,
+                child: Container(height: 10, color: GardenColors.warning),
+              ),
           ]),
         ),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Cuidador ${caregiverPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: GardenColors.success, fontWeight: FontWeight.bold)),
           Text('Garden ${commissionPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.bold)),
+          if (tax > 0)
+            Text('Impuestos ${taxPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: GardenColors.warning, fontWeight: FontWeight.bold)),
         ]),
       ])),
 
