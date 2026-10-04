@@ -10,9 +10,11 @@
 ///   5  — Fotos (caregiverPhotos "fotos de servicios" + placePhotos por secciones)
 ///   6  — Precios
 ///   7  — Logo de la empresa
-///   8  — Verificación de teléfono (OTP)
-///   9  — Verificación de correo
-///   10 — Perfil detallado empresa (CaregiverProfileDataScreen, isCompany:true)
+///   8  — Verificación de identidad del DUEÑO con IA (selfie + CI + prueba de vida)
+///   9  — Verificación de teléfono (OTP)
+///   10 — Verificación de correo
+///   11 — Perfil detallado empresa (CaregiverProfileDataScreen, isCompany:true)
+///   12 — Contrato · 13 — PIN de seguridad
 ///
 /// Al completar navega a /caregiver/home.
 
@@ -37,11 +39,12 @@ import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilde
 import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
 import 'phone_verification_screen.dart';
+import 'verification_screen.dart';
 import 'email_verification_screen.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
   /// When true, the screen queries the backend on load to jump straight to
-  /// the first incomplete post-registration step (4-10) instead of starting
+  /// the first incomplete post-registration step (4-12) instead of starting
   /// at paso 0. Set to true when navigating from the home screen's
   /// "Continuar registro" button for a caregiver with isCompany=true.
   final bool resumeMode;
@@ -61,9 +64,9 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     RegistrationPhase(name: 'Acceso', icon: Icons.vpn_key_outlined, startStep: 0, endStep: 0),
     RegistrationPhase(name: 'Tu empresa', icon: Icons.storefront_outlined, startStep: 1, endStep: 3),
     RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 4, endStep: 7),
-    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 8, endStep: 9),
-    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 10, endStep: 11),
-    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 12, endStep: 12),
+    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 8, endStep: 10),
+    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 11, endStep: 12),
+    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 13, endStep: 13),
   ];
   // Cubre TODO _next() (registro, patch, subida de fotos/logo) para que el
   // botón se deshabilite/muestre loading durante cualquier paso, no solo los
@@ -311,25 +314,32 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         return;
       }
 
-      // Paso 8: Verificación de teléfono — si ya está verificado, sáltalo
-      final phoneVerified = profile['phoneVerified'] == true;
-      if (!phoneVerified) {
+      // Paso 8: Identidad del dueño — requiere identityVerificationStatus VERIFIED
+      final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      if (identityStatus != 'VERIFIED') {
         setState(() => _currentStep = 8);
         return;
       }
 
-      // Paso 9: Verificación de correo — si ya está verificado, sáltalo
-      final emailVerified = profile['emailVerified'] == true ||
-          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
-      if (!emailVerified) {
+      // Paso 9: Verificación de teléfono — si ya está verificado, sáltalo
+      final phoneVerified = profile['phoneVerified'] == true;
+      if (!phoneVerified) {
         setState(() => _currentStep = 9);
         return;
       }
 
+      // Paso 10: Verificación de correo — si ya está verificado, sáltalo
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (!emailVerified) {
+        setState(() => _currentStep = 10);
+        return;
+      }
+
       // Todo lo anterior completo — perfil detallado de la empresa, salvo
-      // que ya haya pasado por ahí Y aceptado el contrato (paso 11), en cuyo
+      // que ya haya pasado por ahí Y aceptado el contrato (paso 12), en cuyo
       // caso no tiene sentido hacerla volver a llenar el perfil detallado.
-      setState(() => _currentStep = profile['contractAcceptedAt'] != null ? 11 : 10);
+      setState(() => _currentStep = profile['contractAcceptedAt'] != null ? 12 : 11);
     } catch (_) {
       // Falla silenciosa — se queda en el paso 0 (comportamiento actual)
     }
@@ -741,10 +751,41 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     }
   }
 
+  /// Paso 8 → siguiente: solo avanza si el servidor ya marcó la identidad del dueño como VERIFIED.
+  /// Salta teléfono y correo si ya estaban verificados.
+  Future<void> _onIdentityVerificationComplete() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final profile = body['data'] as Map<String, dynamic>? ?? {};
+      final status = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      if (status != 'VERIFIED') {
+        if (mounted) {
+          GardenErrorDialog.show(context, 'Debes completar y aprobar la verificación de identidad para continuar.');
+        }
+        return;
+      }
+      final phoneVerified = profile['phoneVerified'] == true;
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (mounted) setState(() => _currentStep = !phoneVerified ? 9 : (!emailVerified ? 10 : 11));
+    } catch (_) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No pudimos confirmar tu verificación. Revisa tu conexión e intenta de nuevo.');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
   /// Si el PATCH falla, no avanza — el botón vuelve a estar disponible para
   /// reintentar (ver CaregiverContractStep._handleAccept). El registro
-  /// todavía no termina acá — falta el paso de PIN de seguridad (12).
+  /// todavía no termina acá — falta el paso de PIN de seguridad (13).
   Future<void> _acceptContractAndFinish() async {
     try {
       final response = await http.patch(
@@ -757,7 +798,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         throw Exception(data['error']?['message'] ?? 'No se pudo registrar la aceptación del contrato');
       }
       if (!mounted) return;
-      setState(() => _currentStep = 12);
+      setState(() => _currentStep = 13);
     } catch (e) {
       if (mounted) {
         GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
@@ -765,7 +806,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     }
   }
 
-  /// Último paso real (12): crea el PIN de seguridad (mismo endpoint que
+  /// Último paso real (13): crea el PIN de seguridad (mismo endpoint que
   /// widgets/pin_gate.dart) y recién ahí navega a home — llamado por
   /// CaregiverPinStep solo con un PIN ya validado localmente.
   Future<void> _submitPin(String pin) async {
@@ -814,34 +855,41 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    // Steps 8 and 9 are full-screen verification widgets
+    // Steps 8, 9 and 10 are full-screen verification widgets
     if (_currentStep == 8) {
-      return PhoneVerificationScreen(
-        phoneNumber: _phoneCtrl.text.trim(),
-        onComplete: () => setState(() => _currentStep = 9),
+      // Identidad del dueño con IA: la invitación solo autoriza el registro, no la reemplaza.
+      return VerificationScreen(
+        showAppBar: false,
+        onComplete: _onIdentityVerificationComplete,
       );
     }
     if (_currentStep == 9) {
-      return EmailVerificationScreen(
+      return PhoneVerificationScreen(
+        phoneNumber: _phoneCtrl.text.trim(),
         onComplete: () => setState(() => _currentStep = 10),
       );
     }
-    // Step 10: embedded company profile
     if (_currentStep == 10) {
+      return EmailVerificationScreen(
+        onComplete: () => setState(() => _currentStep = 11),
+      );
+    }
+    // Step 11: embedded company profile
+    if (_currentStep == 11) {
       return CaregiverProfileDataScreen(
         embeddedMode: true,
         isCompany: true,
         servicesOffered: _services,
-        onSaveComplete: () => setState(() => _currentStep = 11),
+        onSaveComplete: () => setState(() => _currentStep = 12),
       );
     }
-    // Step 11 (final): Contrato de cuidador — scroll-to-accept, mismas
+    // Step 12: Contrato de cuidador — scroll-to-accept, mismas
     // responsabilidades que el registro individual (onboarding_wizard_screen.dart).
-    if (_currentStep == 11) {
+    if (_currentStep == 12) {
       return CaregiverContractStep(onAccept: _acceptContractAndFinish);
     }
-    // Step 12 (final real): PIN de seguridad.
-    if (_currentStep == 12) {
+    // Step 13 (final real): PIN de seguridad.
+    if (_currentStep == 13) {
       return CaregiverPinStep(onSubmit: _submitPin);
     }
 

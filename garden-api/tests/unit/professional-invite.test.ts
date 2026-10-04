@@ -9,8 +9,10 @@ import {
   consumeInvite,
   hashInviteCode,
   inviteStatus,
+  inviteKindOfLabel,
+  listInvites,
 } from '../../src/modules/auth/professional-invite.service';
-import { registerProfessional, validateProfessionalCode } from '../../src/modules/auth/auth.service';
+import { registerProfessional, registerCompany, validateProfessionalCode, validateCompanyCode } from '../../src/modules/auth/auth.service';
 import { getMissingRequiredFieldsForProfessionalSubmit } from '../../src/modules/caregiver-profile/caregiver-profile.validation';
 
 const invites: Record<string, any> = {};
@@ -142,5 +144,80 @@ describe('aprobación del profesional', () => {
     ['phoneVerified', false, 'phoneVerified'],
   ])('no se aprueba sin %s', (field, value, expected) => {
     expect(getMissingRequiredFieldsForProfessionalSubmit({ ...ok, [field]: value })).toContain(expected);
+  });
+});
+
+describe('invitaciones de EMPRESA', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('createInvite(COMPANY) genera un código GE- y marca la etiqueta como empresa', async () => {
+    p.professionalInvite.create.mockImplementation(async ({ data }: any) => ({ id: 'c1', ...data }));
+    const res = await createInvite('admin1', 'Hotel Mascotas', 7, 'COMPANY');
+    expect(res.code).toMatch(/^GE-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(res.kind).toBe('COMPANY');
+    expect(inviteKindOfLabel(p.professionalInvite.create.mock.calls[0][0].data.label)).toBe('COMPANY');
+  });
+
+  it('listInvites devuelve el tipo y la etiqueta sin la marca interna', async () => {
+    p.professionalInvite.findMany.mockResolvedValue([
+      { id: '1', label: '[Empresa] Hotel X', usedAt: null, revokedAt: null, expiresAt: future(), createdAt: new Date() },
+      { id: '2', label: 'Dr. Pérez', usedAt: null, revokedAt: null, expiresAt: future(), createdAt: new Date() },
+    ]);
+    const rows = await listInvites();
+    expect(rows.map((r: any) => [r.kind, r.label])).toEqual([['COMPANY', 'Hotel X'], ['PROFESSIONAL', 'Dr. Pérez']]);
+  });
+
+  it('un código de profesional NO sirve para registrar una empresa, ni al revés', async () => {
+    p.professionalInvite.findUnique.mockResolvedValue({ id: 'i', usedAt: null, revokedAt: null, expiresAt: future() });
+    expect(await validateCompanyCode('GP-AAAA-BBBB')).toBe(false);
+    expect(await validateProfessionalCode('GE-AAAA-BBBB')).toBe(false);
+    expect(await validateCompanyCode('GE-AAAA-BBBB')).toBe(true);
+    expect(await validateProfessionalCode('GP-AAAA-BBBB')).toBe(true);
+  });
+
+  it('el viejo código compartido ya no valida para empresas', async () => {
+    p.professionalInvite.findUnique.mockResolvedValue(null);
+    expect(await validateCompanyCode('codigo-empresa-viejo')).toBe(false);
+  });
+});
+
+describe('registerCompany', () => {
+  const body = {
+    code: 'GE-AAAA-BBBB', companyName: 'Hotel Patitas', businessType: 'HOTEL', email: 'Hotel@Test.com',
+    password: 'Passw0rd!x', phone: '71234567', lat: -17.78, lng: -63.18,
+  } as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    p.professionalInvite.findUnique.mockResolvedValue({ id: 'c1', usedAt: null, revokedAt: null, expiresAt: future() });
+    txMock.professionalInvite.updateMany.mockResolvedValue({ count: 1 });
+    txMock.user.create.mockResolvedValue({ id: 'u9', email: 'hotel@test.com', role: 'CAREGIVER', firstName: 'Hotel Patitas', lastName: '-', profilePicture: null });
+    txMock.caregiverProfile.create.mockImplementation(async ({ data }: any) => ({ id: 'p9', ...data }));
+  });
+
+  it('la identidad del dueño queda PENDIENTE (ya no nace verificada) y guarda la ubicación', async () => {
+    await registerCompany(body);
+    const data = txMock.caregiverProfile.create.mock.calls[0][0].data;
+    expect(data.identityVerificationStatus).toBe('PENDING');
+    expect(data.verified).toBe(false);
+    expect(data.isCompany).toBe(true);
+    expect(data.addressLat).toBe(-17.78);
+  });
+
+  it('consume la invitación con el id del usuario creado', async () => {
+    await registerCompany(body);
+    expect(txMock.professionalInvite.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ usedByUserId: 'u9' }) }),
+    );
+  });
+
+  it('con un código de profesional no crea nada', async () => {
+    await expect(registerCompany({ ...body, code: 'GP-AAAA-BBBB' })).rejects.toThrow(/inválido/);
+    expect(txMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it('si otro registro ya usó la invitación (count 0) falla', async () => {
+    txMock.professionalInvite.updateMany.mockResolvedValue({ count: 0 });
+    await expect(registerCompany(body)).rejects.toThrow(/inválido/);
   });
 });

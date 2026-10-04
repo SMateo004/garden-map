@@ -1431,12 +1431,12 @@ export const listProfessionalInvites = asyncHandler(async (_req: Request, res: R
 
 /** POST /api/admin/professional-invites — body { label, expiresInDays? }. Devuelve el código UNA sola vez. */
 export const createProfessionalInvite = asyncHandler(async (req: Request, res: Response) => {
-  const { label, expiresInDays } = req.body ?? {};
+  const { label, expiresInDays, kind } = req.body ?? {};
   if (typeof label !== 'string') {
     return res.status(400).json({ success: false, error: { code: 'MISSING_LABEL', message: 'Indica para quién es la invitación.' } });
   }
   const days = typeof expiresInDays === 'number' ? expiresInDays : undefined;
-  const data = await professionalInvites.createInvite(req.user!.userId, label, days);
+  const data = await professionalInvites.createInvite(req.user!.userId, label, days, kind === 'COMPANY' ? 'COMPANY' : 'PROFESSIONAL');
   res.status(201).json({ success: true, data });
 });
 

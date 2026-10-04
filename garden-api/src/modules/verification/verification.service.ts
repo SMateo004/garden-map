@@ -153,11 +153,11 @@ export async function submitVerification(
     }
 
     // 0. Attempt Limit System (wrapped in try-catch: columns may not exist on all environments)
-    let caregiver: { verificationAttempts?: number; verificationLockUntil?: Date | null } | null = null;
+    let caregiver: { verificationAttempts?: number; verificationLockUntil?: Date | null; isCompany?: boolean } | null = null;
     try {
       caregiver = await (prisma.caregiverProfile as any).findUnique({
         where: { userId: session.userId },
-        select: { verificationAttempts: true, verificationLockUntil: true },
+        select: { verificationAttempts: true, verificationLockUntil: true, isCompany: true },
       });
     } catch (e) {
       logger.warn('Could not read verificationAttempts (column may not exist yet)', { userId: session.userId });
@@ -176,7 +176,7 @@ export async function submitVerification(
           where: { userId: session.userId },
           data: { verificationAttempts: 0, verificationLockUntil: null },
         });
-        caregiver = { verificationAttempts: 0, verificationLockUntil: null };
+        caregiver = { verificationAttempts: 0, verificationLockUntil: null, isCompany: caregiver.isCompany };
       } catch (e) {
         logger.warn('Could not reset expired verification lock', { userId: session.userId });
       }
@@ -344,7 +344,13 @@ export async function submitVerification(
       // 5. OCR & Name Matching (HARDENED)
       logger.info('Step 5: OCR with Amazon Textract', { sessionId });
       logger.info('Step 5: Starting OCR', { sessionId });
-      crossValResult = await crossValidate(ciFrontBuffer, user.firstName, user.lastName, user.dateOfBirth, user.id, ciBackBuffer);
+      // Cuenta EMPRESA: el User se llama como el negocio (firstName = razón social), así que el
+      // nombre del CI del dueño nunca coincidiría. Se omite SOLO esa comparación; siguen
+      // exigidos cara↔CI, liveness atado al documento, edad real y CI único.
+      crossValResult = await crossValidate(
+        ciFrontBuffer, user.firstName, user.lastName, user.dateOfBirth, user.id, ciBackBuffer,
+        { skipNameMatch: caregiver?.isCompany === true },
+      );
       // Sin OCR no se pueden validar nombre ni CI contra el registro: antes quedaba solo la
       // comparación facial y un score neutro de 50. En producción ahora se corta como error
       // técnico (no consume intentos del usuario) en vez de aprobar a ciegas.

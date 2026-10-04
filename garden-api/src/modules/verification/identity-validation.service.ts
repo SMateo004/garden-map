@@ -171,7 +171,8 @@ export async function crossValidate(
   userLastName: string,
   userBirthDate?: Date | null,
   currentUserId?: string,
-  ciBackImage?: Buffer
+  ciBackImage?: Buffer,
+  options: { skipNameMatch?: boolean } = {}
 ): Promise<CrossValidationResult> {
   const frontData = await extractCIData(ciFrontImage);
   let backData: any = null;
@@ -216,13 +217,17 @@ export async function crossValidate(
   const ciNumberUnique = true; // Handled by DB Constraint P2002 now
 
   // 1. Name Similarity
-  const nameSimilarity = getNameSimilarity(ocrData.fullName || '', userFullName);
+  // skipNameMatch (dueño de una empresa): no hay nombre registrado contra el cual comparar. Si el OCR
+  // leyó un nombre en el CI cuenta como 100, si no leyó nada queda neutro (50) — nunca infla sin leer.
+  const nameSimilarity = options.skipNameMatch
+    ? (ocrData.fullName ? 100 : 50)
+    : getNameSimilarity(ocrData.fullName || '', userFullName);
   const nameMatches = nameSimilarity >= 85; // Slightly more relaxed threshold for fuzzy matching
 
   // 2. Last Name Match (Strict)
   const userLN = normalizeOCRText(userLastName);
   const ocrLN = ocrData.lastName ? normalizeOCRText(ocrData.lastName) : '';
-  const lastNameMismatch = ocrLN && !ocrLN.includes(userLN) && !userLN.includes(ocrLN);
+  const lastNameMismatch = !options.skipNameMatch && ocrLN && !ocrLN.includes(userLN) && !userLN.includes(ocrLN);
 
   // 3. CI Number Match
   const userCI = normalizeOCRText(frontData.documentNumber || '');
@@ -251,7 +256,7 @@ export async function crossValidate(
   const ocrSkipped = (ocrData as any).ocrUnavailable === true;
 
   if (!ocrSkipped) {
-    if (nameSimilarity < 85 || lastNameMismatch) {
+    if (!options.skipNameMatch && (nameSimilarity < 85 || lastNameMismatch)) {
       suggestedStatus = 'REJECTED';
       reason = lastNameMismatch ? 'El apellido en el documento no coincide con el registro' : 'El nombre no coincide suficientemente';
       fraudFlags.push('name_mismatch');

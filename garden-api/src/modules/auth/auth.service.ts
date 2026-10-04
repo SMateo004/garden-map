@@ -943,10 +943,9 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
 
 // ── Company Registration ──────────────────────────────────────────────────────
 
+/** El código de empresa es una invitación individual (GE-…), de un solo uso — ya no el código compartido. */
 export async function validateCompanyCode(code: string): Promise<boolean> {
-  const stored = await getStringSetting('companyRegistrationCode', '');
-  if (!stored || stored.trim() === '') return false;
-  return safeCodeEquals(code, stored);
+  return (await findValidInvite(code, 'COMPANY')) !== null;
 }
 
 export interface RegisterCompanyBody {
@@ -971,8 +970,8 @@ export interface RegisterCompanyBody {
  * Status queda APPROVED; verified=false hasta completar phone+email verification.
  */
 export async function registerCompany(body: RegisterCompanyBody): Promise<RegisterCaregiverResult> {
-  const valid = await validateCompanyCode(body.code);
-  if (!valid) {
+  const invite = await findValidInvite(body.code, 'COMPANY');
+  if (!invite) {
     throw new BadRequestError('Código de registro de empresa inválido.', 'INVALID_COMPANY_CODE');
   }
   await assertZoneNotBlocked((body as any).zone);
@@ -1009,6 +1008,9 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
       },
     });
 
+    // Consumir la invitación en la misma transacción (atómico ante dos registros simultáneos).
+    await consumeInvite(tx, invite.id, user.id);
+
     const profile = await tx.caregiverProfile.create({
       data: {
         userId: user.id,
@@ -1025,7 +1027,9 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
         verified: false,            // set to true after phone+email verified
         verifiedAt: null,
         approvedAt: now,
-        identityVerificationStatus: 'VERIFIED', // companies skip CI
+        // El DUEÑO de la empresa pasa por verificación facial con IA (selfie + CI + prueba de
+        // vida), igual que un cuidador. Hasta entonces la empresa no aparece en el marketplace.
+        identityVerificationStatus: 'PENDING',
         identityVerificationToken: randomBytes(32).toString('hex'),
         emailVerified: false,
         phoneVerified: false,

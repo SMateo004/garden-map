@@ -57,13 +57,14 @@ function applyMarkup(price: number | null | undefined, rate: number): number | n
  *  - Profesional: nace APPROVED/verified con solo el registro mínimo — se muestra
  *    recién con el perfil completo (bio, fotos, precios).
  *  - Empresa: además del perfil completo, el NIT debe estar subido (EN_REVISION o
- *    VERIFICADO); el admin decide después si lo aprueba como sello de confianza.
+ *    VERIFICADO) y el dueño tiene que haber verificado su identidad con IA; el admin decide
+ *    después si aprueba el NIT como sello de confianza.
  */
 const PUBLIC_VISIBILITY_OR: Prisma.CaregiverProfileWhereInput[] = [
   { isProfessional: false, isCompany: false },
   // Profesional (y empresas viejas con isProfessional=false) se resuelven por isCompany.
   { isProfessional: true, isCompany: false, caregiverProfileComplete: true },
-  { isCompany: true, caregiverProfileComplete: true, nitStatus: { in: ['EN_REVISION', 'VERIFICADO'] } },
+  { isCompany: true, caregiverProfileComplete: true, identityVerificationStatus: 'VERIFIED', nitStatus: { in: ['EN_REVISION', 'VERIFICADO'] } },
 ];
 
 export async function listCaregivers(filters: CaregiverFilters): Promise<PaginatedCaregivers> {

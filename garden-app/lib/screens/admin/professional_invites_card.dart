@@ -31,6 +31,7 @@ class _ProfessionalInvitesCardState extends State<ProfessionalInvitesCard> {
   List<Map<String, dynamic>> _invites = [];
   bool _loading = true;
   bool _creating = false;
+  bool _forCompany = false;
   String? _error;
 
   Map<String, String> get _headers => {
@@ -73,7 +74,7 @@ class _ProfessionalInvitesCardState extends State<ProfessionalInvitesCard> {
       final res = await http.post(
         Uri.parse('$_baseUrl/admin/professional-invites'),
         headers: _headers,
-        body: jsonEncode({'label': label}),
+        body: jsonEncode({'label': label, 'kind': _forCompany ? 'COMPANY' : 'PROFESSIONAL'}),
       );
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (!mounted) return;
@@ -148,18 +149,27 @@ class _ProfessionalInvitesCardState extends State<ProfessionalInvitesCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Invitaciones de cuidador profesional',
+          Text('Invitaciones de registro (profesional o empresa)',
               style: TextStyle(color: widget.textColor, fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text('Un código por persona, de un solo uso. Igual deben verificar su identidad.',
+          Text('Un código por persona o empresa, de un solo uso. Igual deben verificar su identidad.',
               style: TextStyle(color: widget.subtextColor, fontSize: 12)),
           const SizedBox(height: 12),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Profesional')),
+              ButtonSegment(value: true, label: Text('Empresa')),
+            ],
+            selected: {_forCompany},
+            onSelectionChanged: (v) => setState(() => _forCompany = v.first),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _labelCtrl,
-                  decoration: const InputDecoration(hintText: 'Para quién es (nombre)', isDense: true),
+                  decoration: InputDecoration(hintText: _forCompany ? 'Nombre de la empresa' : 'Para quién es (nombre)', isDense: true),
                   onSubmitted: (_) => _create(),
                 ),
               ),
@@ -187,7 +197,7 @@ class _ProfessionalInvitesCardState extends State<ProfessionalInvitesCard> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(i['label'] as String? ?? '',
+                      child: Text('${i['kind'] == 'COMPANY' ? 'Empresa · ' : ''}${i['label'] ?? ''}',
                           style: TextStyle(color: widget.textColor, fontSize: 13), overflow: TextOverflow.ellipsis),
                     ),
                     Text(_statusLabel(status), style: TextStyle(color: widget.subtextColor, fontSize: 12)),
