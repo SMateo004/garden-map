@@ -1862,7 +1862,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
     return Column(
       key: _keyServicesPrices,
-      children: allServices.map((s) {
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text('Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suman el servicio de GARDEN y los impuestos.',
+              style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4)),
+        ),
+        ...allServices.map((s) {
         final info = serviceData[s]!;
         final (icon, name) = info;
         final isActive = _effectiveServices.contains(s);
@@ -1969,7 +1975,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ],
           ),
         );
-      }).toList(),
+      }),
+      ],
     );
   }
 

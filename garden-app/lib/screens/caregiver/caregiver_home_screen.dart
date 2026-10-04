@@ -11,6 +11,7 @@ import '../../design/garden_service.dart';
 import '../../narrative/booking_story.dart';
 import '../../design/garden_status_pill.dart';
 import '../../theme/garden_theme.dart';
+import '../../utils/caregiver_earnings.dart';
 import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
@@ -71,6 +72,37 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   void initState() {
     super.initState();
     _initData();
+    _loadAcceptWindow();
+  }
+
+  /// Horas para aceptar una solicitud antes de que el backend la cancele
+  /// (caregiverAcceptWindowHoras, caregiver-accept-expiry.job.ts).
+  int _acceptWindowHoras = 3;
+
+  Future<void> _loadAcceptWindow() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings'));
+      final d = (jsonDecode(res.body) as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+      final w = (d?['caregiverAcceptWindowHoras'] as num?)?.toInt();
+      if (w != null && w > 0 && mounted) setState(() => _acceptWindowHoras = w);
+    } catch (_) {
+      // Sin red: queda el default del backend (3 h).
+    }
+  }
+
+  /// "Responde antes de las 14:30". Se cuenta desde el pago: el backend cuenta
+  /// desde un momento igual o posterior, así que el aviso nunca promete de más.
+  String? _acceptDeadlineLabel(Map<String, dynamic> booking) {
+    final paidAt = DateTime.tryParse(booking['paidAt'] as String? ?? '');
+    if (paidAt == null) return null;
+    final deadline = paidAt.add(Duration(hours: _acceptWindowHoras)).toLocal();
+    final left = deadline.difference(DateTime.now());
+    if (left.isNegative) return 'Se está por cancelar';
+    final hh = deadline.hour.toString().padLeft(2, '0');
+    final mm = deadline.minute.toString().padLeft(2, '0');
+    final now = DateTime.now();
+    final sameDay = deadline.day == now.day && deadline.month == now.month && deadline.year == now.year;
+    return 'Responde antes de las $hh:$mm${sameDay ? '' : ' de mañana'}';
   }
 
   Future<void> _initData() async {
@@ -1312,8 +1344,12 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               children: [
                 const GardenIcon(GIcon.notificaciones, size: GIconSize.sm, state: GIconState.active, color: GardenColors.error),
                 const SizedBox(width: 6),
-                const Text('Esperando tu respuesta',
-                  style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
+                // Con el plazo real: si no responde, la reserva se cancela sola.
+                Flexible(
+                  child: Text(_acceptDeadlineLabel(booking) ?? 'Esperando tu respuesta',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
                 const Spacer(),
                 GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje),
                     size: GIconSize.lg, state: GIconState.active),
@@ -3822,8 +3858,20 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
     'OTRO': 'Otro',
   };
 
+  /// Misma regla que requestCancellationByCaregiver(): cancelar con menos de
+  /// 24 h respecto de walkDate/startDate (fecha a medianoche UTC, como la
+  /// guarda el backend) suma una cancelación tardía; 3 en 90 días suspenden
+  /// la cuenta 30 días.
+  bool _isLateCancellation(Map<String, dynamic> booking) {
+    final raw = (booking['serviceType'] == 'HOSPEDAJE' ? booking['startDate'] : booking['walkDate']) as String?;
+    final ref = DateTime.tryParse(raw ?? '');
+    if (ref == null) return false;
+    return ref.toUtc().difference(DateTime.now().toUtc()).inMinutes < 24 * 60;
+  }
+
   Future<void> _showCancellationDialog(String bookingId) async {
     if (_isCancelling) return;
+    final isLate = _isLateCancellation(widget.booking);
     final reasonController = TextEditingController();
     String? selectedReasonCode;
     final confirmed = await showDialog<bool>(
@@ -3836,9 +3884,34 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'La reserva se cancelará de inmediato y el cliente recibe el reembolso completo al instante. El admin solo recibe una notificación de auditoría.',
+                'La reserva se cancela de inmediato y el dueño recibe el reembolso completo.',
                 style: TextStyle(fontSize: 13, color: GardenColors.textSecondary),
               ),
+              // Avisar ANTES de cancelar lo que el backend aplica después.
+              if (isLate) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: GardenColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(GardenRadius.md),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Falta menos de 24 h: cuenta como cancelación tardía. '
+                          'Con 3 en 90 días, tu cuenta se suspende 30 días.',
+                          style: TextStyle(fontSize: 12.5, color: GardenColors.error, fontWeight: FontWeight.w600, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Wrap(
                 spacing: 8,
@@ -3870,14 +3943,15 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              // "Volver", no "Cancelar": al lado de "Cancelar reserva" confundía.
+              child: const Text('Volver'),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
               onPressed: (selectedReasonCode != null && reasonController.text.trim().isNotEmpty)
                   ? () => Navigator.pop(context, true)
                   : null,
-              child: const Text('Confirmar cancelación'),
+              child: const Text('Cancelar reserva'),
             ),
           ],
         ),
@@ -4479,13 +4553,11 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
 }
 
 
+// Ganancia del cuidador (utils/caregiver_earnings.dart). Antes, si no se
+// podía calcular, caía al total que pagó el dueño — un monto que no es suyo.
 String _caregiverNetAmount(Map<String, dynamic> booking) {
-  final total = double.tryParse(booking['totalAmount']?.toString() ?? '0') ?? 0;
-  final commission = double.tryParse(booking['commissionAmount']?.toString() ?? '0') ?? 0;
-  // Los impuestos (IVA + IT) van incluidos en el total que paga el cliente; no son del cuidador.
-  final tax = double.tryParse(booking['taxAmount']?.toString() ?? '0') ?? 0;
-  final net = total - commission - tax;
-  return net > 0 ? net.toStringAsFixed(0) : (total > 0 ? total.toStringAsFixed(0) : '—');
+  final net = caregiverNetOf(booking);
+  return net == null ? '—' : net.toStringAsFixed(0);
 }
 
 // ── Rate Owner Bottom Sheet ───────────────────────────────────────────────────

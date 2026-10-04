@@ -14,6 +14,8 @@ import { assertImageBuffer, assertImageOrPdfBuffer } from '../../shared/mime-val
 import { validarFoto } from '../../agents/foto-validacion.agent.js';
 import logger from '../../shared/logger.js';
 import { validateBankInfo, persistBankInfo, BANK_ACCOUNT_TYPES } from '../wallet/bank-info.util.js';
+import { EARNING_FILTERS } from '../wallet/wallet-filters.js';
+
 
 const bankInfoSchema = z.object({
   bankName: z.string().min(2, 'Nombre del banco requerido').max(100),
@@ -458,11 +460,11 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
       // User.balance, así que "Ganado" debe sumar los dos o queda por debajo
       // del saldo real apenas hay un cobro de tiempo extra.
       prisma.walletTransaction.aggregate({
-        where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED', createdAt: { gte: startOfMonth } },
+        where: { userId, status: 'COMPLETED', createdAt: { gte: startOfMonth }, OR: EARNING_FILTERS },
         _sum: { amount: true },
       }),
       prisma.walletTransaction.aggregate({
-        where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED' },
+        where: { userId, status: 'COMPLETED', OR: EARNING_FILTERS },
         _sum: { amount: true },
       }),
     ]);

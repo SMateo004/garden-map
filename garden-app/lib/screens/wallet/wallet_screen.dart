@@ -1673,9 +1673,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   Widget _buildTransactionTile(Map<String, dynamic> t, Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final type = t['type'] as String;
     final amount = t['amount'] as num;
+    // Propina recibida: TIP_RECEIVED, o 'TIP' con "Propina recibida" en filas
+    // anteriores a ese tipo (antes salían como gasto en la billetera del cuidador).
+    final isTipReceived = type == 'TIP_RECEIVED' ||
+        (type == 'TIP' && (t['description'] as String? ?? '').startsWith('Propina recibida'));
     final isPositive = type == 'EARNING' || type == 'REFUND' || type == 'GIFT'
         || type == 'OVERTIME_EARNING' // cuidador: ganancia por espera extra
-        || type == 'DEBT_RECOVERY';   // cliente: se zerifica deuda anterior
+        || type == 'DEBT_RECOVERY'    // cliente: se zerifica deuda anterior
+        || type == 'REFERRAL_BONUS'   // bono por referido (antes salía como gasto)
+        || isTipReceived;
     final isPending = t['status'] == 'PENDING';
 
     // Un icono por tipo de movimiento; el texto ya viene en lenguaje humano
@@ -1691,6 +1697,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       'OVERTIME_FEE' => (GIcon.cronometro, GardenColors.warning),
       'OVERTIME_EARNING' => (GIcon.cronometro, GardenColors.successDark),
       'DEBT_RECOVERY' => (GIcon.confirmado, GardenColors.info),
+      'REFERRAL_BONUS' => (GIcon.regalo, GardenColors.successDark),
+      'TIP_RECEIVED' => (GIcon.regalo, GardenColors.successDark),
+      'TIP' => isTipReceived ? (GIcon.regalo, GardenColors.successDark) : (GIcon.regalo, subtextColor),
       _ => (GIcon.repetir, subtextColor),
     };
 

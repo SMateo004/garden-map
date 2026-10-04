@@ -4946,7 +4946,10 @@ export async function addTip(
     await tx.walletTransaction.create({
       data: {
         userId: booking.caregiver.userId,
-        type: 'TIP',
+        // Tipo propio: antes era 'TIP' igual que el débito del cliente, y la
+        // billetera del cuidador la mostraba como gasto ("− Bs 10") y el panel
+        // no la contaba como ganancia.
+        type: 'TIP_RECEIVED',
         amount,
         balance: Number(updatedCaregiver.balance),
         description: `Propina recibida — reserva ${bookingId.slice(0, 8)}`,

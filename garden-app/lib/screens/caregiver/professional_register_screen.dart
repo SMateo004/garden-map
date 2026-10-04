@@ -1284,7 +1284,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Elige tus precios', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
               SizedBox(height: 4),
-              Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
+              Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarla después. Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suman el servicio de GARDEN y los impuestos.',
                   style: TextStyle(fontSize: 12, color: Colors.white70)),
             ])),
           ]),

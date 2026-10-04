@@ -23,6 +23,7 @@ import '../../theme/garden_motion.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/tip_sheet.dart';
+import '../../utils/caregiver_earnings.dart';
 import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
@@ -1149,9 +1150,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text('Bs ${_booking?['totalAmount'] ?? '—'}',
+                                  // Lo que cobra el cuidador, no lo que pagó el dueño.
+                                  Text(caregiverNetLabel(_booking),
                                     style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 16)),
-                                  Text('total', style: TextStyle(color: subtextColor, fontSize: 10)),
+                                  Text('tu ganancia', style: TextStyle(color: subtextColor, fontSize: 10)),
                                 ],
                               ),
                             ),
@@ -3829,7 +3831,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     _InfoRow('Fecha', _booking?['walkDate'] ?? _booking?['startDate'] ?? '—', textColor, subtextColor),
                     if (_booking?['startTime'] != null)
                       _InfoRow('Hora', _booking!['startTime'] as String, textColor, subtextColor),
-                    _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
+                    _InfoRow('Tu ganancia', caregiverNetLabel(_booking), textColor, subtextColor),
                     _InfoRow('Pago', 'Protegido hasta terminar', textColor, subtextColor),
                   ],
                 ),
@@ -4069,7 +4071,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 14),
                     _InfoRow('Mascota', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
                     _InfoRow('Servicio', GardenService.fromApi(_booking?['serviceType'] as String?)?.label ?? 'Hospedaje', textColor, subtextColor),
-                    _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
+                    widget.role == 'CAREGIVER'
+                        ? _InfoRow('Tu ganancia', caregiverNetLabel(_booking), textColor, subtextColor)
+                        : _InfoRow('Total pagado', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
                     if (_booking?['serviceType'] == 'PASEO') ...[
                       Builder(builder: (_) {
                         final rawDist = _booking?['gpsDistance'];

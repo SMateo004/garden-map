@@ -8,6 +8,7 @@ import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { validateBankInfo, persistBankInfo, isPhoneBasedBankType } from './bank-info.util.js';
 import { emitWalletUpdated } from '../../services/socket.service.js';
+import { EARNING_FILTERS, SPENDING_FILTERS } from './wallet-filters.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -53,7 +54,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
     // cobraba tiempo extra, su balance real subía pero "Ganado" se quedaba
     // atrás, mostrando menos de lo que en verdad tenía en la billetera.
     prisma.walletTransaction.aggregate({
-      where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED' },
+      where: { userId, status: 'COMPLETED', OR: EARNING_FILTERS }, // incluye propinas recibidas
       _sum: { amount: true },
     }),
     // "Pagado" = plata que salió de la billetera por servicios, incluye
@@ -63,7 +64,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
     // pero no estaba en este agregado, así que un cliente con cargos de
     // tiempo extra veía su saldo bajar sin que "Pagado" lo reflejara.
     prisma.walletTransaction.aggregate({
-      where: { userId, type: { in: ['PAYMENT', 'WALLET_PAYMENT', 'OVERTIME_FEE'] }, status: 'COMPLETED' },
+      where: { userId, status: 'COMPLETED', OR: SPENDING_FILTERS }, // incluye propinas dadas
       _sum: { amount: true },
     }),
     prisma.walletTransaction.aggregate({
