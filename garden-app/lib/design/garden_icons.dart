@@ -45,6 +45,8 @@ enum GIcon {
   ayuda(Ph.question),
   soporte(Ph.headset),
   siguiente(Ph.caretRight),
+  ver(Ph.eye),
+  ocultar(Ph.eyeSlash),
   atras(Ph.caretLeft),
   cerrar(Ph.x),
   filtros(Ph.slidersHorizontal),
@@ -74,6 +76,7 @@ enum GIcon {
   // ── Relato de la reserva (lo usa booking_story.dart) ──
   esperando(Ph.hourglassMedium),
   confirmado(Ph.checkCircle),
+  pendiente(Ph.circle),
   enVivo(Ph.navigationArrow),
   terminado(Ph.sealCheck),
   cancelado(Ph.xCircle),

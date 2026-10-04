@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 
@@ -85,7 +86,7 @@ class _UploadProfilePhotoScreenState extends State<UploadProfilePhotoScreen> {
                       color: GardenColors.primary.withValues(alpha: 0.08),
                       border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
                     ),
-                    child: const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 44),
+                    child: const Center(child: GardenIcon(GIcon.foto, color: GardenColors.primary, size: GIconSize.hero, state: GIconState.active)),
                   ),
                   const SizedBox(height: 28),
                   Text('Sube tu foto de perfil', textAlign: TextAlign.center,
@@ -108,7 +109,7 @@ class _UploadProfilePhotoScreenState extends State<UploadProfilePhotoScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 18),
+                          const GardenIcon(GIcon.conflicto, color: GardenColors.error, state: GIconState.active),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(_error!,

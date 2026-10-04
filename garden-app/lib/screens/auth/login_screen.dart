@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart' show loginSuccessNotifier, AuthState;
@@ -217,7 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   childAspectRatio: 1,
                 ),
                 itemCount: 50,
-                itemBuilder: (_, __) => const Icon(Icons.eco_rounded, color: Colors.white, size: 32),
+                itemBuilder: (_, __) => const Center(
+                    child: GardenIcon(GIcon.huella, color: Colors.white, size: GIconSize.xl, state: GIconState.active)),
               ),
             ),
           ),
@@ -241,11 +244,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 48),
-                  _statRow('200K+', 'mascotas cuidadas'),
+                  // Los mismos pilares que GardenTrustSeals muestra en cada perfil.
+                  // Antes había cifras ("200K+ mascotas", "98.5%") sin respaldo.
+                  _statRow(GIcon.identidadVerificada, 'Identidad verificada', 'documento y prueba de vida'),
                   const SizedBox(height: 16),
-                  _statRow('98.5%', 'verificación IA'),
+                  _statRow(GIcon.pagoProtegido, 'Pago protegido', 'se libera al terminar el servicio'),
                   const SizedBox(height: 16),
-                  _statRow('Polygon', 'blockchain seguro'),
+                  _statRow(GIcon.enVivo, 'Seguimiento en vivo', 'GPS y fotos durante el servicio'),
                 ],
               ),
             ),
@@ -255,15 +260,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _statRow(String value, String label) {
+  Widget _statRow(GIcon icon, String value, String label) {
     return Row(
       children: [
         Container(
-          width: 4, height: 32,
+          width: 40, height: 40,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(2),
+            color: Colors.white.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
           ),
+          child: Center(child: GardenIcon(icon, color: Colors.white, state: GIconState.active)),
         ),
         const SizedBox(width: 12),
         Column(
@@ -300,14 +306,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               TextButton.icon(
                 onPressed: () => context.go('/'),
-                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: GardenColors.primary),
+                icon: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: GardenColors.primary),
                 label: Text('Volver', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
               ),
             ],
           ),
           const SizedBox(height: 48),
-          Text('Bienvenido de nuevo', style: GardenText.h3.copyWith(color: textColor, letterSpacing: -0.5)),
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Expanded(
+              child: Text('Qué bueno verte de nuevo',
+                  style: GardenText.h3.copyWith(color: textColor, letterSpacing: -0.5)),
+            ),
+            const Brote(pose: BrotePose.hola, size: 64),
+          ]),
           const SizedBox(height: 8),
           Text('Inicia sesión para gestionar tus reservas', style: GardenText.body.copyWith(color: subtextColor, fontSize: 15)),
           const SizedBox(height: 40),
@@ -319,7 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
             hint: 'tu@email.com',
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            prefixIcon: Icons.email_outlined,
+            prefixIcon: GIcon.correo,
           ),
           const SizedBox(height: 20),
 
@@ -334,9 +346,10 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: InputDecoration(
               hintText: '••••••••',
               hintStyle: TextStyle(color: subtextColor),
-              prefixIcon: Icon(Icons.lock_outlined, color: subtextColor, size: 20),
+              prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.seguridad, color: subtextColor)),
               suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 20),
+                icon: GardenIcon(_obscurePassword ? GIcon.ver : GIcon.ocultar, color: subtextColor,
+                    semanticLabel: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña'),
                 onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               ),
               filled: true,
@@ -401,7 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (kIsWeb) GardenButton(
             label: 'Explorar cuidadores',
             outline: true,
-            icon: Icons.search,
+            gIcon: GIcon.buscar,
             onPressed: () => context.go('/marketplace'),
           ),
           const SizedBox(height: 24),

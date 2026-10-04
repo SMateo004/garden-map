@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 
 class ForgotPasswordCodeScreen extends StatefulWidget {
@@ -118,7 +119,7 @@ class _ForgotPasswordCodeScreenState extends State<ForgotPasswordCodeScreen> {
             backgroundColor: bg,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: textColor),
+              icon: GardenIcon(GIcon.atras, color: textColor, semanticLabel: 'Volver'),
               onPressed: () => context.pop(),
             ),
           ),
@@ -129,7 +130,7 @@ class _ForgotPasswordCodeScreenState extends State<ForgotPasswordCodeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 12),
-                  const Text('📬', style: TextStyle(fontSize: 40)),
+                  const GardenIcon(GIcon.correo, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
                   const SizedBox(height: 20),
                   Text(
                     'Código enviado',

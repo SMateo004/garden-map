@@ -34,6 +34,7 @@ class Ph {
   static const check = PhGlyph(IconData(0xe182, fontFamily: _reg), IconData(0xe183, fontFamily: _duo), IconData(0xe182, fontFamily: _duo));
   static const checkCircle = PhGlyph(IconData(0xe184, fontFamily: _reg), IconData(0xe185, fontFamily: _duo), IconData(0xe184, fontFamily: _duo));
   static const checks = PhGlyph(IconData(0xe53a, fontFamily: _reg), IconData(0xe53b, fontFamily: _duo), IconData(0xe53a, fontFamily: _duo));
+  static const circle = PhGlyph(IconData(0xe18a, fontFamily: _reg), IconData(0xe18b, fontFamily: _duo), IconData(0xe18a, fontFamily: _duo));
   static const clipboardText = PhGlyph(IconData(0xe198, fontFamily: _reg), IconData(0xe199, fontFamily: _duo), IconData(0xe198, fontFamily: _duo));
   static const clock = PhGlyph(IconData(0xe19a, fontFamily: _reg), IconData(0xe19b, fontFamily: _duo), IconData(0xe19a, fontFamily: _duo));
   static const confetti = PhGlyph(IconData(0xe81a, fontFamily: _reg), IconData(0xe81b, fontFamily: _duo), IconData(0xe81a, fontFamily: _duo));
@@ -43,6 +44,8 @@ class Ph {
   static const dotsThreeVertical = PhGlyph(IconData(0xe208, fontFamily: _reg), IconData(0xe209, fontFamily: _duo), IconData(0xe208, fontFamily: _duo));
   static const drop = PhGlyph(IconData(0xe210, fontFamily: _reg), IconData(0xe211, fontFamily: _duo), IconData(0xe210, fontFamily: _duo));
   static const envelope = PhGlyph(IconData(0xe214, fontFamily: _reg), IconData(0xe215, fontFamily: _duo), IconData(0xe214, fontFamily: _duo));
+  static const eye = PhGlyph(IconData(0xe220, fontFamily: _reg), IconData(0xe221, fontFamily: _duo), IconData(0xe220, fontFamily: _duo));
+  static const eyeSlash = PhGlyph(IconData(0xe224, fontFamily: _reg), IconData(0xe225, fontFamily: _duo), IconData(0xe224, fontFamily: _duo));
   static const fingerprint = PhGlyph(IconData(0xe23e, fontFamily: _reg), IconData(0xe23f, fontFamily: _duo), IconData(0xe23e, fontFamily: _duo));
   static const gavel = PhGlyph(IconData(0xea32, fontFamily: _reg), IconData(0xea33, fontFamily: _duo), IconData(0xea32, fontFamily: _duo));
   static const gear = PhGlyph(IconData(0xe270, fontFamily: _reg), IconData(0xe271, fontFamily: _duo), IconData(0xe270, fontFamily: _duo));

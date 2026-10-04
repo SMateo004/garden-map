@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show TextInputFormatter, HapticFeedback;
 import 'package:go_router/go_router.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/social_auth_service.dart';
@@ -163,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: GardenColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.gavel_rounded, color: GardenColors.primary, size: 22),
+                    child: const Center(child: GardenIcon(GIcon.legal, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -189,28 +190,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _termPoint(Icons.storefront_outlined, 'Intermediario tecnológico',
+                    _termPoint(GIcon.inicio, 'Intermediario tecnológico',
                         'Garden conecta dueños y cuidadores. No somos empleadores ni prestadores directos del servicio. Los cuidadores son independientes — Garden no puede ser demandada por su conducta.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.percent_rounded, 'Tu tarifa es íntegra',
+                    _termPoint(GIcon.comision, 'Tu tarifa es íntegra',
                         'Garden suma su servicio al precio que fijas (varía según el servicio) y el cliente paga además los impuestos de ley. Tú recibes íntegramente tu tarifa: no se descuenta nada de lo que fijas.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.link_rounded, 'Smart contracts en Polygon',
+                    _termPoint(GIcon.seguridad, 'Smart contracts en Polygon',
                         'Cada reserva queda registrada de forma inmutable en blockchain. Los términos acordados no pueden modificarse retroactivamente.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.pets_outlined, 'Si la mascota se lastima',
+                    _termPoint(GIcon.mascotas, 'Si la mascota se lastima',
                         'El cuidador debe llevar a la mascota al veterinario más cercano de inmediato. Si no hay negligencia, Garden cubre hasta Bs. 2.000. Si hay negligencia, el cuidador asume el 100% de los gastos.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.restaurant_outlined, 'Alimentación (Hospedaje/Guardería)',
+                    _termPoint(GIcon.comida, 'Alimentación (Hospedaje/Guardería)',
                         'El dueño DEBE traer la comida pre-porcionada para toda la estadía. El cuidador no puede dar ningún alimento fuera de la dieta provista.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.medical_services_outlined, 'Si el cuidador se lastima',
+                    _termPoint(GIcon.salud, 'Si el cuidador se lastima',
                         'Si la mascota muerde al cuidador, el dueño es responsable civil (Art. 990 Cód. Civil). Garden mediará la disputa.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.cancel_outlined, 'Conducta prohibida',
+                    _termPoint(GIcon.bloqueado, 'Conducta prohibida',
                         'Pagos fuera de plataforma, información falsa sobre la mascota, maltrato animal o acoso resultan en suspensión permanente y posible denuncia penal.', textColor, subtextColor),
                     _termDivider(borderColor),
-                    _termPoint(Icons.balance_outlined, 'Ley aplicable',
+                    _termPoint(GIcon.legal, 'Ley aplicable',
                         'Estos términos se rigen por las leyes bolivianas: Código Civil (D.L. 12760), Ley N° 453 del Consumidor y Ley N° 164 de TIC.', textColor, subtextColor),
                     const SizedBox(height: 12),
                     GestureDetector(
@@ -285,13 +286,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return result == 'accept';
   }
 
-  Widget _termPoint(IconData icon, String title, String body, Color textColor, Color subtextColor) {
+  Widget _termPoint(GIcon icon, String title, String body, Color textColor, Color subtextColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: GardenColors.primary),
+          GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary, state: GIconState.active),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -475,7 +476,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5),
                 itemCount: 50,
-                itemBuilder: (_, __) => const Icon(Icons.pets, color: Colors.white, size: 32),
+                itemBuilder: (_, __) => const Center(
+                    child: GardenIcon(GIcon.huella, color: Colors.white, size: GIconSize.xl, state: GIconState.active)),
               ),
             ),
           ),
@@ -492,7 +494,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: GardenColors.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.pets, color: GardenColors.primary, size: 40),
+                    child: const Center(child: GardenIcon(GIcon.huella, color: GardenColors.primary, size: GIconSize.hero, state: GIconState.active)),
                   ),
                   const SizedBox(height: 32),
                   Image.asset('assets/images/logo-white.png', height: 224),
@@ -503,11 +505,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Text('La plataforma de cuidado\nde mascotas más segura\nde Santa Cruz',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16, height: 1.6)),
                   const SizedBox(height: 48),
-                  _featureRow(Icons.verified_user_outlined, 'Verificación IA + Blockchain'),
+                  _featureRow(GIcon.identidadVerificada, 'Cuidadores con identidad verificada'),
                   const SizedBox(height: 16),
-                  _featureRow(Icons.shield_outlined, 'Pagos protegidos con escrow'),
+                  _featureRow(GIcon.pagoProtegido, 'Pago protegido hasta terminar el servicio'),
                   const SizedBox(height: 16),
-                  _featureRow(Icons.star_outline_rounded, 'Calificaciones verificadas'),
+                  _featureRow(GIcon.estrella, 'Reseñas de familias que reservaron'),
                 ],
               ),
             ),
@@ -517,7 +519,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _featureRow(IconData icon, String text) {
+  Widget _featureRow(GIcon icon, String text) {
     return Row(
       children: [
         Container(
@@ -526,7 +528,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: GardenColors.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: GardenColors.primary, size: 18),
+          child: Center(child: GardenIcon(icon, color: GardenColors.primary, state: GIconState.active)),
         ),
         const SizedBox(width: 12),
         Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
@@ -555,7 +557,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               TextButton.icon(
                 onPressed: () => context.go('/login'),
-                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: GardenColors.primary),
+                icon: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: GardenColors.primary),
                 label: Text('Iniciar sesión', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
               ),
@@ -592,7 +594,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           color: GardenColors.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.home_outlined, color: GardenColors.primary, size: 22),
+                        child: const Center(child: GardenIcon(GIcon.inicio, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -602,13 +604,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _introItem(Icons.verified_user_outlined, 'Verificación de identidad con IA', subtextColor),
+                  _introItem(GIcon.identidadVerificada, 'Verificación de identidad con IA', subtextColor),
                   const SizedBox(height: 8),
-                  _introItem(Icons.payments_outlined, 'Pagos seguros con escrow blockchain', subtextColor),
+                  _introItem(GIcon.pagoProtegido, 'Cobras con pago protegido al terminar cada servicio', subtextColor),
                   const SizedBox(height: 8),
-                  _introItem(Icons.calendar_month_outlined, 'Gestiona tu disponibilidad fácilmente', subtextColor),
+                  _introItem(GIcon.disponibilidad, 'Gestiona tu disponibilidad fácilmente', subtextColor),
                   const SizedBox(height: 8),
-                  _introItem(Icons.star_outline_rounded, 'Construye tu reputación verificada', subtextColor),
+                  _introItem(GIcon.estrella, 'Construye tu reputación verificada', subtextColor),
                   const SizedBox(height: 12),
                   Text('Después de crear tu cuenta completarás tu perfil de cuidador con fotos, servicios y precios.',
                     style: TextStyle(color: subtextColor, fontSize: 12, height: 1.5)),
@@ -632,7 +634,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 padding: const EdgeInsets.only(bottom: 20),
                 child: GardenButton(
                   label: 'Empezar',
-                  icon: Icons.arrow_forward_rounded,
+                  gIcon: GIcon.siguiente,
                   onPressed: () {
                     HapticFeedback.lightImpact();
                     setState(() => _manualStarted = true);
@@ -651,7 +653,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           _fieldLabel('Nombre', textColor),
                           const SizedBox(height: 8),
-                          _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
+                          _textField(controller: _firstNameController, hint: 'Tu nombre', icon: GIcon.perfil, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
                         ],
                       ),
                     ),
@@ -662,7 +664,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           _fieldLabel('Apellido', textColor),
                           const SizedBox(height: 8),
-                          _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
+                          _textField(controller: _lastNameController, hint: 'Tu apellido', icon: GIcon.perfil, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
                         ],
                       ),
                     ),
@@ -677,7 +679,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _fieldLabel('Correo electrónico', textColor),
                 const SizedBox(height: 8),
-                _textField(controller: _emailController, hint: 'tu@email.com', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                _textField(controller: _emailController, hint: 'tu@email.com', icon: GIcon.correo, keyboardType: TextInputType.emailAddress, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                 const SizedBox(height: 20),
               ]),
             ),
@@ -694,9 +696,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: InputDecoration(
                     hintText: '••••••••',
                     hintStyle: TextStyle(color: subtextColor),
-                    prefixIcon: Icon(Icons.lock_outlined, color: subtextColor, size: 20),
+                    prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.seguridad, color: subtextColor)),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 20),
+                      icon: GardenIcon(_obscurePassword ? GIcon.ver : GIcon.ocultar, color: subtextColor,
+                          semanticLabel: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña'),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                     filled: true, fillColor: surfaceEl,
@@ -717,7 +720,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _fieldLabel('Teléfono boliviano', textColor),
                 const SizedBox(height: 8),
-                _textField(controller: _phoneController, hint: '76543210', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                _textField(controller: _phoneController, hint: '76543210', icon: GIcon.telefono, keyboardType: TextInputType.phone, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                 const SizedBox(height: 8),
                 Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
                 const SizedBox(height: 20),
@@ -797,7 +800,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       border: Border.all(color: borderColor),
                     ),
                     child: Row(children: [
-                      Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                      GardenIcon(GIcon.calendario, color: subtextColor),
                       const SizedBox(width: 12),
                       Text(
                         _dateOfBirth == null
@@ -827,7 +830,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     hintStyle: TextStyle(color: subtextColor),
                     prefixIcon: Padding(
                       padding: const EdgeInsets.only(bottom: 40),
-                      child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                      child: GardenIcon(GIcon.nota, color: subtextColor),
                     ),
                     filled: true, fillColor: surfaceEl,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -990,9 +993,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                size: 14,
+              GardenIcon(
+                met ? GIcon.confirmado : GIcon.pendiente,
+                size: GIconSize.xs,
+                state: met ? GIconState.active : GIconState.idle,
                 color: color,
               ),
               const SizedBox(width: 5),
@@ -1004,10 +1008,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _introItem(IconData icon, String text, Color subtextColor) {
+  Widget _introItem(GIcon icon, String text, Color subtextColor) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: GardenColors.primary),
+        GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary, state: GIconState.active),
         const SizedBox(width: 10),
         Expanded(
           child: Text(text, style: TextStyle(color: subtextColor, fontSize: 13)),
@@ -1034,7 +1038,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _textField({
     required TextEditingController controller,
     required String hint,
-    required IconData icon,
+    required GIcon icon,
     required Color surfaceEl,
     required Color textColor,
     required Color subtextColor,
@@ -1050,7 +1054,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: subtextColor),
-        prefixIcon: Icon(icon, color: subtextColor, size: 20),
+        prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(icon, color: subtextColor)),
         filled: true, fillColor: surfaceEl,
         border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),

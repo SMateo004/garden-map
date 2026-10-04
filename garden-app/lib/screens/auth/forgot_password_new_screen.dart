@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 
 class ForgotPasswordNewScreen extends StatefulWidget {
@@ -97,16 +98,16 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
         final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
 
-        InputDecoration _field(String hint, IconData icon, bool obscure, VoidCallback toggle) =>
+        InputDecoration _field(String hint, GIcon icon, bool obscure, VoidCallback toggle) =>
             InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: subtextColor),
-              prefixIcon: Icon(icon, color: subtextColor, size: 20),
+              prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(icon, color: subtextColor)),
               suffixIcon: IconButton(
-                icon: Icon(
-                  obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                icon: GardenIcon(
+                  obscure ? GIcon.ver : GIcon.ocultar,
                   color: subtextColor,
-                  size: 20,
+                  semanticLabel: obscure ? 'Mostrar contraseña' : 'Ocultar contraseña',
                 ),
                 onPressed: toggle,
               ),
@@ -135,7 +136,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🔐', style: TextStyle(fontSize: 40)),
+                  const GardenIcon(GIcon.seguridad, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
                   const SizedBox(height: 20),
                   Text(
                     'Nueva contraseña',
@@ -162,7 +163,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     style: TextStyle(color: textColor),
                     decoration: _field(
                       '••••••••',
-                      Icons.lock_outlined,
+                      GIcon.seguridad,
                       _obscure1,
                       () => setState(() => _obscure1 = !_obscure1),
                     ),
@@ -191,7 +192,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     onSubmitted: (_) => _submit(),
                     decoration: _field(
                       '••••••••',
-                      Icons.lock_outline,
+                      GIcon.seguridad,
                       _obscure2,
                       () => setState(() => _obscure2 = !_obscure2),
                     ),
@@ -200,9 +201,10 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
-                          _passwordsMatch ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                          size: 14,
+                        GardenIcon(
+                          _passwordsMatch ? GIcon.confirmado : GIcon.conflicto,
+                          size: GIconSize.xs,
+                          state: GIconState.active,
                           color: _passwordsMatch ? GardenColors.success : GardenColors.error,
                         ),
                         const SizedBox(width: 6),
@@ -240,9 +242,10 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-          size: 14,
+        GardenIcon(
+          met ? GIcon.confirmado : GIcon.pendiente,
+          size: GIconSize.xs,
+          state: met ? GIconState.active : GIconState.idle,
           color: met ? GardenColors.success : subtextColor,
         ),
         const SizedBox(width: 6),

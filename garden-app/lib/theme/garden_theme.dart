@@ -1035,6 +1035,9 @@ class GardenButton extends StatelessWidget {
   final bool outline;
   final Color? color;
   final IconData? icon;
+  /// Icono del sistema (GardenIcon). Tiene prioridad sobre [icon], que queda
+  /// solo por compatibilidad mientras se migran los usos viejos.
+  final GIcon? gIcon;
   final double height;
   final double? width;
 
@@ -1046,6 +1049,7 @@ class GardenButton extends StatelessWidget {
     this.outline = false,
     this.color,
     this.icon,
+    this.gIcon,
     this.height = 52,
     this.width,
   });
@@ -1190,11 +1194,13 @@ class GardenButton extends StatelessWidget {
       return GardenLoadingIndicator(size: 20, color: textColor);
     }
     // GardenButton text — ExtraBold 800 (primary actions per spec)
-    if (icon != null) {
+    if (gIcon != null || icon != null) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: textColor, size: 18),
+          gIcon != null
+              ? GardenIcon(gIcon!, color: textColor, size: GIconSize.md)
+              : Icon(icon, color: textColor, size: 18),
           const SizedBox(width: 8),
           Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10)),
         ],
@@ -1208,7 +1214,7 @@ class GardenButton extends StatelessWidget {
 class GardenInput extends StatelessWidget {
   final String hint;
   final TextEditingController? controller;
-  final IconData? prefixIcon;
+  final GIcon? prefixIcon;
   final bool obscureText;
   final TextInputType? keyboardType;
   final int? maxLines;
@@ -1261,7 +1267,7 @@ class GardenInput extends StatelessWidget {
         hintText: hint,
         hintStyle: GardenText.bodyMedium.copyWith(color: hintCol),
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: textCol, size: 20)
+            ? Padding(padding: const EdgeInsets.all(12), child: GardenIcon(prefixIcon!, color: textCol))
             : null,
         suffixIcon: suffixIcon,
         filled: true,
