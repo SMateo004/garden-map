@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../design/garden_chain_proof.dart';
 import '../design/garden_icons.dart';
 import '../theme/garden_theme.dart';
 
@@ -16,7 +17,8 @@ class BookingHistoryDetail extends StatefulWidget {
   const BookingHistoryDetail({super.key, required this.bookingId, required this.token, required this.isDark});
 
   /// Solo las reservas ya cerradas muestran el historial.
-  static bool appliesTo(String? status) => status == 'COMPLETED' || status == 'CANCELLED';
+  static bool appliesTo(String? status) =>
+      status == 'COMPLETED' || status == 'CANCELLED' || status == 'REJECTED_BY_CAREGIVER';
 
   @override
   State<BookingHistoryDetail> createState() => _BookingHistoryDetailState();
@@ -87,6 +89,7 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
         'RATED' => GIcon.estrella,
         'AUTO_RELEASE' || 'PAYOUT' => GIcon.billetera,
         'DISPUTE_OPENED' || 'DISPUTE_APPEALED' || 'DISPUTE_RESOLVED' || 'APPEAL_RESOLVED' => GIcon.enRevision,
+        'CHAIN_RECORD' => GIcon.verificado,
         _ => GIcon.reloj,
       };
 
@@ -133,11 +136,16 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
     final timeline = (d['timeline'] as List).cast<Map<String, dynamic>>();
     final movements = (d['movements'] as List).cast<Map<String, dynamic>>();
     final isClient = d['viewerRole'] == 'CLIENT';
+    final chain = d['blockchain'] as Map<String, dynamic>?;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _paymentCard(pay, isClient, textColor, subtext, border),
+        if (chain != null) ...[
+          const SizedBox(height: 14),
+          GardenChainProof(proof: ChainProof.fromJson(chain)),
+        ],
         const SizedBox(height: 16),
         Text('Qué pasó', style: TextStyle(color: subtext, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
         const SizedBox(height: 10),

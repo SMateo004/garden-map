@@ -1118,6 +1118,43 @@ model AdminNotification {
   @@map("admin_notifications")
 }
 
+/// Cola persistente e historial de los registros on-chain (outbox). Una fila por
+/// evento (pago, fin, cancelación, extensión, veredicto, perfil): se escribe en
+/// la base ANTES de tocar la cadena, así un fallo de RPC, de saldo o un reinicio
+/// nunca pierde el registro — el job blockchain-sync lo reintenta hasta que
+/// queda CONFIRMED con su txHash. Ver services/chain-registry.service.ts.
+model BlockchainRecord {
+  id              String    @id @default(uuid())
+  /// BOOKING | USER
+  subjectType     String    @db.VarChar(10)
+  subjectId       String    @db.VarChar(36)
+  /// CREATE | EXTEND | FINALIZE | CANCEL | DISPUTE | PROFILE
+  kind            String    @db.VarChar(12)
+  /// Evita encolar dos veces el mismo hecho (ej. CREATE:<bookingId>).
+  dedupeKey       String    @unique @db.VarChar(160)
+  /// Datos ya traducidos a lo que va on-chain (montos en centavos, códigos). Nunca nombres.
+  payload         Json?
+  /// PENDING | SENT | CONFIRMED | FAILED | SKIPPED
+  status          String    @default("PENDING") @db.VarChar(10)
+  attempts        Int       @default(0)
+  nextAttemptAt   DateTime  @default(now())
+  lastError       String?   @db.VarChar(500)
+  chainId         Int?
+  contractAddress String?   @db.VarChar(42)
+  txHash          String?   @db.VarChar(66)
+  sentAt          DateTime?
+  sentBlock       Int?
+  blockNumber     Int?
+  confirmedAt     DateTime?
+  alertedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([subjectId])
+  @@map("blockchain_records")
+}
+
 /// Donación voluntaria del dueño al momento del pago, destinada al 100% a hogares de perros.
 model Donation {
   id                 String    @id @default(uuid())

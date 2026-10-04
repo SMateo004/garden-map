@@ -1,264 +1,175 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.24;
+
+import {GardenRecorderAccess} from "./GardenRecorderAccess.sol";
 
 /**
- * @title GardenEscrow v2
- * @dev Gestiona la lógica inmutable de reservas, disputas, extensiones y reputación para GARDEN.
- * Los pagos reales son off-chain (fiat), pero el estado y la reputación son on-chain.
+ * @title GardenEscrow v3
+ * @dev Registro público e inmutable del ciclo de vida de cada reserva de GARDEN.
+ * No custodia dinero (los pagos son fiat, fuera de la cadena): solo deja
+ * constancia de qué se pagó, cuándo y cómo terminó.
+ *
+ * Privacidad: no acepta ningún string. La reserva se identifica por su uuid
+ * (bytes16) y las personas solo por una referencia seudónima (bytes32) que el
+ * servidor calcula con un HMAC secreto de su id interno — desde la cadena no se
+ * puede llegar a un nombre, teléfono ni correo. Montos en centavos de Bs.
+ *
+ * Reglas de estado: el registro de pago se hace una sola vez; finalizar,
+ * cancelar y extender solo sobre una reserva activa; el veredicto de una
+ * disputa se acepta en cualquier estado (una disputa por no-show llega con la
+ * reserva ya cancelada, y una apelación puede reemplazar el veredicto anterior:
+ * cada uno queda como evento).
  */
-contract GardenEscrow {
-    address public immutable owner;
+contract GardenEscrow is GardenRecorderAccess {
+    uint256 public constant VERSION = 3;
+    uint8 public constant MAX_CANCEL_REASON = 7;
+
+    enum ServiceType { NONE, PASEO, HOSPEDAJE, GUARDERIA }
+    enum Status { NONE, ACTIVE, COMPLETED, CANCELLED, RESOLVED }
+    enum Verdict { NONE, CAREGIVER_WINS, CLIENT_WINS, PARTIAL }
+    enum ExtensionUnit { NONE, MINUTES, DAYS }
 
     struct Booking {
-        string bookingId;       // UUID de nuestra base de datos
-        string clientId;        // ID del dueño
-        string caregiverId;     // ID del cuidador
-        uint256 amountBs;       // Monto total en Bs (para transparencia)
-        uint256 startTime;      // Timestamp inicio
-        uint256 endTime;        // Timestamp fin
-        bool isActive;          // True cuando el pago fiat es confirmado
-        bool isCompleted;       // True cuando el servicio finaliza bien
-        uint8 rating;           // Calificación 1-5 (0 si no calificado)
-        string petName;         // Nombre del peludo
-        string serviceType;     // "HOSPEDAJE" o "PASEO"
+        bytes32 clientRef;
+        bytes32 caregiverRef;
+        uint128 amountCents;
+        uint64 paidAt;
+        uint64 recordedAt;
+        uint64 startTime;
+        uint64 endTime;
+        ServiceType serviceType;
+        Status status;
+        uint8 rating;
+        uint8 cancelReason;
+        Verdict verdict;
     }
 
-    mapping(string => Booking) public bookings;
+    mapping(bytes16 => Booking) private _bookings;
     uint256 public totalBookings;
 
-    // Reputación por cuidador: acumulado de ratings y conteo
-    mapping(string => uint256) public caregiverTotalRating;
-    mapping(string => uint256) public caregiverRatingCount;
+    mapping(bytes32 => uint256) public caregiverRatingSum;
+    mapping(bytes32 => uint256) public caregiverRatingCount;
 
-    event BookingCreated(string indexed bookingId, string petName, uint256 amountBs);
-    event PaymentConfirmed(string indexed bookingId, uint256 timestamp);
-    event ServiceFinalized(string indexed bookingId, uint8 rating, uint256 timestamp);
-    event ServiceCancelled(string indexed bookingId, string reason, uint256 timestamp);
-    event DisputeResolved(
-        string indexed bookingId,
-        string verdict,
-        uint256 caregiverAmountBs,
-        uint256 clientDiscountBs,
-        uint256 timestamp
+    event BookingRecorded(
+        bytes16 indexed bookingId,
+        bytes32 indexed clientRef,
+        bytes32 indexed caregiverRef,
+        ServiceType serviceType,
+        uint128 amountCents,
+        uint64 paidAt,
+        uint64 startTime,
+        uint64 endTime
     );
-    event WalkExtended(
-        string indexed bookingId,
-        uint256 additionalMinutes,
-        uint256 newAmountBs,
-        uint256 timestamp
-    );
-
-    event HospedajeExtended(
-        string indexed bookingId,
-        uint256 additionalDays,
-        uint256 newAmountBs,
-        uint256 timestamp
+    event BookingFinalized(bytes16 indexed bookingId, uint8 rating);
+    event BookingCancelled(bytes16 indexed bookingId, uint8 reasonCode, uint128 refundCents);
+    event DisputeResolved(bytes16 indexed bookingId, Verdict verdict, uint128 caregiverCents, uint128 clientCents);
+    event BookingExtended(
+        bytes16 indexed bookingId,
+        ExtensionUnit unit,
+        uint32 quantity,
+        uint128 newAmountCents,
+        uint64 newEndTime
     );
 
-    modifier onlyOwner() {
-        require(
-            msg.sender == owner,
-            "Solo el administrador de GARDEN puede llamar esta funcion"
-        );
-        _;
-    }
+    error InvalidInput();
+    error AlreadyRecorded(bytes16 bookingId);
+    error UnknownBooking(bytes16 bookingId);
+    error NotActive(bytes16 bookingId, Status status);
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor(address initialRecorder) GardenRecorderAccess(initialRecorder) {}
 
-    /**
-     * @dev Crea una nueva reserva en la blockchain (Escrow Virtual).
-     * Se llama cuando el admin confirma el pago fiat.
-     */
-    function createBooking(
-        string calldata _bookingId,
-        string calldata _clientId,
-        string calldata _caregiverId,
-        uint256 _amountBs,
-        uint256 _startTime,
-        uint256 _endTime,
-        string calldata _petName,
-        string calldata _serviceType
-    ) external onlyOwner {
-        require(bookings[_bookingId].startTime == 0, "La reserva ya existe on-chain");
+    function recordBooking(
+        bytes16 bookingId,
+        bytes32 clientRef,
+        bytes32 caregiverRef,
+        ServiceType serviceType,
+        uint128 amountCents,
+        uint64 paidAt,
+        uint64 startTime,
+        uint64 endTime
+    ) external onlyRecorder {
+        if (
+            bookingId == bytes16(0) || clientRef == bytes32(0) || caregiverRef == bytes32(0) ||
+            serviceType == ServiceType.NONE || paidAt == 0 || startTime == 0 || endTime < startTime
+        ) revert InvalidInput();
+        Booking storage b = _bookings[bookingId];
+        if (b.status != Status.NONE) revert AlreadyRecorded(bookingId);
 
-        bookings[_bookingId] = Booking({
-            bookingId: _bookingId,
-            clientId: _clientId,
-            caregiverId: _caregiverId,
-            amountBs: _amountBs,
-            startTime: _startTime,
-            endTime: _endTime,
-            isActive: true,
-            isCompleted: false,
-            rating: 0,
-            petName: _petName,
-            serviceType: _serviceType
-        });
-
+        b.clientRef = clientRef;
+        b.caregiverRef = caregiverRef;
+        b.amountCents = amountCents;
+        b.paidAt = paidAt;
+        b.recordedAt = uint64(block.timestamp);
+        b.startTime = startTime;
+        b.endTime = endTime;
+        b.serviceType = serviceType;
+        b.status = Status.ACTIVE;
         totalBookings++;
 
-        emit BookingCreated(_bookingId, _petName, _amountBs);
-        emit PaymentConfirmed(_bookingId, block.timestamp);
+        emit BookingRecorded(bookingId, clientRef, caregiverRef, serviceType, amountCents, paidAt, startTime, endTime);
     }
 
-    /**
-     * @dev Finaliza el servicio y registra la calificación (Reputación Inmutable).
-     * Actualiza el acumulado de reputación del cuidador.
-     */
-    function finalizeBooking(string calldata _bookingId, uint8 _rating) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa o ya finalizada");
-        require(!b.isCompleted, "Ya esta marcada como completada");
-        require(_rating >= 1 && _rating <= 5, "La calificacion debe ser entre 1 y 5");
-
-        b.isCompleted = true;
-        b.isActive = false;
-        b.rating = _rating;
-
-        // Actualizar reputación acumulada del cuidador
-        caregiverTotalRating[b.caregiverId] += _rating;
-        caregiverRatingCount[b.caregiverId] += 1;
-
-        emit ServiceFinalized(_bookingId, _rating, block.timestamp);
+    /// @param rating 1-5, o 0 si el dueño no calificó (liberación automática del pago).
+    function finalizeBooking(bytes16 bookingId, uint8 rating) external onlyRecorder {
+        if (rating > 5) revert InvalidInput();
+        Booking storage b = _active(bookingId);
+        b.status = Status.COMPLETED;
+        b.rating = rating;
+        if (rating > 0) {
+            caregiverRatingSum[b.caregiverRef] += rating;
+            caregiverRatingCount[b.caregiverRef] += 1;
+        }
+        emit BookingFinalized(bookingId, rating);
     }
 
-    /**
-     * @dev Cancela la reserva en el historial on-chain.
-     */
-    function cancelBooking(
-        string calldata _bookingId,
-        string calldata _reason
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "No se puede cancelar una reserva inactiva o finalizada");
-
-        b.isActive = false;
-
-        emit ServiceCancelled(_bookingId, _reason, block.timestamp);
+    /// @param reasonCode código numérico del motivo (ver blockchain.service.ts), nunca texto libre.
+    function cancelBooking(bytes16 bookingId, uint8 reasonCode, uint128 refundCents) external onlyRecorder {
+        if (reasonCode > MAX_CANCEL_REASON) revert InvalidInput();
+        Booking storage b = _active(bookingId);
+        b.status = Status.CANCELLED;
+        b.cancelReason = reasonCode;
+        emit BookingCancelled(bookingId, reasonCode, refundCents);
     }
 
-    /**
-     * @dev Resuelve una disputa a favor del cuidador.
-     * Registra el monto pagado al cuidador.
-     */
-    function resolveDisputeCaregiverWins(
-        string calldata _bookingId,
-        uint256 _caregiverAmountBs
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa o ya resuelta");
-
-        b.isActive = false;
-
-        emit DisputeResolved(
-            _bookingId,
-            "CAREGIVER_WINS",
-            _caregiverAmountBs,
-            0,
-            block.timestamp
-        );
+    function resolveDispute(
+        bytes16 bookingId,
+        Verdict verdict,
+        uint128 caregiverCents,
+        uint128 clientCents
+    ) external onlyRecorder {
+        if (verdict == Verdict.NONE) revert InvalidInput();
+        Booking storage b = _bookings[bookingId];
+        if (b.status == Status.NONE) revert UnknownBooking(bookingId);
+        b.status = Status.RESOLVED;
+        b.verdict = verdict;
+        emit DisputeResolved(bookingId, verdict, caregiverCents, clientCents);
     }
 
-    /**
-     * @dev Resuelve una disputa a favor del cliente.
-     * Registra el monto de reembolso.
-     */
-    function resolveDisputeClientWins(
-        string calldata _bookingId,
-        uint256 _refundAmountBs
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa o ya resuelta");
-
-        b.isActive = false;
-
-        emit DisputeResolved(
-            _bookingId,
-            "CLIENT_WINS",
-            0,
-            _refundAmountBs,
-            block.timestamp
-        );
+    function extendBooking(
+        bytes16 bookingId,
+        ExtensionUnit unit,
+        uint32 quantity,
+        uint128 newAmountCents
+    ) external onlyRecorder {
+        if (unit == ExtensionUnit.NONE || quantity == 0) revert InvalidInput();
+        Booking storage b = _active(bookingId);
+        uint64 secondsPerUnit = unit == ExtensionUnit.MINUTES ? 60 : 86400;
+        b.endTime = b.endTime + uint64(quantity) * secondsPerUnit;
+        b.amountCents = newAmountCents;
+        emit BookingExtended(bookingId, unit, quantity, newAmountCents, b.endTime);
     }
 
-    /**
-     * @dev Resuelve una disputa con pago parcial a ambas partes.
-     */
-    function resolvePartial(
-        string calldata _bookingId,
-        uint256 _caregiverAmountBs,
-        uint256 _clientDiscountBs
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa o ya resuelta");
-
-        b.isActive = false;
-
-        emit DisputeResolved(
-            _bookingId,
-            "PARTIAL",
-            _caregiverAmountBs,
-            _clientDiscountBs,
-            block.timestamp
-        );
+    function getBooking(bytes16 bookingId) external view returns (Booking memory) {
+        return _bookings[bookingId];
     }
 
-    /**
-     * @dev Registra la extensión de un paseo en curso.
-     * Actualiza el monto total y extiende el tiempo de fin.
-     */
-    function extendWalk(
-        string calldata _bookingId,
-        uint256 _additionalMinutes,
-        uint256 _newAmountBs
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa - no se puede extender");
-
-        b.amountBs = _newAmountBs;
-        b.endTime = b.endTime + (_additionalMinutes * 60);
-
-        emit WalkExtended(_bookingId, _additionalMinutes, _newAmountBs, block.timestamp);
+    function getReputation(bytes32 caregiverRef) external view returns (uint256 totalRating, uint256 ratingCount) {
+        return (caregiverRatingSum[caregiverRef], caregiverRatingCount[caregiverRef]);
     }
 
-    /**
-     * @dev Registra la extensión de un hospedaje (noches adicionales).
-     * Actualiza el monto total y extiende el tiempo de fin en días completos.
-     */
-    function extendHospedaje(
-        string calldata _bookingId,
-        uint256 _additionalDays,
-        uint256 _newAmountBs
-    ) external onlyOwner {
-        Booking storage b = bookings[_bookingId];
-        require(b.isActive, "Reserva no activa - no se puede extender el hospedaje");
-
-        b.amountBs = _newAmountBs;
-        b.endTime = b.endTime + (_additionalDays * 86400); // 86 400 seconds per day
-
-        emit HospedajeExtended(_bookingId, _additionalDays, _newAmountBs, block.timestamp);
-    }
-
-    /**
-     * @dev Obtiene la reputación on-chain de un cuidador.
-     * @return totalRating Suma de todos los ratings recibidos.
-     * @return ratingCount Número total de valoraciones.
-     */
-    function getReputation(
-        string calldata _caregiverId
-    ) external view returns (uint256 totalRating, uint256 ratingCount) {
-        return (
-            caregiverTotalRating[_caregiverId],
-            caregiverRatingCount[_caregiverId]
-        );
-    }
-
-    /**
-     * @dev Obtiene info de una reserva (para transparencia en el frontend).
-     */
-    function getBooking(string calldata _id) external view returns (Booking memory) {
-        return bookings[_id];
+    function _active(bytes16 bookingId) private view returns (Booking storage b) {
+        b = _bookings[bookingId];
+        if (b.status == Status.NONE) revert UnknownBooking(bookingId);
+        if (b.status != Status.ACTIVE) revert NotActive(bookingId, b.status);
     }
 }

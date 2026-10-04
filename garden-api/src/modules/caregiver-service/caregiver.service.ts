@@ -664,7 +664,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
 
   // Enriquecer con reputación de blockchain
   try {
-    const bcRep = await blockchainService.getCaregiverReputation(id);
+    const bcRep = await blockchainService.getCaregiverReputation(profile.userId);
     if (bcRep) {
       detail.blockchainReputation = {
         average: bcRep.average,

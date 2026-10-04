@@ -22,7 +22,7 @@ import {
 import logger from '../../shared/logger.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
 import { corregirCamposPerfil } from '../../agents/redaccion.agent.js';
-import { blockchainService } from '../../services/blockchain.service.js';
+import { enqueueProfileSync, enqueueSafely } from '../../services/chain-registry.service.js';
 import { onCaregiverWelcome } from '../../services/notification.service.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
@@ -630,12 +630,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
   );
 
   // Blockchain: sync como verificado (completó todos los pasos)
-  blockchainService.syncProfileOnChain(
-    userId,
-    `${profile.user.firstName} ${profile.user.lastName}`,
-    'CAREGIVER',
-    true
-  ).catch(err => logger.error('Blockchain sync failed (caregiver submit)', { userId, err }));
+  enqueueSafely('PROFILE', () => enqueueProfileSync(userId, 'CAREGIVER', true));
 
   logger.info('CaregiverProfile: aprobado automáticamente tras completar todos los pasos', {
     profileId: profile.id,

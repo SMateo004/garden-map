@@ -2,8 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import Anthropic from '@anthropic-ai/sdk';
-import { blockchainService } from '../../services/blockchain.service.js';
-import { dispatchOnChainWithRetry } from '../../services/blockchain-retry.helper.js';
+import { disputeAmounts, enqueueDisputeResolution, enqueueSafely } from '../../services/chain-registry.service.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 
@@ -1076,31 +1075,10 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
     });
   }
 
-  // ── Registrar en blockchain con retry (3 intentos, back-off exponencial) ──
-  // Fire-and-forget but with retry so ledger inconsistencies are minimized.
-  // If all retries fail, an admin notification is created so it can be manually re-submitted.
-  _dispatchBlockchainWithRetry(bookingId, resolution.verdict, netAmount, totalAmount);
-}
-
-function _dispatchBlockchainWithRetry(
-  bookingId: string,
-  verdict: string,
-  netAmount: number,
-  totalAmount: number,
-) {
-  let action: (() => Promise<string | null>) | null = null;
-  if (verdict === 'CAREGIVER_WINS') {
-    action = () => blockchainService.resolveDisputeCaregiverWinsOnChain(bookingId, netAmount);
-  } else if (verdict === 'CLIENT_WINS') {
-    action = () => blockchainService.resolveDisputeClientWinsOnChain(bookingId, totalAmount);
-  } else if (verdict === 'PARTIAL') {
-    const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
-    const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
-    action = () => blockchainService.resolvePartialOnChain(bookingId, caregiverPayout, clientDiscountAmount);
-  }
-  if (!action) return;
-
-  dispatchOnChainWithRetry({ bookingId, label: `resolveDispute:${verdict}`, action });
+  // Registro on-chain del veredicto: cola persistente con reintentos (chain-registry.service.ts).
+  // Si esto no llegara a encolarse, la reconciliación lo detecta por la disputa resuelta.
+  enqueueSafely('DISPUTE', () =>
+    enqueueDisputeResolution(bookingId, { ...disputeAmounts(resolution.verdict, booking), phase: 'INITIAL' }));
 }
 
 export default router;

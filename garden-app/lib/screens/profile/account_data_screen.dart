@@ -20,9 +20,9 @@ class AccountDataScreen extends StatefulWidget {
 
 class _AccountDataScreenState extends State<AccountDataScreen> {
   static const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-  static const _blockchainContract = '0xc8223f91B21FC7C72744f98e09b113AfF882756E';
-
   Map<String, dynamic>? _userData;
+  /// GET /blockchain/info: red y contrato reales (nada escrito a mano acá).
+  Map<String, dynamic>? _chainInfo;
   Map<String, dynamic>? _caregiverProfile;
   List<Map<String, dynamic>> _blockchainTxs = [];
   bool _isLoading = true;
@@ -60,6 +60,12 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
         if (pData['success'] == true && mounted) {
           setState(() => _caregiverProfile = pData['data'] as Map<String, dynamic>);
         }
+      }
+
+      final cRes = await http.get(Uri.parse('$_baseUrl/blockchain/info'));
+      final cData = jsonDecode(cRes.body);
+      if (cData['success'] == true && mounted) {
+        setState(() => _chainInfo = cData['data'] as Map<String, dynamic>);
       }
 
       final bookingsUrl = _role == 'CAREGIVER'
@@ -296,33 +302,44 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                 const SizedBox(height: 20),
 
                 // Blockchain Section
-                _section('Datos Blockchain', borderColor, children: [
-                  _infoRow(
-                    'Contrato Garden',
-                    _blockchainContract,
-                    GIcon.retiro, textColor, subtextColor,
-                    canCopy: true,
-                    monospace: true,
-                    truncate: true),
+                _section('Registro en blockchain', borderColor, children: [
+                  if (_chainInfo?['escrowAddress'] != null)
+                    _infoRow(
+                      'Contrato Garden',
+                      _chainInfo!['escrowAddress'] as String,
+                      GIcon.retiro, textColor, subtextColor,
+                      canCopy: true,
+                      monospace: true,
+                      truncate: true),
                   _infoRow(
                     'Red',
-                    'Polygon Amoy Testnet',
-                    GIcon.ia, textColor, subtextColor),
+                    _chainInfo?['network'] == null
+                        ? 'Sin configurar'
+                        : '${_chainInfo!['network']['name']} (${_chainInfo!['network']['label']})',
+                    GIcon.verificado, textColor, subtextColor),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Text(
+                      'El comprobante de cada reserva está en su detalle, con el enlace a Polygonscan. '
+                      'Solo se registran identificadores internos, montos, fechas y estados: nunca tu nombre ni otros datos personales.',
+                      style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                    ),
+                  ),
                   if (_blockchainTxs.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      child: Text('Sin transacciones blockchain aun', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      child: Text('Todavía no tienes reservas registradas en blockchain', style: TextStyle(color: subtextColor, fontSize: 13)),
                     )
                   else ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text('Ultimas transacciones on-chain:', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                      child: Text('Últimas transacciones on-chain:', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                     for (final tx in _blockchainTxs.take(5)) ...[
                       if (tx['blockchainTxHash'] != null)
-                        _infoRow('TX creacion', tx['blockchainTxHash'] as String, GIcon.recibo, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
+                        _infoRow('Registro del pago', tx['blockchainTxHash'] as String, GIcon.recibo, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
                       if (tx['blockchainFinalizedTxHash'] != null)
-                        _infoRow('TX finalizacion', tx['blockchainFinalizedTxHash'] as String, GIcon.confirmado, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
+                        _infoRow('Registro del cierre', tx['blockchainFinalizedTxHash'] as String, GIcon.confirmado, textColor, subtextColor, canCopy: true, monospace: true, truncate: true),
                     ],
                   ],
                 ]),

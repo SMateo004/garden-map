@@ -13,7 +13,7 @@ import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
-import { blockchainService } from '../../services/blockchain.service.js';
+import { enqueueProfileSyncForUser, enqueueSafely } from '../../services/chain-registry.service.js';
 import {
   detectFacesWithDetails,
   validateFaceQuality,
@@ -599,8 +599,7 @@ export async function submitVerification(
 
       // Sincronizar estado de verificación en Blockchain (asíncrono)
       if (finalStatus === 'VERIFIED') {
-        blockchainService.updateVerificationOnChain(session.userId, true)
-          .catch(err => logger.error('Blockchain verification sync failed', { userId: session.userId, err }));
+        enqueueSafely('PROFILE', () => enqueueProfileSyncForUser(session.userId, true));
       }
 
       // Audit log — non-blocking, does not affect result

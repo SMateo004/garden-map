@@ -41,6 +41,7 @@ import vetsRoutes from './modules/vets/vets.routes.js';
 import appHealthRoutes from './modules/app-health/app-health.routes.js';
 import legalRoutes from './modules/legal/legal.routes.js';
 import { hideCommissionFromClients } from './middleware/hide-commission.middleware.js';
+import blockchainRoutes from './modules/blockchain/blockchain.routes.js';
 
 const app = express();
 
@@ -292,6 +293,7 @@ app.use('/api/bookings', hideCommissionFromClients, bookingRoutes);
 app.use('/api/recurring-bookings', recurringBookingRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/blockchain', blockchainRoutes);
 app.use('/api/notifications', notificationRoutes);
 if (env.NODE_ENV !== 'production') {
   app.use('/api/test', testRoutes);

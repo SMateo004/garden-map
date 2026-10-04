@@ -4,7 +4,6 @@ import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import { ensureAbsoluteUrl } from '../../shared/upload-utils.js';
 import logger from '../../shared/logger.js';
 import type { CreatePetBody, PatchPetBody } from './client-pets.validation.js';
-import { blockchainService } from '../../services/blockchain.service.js';
 
 function isPetComplete(p: { name: string; size: PetSize | null; photoUrl: string | null }) {
   return Boolean(p.name && p.size && p.photoUrl);
@@ -135,13 +134,6 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
     select: { name: true, size: true, photoUrl: true },
   });
   await recalcProfileIsComplete(prisma, profile.id, allPets);
-
-  // Sync pet to Blockchain (Creative touch)
-  blockchainService.addPetOnChain(
-    userId,
-    pet.name,
-    pet.breed || 'Mestizo'
-  ).catch(err => logger.error('Blockchain pet sync failed', { userId, petName: pet.name, err }));
 
   if (photoUrl) {
     logger.info('Foto subida y guardada', { url: photoUrl, field: 'petPhoto', userId });

@@ -1,10 +1,12 @@
 import prisma from '../../config/database.js';
 import { BookingNotFoundError, ForbiddenError } from '../../shared/errors.js';
+import { getBookingChainProof, type BookingChainProof } from '../../services/chain-registry.service.js';
 
 /**
  * Historial independiente de UNA reserva: método de pago + línea de tiempo de
  * todo lo que pasó + movimientos de dinero. Se arma solo con lo que ya está
- * guardado (Booking, serviceEvents, WalletTransaction, Dispute, AdminAction),
+ * guardado (Booking, serviceEvents, WalletTransaction, Dispute, AdminAction,
+ * BlockchainRecord),
  * así que también funciona con reservas anteriores a este endpoint.
  *
  * Cada parte ve lo suyo: el dueño nunca ve comisión/impuestos (regla de
@@ -20,6 +22,8 @@ export interface HistoryEvent {
   title: string;
   detail?: string | null;
   amount?: number | null;
+  /** Enlace externo del evento (ej. la transacción en polygonscan.com). */
+  link?: string | null;
 }
 
 export type PaymentMethodCode = 'WALLET' | 'QR' | 'CARD' | 'WALLET_QR' | 'WALLET_CARD' | 'OTHER' | 'PENDING';
@@ -55,6 +59,8 @@ export interface BookingHistory {
     amount: number;
     status: string;
   }>;
+  /** Comprobante on-chain: el dueño y el cuidador ven lo mismo (son datos públicos). */
+  blockchain: BookingChainProof;
 }
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
@@ -133,7 +139,7 @@ export async function getBookingHistory(
   const viewerRole: BookingHistory['viewerRole'] = isAdmin ? 'ADMIN' : isClient ? 'CLIENT' : 'CAREGIVER';
   const seesCaregiverSide = viewerRole !== 'CLIENT';
 
-  const [walletTxs, adminActions] = await Promise.all([
+  const [walletTxs, adminActions, blockchain] = await Promise.all([
     prisma.walletTransaction.findMany({
       where: {
         bookingId,
@@ -147,6 +153,7 @@ export async function getBookingHistory(
       orderBy: { createdAt: 'asc' },
       select: { actionType: true, createdAt: true },
     }),
+    getBookingChainProof(booking),
   ]);
 
   // ── Pago ────────────────────────────────────────────────────────────────
@@ -341,6 +348,16 @@ export async function getBookingHistory(
     }
   }
 
+  for (const r of blockchain.records) {
+    push(r.confirmedAt, {
+      kind: 'CHAIN_RECORD',
+      actor: 'SISTEMA',
+      title: `${r.label} en blockchain`,
+      detail: blockchain.network ? `${blockchain.network.name} · ${r.txHash.slice(0, 10)}…` : null,
+      link: r.explorerUrl,
+    });
+  }
+
   tl.sort((a, b) => a.at.localeCompare(b.at));
 
   const movements = walletTxs.map((t) => ({
@@ -352,5 +369,5 @@ export async function getBookingHistory(
     status: t.status,
   }));
 
-  return { bookingId, status: booking.status, viewerRole, payment, timeline: tl, movements };
+  return { bookingId, status: booking.status, viewerRole, payment, timeline: tl, movements, blockchain };
 }

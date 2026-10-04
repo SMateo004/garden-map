@@ -62,12 +62,9 @@ jest.mock('../../src/config/database', () => {
   // después de crear el booking — sin este mock, tx.bookingPet.createMany
   // no es función.
   const bookingPet = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
-  // dispatchOnChainWithRetry (blockchain-retry.helper.ts) crea un
-  // AdminNotification cuando agota los reintentos — se dispara fire-and-forget
-  // desde cancelBooking, así que sin este mock el proceso entero explota con
-  // una excepción no capturada DESPUÉS de que Jest ya reportó los tests como
-  // pasados (exit code 1 igual, rompe el job de CI).
   const adminNotification = { create: jest.fn().mockResolvedValue({}) };
+  // cancelBooking encola el registro on-chain (chain-registry.service.ts).
+  const blockchainRecord = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
   // booking.service.ts llama auditLog() en create/cancel, que importa
   // `{ prisma }` con nombre (no default) de config/database.js — sin exponer
   // también `prisma` acá, ese import resuelve undefined y auditLog explota.
@@ -75,7 +72,7 @@ jest.mock('../../src/config/database', () => {
   // La disponibilidad de hospedaje/guardería cuenta las mascotas walk-in
   // presentes en el local (ver countWalkInPetsPresentNow) — 0 = sin walk-in.
   const walkInVisit = { count: jest.fn().mockResolvedValue(0) };
-  const txModels = { walkInVisit, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification };
+  const txModels = { walkInVisit, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord };
   const db = {
     walkInVisit,
     booking,
@@ -90,6 +87,7 @@ jest.mock('../../src/config/database', () => {
     auditLog,
     bookingPet,
     adminNotification,
+    blockchainRecord,
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(0),
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(txModels)),

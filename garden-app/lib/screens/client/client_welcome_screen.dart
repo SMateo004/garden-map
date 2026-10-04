@@ -146,7 +146,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
                         fadeAnim: _fadeAnim,
                         illustration: _Page2Illustration(isDark: isDark),
                         title: 'Reserva con total seguridad',
-                        subtitle: 'Tu pago queda bloqueado en Polygon Blockchain hasta que el servicio se complete. Cero riesgo.',
+                        subtitle: 'Garden retiene tu pago hasta que el servicio se completa, y cada reserva pagada queda registrada en la red Polygon.',
                         textColor: textColor,
                         subtextColor: subtextColor,
                       ),

@@ -13,7 +13,7 @@ import type { LoginBody, RegisterCaregiverBody, RegisterClientBody, PatchCaregiv
 import type { JwtPayload } from '../../middleware/auth.middleware.js';
 import logger from '../../shared/logger.js';
 import { track, identify } from '../../shared/analytics.js';
-import { blockchainService } from '../../services/blockchain.service.js';
+import { enqueueProfileSync, enqueueSafely } from '../../services/chain-registry.service.js';
 import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js';
 import { matchZoneForPoint } from '../../utils/geo.js';
 
@@ -404,12 +404,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
   }
 
   // Sincronizar Caregiver en Blockchain (asíncrono)
-  blockchainService.syncProfileOnChain(
-    result.user.id,
-    `${result.user.firstName} ${result.user.lastName}`,
-    'CAREGIVER',
-    false // Empieza no verificado hasta que admin/proceso apruebe
-  ).catch(err => logger.error('Blockchain sync failed (caregiver register)', { userId: result.user.id, err }));
+  enqueueSafely('PROFILE', () => enqueueProfileSync(result.user.id, 'CAREGIVER', false));
 
   const savedPhotos = ensureAbsoluteUrls(profileInput.photos ?? []);
   if (savedPhotos.length > 0) {
@@ -615,12 +610,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   }
 
   // Sincronizar Cliente en Blockchain (asíncrono)
-  blockchainService.syncProfileOnChain(
-    user.id,
-    `${user.firstName} ${user.lastName}`,
-    'CLIENT',
-    false
-  ).catch(err => logger.error('Blockchain sync failed (client register)', { userId: user.id, err }));
+  enqueueSafely('PROFILE', () => enqueueProfileSync(user.id, 'CLIENT', false));
 
   const payload: JwtPayload = { userId: user.id, role: user.role };
   const { token, expiresIn } = signAccessToken(payload);
@@ -910,12 +900,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
   });
 
   // Blockchain sync (async, non-blocking)
-  blockchainService.syncProfileOnChain(
-    result.user.id,
-    `${result.user.firstName} ${result.user.lastName}`,
-    'CAREGIVER',
-    false // se marca verificado al aprobarse (submitProfile)
-  ).catch(err => logger.error('Blockchain sync failed (professional register)', { userId: result.user.id, err }));
+  enqueueSafely('PROFILE', () => enqueueProfileSync(result.user.id, 'CAREGIVER', false));
 
   const payload: JwtPayload = { userId: result.user.id, role: result.user.role };
   const { token: accessToken, expiresIn } = signAccessToken(payload);

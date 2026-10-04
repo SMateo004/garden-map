@@ -82,7 +82,7 @@ const List<ContractSection> caregiverContractSections = [
   ),
   ContractSection(
     '10. Si hay una disputa',
-    'Si un Cliente cuestiona un servicio, un sistema de inteligencia artificial revisa la evidencia disponible (fotos, GPS, chat, calificaciones) y emite un veredicto inicial en minutos. Si no estás de acuerdo, tienes 5 días hábiles para apelar — la apelación la resuelve siempre una persona real del equipo de Garden, nunca la IA, y esa decisión es la definitiva dentro de Garden. El resultado de cada servicio y de cada disputa queda registrado de forma inmutable en blockchain (red Polygon).',
+    'Si un Cliente cuestiona un servicio, un sistema de inteligencia artificial revisa la evidencia disponible (fotos, GPS, chat, calificaciones) y emite un veredicto inicial en minutos. Si no estás de acuerdo, tienes 5 días hábiles para apelar — la apelación la resuelve siempre una persona real del equipo de Garden, nunca la IA, y esa decisión es la definitiva dentro de Garden. El pago, el cierre de cada servicio y el veredicto de cada disputa quedan registrados en la red Polygon, sin datos personales.',
   ),
   ContractSection(
     '11. Terminación',

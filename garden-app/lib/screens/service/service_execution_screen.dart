@@ -4616,7 +4616,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           GpsTrackingSession.instance.start(bookingId: widget.bookingId, token: _token);
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Servicio iniciado! El escrow blockchain está activo.'), backgroundColor: GardenColors.success),
+          const SnackBar(content: Text('¡Servicio iniciado! El pago sigue protegido hasta que termine.'), backgroundColor: GardenColors.success),
         );
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
@@ -6135,7 +6135,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: AbsorbPointer(
                 absorbing: !canSubmit,
                 child: GardenButton(
-                  label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
+                  label: _isProcessing ? 'Enviando calificación…' : 'Confirmar calificación',
                   loading: _isProcessing,
                   onPressed: canSubmit
                       ? () => _submitRating(_surveyRating, _surveyCommentController.text, _surveySkillTags)

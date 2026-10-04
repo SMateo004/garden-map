@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "gas": "hardhat run scripts/estimate-gas.cjs",
+    "deploy:amoy": "hardhat run scripts/deploy.cjs --network amoy",
+    "deploy:polygon": "hardhat run scripts/deploy.cjs --network polygon"
   },
   "keywords": [],
   "author": "",

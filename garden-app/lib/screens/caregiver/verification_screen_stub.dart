@@ -694,12 +694,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Badge registrado en Polygon',
+                                'Verificación aprobada',
                                 style: TextStyle(
                                     color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               const Text(
-                                'Tu verificacion quedo registrada de forma inmutable en la blockchain',
+                                'Se registra en la red Polygon solo como referencia anónima, sin tus datos',
                                 style: TextStyle(color: GardenColors.polygon, fontSize: 11),
                               ),
                             ],

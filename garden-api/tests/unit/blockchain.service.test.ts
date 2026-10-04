@@ -1,364 +1,217 @@
 /**
- * Unit tests: BlockchainService
- *
- * Covers all public methods including previously-mocked ones:
- *  - recordWalkExtensionOnChain (now calls extendWalk on contract)
- *  - getCaregiverReputation (now reads getReputation view)
- *  - resolveDispute* (caregiver wins / client wins / partial)
- *  - createBookingOnChain, finalizeBookingOnChain, cancelBookingOnChain
- *  - syncProfileOnChain, updateVerificationOnChain, addPetOnChain
- *
- * Strategy: mock ethers so no real RPC connection is made.
+ * Unit tests: BlockchainService (GardenEscrow v3 / GardenProfiles v2).
+ * ethers está mockeado: ninguna llamada sale a una red real.
  */
 
-// ── Mock ethers before importing the service ────────────────────────────────
-
-const mockContractCall = jest.fn();
-const mockWait = jest.fn().mockResolvedValue({ hash: '0xabc123TXHASH' });
-
-const mockEscrowContract = {
-  createBooking: jest.fn().mockResolvedValue({ wait: mockWait }),
-  finalizeBooking: jest.fn().mockResolvedValue({ wait: mockWait }),
-  cancelBooking: jest.fn().mockResolvedValue({ wait: mockWait }),
-  resolveDisputeCaregiverWins: jest.fn().mockResolvedValue({ wait: mockWait }),
-  resolveDisputeClientWins: jest.fn().mockResolvedValue({ wait: mockWait }),
-  resolvePartial: jest.fn().mockResolvedValue({ wait: mockWait }),
-  extendWalk: jest.fn().mockResolvedValue({ wait: mockWait }),
-  getReputation: jest.fn().mockResolvedValue([BigInt(15), BigInt(3)]), // totalRating=15, count=3
+const mockEscrow: Record<string, jest.Mock | any> = {};
+const mockProfiles: Record<string, jest.Mock | any> = {};
+const mockProvider = {
+  getNetwork: jest.fn(),
+  getBlock: jest.fn(),
+  getBlockNumber: jest.fn().mockResolvedValue(1000),
+  send: jest.fn(),
+  getBalance: jest.fn(),
 };
 
-const mockProfileContract = {
-  syncProfile: jest.fn().mockResolvedValue({ wait: mockWait }),
-  updateVerificationStatus: jest.fn().mockResolvedValue({ wait: mockWait }),
-  addPetToOwner: jest.fn().mockResolvedValue({ wait: mockWait }),
-};
+jest.mock('ethers', () => {
+  const actual = jest.requireActual('ethers');
+  return {
+    ethers: {
+      ...actual.ethers,
+      JsonRpcProvider: jest.fn().mockImplementation(() => mockProvider),
+      Wallet: jest.fn().mockImplementation(() => ({ address: '0xServerWallet' })),
+      Contract: jest.fn().mockImplementation((_addr: string, abi: string[]) =>
+        abi.some((s) => s.includes('recordBooking')) ? mockEscrow : mockProfiles),
+    },
+  };
+});
 
-jest.mock('ethers', () => ({
-  ethers: {
-    JsonRpcProvider: jest.fn().mockReturnValue({}),
-    Wallet: jest.fn().mockReturnValue({ address: '0xAdminWallet' }),
-    Contract: jest.fn().mockImplementation((_address: string, _abi: unknown, _wallet: unknown) => {
-      // Return escrow or profile mock based on which is instantiated
-      return _abi && Array.isArray(_abi) && (_abi as string[]).some((s: string) => s.includes('extendWalk'))
-        ? mockEscrowContract
-        : mockProfileContract;
-    }),
-  },
-}));
+import { ethers } from 'ethers';
+import {
+  blockchainService,
+  ChainRevertError,
+  GasTooHighError,
+  explorerTxUrl,
+  networkInfo,
+  toCents,
+  uuidToBytes16,
+} from '../../src/services/blockchain.service';
 
-// ── Force blockchain to initialize in LIVE mode ──────────────────────────────
-
-// We must set env vars BEFORE loading the module (lazy init reads process.env)
 const ORIGINAL_ENV = { ...process.env };
 
-function setBlockchainEnv(enabled: boolean = true) {
-  process.env.BLOCKCHAIN_ENABLED = enabled ? 'true' : 'false';
-  process.env.BLOCKCHAIN_RPC_URL = 'https://fake-rpc.test';
-  process.env.BLOCKCHAIN_PRIVATE_KEY = '0x' + 'a'.repeat(64);
-  process.env.BLOCKCHAIN_CONTRACT_ADDRESS = '0x' + 'b'.repeat(40);
-  process.env.BLOCKCHAIN_PROFILES_ADDRESS = '0x' + 'c'.repeat(40);
+function setEnv(extra: Record<string, string | undefined> = {}) {
+  Object.assign(process.env, {
+    BLOCKCHAIN_ENABLED: 'true',
+    BLOCKCHAIN_RPC_URL: 'https://rpc.test',
+    BLOCKCHAIN_PRIVATE_KEY: '0x' + 'a'.repeat(64),
+    BLOCKCHAIN_CONTRACT_ADDRESS: '0x' + 'b'.repeat(40),
+    BLOCKCHAIN_PROFILES_ADDRESS: '0x' + 'c'.repeat(40),
+    BLOCKCHAIN_ID_PEPPER: 'p'.repeat(40),
+    BLOCKCHAIN_CHAIN_ID: '137',
+  });
+  delete process.env.BLOCKCHAIN_MAX_FEE_GWEI;
+  for (const [k, v] of Object.entries(extra)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  blockchainService.resetForTests();
 }
 
-// ── Import the service (after mocks are set) ─────────────────────────────────
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockProvider.getNetwork.mockResolvedValue({ chainId: 137n });
+  mockProvider.getBlock.mockResolvedValue({ baseFeePerGas: ethers.parseUnits('100', 'gwei') });
+  mockProvider.send.mockResolvedValue('0x' + ethers.parseUnits('40', 'gwei').toString(16));
+  Object.assign(mockEscrow, {
+    VERSION: jest.fn().mockResolvedValue(3n),
+    recorder: jest.fn().mockResolvedValue('0xServerWallet'),
+    getReputation: jest.fn().mockResolvedValue([9n, 2n]),
+    interface: new ethers.Interface(['error AlreadyRecorded(bytes16 bookingId)', 'error InvalidInput()']),
+  });
+  Object.assign(mockProfiles, {
+    VERSION: jest.fn().mockResolvedValue(2n),
+    recorder: jest.fn().mockResolvedValue('0xServerWallet'),
+  });
+  setEnv();
+});
 
-// We import dynamically so we can reset the singleton between env scenarios
-let blockchainService: typeof import('../../src/services/blockchain.service.js')['blockchainService'];
+afterAll(() => {
+  process.env = ORIGINAL_ENV;
+});
 
-describe('BlockchainService', () => {
-  beforeAll(() => {
-    setBlockchainEnv(true);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    blockchainService = require('../../src/services/blockchain.service.js').blockchainService;
+describe('helpers de codificación', () => {
+  it('uuidToBytes16 convierte un uuid y rechaza cualquier otra cosa', () => {
+    expect(uuidToBytes16('8F14E45F-CEEA-467A-9575-1A2B3C4D5E6F')).toBe('0x8f14e45fceea467a95751a2b3c4d5e6f');
+    expect(() => uuidToBytes16('Firulais')).toThrow();
   });
 
-  afterAll(() => {
-    Object.assign(process.env, ORIGINAL_ENV);
+  it('toCents redondea a centavos', () => {
+    expect(toCents(31.5)).toBe(3150n);
+    expect(toCents('45.555')).toBe(4556n);
   });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockWait.mockResolvedValue({ hash: '0xabc123TXHASH' });
-    mockEscrowContract.createBooking.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.finalizeBooking.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.cancelBooking.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.resolveDisputeCaregiverWins.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.resolveDisputeClientWins.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.resolvePartial.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.extendWalk.mockResolvedValue({ wait: mockWait });
-    mockEscrowContract.getReputation.mockResolvedValue([BigInt(15), BigInt(3)]);
-    mockProfileContract.syncProfile.mockResolvedValue({ wait: mockWait });
-    mockProfileContract.updateVerificationStatus.mockResolvedValue({ wait: mockWait });
-    mockProfileContract.addPetToOwner.mockResolvedValue({ wait: mockWait });
+  it('red y explorador según chainId', () => {
+    expect(networkInfo(137)?.testnet).toBe(false);
+    expect(networkInfo(80002)?.testnet).toBe(true);
+    expect(explorerTxUrl(137, '0xabc')).toBe('https://polygonscan.com/tx/0xabc');
+    expect(explorerTxUrl(80002, '0xabc')).toBe('https://amoy.polygonscan.com/tx/0xabc');
+    expect(explorerTxUrl(137, null)).toBeNull();
   });
 
-  // ── createBookingOnChain ──────────────────────────────────────────────────
-
-  describe('createBookingOnChain', () => {
-    it('returns txHash on success', async () => {
-      const hash = await blockchainService.createBookingOnChain(
-        'booking-1', 'client-1', 'caregiver-1', 300,
-        new Date('2026-06-01'), new Date('2026-06-04'),
-        'Max', 'HOSPEDAJE'
-      );
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.createBooking).toHaveBeenCalledWith(
-        'booking-1', 'client-1', 'caregiver-1', 300,
-        expect.any(Number), expect.any(Number), '', 'HOSPEDAJE' // sin nombre de mascota on-chain
-      );
-    });
-
-    it('returns null when booking already exists on-chain (duplicate call)', async () => {
-      mockEscrowContract.createBooking.mockRejectedValue(
-        new Error('La reserva ya existe on-chain')
-      );
-      const hash = await blockchainService.createBookingOnChain(
-        'booking-dup', 'client-1', 'caregiver-1', 100,
-        new Date(), new Date(), 'Rex', 'PASEO'
-      );
-      expect(hash).toBeNull();
-    });
-
-    it('rethrows on genuine network/contract errors (so retry helpers can catch them)', async () => {
-      mockEscrowContract.createBooking.mockRejectedValue(new Error('network timeout'));
-      await expect(blockchainService.createBookingOnChain(
-        'booking-2', 'client-1', 'caregiver-1', 100,
-        new Date(), new Date(), 'Bolt', 'PASEO'
-      )).rejects.toThrow('network timeout');
-    });
-  });
-
-  // ── finalizeBookingOnChain ────────────────────────────────────────────────
-
-  describe('finalizeBookingOnChain', () => {
-    it('returns txHash and calls finalizeBooking with correct args', async () => {
-      const hash = await blockchainService.finalizeBookingOnChain('booking-1', 5);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.finalizeBooking).toHaveBeenCalledWith('booking-1', 5);
-    });
-
-    it('rethrows on error', async () => {
-      mockEscrowContract.finalizeBooking.mockRejectedValue(new Error('execution reverted'));
-      await expect(blockchainService.finalizeBookingOnChain('booking-bad', 4)).rejects.toThrow('execution reverted');
-    });
-  });
-
-  // ── cancelBookingOnChain ──────────────────────────────────────────────────
-
-  describe('cancelBookingOnChain', () => {
-    it('returns txHash and passes reason to contract', async () => {
-      const hash = await blockchainService.cancelBookingOnChain('booking-1', 'Cliente canceló');
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.cancelBooking).toHaveBeenCalledWith('booking-1', 'Cliente canceló');
-    });
-
-    it('uses fallback reason when empty string given', async () => {
-      await blockchainService.cancelBookingOnChain('booking-1', '');
-      expect(mockEscrowContract.cancelBooking).toHaveBeenCalledWith('booking-1', 'No especificado');
-    });
-
-    it('rethrows on error', async () => {
-      mockEscrowContract.cancelBooking.mockRejectedValue(new Error('reverted'));
-      await expect(blockchainService.cancelBookingOnChain('booking-bad', 'reason')).rejects.toThrow('reverted');
-    });
-  });
-
-  // ── recordWalkExtensionOnChain (FORMERLY MOCKED) ──────────────────────────
-
-  describe('recordWalkExtensionOnChain', () => {
-    it('calls extendWalk on the contract and returns txHash', async () => {
-      const hash = await blockchainService.recordWalkExtensionOnChain('booking-walk-1', 30, 150);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.extendWalk).toHaveBeenCalledWith('booking-walk-1', 30, 150);
-    });
-
-    it('rounds float additionalMinutes and amount to integers', async () => {
-      await blockchainService.recordWalkExtensionOnChain('booking-walk-2', 15.7, 120.9);
-      expect(mockEscrowContract.extendWalk).toHaveBeenCalledWith('booking-walk-2', 15, 120);
-    });
-
-    it('rethrows on contract error', async () => {
-      mockEscrowContract.extendWalk.mockRejectedValue(new Error('Reserva no activa'));
-      await expect(blockchainService.recordWalkExtensionOnChain('booking-bad', 30, 100)).rejects.toThrow('Reserva no activa');
-    });
-  });
-
-  // ── getCaregiverReputation (FORMERLY HARDCODED MOCK) ─────────────────────
-
-  describe('getCaregiverReputation', () => {
-    it('reads real reputation from getReputation() view and computes average', async () => {
-      // totalRating=15, count=3 → average=5.0
-      mockEscrowContract.getReputation.mockResolvedValue([BigInt(15), BigInt(3)]);
-      const rep = await blockchainService.getCaregiverReputation('caregiver-abc');
-      expect(rep).toEqual({ average: 5, count: 3 });
-      expect(mockEscrowContract.getReputation).toHaveBeenCalledWith('caregiver-abc');
-    });
-
-    it('returns average=0 and count=0 when caregiver has no ratings yet', async () => {
-      mockEscrowContract.getReputation.mockResolvedValue([BigInt(0), BigInt(0)]);
-      const rep = await blockchainService.getCaregiverReputation('new-caregiver');
-      expect(rep).toEqual({ average: 0, count: 0 });
-    });
-
-    it('rounds average to 1 decimal place', async () => {
-      // totalRating=14, count=3 → 14/3=4.666... → rounds to 4.7
-      mockEscrowContract.getReputation.mockResolvedValue([BigInt(14), BigInt(3)]);
-      const rep = await blockchainService.getCaregiverReputation('caregiver-xyz');
-      expect(rep?.average).toBe(4.7);
-      expect(rep?.count).toBe(3);
-    });
-
-    it('returns null on contract error without throwing', async () => {
-      mockEscrowContract.getReputation.mockRejectedValue(new Error('call failed'));
-      const rep = await blockchainService.getCaregiverReputation('bad-id');
-      expect(rep).toBeNull();
-    });
-  });
-
-  // ── resolveDisputeCaregiverWinsOnChain ────────────────────────────────────
-
-  describe('resolveDisputeCaregiverWinsOnChain', () => {
-    it('calls contract and returns txHash', async () => {
-      const hash = await blockchainService.resolveDisputeCaregiverWinsOnChain('booking-d1', 250);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.resolveDisputeCaregiverWins).toHaveBeenCalledWith('booking-d1', 250);
-    });
-
-    it('rethrows on error', async () => {
-      mockEscrowContract.resolveDisputeCaregiverWins.mockRejectedValue(new Error('reverted'));
-      await expect(blockchainService.resolveDisputeCaregiverWinsOnChain('bad', 100)).rejects.toThrow('reverted');
-    });
-  });
-
-  // ── resolveDisputeClientWinsOnChain ───────────────────────────────────────
-
-  describe('resolveDisputeClientWinsOnChain', () => {
-    it('calls contract and returns txHash', async () => {
-      const hash = await blockchainService.resolveDisputeClientWinsOnChain('booking-d2', 300);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.resolveDisputeClientWins).toHaveBeenCalledWith('booking-d2', 300);
-    });
-
-    it('rethrows on error', async () => {
-      mockEscrowContract.resolveDisputeClientWins.mockRejectedValue(new Error('reverted'));
-      await expect(blockchainService.resolveDisputeClientWinsOnChain('bad', 100)).rejects.toThrow('reverted');
-    });
-  });
-
-  // ── resolvePartialOnChain ─────────────────────────────────────────────────
-
-  describe('resolvePartialOnChain', () => {
-    it('calls contract with caregiver and client amounts', async () => {
-      const hash = await blockchainService.resolvePartialOnChain('booking-d3', 150, 100);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockEscrowContract.resolvePartial).toHaveBeenCalledWith('booking-d3', 150, 100);
-    });
-
-    it('floors decimal amounts', async () => {
-      await blockchainService.resolvePartialOnChain('booking-d3', 149.9, 99.5);
-      expect(mockEscrowContract.resolvePartial).toHaveBeenCalledWith('booking-d3', 149, 99);
-    });
-
-    it('rethrows on error', async () => {
-      mockEscrowContract.resolvePartial.mockRejectedValue(new Error('reverted'));
-      await expect(blockchainService.resolvePartialOnChain('bad', 100, 50)).rejects.toThrow('reverted');
-    });
-  });
-
-  // ── syncProfileOnChain ────────────────────────────────────────────────────
-
-  describe('syncProfileOnChain', () => {
-    it('calls syncProfile with role 2 for CAREGIVER', async () => {
-      await blockchainService.syncProfileOnChain('user-1', 'Juan Lopez', 'CAREGIVER', false);
-      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-1', '', 2, false, ''); // el nombre nunca va a la cadena pública
-    });
-
-    it('calls syncProfile with role 1 for CLIENT', async () => {
-      await blockchainService.syncProfileOnChain('user-2', 'Maria P', 'CLIENT', true, 'ipfs://hash');
-      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-2', '', 1, true, 'ipfs://hash');
-    });
-
-    it('returns null on error without throwing', async () => {
-      mockProfileContract.syncProfile.mockRejectedValue(new Error('network error'));
-      const hash = await blockchainService.syncProfileOnChain('user-bad', 'X', 'CLIENT', false);
-      expect(hash).toBeNull();
-    });
-  });
-
-  // ── updateVerificationOnChain ─────────────────────────────────────────────
-
-  describe('updateVerificationOnChain', () => {
-    it('calls updateVerificationStatus and returns txHash', async () => {
-      const hash = await blockchainService.updateVerificationOnChain('user-1', true);
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockProfileContract.updateVerificationStatus).toHaveBeenCalledWith('user-1', true);
-    });
-
-    it('returns null on error', async () => {
-      mockProfileContract.updateVerificationStatus.mockRejectedValue(new Error('profile not found'));
-      expect(await blockchainService.updateVerificationOnChain('bad', true)).toBeNull();
-    });
-  });
-
-  // ── addPetOnChain ─────────────────────────────────────────────────────────
-
-  describe('addPetOnChain', () => {
-    it('calls addPetToOwner and returns txHash', async () => {
-      const hash = await blockchainService.addPetOnChain('owner-1', 'Max', 'Labrador');
-      expect(hash).toBe('0xabc123TXHASH');
-      expect(mockProfileContract.addPetToOwner).toHaveBeenCalledWith('owner-1', '', 'Labrador');
-    });
-
-    it('returns null on error', async () => {
-      mockProfileContract.addPetToOwner.mockRejectedValue(new Error('owner not found'));
-      expect(await blockchainService.addPetOnChain('bad', 'X', 'Mix')).toBeNull();
-    });
+  it('partyRef es determinista, de 32 bytes y no contiene el id', () => {
+    const id = '11111111-2222-4333-8444-555555555555';
+    const ref = blockchainService.partyRef(id);
+    expect(ref).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(blockchainService.partyRef(id)).toBe(ref);
+    expect(ref).not.toContain(id.replace(/-/g, ''));
+    setEnv({ BLOCKCHAIN_ID_PEPPER: 'q'.repeat(40) });
+    expect(blockchainService.partyRef(id)).not.toBe(ref);
   });
 });
 
-// ── MOCK MODE tests (BLOCKCHAIN_ENABLED=false) ────────────────────────────────
-// Use jest.isolateModules to avoid polluting the global module registry,
-// which would cause cross-test contamination when running in parallel workers.
-
-describe('BlockchainService — MOCK MODE (BLOCKCHAIN_ENABLED=false)', () => {
-  let mockModeService: typeof import('../../src/services/blockchain.service.js')['blockchainService'];
-
-  beforeAll(async () => {
-    await jest.isolateModulesAsync(async () => {
-      process.env.BLOCKCHAIN_ENABLED = 'false';
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require('../../src/services/blockchain.service.js');
-      mockModeService = mod.blockchainService;
-    });
+describe('checkReady', () => {
+  it('ok con red, versión y recorder correctos', async () => {
+    const r = await blockchainService.checkReady(true);
+    expect(r).toMatchObject({ ok: true, chainId: 137, profilesOk: true });
   });
 
-  afterAll(() => {
-    process.env.BLOCKCHAIN_ENABLED = 'true';
+  it('deshabilitado', async () => {
+    setEnv({ BLOCKCHAIN_ENABLED: 'false' });
+    expect((await blockchainService.checkReady(true)).reason).toBe('DISABLED');
   });
 
-  it('createBookingOnChain returns null in mock mode', async () => {
-    const hash = await mockModeService.createBookingOnChain(
-      'x', 'c', 'g', 100, new Date(), new Date(), 'Rex', 'PASEO'
-    );
-    expect(hash).toBeNull();
+  it('sin pepper no escribe', async () => {
+    setEnv({ BLOCKCHAIN_ID_PEPPER: undefined });
+    expect((await blockchainService.checkReady(true)).reason).toBe('MISSING_PEPPER');
   });
 
-  it('recordWalkExtensionOnChain returns null in mock mode', async () => {
-    expect(await mockModeService.recordWalkExtensionOnChain('x', 30, 100)).toBeNull();
+  it('red distinta de la esperada', async () => {
+    mockProvider.getNetwork.mockResolvedValue({ chainId: 80002n });
+    expect((await blockchainService.checkReady(true)).reason).toBe('WRONG_NETWORK');
   });
 
-  it('getCaregiverReputation returns null in mock mode', async () => {
-    expect(await mockModeService.getCaregiverReputation('cg-1')).toBeNull();
+  it('contrato v2 (sin VERSION) queda en pausa', async () => {
+    mockEscrow.VERSION.mockRejectedValue(Object.assign(new Error('revert'), { code: 'CALL_EXCEPTION' }));
+    expect((await blockchainService.checkReady(true)).reason).toBe('OUTDATED_CONTRACT');
   });
 
-  it('resolveDisputeCaregiverWinsOnChain returns null in mock mode', async () => {
-    expect(await mockModeService.resolveDisputeCaregiverWinsOnChain('x', 100)).toBeNull();
+  it('wallet que no es el recorder', async () => {
+    mockEscrow.recorder.mockResolvedValue('0xOtro');
+    expect((await blockchainService.checkReady(true)).reason).toBe('NOT_RECORDER');
   });
 
-  it('resolveDisputeClientWinsOnChain returns null in mock mode', async () => {
-    expect(await mockModeService.resolveDisputeClientWinsOnChain('x', 100)).toBeNull();
+  it('RPC caído', async () => {
+    mockProvider.getNetwork.mockRejectedValue(new Error('ECONNREFUSED'));
+    expect((await blockchainService.checkReady(true)).reason).toBe('RPC_UNAVAILABLE');
+  });
+});
+
+describe('comisiones', () => {
+  it('aplica la propina mínima de Polygon aunque el RPC sugiera menos', async () => {
+    mockProvider.send.mockResolvedValue('0x' + ethers.parseUnits('1', 'gwei').toString(16));
+    await blockchainService.checkReady(true);
+    const fees = await blockchainService.feeOverrides(137);
+    expect(fees.maxPriorityFeePerGas).toBe(ethers.parseUnits('30', 'gwei'));
+    expect(fees.maxFeePerGas).toBe(ethers.parseUnits('230', 'gwei'));
   });
 
-  it('resolvePartialOnChain returns null in mock mode', async () => {
-    expect(await mockModeService.resolvePartialOnChain('x', 50, 50)).toBeNull();
+  it('posterga si el gas supera BLOCKCHAIN_MAX_FEE_GWEI', async () => {
+    setEnv({ BLOCKCHAIN_MAX_FEE_GWEI: '120' });
+    await blockchainService.checkReady(true);
+    await expect(blockchainService.feeOverrides(137)).rejects.toBeInstanceOf(GasTooHighError);
+  });
+});
+
+describe('send', () => {
+  function stubFunction(fn: { estimateGas: jest.Mock; send: jest.Mock }) {
+    mockEscrow.getFunction = jest.fn().mockReturnValue(fn);
+  }
+
+  it('estima, envía con comisiones explícitas y devuelve el hash', async () => {
+    const fn = { estimateGas: jest.fn().mockResolvedValue(100_000n), send: jest.fn().mockResolvedValue({ hash: '0xhash' }) };
+    stubFunction(fn);
+    await blockchainService.checkReady(true);
+    const res = await blockchainService.send('escrow', 'finalizeBooking', ['0x01', 5], 137);
+    expect(res).toEqual({ hash: '0xhash', sentBlock: 1000 });
+    const overrides = fn.send.mock.calls[0][2];
+    expect(overrides.gasLimit).toBe(120_000n);
+    expect(overrides.maxPriorityFeePerGas).toBe(ethers.parseUnits('40', 'gwei'));
+  });
+
+  it('traduce el revert del contrato a ChainRevertError sin enviar', async () => {
+    const data = mockEscrow.interface.encodeErrorResult('AlreadyRecorded', ['0x' + '11'.repeat(16)]);
+    const fn = {
+      estimateGas: jest.fn().mockRejectedValue(Object.assign(new Error('execution reverted'), { code: 'CALL_EXCEPTION', data })),
+      send: jest.fn(),
+    };
+    stubFunction(fn);
+    await blockchainService.checkReady(true);
+    const err = await blockchainService.send('escrow', 'recordBooking', [], 137).catch((e) => e);
+    expect(err).toBeInstanceOf(ChainRevertError);
+    expect(err.errorName).toBe('AlreadyRecorded');
+    expect(fn.send).not.toHaveBeenCalled();
+  });
+
+  it('un error de red se propaga tal cual (para reintentar)', async () => {
+    const fn = { estimateGas: jest.fn().mockRejectedValue(Object.assign(new Error('timeout'), { code: 'TIMEOUT' })), send: jest.fn() };
+    stubFunction(fn);
+    await blockchainService.checkReady(true);
+    const err = await blockchainService.send('escrow', 'finalizeBooking', [], 137).catch((e) => e);
+    expect(err).not.toBeInstanceOf(ChainRevertError);
+    expect(err.code).toBe('TIMEOUT');
+  });
+});
+
+describe('getCaregiverReputation', () => {
+  it('lee por la referencia seudónima del cuidador', async () => {
+    const rep = await blockchainService.getCaregiverReputation('11111111-2222-4333-8444-555555555555');
+    expect(rep).toEqual({ average: 4.5, count: 2 });
+    expect(mockEscrow.getReputation).toHaveBeenCalledWith(
+      blockchainService.partyRef('11111111-2222-4333-8444-555555555555'));
+  });
+
+  it('null si la cadena no está lista', async () => {
+    setEnv({ BLOCKCHAIN_ENABLED: 'false' });
+    expect(await blockchainService.getCaregiverReputation('x')).toBeNull();
   });
 });

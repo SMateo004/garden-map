@@ -1138,7 +1138,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               children: [
                 Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 14)),
                 SizedBox(width: 8),
-                Text('Veredicto registrado en Polygon Amoy', style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text('El veredicto se registra en la red Polygon', style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
           ),

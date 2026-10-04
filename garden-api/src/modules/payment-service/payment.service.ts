@@ -7,34 +7,12 @@ import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
-import { blockchainService } from '../../services/blockchain.service.js';
-import { dispatchOnChainWithRetry } from '../../services/blockchain-retry.helper.js';
+import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { confirmExtensionQrBySip } from '../booking-service/booking.service.js';
 
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
-
-/**
- * Derives the correct end date for a booking to pass to the blockchain.
- * For multi-day walks (walkDays JSON array), uses the last day in the array.
- * For hospedaje, uses endDate. Falls back to startDate / walkDate / now.
- */
-function resolveBookingEndDate(booking: {
-  startDate: Date | null;
-  endDate: Date | null;
-  walkDate: Date | null;
-  walkDays?: unknown;
-}): Date {
-  // Multi-day PASEO: pick the last date from the walkDays array
-  if (booking.walkDays && Array.isArray(booking.walkDays) && (booking.walkDays as any[]).length > 0) {
-    const days = booking.walkDays as Array<{ date: string }>;
-    const lastDay = days[days.length - 1];
-    if (lastDay?.date) return new Date(lastDay.date);
-  }
-  // HOSPEDAJE or single-day PASEO
-  return booking.endDate ?? booking.startDate ?? booking.walkDate ?? new Date();
-}
 
 export async function createCheckoutSession(
   bookingId: string,
@@ -186,25 +164,8 @@ export async function handleCheckoutCompleted(
     logger.error('Notification onBookingWaitingApproval failed (Stripe)', { bookingId, err });
   });
 
-  // Registro en Blockchain — guardar txHash para verificación
-  dispatchOnChainWithRetry({
-    bookingId,
-    label: 'createBooking:stripe',
-    action: () => blockchainService.createBookingOnChain(
-      bookingId,
-      booking.clientId,
-      booking.caregiverId,
-      Number(booking.totalAmount),
-      booking.startDate ?? booking.walkDate ?? new Date(),
-      resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
-      booking.petName,
-      booking.serviceType
-    ),
-    onSuccess: async (txHash) => {
-      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
-      logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
-    },
-  });
+  // Registro en blockchain: queda en la cola persistente (chain-registry.service.ts)
+  enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
 }
 
 /**
@@ -387,25 +348,8 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     }
   }
 
-  // Registro en Blockchain — guardar txHash
-  dispatchOnChainWithRetry({
-    bookingId: booking.id,
-    label: 'createBooking:qr',
-    action: () => blockchainService.createBookingOnChain(
-      booking.id,
-      booking.clientId,
-      booking.caregiverId,
-      Number(booking.totalAmount),
-      booking.startDate ?? booking.walkDate ?? new Date(),
-      resolveBookingEndDate(booking),
-      booking.petName,
-      booking.serviceType
-    ),
-    onSuccess: async (txHash) => {
-      await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
-      logger.info('[Blockchain] txHash saved to booking', { bookingId: booking.id, txHash });
-    },
-  });
+  // Registro en blockchain: queda en la cola persistente (chain-registry.service.ts)
+  enqueueSafely('CREATE', () => enqueueBookingCreate(booking.id));
 
   return {
     bookingId: booking.id,
@@ -482,25 +426,8 @@ export async function verifyPaymentManual(
     logger.error('Notification onBookingWaitingApproval failed', { bookingId, err });
   });
 
-  // Registro en Blockchain — guardar txHash
-  dispatchOnChainWithRetry({
-    bookingId,
-    label: 'createBooking:manual',
-    action: () => blockchainService.createBookingOnChain(
-      bookingId,
-      booking.clientId,
-      booking.caregiverId,
-      Number(booking.totalAmount),
-      booking.startDate ?? booking.walkDate ?? new Date(),
-      resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
-      booking.petName,
-      booking.serviceType
-    ),
-    onSuccess: async (txHash) => {
-      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
-      logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
-    },
-  });
+  // Registro en blockchain: queda en la cola persistente (chain-registry.service.ts)
+  enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
 
   return { bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
 }
@@ -636,23 +563,7 @@ export async function verifyPaymentBySipCallback(
     }
   }
 
-  dispatchOnChainWithRetry({
-    bookingId: booking.id,
-    label: 'createBooking:sipCallback',
-    action: () => blockchainService.createBookingOnChain(
-      booking.id,
-      booking.clientId,
-      booking.caregiverId,
-      Number(booking.totalAmount),
-      booking.startDate ?? booking.walkDate ?? new Date(),
-      resolveBookingEndDate(booking),
-      booking.petName,
-      booking.serviceType
-    ),
-    onSuccess: async (txHash) => {
-      await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
-    },
-  });
+  enqueueSafely('CREATE', () => enqueueBookingCreate(booking.id));
 
   return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
 }

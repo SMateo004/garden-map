@@ -17,6 +17,7 @@ import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
 import { emitWalletUpdated } from '../../services/socket.service.js';
+import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 
 const paymentQrUpload = multer({
   storage: multer.memoryStorage(),
@@ -281,6 +282,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
     ).catch(() => {});
   }
 
+  enqueueSafely('CREATE', () => enqueueBookingCreate(id));
   auditLog({ userId: adminId, action: 'PAYMENT_APPROVED', entity: 'Booking', entityId: id, ip: req.ip });
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
@@ -1305,6 +1307,12 @@ export const generatePhoneOtpMessage = asyncHandler(async (req: Request, res: Re
 /** GET /api/admin/blockchain/status */
 export const getBlockchainStatus = asyncHandler(async (req: Request, res: Response) => {
   const data = await adminService.getBlockchainStatus();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/blockchain/records/:id/retry */
+export const retryBlockchainRecord = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.retryBlockchainRecord(req.params.id!);
   res.json({ success: true, data });
 });
 

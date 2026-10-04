@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
+import 'design/garden_chain_proof.dart';
 import 'design/garden_live_hero.dart';
 import 'design/garden_story_progress.dart';
 import 'design/garden_trust_seals.dart';
@@ -168,6 +169,48 @@ class _CatalogPageState extends State<_CatalogPage> {
                 StoryStepItem(GIcon.esperando, 'Andrea acepta la solicitud', StoryStepState.current,
                     detail: 'Puedes escribirle desde Mis reservas'),
                 StoryStepItem(GIcon.paseo, 'Reserva confirmada para mañana a las 9:00', StoryStepState.next),
+              ]),
+            ),
+          ]),
+          _Section('Comprobante en blockchain (detalle de la reserva)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(children: [
+                GardenChainProof(
+                  onOpen: (_) {},
+                  proof: ChainProof(
+                    status: ChainProofStatus.recorded,
+                    recordsSince: DateTime(2026, 10, 4),
+                    networkName: 'Polygon PoS',
+                    records: [
+                      ChainProofRecord(kind: 'CREATE', label: 'Pago registrado',
+                          txHash: '0x8f3a9c1d2e4b5a6978c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6',
+                          explorerUrl: 'https://polygonscan.com/tx/0x8f3a', confirmedAt: DateTime(2026, 10, 6, 9, 14)),
+                      ChainProofRecord(kind: 'FINALIZE', label: 'Servicio completado registrado',
+                          txHash: '0x1b2c3d4e5f60718293a4b5c68f3a9c1d2e4b5a6978c0d1e2f3a4b5c6d7e8f90a',
+                          explorerUrl: 'https://polygonscan.com/tx/0x1b2c', confirmedAt: DateTime(2026, 10, 7, 18, 2)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GardenChainProof(proof: ChainProof(status: ChainProofStatus.pending, recordsSince: DateTime(2026, 10, 4))),
+                const SizedBox(height: 12),
+                GardenChainProof(proof: ChainProof(status: ChainProofStatus.beforeStart, recordsSince: DateTime(2026, 10, 4))),
+                const SizedBox(height: 12),
+                GardenChainProof(
+                  onOpen: (_) {},
+                  proof: ChainProof(
+                    status: ChainProofStatus.recorded,
+                    recordsSince: DateTime(2026, 10, 4),
+                    networkName: 'Polygon Amoy',
+                    testnet: true,
+                    records: [
+                      ChainProofRecord(kind: 'CREATE', label: 'Pago registrado',
+                          txHash: '0x69d47f1981aa00bb', explorerUrl: 'https://amoy.polygonscan.com/tx/0x69d4',
+                          confirmedAt: DateTime(2026, 10, 5, 11, 30)),
+                    ],
+                  ),
+                ),
               ]),
             ),
           ]),

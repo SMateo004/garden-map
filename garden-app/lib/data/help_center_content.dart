@@ -574,10 +574,11 @@ const List<HelpCategory> helpCenterCategories = [
           ),
           HelpSection(
             heading: 'El veredicto queda registrado en blockchain',
-            body: 'Cada resolución se graba de forma inmutable en la red '
-                'Polygon, junto con un análisis en texto explicando el '
-                'porqué de la decisión y, si aplica, recomendaciones para que '
-                'el cuidador mejore.',
+            body: 'Cada veredicto (y el de una apelación, si la hay) se '
+                'registra en la red Polygon con el resultado y '
+                'los montos. El análisis en texto con el porqué de la decisión '
+                'queda en Garden, no en la blockchain, para no publicar datos '
+                'personales. El comprobante aparece en el detalle de la reserva.',
           ),
           HelpSection(
             heading: '¿Puedo apelar el veredicto de la IA?',

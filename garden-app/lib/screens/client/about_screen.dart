@@ -309,8 +309,8 @@ class _AboutSection extends StatelessWidget {
       ),
       const SizedBox(height: 20),
       Text(
-        'Nuestro sistema de escrow blockchain protege cada pago: el cuidador solo recibe el dinero cuando '
-        'tú confirmas que el servicio fue completado correctamente. Sin riesgos, sin sorpresas.',
+        'Garden retiene cada pago y el cuidador solo recibe el dinero cuando el servicio terminó bien. '
+        'Además, cada reserva pagada queda registrada en la red Polygon: un comprobante público que nadie puede alterar.',
         style: GoogleFonts.nunito(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
       ),
     ]),
@@ -521,7 +521,7 @@ class _ValuesSection extends StatelessWidget {
   static const _values = [
     (GIcon.protegido,       'Confianza',     'Cada cuidador pasa por verificación de identidad con IA antes de aparecer en la plataforma.'),
     (GIcon.favorito,     'Bienestar',     'El bienestar de cada mascota es nuestra prioridad absoluta, antes que cualquier métrica de negocio.'),
-    (GIcon.idea,    'Innovación',    'Escrow blockchain, GPS en tiempo real y IA fotométrica — tecnología al servicio del amor por las mascotas.'),
+    (GIcon.idea,    'Innovación',    'Registro en blockchain, GPS en tiempo real y IA fotométrica — tecnología al servicio del amor por las mascotas.'),
     (GIcon.meetGreet,    'Comunidad',     'Construimos una comunidad de dueños y cuidadores que comparten el mismo compromiso con los animales.'),
   ];
 

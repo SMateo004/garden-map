@@ -222,6 +222,9 @@ router.get('/blockchain/status', adminController.getBlockchainStatus);
 /** POST /api/admin/blockchain/failures/:id/resolve — marca una falla BLOCKCHAIN_FAILURE como resuelta. */
 router.post('/blockchain/failures/:id/resolve', adminController.resolveBlockchainFailure);
 
+/** POST /api/admin/blockchain/records/:id/retry — vuelve a encolar un registro on-chain FAILED. */
+router.post('/blockchain/records/:id/retry', adminController.retryBlockchainRecord);
+
 /** GET /api/admin/antecedentes-flagged — documentos de antecedentes en revisión. */
 router.get('/antecedentes-flagged', adminController.getFlaggedAntecedentes);
 

@@ -24,6 +24,10 @@ import { sendPushToUser } from '../../services/firebase.service.js';
 import * as authService from '../auth/auth.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import {
+  disputeAmounts, enqueueBookingCreate, enqueueBookingExtension, enqueueDisputeResolution, enqueueSafely,
+  getQueueOverview, retryRecord,
+} from '../../services/chain-registry.service.js';
+import {
   getCommissionRate,
   getTaxRate,
   caregiverUnitFromPriced,
@@ -981,6 +985,7 @@ export async function approvePaymentSecure(
     ).catch(() => {});
   }
 
+  enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
   logger.info('Admin: pago aprobado (secure, con contraseña)', { bookingId, adminId });
   return { id: bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
 }
@@ -1519,6 +1524,8 @@ export async function resolveDisputeAppeal(
         discountCodeId,
       },
     });
+    // El veredicto de la apelación también queda on-chain (reemplaza al anterior).
+    await enqueueDisputeResolution(bookingId, { ...disputeAmounts(verdict, booking), phase: 'APPEAL' }, tx);
   });
 
   const verdictChanged = verdict !== oldVerdict;
@@ -1785,6 +1792,9 @@ export async function approveExtensionPayment(
     bookingUpdate.serviceEvents = events;
 
     await tx.booking.update({ where: { id: bookingId }, data: bookingUpdate });
+    await enqueueBookingExtension(bookingId, isHospedaje
+      ? { unit: 'DAYS', quantity: evt.additionalDays, newTotalAmount: newTotal }
+      : { unit: 'MINUTES', quantity: evt.additionalMinutes, newTotalAmount: newTotal }, tx);
     await tx.adminNotification.updateMany({
       where: { type: 'EXTENSION_PAYMENT_APPROVAL', bookingId, readAt: null },
       data: { readAt: new Date() },
@@ -4116,6 +4126,7 @@ export async function getBlockchainStatus() {
     bookingsCancelledOnChain,
     unresolvedFailures,
     recentFailures,
+    queue,
   ] = await Promise.all([
     prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] } } }),
     prisma.booking.count({ where: { blockchainTxHash: { not: null } } }),
@@ -4130,6 +4141,7 @@ export async function getBlockchainStatus() {
       take: 20,
       select: { id: true, bookingId: true, createdAt: true, readAt: true },
     }),
+    getQueueOverview(),
   ]);
 
   return {
@@ -4142,11 +4154,19 @@ export async function getBlockchainStatus() {
       bookingsCancelled,
       bookingsCancelledOnChain,
     },
+    queue,
     failures: {
       unresolved: unresolvedFailures,
       recent: recentFailures,
     },
   };
+}
+
+/** POST /api/admin/blockchain/records/:id/retry — vuelve a encolar un registro FAILED. */
+export async function retryBlockchainRecord(recordId: string) {
+  const updated = await retryRecord(recordId);
+  if (!updated) throw new NotFoundError('Registro no encontrado o no se puede reintentar');
+  return { id: updated.id, status: updated.status };
 }
 
 /** POST /api/admin/blockchain/failures/:id/resolve — el admin ya reprocesó

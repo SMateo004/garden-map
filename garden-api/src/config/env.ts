@@ -50,6 +50,19 @@ const envSchema = z.object({
   BLOCKCHAIN_CONTRACT_ADDRESS: z.string().optional(),
   BLOCKCHAIN_PROFILES_ADDRESS: z.string().optional(),
   BLOCKCHAIN_ENABLED: z.string().transform(v => v === 'true').default('false'),
+  // Red esperada (137 = Polygon PoS, 80002 = Amoy). Si el RPC responde otra, no se escribe nada.
+  BLOCKCHAIN_CHAIN_ID: z.coerce.number().int().positive().optional(),
+  // Secreto para las referencias seudónimas de usuarios on-chain (HMAC del id).
+  // Si se pierde, los registros nuevos dejan de enlazar con los viejos: guardarlo en el gestor de contraseñas.
+  BLOCKCHAIN_ID_PEPPER: z.string().min(32).optional(),
+  // Reservas pagadas desde esta fecha se registran on-chain (las anteriores no, ver chain-registry.service.ts).
+  BLOCKCHAIN_RECORDS_SINCE: z.string().datetime({ offset: true }).optional(),
+  // Bloque del deploy de GardenEscrow: desde ahí se buscan eventos para recuperar un txHash.
+  BLOCKCHAIN_DEPLOY_BLOCK: z.coerce.number().int().nonnegative().optional(),
+  // Tope de gas: por encima se posterga el envío (sin contar como intento) hasta que baje.
+  BLOCKCHAIN_MAX_FEE_GWEI: z.coerce.number().positive().default(1500),
+  // Alerta por saldo bajo del wallet (POL). Default según la red.
+  BLOCKCHAIN_LOW_BALANCE_POL: z.coerce.number().positive().optional(),
   // AI Agent (Anthropic — required when BLOCKCHAIN_ENABLED or dispute resolution is active)
   ANTHROPIC_API_KEY: z.string().optional(),
   // OTP de teléfono — WhatsApp Business Cloud API (canal principal) con

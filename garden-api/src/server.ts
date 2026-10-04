@@ -64,6 +64,7 @@ import { iniciarJobSosRetry } from './jobs/sos-retry.job.js';
 import { iniciarJobRecurringBookingGeneration } from './jobs/recurring-booking-generation.job.js';
 import { iniciarJobInstantBookingAutoAccept } from './jobs/instant-booking-auto-accept.job.js';
 import { iniciarJobCaregiverWaitlist } from './jobs/caregiver-waitlist.job.js';
+import { iniciarJobBlockchainSync } from './jobs/blockchain-sync.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -268,6 +269,7 @@ async function start() {
     iniciarJobRecurringBookingGeneration();
     iniciarJobInstantBookingAutoAccept();
     iniciarJobCaregiverWaitlist();
+    iniciarJobBlockchainSync();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed
