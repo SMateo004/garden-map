@@ -3,7 +3,10 @@ import { AppError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { getIO } from '../../services/socket.service.js';
 
-async function sendSystemChatMessage(bookingId: string, senderId: string, message: string) {
+/** Tipos de mensaje de sistema que entiende la app (narrative/chat_event.dart). */
+type SystemEventType = 'MG_PROPOSED' | 'MG_CONFIRMED' | 'MG_COMPATIBLE' | 'MG_INCOMPATIBLE' | 'MG_CANCELLED';
+
+async function sendSystemChatMessage(bookingId: string, senderId: string, message: string, eventType: SystemEventType) {
   try {
     const saved = await prisma.chatMessage.create({
       data: {
@@ -12,6 +15,7 @@ async function sendSystemChatMessage(bookingId: string, senderId: string, messag
         senderRole: 'SYSTEM',
         message,
         isSystem: true,
+        eventType,
       },
     });
     logger.info('[MG] System chat message saved', { bookingId, msgId: saved.id, preview: message.slice(0, 60) });
@@ -28,6 +32,7 @@ async function sendSystemChatMessage(bookingId: string, senderId: string, messag
         senderRole: 'SYSTEM',
         message: saved.message,
         isSystem: true,
+        eventType: saved.eventType,
         read: saved.read,
         createdAt: saved.createdAt.toISOString(),
       });
@@ -181,7 +186,7 @@ export async function propose(bookingId: string, proposedBy: string, body: {
     `🤝 ${modalidadLabel}`,
   ].join('\n');
 
-  await sendSystemChatMessage(bookingId, proposedBy, chatMsg);
+  await sendSystemChatMessage(bookingId, proposedBy, chatMsg, 'MG_PROPOSED');
 
   if (otherId) {
     await sendNotif(otherId, 'Meet & Greet propuesto',
@@ -237,7 +242,8 @@ export async function accept(bookingId: string, userId: string) {
   await sendSystemChatMessage(
     bookingId,
     userId,
-    `✅ Meet & Greet confirmado${dateLabel ? ` · ${dateLabel}` : ''}`
+    `✅ Meet & Greet confirmado${dateLabel ? ` · ${dateLabel}` : ''}`,
+    'MG_CONFIRMED',
   );
 
   return mg;
@@ -300,7 +306,8 @@ export async function complete(bookingId: string, caregiverUserIdParam: string, 
     );
     await sendSystemChatMessage(
       bookingId, caregiverUserIdParam,
-      '❌ Meet & Greet finalizado · El cuidador detectó incompatibilidad. La reserva fue cancelada con reembolso completo.'
+      '❌ Meet & Greet finalizado · El cuidador detectó incompatibilidad. La reserva fue cancelada con reembolso completo.',
+      'MG_INCOMPATIBLE',
     );
   } else {
     await sendNotif(
@@ -310,7 +317,8 @@ export async function complete(bookingId: string, caregiverUserIdParam: string, 
     );
     await sendSystemChatMessage(
       bookingId, caregiverUserIdParam,
-      '✅ Meet & Greet finalizado · ¡Todo compatible! El cuidador está listo para el servicio.'
+      '✅ Meet & Greet finalizado · ¡Todo compatible! El cuidador está listo para el servicio.',
+      'MG_COMPATIBLE',
     );
   }
 
@@ -344,7 +352,7 @@ export async function cancel(bookingId: string, userId: string) {
     await sendNotif(otherId, 'Meet & Greet cancelado', 'El Meet & Greet fue cancelado.');
   }
 
-  await sendSystemChatMessage(bookingId, userId, '🚫 Meet & Greet cancelado');
+  await sendSystemChatMessage(bookingId, userId, '🚫 Meet & Greet cancelado', 'MG_CANCELLED');
 
   logger.info('[MG] cancel() → CANCELLED', { bookingId });
   return mg;

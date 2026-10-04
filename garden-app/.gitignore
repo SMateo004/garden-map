@@ -49,3 +49,6 @@ app.*.map.json
 # CI artifacts
 analyze.txt
 .vercel
+
+# Diferencias de las pruebas de imagen (flutter test test/goldens)
+test/goldens/failures/

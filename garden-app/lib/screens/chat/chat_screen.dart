@@ -1113,7 +1113,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildMGProposalCard(ChatMessage msg, Color textColor, Color subtextColor) {
     final isDark = themeNotifier.isDark;
     // Detalles en el orden en que los arma el backend: fecha, lugar, modalidad.
-    final infoLines = ChatEvent.parse(msg.message).details;
+    final infoLines = ChatEvent.from(msg.message, eventType: msg.eventType).details;
     const infoIcons = [GIcon.calendario, GIcon.ubicacion, GIcon.meetGreet];
 
     // Only the most recent proposal card should show action buttons
@@ -1221,7 +1221,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildMessageBubble(ChatMessage msg, bool isMe, Color textColor, Color subtextColor) {
     // Mensaje de sistema: ChatEvent decide icono y tono (nunca el emoji).
     if (msg.isSystem) {
-      final event = ChatEvent.parse(msg.message);
+      final event = ChatEvent.from(msg.message, eventType: msg.eventType);
       if (event.kind == ChatEventKind.meetProposed) {
         return _buildMGProposalCard(msg, textColor, subtextColor);
       }

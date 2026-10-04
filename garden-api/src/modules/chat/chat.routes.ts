@@ -134,6 +134,7 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
             senderRole: m.senderRole,
             message: m.message,
             isSystem: m.isSystem,
+            eventType: m.eventType,
             read: m.read,
             createdAt: m.createdAt.toISOString(),
         })),

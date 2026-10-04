@@ -14,6 +14,10 @@ class ChatMessage {
   final String message;
   final bool read;
   final bool isSystem;
+
+  /// Tipo del mensaje de sistema (MG_PROPOSED...). Null en mensajes de
+  /// personas y en los de sistema viejos. Lo interpreta ChatEvent.from.
+  final String? eventType;
   final DateTime createdAt;
 
   ChatMessage({
@@ -25,6 +29,7 @@ class ChatMessage {
     required this.message,
     required this.read,
     this.isSystem = false,
+    this.eventType,
     required this.createdAt,
   });
 
@@ -38,6 +43,7 @@ class ChatMessage {
       message: json['message'] as String,
       read: json['read'] as bool? ?? false,
       isSystem: json['isSystem'] as bool? ?? false,
+      eventType: json['eventType'] as String?,
       // El backend manda el timestamp en UTC (sufijo Z). Sin .toLocal() acá,
       // cualquier lugar que lea msg.createdAt.hour/.minute (ej. chat_screen.dart)
       // mostraba la hora UTC directamente — en Bolivia (UTC-4) un mensaje de

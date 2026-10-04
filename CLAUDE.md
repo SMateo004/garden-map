@@ -222,5 +222,7 @@ Código nuevo de UI usa únicamente estas piezas — nada de inventar variantes:
 - Después de cualquier cambio en `garden-api`: `npx tsc --noEmit` (hay 2-3 errores preexistentes
   no relacionados, conocidos — no los persigas, solo confirmá que no agregaste nuevos).
 - Después de cualquier cambio en `garden-app`: `flutter analyze` (debería dar 0 errores),
-  `flutter test test/design_system_test.dart` y `python tool/ui_ratchet.py`.
+  `flutter test test/design_system_test.dart`, `flutter test test/goldens` (fotos del catálogo en
+  claro y oscuro; si cambiaste el diseño a propósito, regenéralas con `--update-goldens` y
+  commitea los PNG) y `python tool/ui_ratchet.py`.
 - Limpiá cualquier dato de prueba que hayas creado en producción antes de terminar la sesión.

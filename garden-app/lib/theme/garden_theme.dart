@@ -137,45 +137,60 @@ class GardenGradients {
 //   Body     : 1.55 – 1.65
 //   UI labels: 1.20 – 1.30
 class GardenText {
+  /// Solo para pruebas de imagen: en false los estilos usan la familia por
+  /// nombre en vez de google_fonts, que en pruebas intenta descargar la fuente
+  /// y falla. La app nunca lo cambia.
+  static bool useGoogleFonts = true;
+
+  static TextStyle _nunito({Color? color, double? fontSize, FontWeight? fontWeight, double? letterSpacing, double? height}) =>
+      useGoogleFonts
+          ? GoogleFonts.nunito(color: color, fontSize: fontSize, fontWeight: fontWeight, letterSpacing: letterSpacing, height: height)
+          : TextStyle(fontFamily: 'Nunito', color: color, fontSize: fontSize, fontWeight: fontWeight, letterSpacing: letterSpacing, height: height);
+
+  static TextStyle _mono({Color? color, double? fontSize, FontWeight? fontWeight, double? letterSpacing, double? height}) =>
+      useGoogleFonts
+          ? GoogleFonts.jetBrainsMono(color: color, fontSize: fontSize, fontWeight: fontWeight, letterSpacing: letterSpacing, height: height)
+          : TextStyle(fontFamily: 'JetBrains Mono', color: color, fontSize: fontSize, fontWeight: fontWeight, letterSpacing: letterSpacing, height: height);
+
   // ── Escala principal ─────────────────────────────────────────────────────
 
   /// 72sp · Black 900 · ls -0.04em · height 1.0 — splash, hero display
-  static TextStyle get h1 => GoogleFonts.nunito(
+  static TextStyle get h1 => _nunito(
     fontSize: 72, fontWeight: FontWeight.w900,
     letterSpacing: -2.88,   // -0.04em × 72
     height: 1.00,
   );
 
   /// 48sp · ExtraBold 800 · ls -0.025em · height 1.15 — títulos principales
-  static TextStyle get h2 => GoogleFonts.nunito(
+  static TextStyle get h2 => _nunito(
     fontSize: 48, fontWeight: FontWeight.w800,
     letterSpacing: -1.20,   // -0.025em × 48
     height: 1.15,
   );
 
   /// 28sp · ExtraBold 800 · ls -0.022em · height 1.20 — subtítulos de pantalla
-  static TextStyle get h3 => GoogleFonts.nunito(
+  static TextStyle get h3 => _nunito(
     fontSize: 28, fontWeight: FontWeight.w800,
     letterSpacing: -0.62,   // -0.022em × 28
     height: 1.20,
   );
 
   /// 20sp · Bold 700 · ls -0.015em · height 1.25 — encabezados de tarjeta
-  static TextStyle get h4 => GoogleFonts.nunito(
+  static TextStyle get h4 => _nunito(
     fontSize: 20, fontWeight: FontWeight.w700,
     letterSpacing: -0.30,   // -0.015em × 20
     height: 1.25,
   );
 
   /// 16sp · Medium 500 · ls 0 · height 1.60 — cuerpo de texto estándar
-  static TextStyle get body => GoogleFonts.nunito(
+  static TextStyle get body => _nunito(
     fontSize: 16, fontWeight: FontWeight.w500,
     letterSpacing: 0,
     height: 1.60,
   );
 
   /// 13sp · JetBrains Mono SemiBold 600 — precios, métricas, timestamps
-  static TextStyle get metadata => GoogleFonts.jetBrainsMono(
+  static TextStyle get metadata => _mono(
     fontSize: 13, fontWeight: FontWeight.w600,
     height: 1.40,
   );
@@ -183,14 +198,14 @@ class GardenText {
   // ── Aliases para compatibilidad con código existente ─────────────────────
 
   /// 32sp · ExtraBold 800 · ls -0.025em · height 1.10 — section display titles
-  static TextStyle get displayLarge  => GoogleFonts.nunito(
+  static TextStyle get displayLarge  => _nunito(
     fontSize: 32, fontWeight: FontWeight.w800,
     letterSpacing: -0.80,   // -0.025em × 32
     height: 1.10,
   );
   static TextStyle get displayMedium => h3;
   /// 24sp · Bold 700 · ls -0.018em · height 1.20
-  static TextStyle get displaySmall  => GoogleFonts.nunito(
+  static TextStyle get displaySmall  => _nunito(
     fontSize: 24, fontWeight: FontWeight.w700,
     letterSpacing: -0.43,   // -0.018em × 24
     height: 1.20,
@@ -198,69 +213,69 @@ class GardenText {
 
   static TextStyle get headingLarge  => h4;
   /// 18sp · SemiBold 600 · ls -0.01em · height 1.30
-  static TextStyle get headingMedium => GoogleFonts.nunito(
+  static TextStyle get headingMedium => _nunito(
     fontSize: 18, fontWeight: FontWeight.w600,
     letterSpacing: -0.18,   // -0.01em × 18
     height: 1.30,
   );
   /// 16sp · SemiBold 600 · ls -0.01em · height 1.35
-  static TextStyle get headingSmall  => GoogleFonts.nunito(
+  static TextStyle get headingSmall  => _nunito(
     fontSize: 16, fontWeight: FontWeight.w600,
     letterSpacing: -0.16,   // -0.01em × 16
     height: 1.35,
   );
 
   /// 16sp · Medium 500 · ls 0 · height 1.60
-  static TextStyle get bodyLarge  => GoogleFonts.nunito(
+  static TextStyle get bodyLarge  => _nunito(
     fontSize: 16, fontWeight: FontWeight.w500,
     letterSpacing: 0,
     height: 1.60,
   );
   /// 14sp · Medium 500 · ls 0 · height 1.55
-  static TextStyle get bodyMedium => GoogleFonts.nunito(
+  static TextStyle get bodyMedium => _nunito(
     fontSize: 14, fontWeight: FontWeight.w500,
     letterSpacing: 0,
     height: 1.55,
   );
   /// 12sp · Regular 400 · ls 0 · height 1.50
-  static TextStyle get bodySmall  => GoogleFonts.nunito(
+  static TextStyle get bodySmall  => _nunito(
     fontSize: 12, fontWeight: FontWeight.w400,
     letterSpacing: 0,
     height: 1.50,
   );
 
   /// 14sp · ExtraBold 800 · ls +0.10 · height 1.20 — CTA labels, primary buttons
-  static TextStyle get labelLarge  => GoogleFonts.nunito(
+  static TextStyle get labelLarge  => _nunito(
     fontSize: 14, fontWeight: FontWeight.w800,
     letterSpacing: 0.10,
     height: 1.20,
   );
   /// 12sp · Bold 700 · ls +0.08 · height 1.25
-  static TextStyle get labelMedium => GoogleFonts.nunito(
+  static TextStyle get labelMedium => _nunito(
     fontSize: 12, fontWeight: FontWeight.w700,
     letterSpacing: 0.08,
     height: 1.25,
   );
   /// 10sp · Bold 700 · ls +1.20 · height 1.20 — eyebrow / ALL CAPS
-  static TextStyle get labelSmall  => GoogleFonts.nunito(
+  static TextStyle get labelSmall  => _nunito(
     fontSize: 10, fontWeight: FontWeight.w700,
     letterSpacing: 1.20,
     height: 1.20,
   );
 
   /// 11sp · Regular 400 · height 1.40 — captions, fine print
-  static TextStyle get caption    => GoogleFonts.nunito(
+  static TextStyle get caption    => _nunito(
     fontSize: 11, fontWeight: FontWeight.w400,
     letterSpacing: 0,
     height: 1.40,
   );
 
   // ── Monospace (JetBrains Mono — no tocar) ───────────────────────────────
-  static TextStyle get price      => GoogleFonts.jetBrainsMono(
+  static TextStyle get price      => _mono(
     fontSize: 18, fontWeight: FontWeight.w800,
     color: GardenColors.primary, letterSpacing: -0.30,
   );
-  static TextStyle get priceSmall => GoogleFonts.jetBrainsMono(
+  static TextStyle get priceSmall => _mono(
     fontSize: 14, fontWeight: FontWeight.w700,
     color: GardenColors.primary,
   );

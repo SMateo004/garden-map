@@ -1552,6 +1552,11 @@ model ChatMessage {
   senderRole String // CLIENT | CAREGIVER
   message    String
   isSystem   Boolean  @default(false)
+  /// Tipo del mensaje de sistema (MG_PROPOSED, MG_CONFIRMED, MG_COMPATIBLE,
+  /// MG_INCOMPATIBLE, MG_CANCELLED). La app decide icono y tono con esto en
+  /// vez de leer el emoji del texto. Null en mensajes de personas y en los
+  /// de sistema anteriores a octubre 2026.
+  eventType  String?
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 

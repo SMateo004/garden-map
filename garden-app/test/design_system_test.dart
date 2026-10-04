@@ -174,6 +174,22 @@ void main() {
   });
 
   group('ChatEvent', () {
+    test('eventType del backend manda sobre el texto', () {
+      // Mismo texto, distinto tipo: el tipo decide, no el emoji.
+      final e = ChatEvent.from('✅ Meet & Greet finalizado · algo', eventType: 'MG_INCOMPATIBLE');
+      expect(e.kind, ChatEventKind.meetIncompatible);
+      expect(e.tone, StoryTone.alert);
+      expect(e.text, 'Meet & Greet finalizado · algo');
+      final p = ChatEvent.from('MEET & GREET PROPUESTO\njueves · 17:00', eventType: 'MG_PROPOSED');
+      expect(p.kind, ChatEventKind.meetProposed);
+      expect(p.details, ['jueves · 17:00']);
+    });
+
+    test('sin eventType (mensajes viejos) se lee el emoji', () {
+      expect(ChatEvent.from('🚫 Meet & Greet cancelado').kind, ChatEventKind.meetCancelled);
+      expect(ChatEvent.from('🚫 Meet & Greet cancelado', eventType: 'ALGO_NUEVO').kind, ChatEventKind.meetCancelled);
+    });
+
     test('propuesta de Meet & Greet con detalles sin emojis', () {
       final e = ChatEvent.parse('📋 MEET & GREET PROPUESTO\n📅 jueves · 17:00\n📍 Parque Urbano\n🤝 Presencial');
       expect(e.kind, ChatEventKind.meetProposed);
