@@ -153,6 +153,13 @@ const _publicPaths = {
   '/verify',           // alias legacy de /mobile-verify
 };
 
+// Perfil público de un cuidador (/caregiver/<uuid>): se ve sin cuenta, como un
+// anuncio de Airbnb. La sesión se pide recién al reservar o guardar en
+// favoritos (ver caregiver_profile_screen.dart). Solo matchea un uuid para no
+// abrir /caregiver/home, /caregiver/pets y demás pantallas del cuidador.
+final _publicCaregiverProfile = RegExp(
+    r'^/caregiver/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
 // ── Guardia de rol ───────────────────────────────────────────
 // Mapeo conservador de prefijos de ruta → rol requerido, SOLO para pantallas
 // "home" exclusivas de cada rol. Deja fuera a propósito rutas compartidas o
@@ -235,7 +242,8 @@ final GoRouter _router = GoRouter(
       }
     }
 
-    if (_publicPaths.any((p) => path == p || path.startsWith('$p/'))) {
+    if (_publicPaths.any((p) => path == p || path.startsWith('$p/')) ||
+        _publicCaregiverProfile.hasMatch(path)) {
       return null; // ruta pública — sin restricción
     }
     // AuthState.token es sincrónico (cacheado en memoria desde el startup).
@@ -324,6 +332,7 @@ final GoRouter _router = GoRouter(
           prefillEmail: extra?['email'] as String?,
           fromSocial: extra?['fromSocial'] as bool? ?? false,
           caregiverOnly: extra?['caregiverOnly'] as bool? ?? false,
+          returnTo: extra?['returnTo'] as String?,
         );
       },
     ),

@@ -313,13 +313,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     HapticFeedback.mediumImpact();
     final token = _authToken;
     if (token.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inicia sesión para guardar favoritos'), backgroundColor: GardenColors.primary, duration: Duration(seconds: 2)),
-      );
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
-      context.push('/login');
+      _loginAndComeBack();
       return;
     }
     setState(() => _isTogglingFavorite = true);
@@ -350,6 +344,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     );
   }
 
+  /// Invitado que quiere reservar o guardar: login y de vuelta a ESTE perfil
+  /// (login_screen.dart respeta `returnTo`), no al inicio de la app.
+  void _loginAndComeBack() {
+    if (!mounted) return;
+    context.push('/login', extra: {
+      'returnTo': '/caregiver/${widget.caregiverId}',
+      'caregiverData': _caregiver ?? widget.initialData,
+    });
+  }
+
   /// "Reservar para Luna" si el cliente tiene una sola mascota.
   String get _reserveLabel {
     final names = _clientPets
@@ -363,10 +367,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     if (_petsLoading) return; // button is disabled while this is true; guard against races
     final token = _authToken;
     if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inicia sesión para hacer una reserva'), backgroundColor: GardenColors.primary, duration: Duration(seconds: 2)),
-      );
-      Future.delayed(const Duration(seconds: 1), () { if (context.mounted) context.push('/login'); });
+      _loginAndComeBack();
       return;
     }
     if (!_clientHasZone) {

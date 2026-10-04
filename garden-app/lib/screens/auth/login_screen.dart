@@ -426,7 +426,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text('¿No tienes cuenta? ', style: GardenText.metadata.copyWith(color: subtextColor, fontSize: 14)),
                 GardenPressable(
                   pressedScale: 0.94,
-                  onTap: () => context.go('/register'),
+                  // Si el invitado venía de un perfil, el registro lo devuelve ahí.
+                  onTap: () {
+                    final extra = GoRouterState.of(context).extra;
+                    final returnTo = extra is Map<String, dynamic> ? extra['returnTo'] as String? : null;
+                    context.go('/register', extra: returnTo != null ? {'returnTo': returnTo} : null);
+                  },
                   child: Text('Regístrate', style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
               ],

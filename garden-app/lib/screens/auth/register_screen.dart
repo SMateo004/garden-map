@@ -25,6 +25,9 @@ class RegisterScreen extends StatefulWidget {
   /// de ese embudo. Cualquier otro botón "Regístrate" de la app deja esto
   /// en false y nunca muestra la opción de cuidador.
   final bool caregiverOnly;
+  /// Ruta a la que volver tras crear la cuenta (ej. el perfil del cuidador
+  /// que un invitado quería reservar). Null → destino por defecto.
+  final String? returnTo;
 
   const RegisterScreen({
     super.key,
@@ -33,6 +36,7 @@ class RegisterScreen extends StatefulWidget {
     this.prefillEmail,
     this.fromSocial = false,
     this.caregiverOnly = false,
+    this.returnTo,
   });
 
   @override
@@ -410,7 +414,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (!mounted) return;
         // El registro normal nunca pide foto — siempre falta en este punto,
         // así que el paso obligatorio de foto va antes del destino final.
-        final nextRoute = kIsWeb ? '/client-welcome' : '/service-selector';
+        final nextRoute = widget.returnTo ?? (kIsWeb ? '/client-welcome' : '/service-selector');
         context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
       }
     } catch (e) {
@@ -936,7 +940,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       : 'Ya tenías una cuenta — iniciando sesión.',
                   duration: const Duration(seconds: 5),
                 );
-                final nextRoute = kIsWeb ? '/marketplace' : '/service-selector';
+                final nextRoute = widget.returnTo ?? (kIsWeb ? '/marketplace' : '/service-selector');
                 if (result.profilePicture == null || result.profilePicture!.isEmpty) {
                   context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
                 } else {

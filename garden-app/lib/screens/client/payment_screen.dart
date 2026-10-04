@@ -1349,7 +1349,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // tocar el motor de reembolso); esto es la política única de Garden,
   // simplemente hecha visible antes de pagar en vez de solo al cancelar.
   Widget _buildCancellationPolicy(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+    // Guardería usa la política de Hospedaje en calculateRefund() (48h/24h y
+    // cargo administrativo) — antes acá caía en la de Paseo y se le prometía
+    // al dueño un reembolso que el backend no le iba a dar.
+    final serviceType = _booking?['serviceType'] ?? widget.bookingParams?['serviceType'];
+    final isHospedaje = serviceType == 'HOSPEDAJE' || serviceType == 'GUARDERIA';
     final h100 = isHospedaje ? _hospedajeRefund100h : _paseoRefund100h;
     final h50 = isHospedaje ? _hospedajeRefund50h : _paseoRefund50h;
     final feeNote = isHospedaje ? ' (menos Bs ${_hospedajeRefundFee.toStringAsFixed(0)} de cargo administrativo)' : '';
@@ -2466,10 +2470,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _paidWithWallet
-                    ? 'Se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera Garden. '
-                        'Ahora ${ctx.caregiver} revisa la solicitud para ${ctx.pet}.'
-                    : 'Ahora ${ctx.caregiver} revisa la solicitud para ${ctx.pet}. Te avisamos apenas responda.',
+                // Se llega aquí con WAITING_CAREGIVER_APPROVAL o ya CONFIRMED:
+                // el siguiente paso que se cuenta tiene que ser el real.
+                '${_paidWithWallet ? 'Se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera Garden. ' : ''}'
+                '${_booking?['status'] == 'CONFIRMED'
+                    ? '${ctx.caregiver} ya tiene todo listo para ${ctx.pet}. Puedes escribirle desde el chat.'
+                    : 'Ahora ${ctx.caregiver} revisa la solicitud para ${ctx.pet}. Te avisamos apenas responda.'}',
                 style: GardenText.bodyMedium.copyWith(color: subtextColor, height: 1.55),
                 textAlign: TextAlign.center,
               ),
@@ -2726,7 +2732,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: const GardenIcon(GIcon.soporte, size: GIconSize.hero, state: GIconState.active, color: GardenColors.warning),
               ),
               const SizedBox(height: 28),
-              Text('Esperando aprobación',
+              // Mismo nombre que la píldora de PAYMENT_PENDING_APPROVAL en
+              // BookingStory — "aprobación" se confundía con la del cuidador.
+              Text('Verificando tu pago',
                   style: TextStyle(
                       fontSize: 26, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
                   textAlign: TextAlign.center),

@@ -2162,14 +2162,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       pressedScale: 0.97,
       onTap: () {
         HapticFeedback.lightImpact();
-        if (!AuthState.hasSession) {
-          context.push('/login', extra: {
-            'returnTo': '/caregiver/${caregiver['id']}',
-            'caregiverData': caregiver,
-          });
-        } else {
-          context.push('/caregiver/${caregiver['id']}', extra: caregiver);
-        }
+        // Invitados también ven el perfil; la cuenta se pide al reservar.
+        context.push('/caregiver/${caregiver['id']}', extra: caregiver);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
