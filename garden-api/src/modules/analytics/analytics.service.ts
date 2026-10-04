@@ -157,6 +157,9 @@ const round = (v: unknown, d = 1) => {
   return Math.round(num(v) * f) / f;
 };
 
+/** Fecha de una columna ::date (Prisma la devuelve como Date en UTC) → 'YYYY-MM-DD'. */
+const dayStr = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
+
 type Row = Record<string, unknown>;
 const q = (s: Prisma.Sql) => prisma.$queryRaw<Row[]>(s);
 
@@ -306,7 +309,7 @@ export async function getAdminSummary(rangeKey: string) {
 
   const newUsersByBucket = new Map<string, { clients: number; caregivers: number }>();
   for (const r of newUsers) {
-    const k = String(r.b);
+    const k = dayStr(r.b);
     const cur = newUsersByBucket.get(k) ?? { clients: 0, caregivers: 0 };
     if (r.role === 'CLIENT') cur.clients += num(r.n);
     else if (r.role === 'CAREGIVER') cur.caregivers += num(r.n);
@@ -332,7 +335,7 @@ export async function getAdminSummary(rangeKey: string) {
       mau,
       stickinessPct: mau ? round((dau / mau) * 100) : 0,
       series: audienceSeries.map((r) => ({
-        bucket: String(r.b), sessions: num(r.sessions), users: num(r.users), avgSec: round(r.avg_sec, 0),
+        bucket: dayStr(r.b), sessions: num(r.sessions), users: num(r.users), avgSec: round(r.avg_sec, 0),
       })),
       platform: kv(platform),
       versions: kv(versions),
@@ -364,7 +367,7 @@ export async function getAdminSummary(rangeKey: string) {
       repeatRatePct: num(repeatRow[0]?.payers)
         ? round((num(repeatRow[0]?.repeaters) / num(repeatRow[0]?.payers)) * 100) : 0,
       series: bizSeries.map((r) => ({
-        bucket: String(r.b), created: num(r.created), paid: num(r.paid), cancelled: num(r.cancelled),
+        bucket: dayStr(r.b), created: num(r.created), paid: num(r.paid), cancelled: num(r.cancelled),
         gmv: round(r.gmv, 2), commission: round(r.commission, 2),
       })),
     },
