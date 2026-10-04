@@ -4835,7 +4835,7 @@ export async function concludeService(
     sendPushToUser(
       booking.clientId,
       `${booking.petName} ya volvió a casa ✅`,
-      `⭐ Mirá el resumen de su servicio${distanceNote} Calificá para liberar el pago a tu cuidador.`,
+      `⭐ Mira el resumen de su servicio${distanceNote} Califica para liberar el pago a tu cuidador.`,
       { type: 'SERVICE_COMPLETED', bookingId }
     ).catch(() => {});
     notificationService.onServiceCompleted(bookingId).catch(() => {});
@@ -4958,7 +4958,7 @@ export async function addTip(
     sendPushToUser(
       booking.caregiver.userId,
       '💚 Recibiste una propina',
-      `Un cliente te dejó Bs ${amount.toFixed(2)} de propina — 100% para vos, sin comisión.`,
+      `Un cliente te dejó Bs ${amount.toFixed(2)} de propina — 100% para ti, sin comisión.`,
       { type: 'TIP_RECEIVED', bookingId }
     ).catch(() => {});
 

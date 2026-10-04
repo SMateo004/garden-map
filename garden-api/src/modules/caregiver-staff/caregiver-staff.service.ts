@@ -35,7 +35,7 @@ function generateCode(): string {
 
 async function assertIsCompanyOwner(ownerUserId: string) {
   const profile = await prisma.caregiverProfile.findFirst({ where: { userId: ownerUserId } });
-  if (!profile) throw new NotFoundError('No tenés un perfil de cuidador');
+  if (!profile) throw new NotFoundError('No tienes un perfil de cuidador');
   if (!profile.isCompany) {
     throw new ForbiddenError('Solo las cuentas empresa pueden tener empleados');
   }
@@ -46,7 +46,7 @@ async function assertIsCompanyOwner(ownerUserId: string) {
   // staff de la empresa: el dueño podía seguir generando invitaciones y
   // sumando empleados nuevos mientras estaba suspendido.
   if (profile.suspended) {
-    throw new ForbiddenError('Tu cuenta está suspendida — contactá a soporte para más información.');
+    throw new ForbiddenError('Tu cuenta está suspendida — contacta a soporte para más información.');
   }
   return profile;
 }
@@ -78,7 +78,7 @@ export async function generateInviteCode(
       throw err;
     }
   }
-  throw new BadRequestError('No se pudo generar el código, intentá de nuevo');
+  throw new BadRequestError('No se pudo generar el código, intenta de nuevo');
 }
 
 export async function listInvites(ownerUserId: string) {

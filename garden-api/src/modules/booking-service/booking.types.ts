@@ -95,6 +95,9 @@ export interface BookingCreateResult {
     zone: string | null;
     full: string | null;
   } | null;
+  /** Estado del pago al cuidador (PENDING / ON_HOLD / PAID…). La app lo usa
+   *  para saber si el dueño todavía puede calificar o retomar un reclamo. */
+  payoutStatus?: string | null;
   ownerRated?: boolean;
   ownerRating?: number | null;
   ownerComment?: string | null;
@@ -202,6 +205,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     serviceEvents: b.serviceEvents ?? [],
     gpsTrack: b.serviceTrackingData ?? [],
     gpsDistance: b.gpsDistance ?? null,
+    payoutStatus: b.payoutStatus ?? null,
     ownerRated: b.ownerRated ?? false,
     ownerRating: b.ownerRating,
     ownerComment: b.ownerComment,

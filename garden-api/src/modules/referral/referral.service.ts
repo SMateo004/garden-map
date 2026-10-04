@@ -54,7 +54,7 @@ export async function getMyReferral(userId: string) {
 export async function applyReferralCode(userId: string, code: string) {
   const referrer = await prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } });
   if (!referrer) throw new NotFoundError('Código de invitación no encontrado');
-  if (referrer.id === userId) throw new BadRequestError('No podés usar tu propio código', 'CANNOT_REFER_SELF');
+  if (referrer.id === userId) throw new BadRequestError('No puedes usar tu propio código', 'CANNOT_REFER_SELF');
 
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { referredByUserId: true } });
   if (me?.referredByUserId) throw new BadRequestError('Ya aplicaste un código de invitación antes', 'REFERRAL_ALREADY_APPLIED');

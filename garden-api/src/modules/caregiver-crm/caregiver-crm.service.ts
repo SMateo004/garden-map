@@ -53,7 +53,7 @@ async function notifyWalkInClientEmail(email: string, subject: string, html: str
 
 async function resolveCompanyProfile(ownerUserId: string) {
   const profile = await prisma.caregiverProfile.findFirst({ where: { userId: ownerUserId } });
-  if (!profile) throw new NotFoundError('No tenés un perfil de cuidador');
+  if (!profile) throw new NotFoundError('No tienes un perfil de cuidador');
   if (!profile.isCompany) {
     throw new ForbiddenError('El CRM de mascotas walk-in es solo para cuentas empresa');
   }
@@ -63,7 +63,7 @@ async function resolveCompanyProfile(ownerUserId: string) {
   // check-out, cobro en efectivo, bitácora de incidentes) fuera de la vista
   // del admin.
   if (profile.suspended) {
-    throw new ForbiddenError('Tu cuenta está suspendida — contactá a soporte para más información.');
+    throw new ForbiddenError('Tu cuenta está suspendida — contacta a soporte para más información.');
   }
   return profile;
 }
@@ -317,7 +317,7 @@ export async function checkOutWalkInVisit(ownerUserId: string, actingUserId: str
       ${updated.amountCollected !== null ? `<p>Monto cobrado: Bs ${updated.amountCollected.toFixed(2)}</p>` : ''}
       <p>¡Gracias por confiarnos a ${visit.walkInPet.name}!</p>
     `;
-    await notifyWalkInClientEmail(client.email, `${visit.walkInPet.name} ya está de vuelta con vos 🐾`, html);
+    await notifyWalkInClientEmail(client.email, `${visit.walkInPet.name} ya está de vuelta contigo 🐾`, html);
   }
 
   return updated;

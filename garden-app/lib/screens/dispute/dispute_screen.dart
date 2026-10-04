@@ -528,7 +528,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'La IA de GARDEN analizará ambas versiones y decidirá automáticamente. El smart contract ejecutará el veredicto.',
+                          'La IA de GARDEN analiza ambas versiones junto con la evidencia del servicio (fotos, GPS, chat) y decide en minutos. '
+                          'Si no estás de acuerdo, puedes apelar.',
                           style: TextStyle(color: GardenColors.polygon, fontSize: 12),
                         ),
                       ),
@@ -958,7 +959,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                   color: GardenColors.polygon.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text('⬡ Consultando smart contract en Polygon...',
+                child: const Text('Analizando la evidencia del servicio…',
                   style: TextStyle(color: GardenColors.polygon, fontSize: 12)),
               ),
             ],

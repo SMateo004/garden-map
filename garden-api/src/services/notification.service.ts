@@ -9,6 +9,8 @@ import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { sendTransactionalEmail } from '../modules/auth/email.service.js';
 import { sendPushToUser } from './firebase.service.js';
+import { getNumericSetting } from '../utils/settings-cache.js';
+import { caregiverNetOf } from '../modules/pricing/pricing.service.js';
 
 // ---------------------------------------------------------------------------
 // WhatsApp placeholder (booking-event notifications — not yet wired to a
@@ -280,20 +282,27 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
   const svc = serviceLabel(booking.serviceType);
   const dates = dateRange(booking);
+  // Mismo plazo que aplica caregiver-accept-expiry.job.ts (antes el aviso decía
+  // 24h fijas y la reserva se cancelaba a las 3h).
+  const ventanaHoras = await getNumericSetting('caregiverAcceptWindowHoras', 3);
+  const plazo = `${ventanaHoras} ${ventanaHoras === 1 ? 'hora' : 'horas'}`;
+  // Al cuidador se le muestra lo que va a cobrar, no lo que pagó el cliente
+  // (que incluye comisión e impuestos).
+  const ganancia = caregiverNetOf(booking).toFixed(0);
 
   const html = gardenEmail(
-    `${clientName} quiere reservarte para ${booking.petName} — respondé antes de 24h ⏰`,
+    `${clientName} quiere reservarte para ${booking.petName} — responde en las próximas ${plazo} ⏰`,
     `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, <strong>${clientName}</strong> ya pagó por <strong>${svc}</strong> para <strong>${booking.petName}</strong> y está esperando que aceptes.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cliente', clientName],
       ['Mascota', booking.petName],
       ['Fechas', dates],
-      ['Total', `Bs ${booking.totalAmount}`],
+      ['Tu ganancia', `Bs ${ganancia}`],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
     `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
-       <p style="color:#166534;font-size:13px;margin:0;">⚠️ Tienes <strong>24 horas</strong> para aceptar o rechazar esta solicitud. Si no respondes, la reserva será cancelada automáticamente y el cliente recibirá un reembolso.</p>
+       <p style="color:#166534;font-size:13px;margin:0;">⚠️ Tienes <strong>${plazo}</strong> para aceptar o rechazar esta solicitud. Si no respondes, la reserva se cancela automáticamente y el cliente recibe un reembolso.</p>
      </div>
      <p style="color:#555;font-size:14px;margin:0;">Ingresa a la app para <strong>Aceptar</strong> o <strong>Rechazar</strong> esta solicitud.</p>`
   );
@@ -301,7 +310,7 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   fireEmail(booking.caregiver.user.email, `${clientName} espera tu respuesta — ${svc} de ${booking.petName}`, html, 'BOOKING_WAITING_APPROVAL', bookingId);
   sendWhatsAppPlaceholder(
     booking.caregiver.user.phone,
-    `GARDEN: ${clientName} pagó ${svc} para ${booking.petName} (${dates}). ID: ${bookingId}. Ingresa al panel para Aceptar o Rechazar antes de 24h.`,
+    `GARDEN: ${clientName} pagó ${svc} para ${booking.petName} (${dates}). ID: ${bookingId}. Ingresa al panel para Aceptar o Rechazar en las próximas ${plazo}.`,
     { event: 'BOOKING_WAITING_APPROVAL', bookingId }
   );
   // Push — antes esta era la notificación que el dueño del negocio reportó
@@ -313,7 +322,7 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   sendPushToUser(
     booking.caregiver.user.id,
     `⏰ ${clientName} te espera`,
-    `${booking.petName} necesita ${svc} el ${dates}. Tienes 24h para aceptar o rechazar.`,
+    `${booking.petName} necesita ${svc} el ${dates}. Tienes ${plazo} para aceptar o rechazar.`,
     { type: 'BOOKING_WAITING_APPROVAL', bookingId }
   ).catch((err) => logger.warn('[NOTIFICATION] push onBookingWaitingApproval failed', { bookingId, err }));
 }
@@ -440,7 +449,7 @@ export async function onServiceCompleted(bookingId: string): Promise<void> {
     ]) +
     `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
        <p style="color:#166534;font-size:14px;font-weight:700;margin:0 0 6px;">⭐ Califica a ${caregiverName}</p>
-       <p style="color:#166534;font-size:13px;margin:0;">Contá cómo le fue a ${booking.petName}. Tu reseña libera el pago de Bs ${booking.totalAmount} para ${caregiverName} y guía a otros dueños en Santa Cruz.</p>
+       <p style="color:#166534;font-size:13px;margin:0;">Cuéntanos cómo le fue a ${booking.petName}. Tu reseña libera el pago de Bs ${booking.totalAmount} para ${caregiverName} y guía a otros dueños en Santa Cruz.</p>
      </div>
      <p style="color:#555;font-size:14px;margin:0;">Gracias por confiar en GARDEN para cuidar a ${booking.petName}. ¡Hasta la próxima! 🌿</p>`
   );

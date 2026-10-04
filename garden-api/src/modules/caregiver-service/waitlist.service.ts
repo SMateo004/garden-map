@@ -70,7 +70,7 @@ export async function checkWaitlistsAndNotify(): Promise<{ notified: number }> {
       await sendPushToUser(
         entry.clientId,
         `🎉 ${caregiverName} ya tiene cupo`,
-        'Tiene disponibilidad esta semana — reservá antes de que se llene de nuevo.',
+        'Tiene disponibilidad esta semana — reserva antes de que se llene de nuevo.',
         { type: 'WAITLIST_OPENING', caregiverId: entry.caregiverId }
       ).catch(() => {});
       await prisma.caregiverWaitlist.update({ where: { id: entry.id }, data: { lastNotifiedAt: new Date() } });

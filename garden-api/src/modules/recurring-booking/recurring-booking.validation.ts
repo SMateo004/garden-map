@@ -11,7 +11,7 @@ export const createRecurringSeriesSchema = z
       .max(3, 'Máximo 3 mascotas por reserva'),
     daysOfWeek: z
       .array(z.number().int().min(1).max(7))
-      .min(1, 'Elegí al menos un día de la semana')
+      .min(1, 'Elige al menos un día de la semana')
       .max(7)
       .transform((arr) => [...new Set(arr)].sort((a, b) => a - b)),
     timeSlot: z

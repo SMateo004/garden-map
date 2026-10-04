@@ -5013,7 +5013,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             Text(
-              'El dueño recibirá una encuesta de satisfacción.\nEl smart contract liberará el pago según la calificación.',
+              'El dueño va a calificar el servicio. Con 3 estrellas o más, el pago pasa a tu billetera; '
+              'si no califica a tiempo, se libera solo.',
               textAlign: TextAlign.center,
               style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
             ),
@@ -5893,7 +5894,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tu calificación libera el pago al cuidador y ayuda a otras familias a elegir.',
+                    'Con 3 estrellas o más, el pago pasa al cuidador. Si algo salió mal, califica con menos '
+                    'y cuéntanos qué pasó: el pago queda retenido hasta resolverlo.',
                     style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
                     textAlign: TextAlign.center,
                   ),
@@ -6064,7 +6066,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
             const SizedBox(height: 18),
 
-            // ── Feedback Smart Contract ────────────────────────────────
+            // ── Qué pasa con el pago según la nota ────────────────────────
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
               child: _surveyRating > 0
@@ -6085,8 +6087,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           Expanded(
                             child: Text(
                               _surveyRating >= 3
-                                  ? 'El smart contract liberará el pago automáticamente al cuidador.'
-                                  : 'El pago quedará retenido y un administrador revisará el caso.',
+                                  ? 'Al enviar, el pago se libera al cuidador.'
+                                  : 'El pago queda retenido. En el siguiente paso nos cuentas qué pasó, '
+                                    'el cuidador da su versión y lo resolvemos con la evidencia del servicio.',
                               style: TextStyle(
                                 color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
                                 fontSize: 12, fontWeight: FontWeight.w600, height: 1.4,
@@ -6206,7 +6209,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               Text(
                 rating >= 3
                     ? 'El pago se liberó a la billetera del cuidador.'
-                    : 'Debido a la calificación, un administrador revisará el caso antes de liberar los fondos.',
+                    : 'El pago queda retenido hasta resolver tu reclamo.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
               ),

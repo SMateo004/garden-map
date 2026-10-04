@@ -344,6 +344,10 @@ const PUBLIC_SETTING_KEYS = new Set([
   // servidor, después de todo el diálogo de confirmación. Pública por el
   // mismo motivo que las políticas de reembolso de arriba.
   'montoMinimoRetiro',
+  // Ventana para calificar/reclamar tras el servicio: pasado este plazo el
+  // pago se libera solo al cuidador y ya no se puede abrir una disputa. El
+  // dueño tiene que verla para no perder su derecho a reclamar sin saberlo.
+  'autoReleasePaymentHoras',
   // platformCommissionPct YA NO es pública (2026-10-03): la comisión varía por servicio y
   // cuidador/empresa y no se muestra a los usuarios — ver pricing.service.ts.
 ]);
@@ -388,6 +392,7 @@ app.get('/api/settings', async (_req, res) => {
       paseoRefund100Horas: 12,
       paseoRefund50Horas: 6,
       montoMinimoRetiro: 50,
+      autoReleasePaymentHoras: 24,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

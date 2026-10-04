@@ -50,6 +50,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   void initState() {
     super.initState();
     _initData();
+    _loadAutoReleaseHoras();
   }
 
   Future<void> _initData() async {
@@ -499,21 +500,80 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 
-  void _showRatingDialog(String bookingId) {
-    showModalBottomSheet(
+  /// El sheet solo envía la calificación y devuelve la nota; lo que sigue
+  /// (disputa si < 3, gracias + propina si ≥ 3) lo decide esta pantalla, que
+  /// sigue montada — antes se hacía desde el sheet mientras se cerraba.
+  Future<void> _showRatingDialog(String bookingId) async {
+    final rating = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => _RatingSheet(
+      builder: (_) => _RatingSheet(
         bookingId: bookingId,
-        onSubmitted: () {
-          _loadBookings();
-          Navigator.pop(context);
-        },
         baseUrl: _baseUrl,
         token: _clientToken,
       ),
     );
+    if (rating == null || !mounted) return;
+    _loadBookings();
+    if (rating < 3) {
+      await _openQualityClaim(bookingId);
+      return;
+    }
+    GardenSnackBar.success(context, '¡Gracias por tu calificación!');
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _TipSheet(bookingId: bookingId, baseUrl: _baseUrl, token: _clientToken),
+    );
+  }
+
+  /// Calificación < 3 → el pago queda retenido y el dueño cuenta qué pasó.
+  Future<void> _openQualityClaim(String bookingId) async {
+    await context.push('/dispute/$bookingId', extra: {'role': 'CLIENT'});
+    if (mounted) _loadBookings();
+  }
+
+  /// Horas para calificar o reclamar tras el servicio (setting público
+  /// autoReleasePaymentHoras). Pasado el plazo, el pago se libera solo.
+  int _autoReleaseHoras = 24;
+
+  /// Horas que tiene el cuidador para aceptar; si no responde, el backend
+  /// cancela y devuelve todo a la billetera (caregiver-accept-expiry.job.ts).
+  int _acceptWindowHoras = 3;
+
+  Future<void> _loadAutoReleaseHoras() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings'));
+      final d = (jsonDecode(res.body) as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+      final h = (d?['autoReleasePaymentHoras'] as num?)?.toInt();
+      final w = (d?['caregiverAcceptWindowHoras'] as num?)?.toInt();
+      if (!mounted) return;
+      setState(() {
+        if (h != null && h > 0) _autoReleaseHoras = h;
+        if (w != null && w > 0) _acceptWindowHoras = w;
+      });
+    } catch (_) {
+      // Sin red: se queda el default del backend (24 h).
+    }
+  }
+
+  /// Hasta cuándo puede calificar/reclamar, o null si no aplica.
+  DateTime? _rateDeadline(Map<String, dynamic> b) {
+    final ended = DateTime.tryParse(b['serviceEndedAt'] as String? ?? '');
+    return ended?.add(Duration(hours: _autoReleaseHoras)).toLocal();
+  }
+
+  static String _deadlineLabel(DateTime d) {
+    final now = DateTime.now();
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mm = d.minute.toString().padLeft(2, '0');
+    final sameDay = d.year == now.year && d.month == now.month && d.day == now.day;
+    final tomorrow = now.add(const Duration(days: 1));
+    final isTomorrow = d.year == tomorrow.year && d.month == tomorrow.month && d.day == tomorrow.day;
+    final day = sameDay ? 'hoy' : isTomorrow ? 'mañana' : 'el ${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+    return '$day a las $hh:$mm';
   }
 
   Widget _filterPill(String label, String value, bool isDark) {
@@ -1029,15 +1089,51 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             );
                           }),
                         ),
-                      if (status == 'COMPLETED' && booking['ownerRating'] == null)
+                      // ownerRated también queda en true cuando el pago se
+                      // libera solo (sin nota): ahí ya no se puede calificar.
+                      if (status == 'COMPLETED' && booking['ownerRated'] != true && booking['ownerRating'] == null)
                         Expanded(
                           child: GardenButton(
                             label: 'Calificar experiencia',
                             onPressed: () => _showRatingDialog(booking['id']),
                           ),
                         ),
+                      // Calificó < 3 pero no llegó a contar qué pasó: el pago
+                      // sigue retenido — dejarle retomar el reclamo.
+                      if (status == 'COMPLETED' &&
+                          booking['payoutStatus'] == 'ON_HOLD' &&
+                          booking['disputeStatus'] == null)
+                        Expanded(
+                          child: GardenButton(
+                            label: 'Contar qué pasó',
+                            color: GardenColors.error,
+                            outline: true,
+                            onPressed: () => _openQualityClaim(booking['id'] as String),
+                          ),
+                        ),
                     ],
                   ),
+                  if (status == 'WAITING_CAREGIVER_APPROVAL')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Si ${storyCtx.caregiver} no responde en $_acceptWindowHoras h, cancelamos la reserva '
+                        'y te devolvemos todo a tu billetera.',
+                        style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  if (status == 'COMPLETED' &&
+                      booking['ownerRated'] != true &&
+                      booking['ownerRating'] == null &&
+                      _rateDeadline(booking) != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Tienes hasta ${_deadlineLabel(_rateDeadline(booking)!)} para calificar o reportar un '
+                        'problema. Después, el pago se libera al cuidador.',
+                        style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                      ),
+                    ),
                   // Report card del servicio — ya existe la vista completa
                   // (fotos, distancia recorrida, resumen) en
                   // service_execution_screen.dart, solo faltaba el link
@@ -1689,13 +1785,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
 class _RatingSheet extends StatefulWidget {
   final String bookingId;
-  final VoidCallback onSubmitted;
   final String baseUrl;
   final String token;
 
   const _RatingSheet({
     required this.bookingId,
-    required this.onSubmitted,
     required this.baseUrl,
     required this.token,
   });
@@ -1727,17 +1821,8 @@ class _RatingSheetState extends State<_RatingSheet> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (!mounted) return;
-        widget.onSubmitted(); // Esto cierra el ModalBottom y recarga _loadBookings() en la pantalla principal
-
-        if (_rating < 3) {
-          context.push(
-            '/dispute/${widget.bookingId}',
-            extra: {'role': 'CLIENT'},
-          );
-        } else {
-          GardenSnackBar.success(context, '¡Gracias por tu calificación!');
-          _offerTip();
-        }
+        // La pantalla principal sigue el flujo (disputa o propina).
+        Navigator.of(context).pop(_rating);
       } else if (mounted) {
         // BUG (auditoría): antes, si el servidor rechazaba la calificación
         // (ej. ya calificada, reserva no completada), no pasaba absolutamente
@@ -1754,21 +1839,6 @@ class _RatingSheetState extends State<_RatingSheet> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
-  }
-
-  // Propina opcional, justo después de calificar bien (≥3) — mismo momento
-  // en que Uber/Rover la ofrecen. this.context sigue válido acá igual que
-  // el context.push('/dispute/...') de la rama de abajo (mismo patrón ya
-  // establecido: widget.onSubmitted() ya hizo Navigator.pop del contexto
-  // EXTERNO, no de este sheet).
-  Future<void> _offerTip() async {
-    if (!mounted) return;
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _TipSheet(bookingId: widget.bookingId, baseUrl: widget.baseUrl, token: widget.token),
-    );
   }
 
   @override
