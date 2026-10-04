@@ -229,6 +229,6 @@ Código nuevo de UI usa únicamente estas piezas — nada de inventar variantes:
   no relacionados, conocidos — no los persigas, solo confirmá que no agregaste nuevos).
 - Después de cualquier cambio en `garden-app`: `flutter analyze` (debería dar 0 errores),
   `flutter test test/design_system_test.dart`, `flutter test test/goldens` (fotos del catálogo en
-  claro y oscuro; si cambiaste el diseño a propósito, regenéralas con `--update-goldens` y
-  commitea los PNG) y `python tool/ui_ratchet.py`.
+  claro y oscuro; la referencia es Linux: si cambiaste el diseño a propósito, regenéralas con el
+  workflow "Actualizar fotos del catálogo" de GitHub Actions y commitea los PNG del artefacto) y `python tool/ui_ratchet.py`.
 - Limpiá cualquier dato de prueba que hayas creado en producción antes de terminar la sesión.

@@ -1,0 +1,34 @@
+name: Actualizar fotos del catálogo
+
+# Regenera las fotos de referencia de test/goldens en Linux (el mismo sistema
+# que el CI) y las deja como artefacto para descargarlas y commitearlas.
+# Usar solo después de un cambio de diseño hecho a propósito.
+on:
+  workflow_dispatch:
+
+jobs:
+  update-goldens:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: garden-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'  # igual que ci.yml
+          channel: stable
+          cache: true
+
+      - name: Regenerar fotos
+        run: |
+          flutter pub get
+          flutter test test/goldens --update-goldens
+
+      - name: Subir fotos nuevas
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens
+          path: garden-app/test/goldens/goldens/

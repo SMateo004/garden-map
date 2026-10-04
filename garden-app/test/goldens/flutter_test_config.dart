@@ -11,13 +11,18 @@ import 'package:garden_app/theme/garden_theme.dart';
 ///
 /// - Carga las fuentes de Phosphor: sin esto los iconos saldrían como cajas
 ///   y la prueba no vería un cambio de icono.
-/// - El texto usa la fuente de prueba de Flutter (cajas), igual en Windows,
-///   macOS y Linux. Solo el suavizado de los iconos cambia un poco entre
-///   sistemas, por eso el comparador tolera hasta [_tolerance] de píxeles
-///   distintos: alcanza para eso y falla ante un color, radio o icono cambiado.
+/// - El texto usa la fuente de prueba de Flutter (cajas), igual en todos los
+///   sistemas. El suavizado de iconos y bordes sí cambia: en Linux contra
+///   Windows da entre 1,5 % y 4 % de píxeles distintos.
+/// - Las fotos de referencia son las de Linux, donde corre el CI, y ahí la
+///   tolerancia es estricta. En Windows o macOS la prueba local es más
+///   permisiva: sigue atrapando un color, un fondo o un tamaño cambiado.
 ///
-/// Para regenerar las imágenes después de un cambio de diseño a propósito:
-///   flutter test test/goldens --update-goldens
+/// Para regenerar las fotos después de un cambio de diseño a propósito, hay
+/// que hacerlo en Linux: GitHub > Actions > "Actualizar fotos del catálogo" >
+/// Run workflow, y commitear los PNG del artefacto en test/goldens/goldens/.
+/// (`flutter test test/goldens --update-goldens` en Windows las dejaría
+/// con el suavizado de Windows y el CI fallaría.)
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
   GardenText.useGoogleFonts = false;
@@ -37,7 +42,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   await testMain();
 }
 
-const double _tolerance = 0.015; // 1,5 % de píxeles
+// Linux (CI, referencia): 1,5 %. Otros sistemas: 6 %, por el suavizado.
+final double _tolerance = Platform.isLinux ? 0.015 : 0.06;
 
 class _TolerantComparator extends LocalFileComparator {
   _TolerantComparator(super.testFile);
