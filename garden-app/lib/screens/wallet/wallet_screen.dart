@@ -245,11 +245,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   /// transferencia). El backend valida cuál usar al procesar `/wallet/withdraw`.
   Future<void> _setWithdrawalMethod(String method) async {
     if (_switchingMethod || _withdrawalMethod == method) return;
+    // Cambiar a dónde va el dinero exige el PIN verificado en el servidor.
+    final headers = await pinTokenHeaders(context,
+        base: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'});
+    if (headers == null || !mounted) return;
     setState(() => _switchingMethod = true);
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/wallet/withdrawal-method'),
-        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({'withdrawalMethod': method}),
       );
       final data = jsonDecode(response.body);
@@ -328,13 +332,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
     if (picked == null) return;
 
+    final pinHeaders = await pinTokenHeaders(context, base: {'Authorization': 'Bearer $_token'});
+    if (pinHeaders == null || !mounted) return;
     setState(() => _uploadingQr = true);
     try {
       final bytes = await picked.readAsBytes();
       final fileName = picked.name.isEmpty ? 'qr.jpg' : picked.name;
       final uri = Uri.parse('$_baseUrl/wallet/withdrawal-qr');
       final request = http.MultipartRequest('POST', uri);
-      request.headers['Authorization'] = 'Bearer $_token';
+      request.headers.addAll(pinHeaders);
       request.files.add(http.MultipartFile.fromBytes(
         'qrImage', bytes, filename: fileName,
         contentType: MediaType('image', 'jpeg'),
@@ -1264,12 +1270,16 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       // Guardar refs antes de gaps async
                       if (!context.mounted) return;
                       final scaffoldMsg = ScaffoldMessenger.of(context);
+                      // Retirar exige el PIN verificado en el servidor (15 min).
+                      final pinHeaders = await pinTokenHeaders(context,
+                          base: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'});
+                      if (pinHeaders == null) return;
 
                       setSheet(() => isSubmitting = true);
                       try {
                         final response = await http.post(
                           Uri.parse('$_baseUrl/wallet/withdraw'),
-                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                          headers: pinHeaders,
                           body: jsonEncode({'amount': amount}),
                         );
                         final data = jsonDecode(response.body);
@@ -1460,11 +1470,14 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         GardenErrorDialog.show(context, 'Ingresa el nombre del titular de la cuenta');
                         return;
                       }
+                      final pinHeaders = await pinTokenHeaders(context,
+                          base: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'});
+                      if (pinHeaders == null) return;
                       setSheet(() => isSaving = true);
                       try {
                         final response = await http.put(
                           Uri.parse('$_baseUrl/wallet/bank'),
-                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                          headers: pinHeaders,
                           body: jsonEncode({
                             'bankName': selectedBankName,
                             'bankAccount': bankAccountController.text.trim(),

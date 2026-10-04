@@ -3603,6 +3603,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
     final isPendingReview = _caregiverStatus == 'PENDING_REVIEW';
     final isRejected = _caregiverStatus == 'REJECTED';
+    // NEEDS_REVISION: el admin pidió cambios (el cuidador SÍ puede reenviar).
+    // REJECTED: el backend bloquea el reenvío (PROFILE_NOT_SUBMITTABLE), así
+    // que no se le puede decir "corrige y vuelve a enviarlo".
+    final needsRevision = _caregiverStatus == 'NEEDS_REVISION';
+    final rejectionReason = (_caregiver?['rejectionReason'] as String?)?.trim();
     final isSuspended = _caregiverStatus == 'SUSPENDED';
     final suspensionReason = _caregiver?['suspensionReason'] as String?;
 
@@ -3612,7 +3617,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ? GIcon.esperando
             : isRejected
                 ? GIcon.cancelado
-                : GIcon.documento;
+                : needsRevision
+                    ? GIcon.editar
+                    : GIcon.documento;
 
     final gradientColors = isSuspended
         ? [const Color(0xFFE65100), const Color(0xFFBF360C)]
@@ -3628,14 +3635,18 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ? 'Perfil en revisión'
             : isRejected
                 ? 'Perfil rechazado'
-                : 'Completa tu registro';
+                : needsRevision
+                    ? 'Tu perfil necesita cambios'
+                    : 'Completa tu registro';
 
     final subtitle = isSuspended
-        ? 'Nuestro equipo ha detectado actividad inusual y tu perfil está temporalmente bajo revisión. No apareces en el marketplace mientras dure este proceso.${suspensionReason != null ? '\n\nMotivo: $suspensionReason' : ''}\n\nTe notificaremos cuando se resuelva. Si tienes dudas, contáctanos en soporte@garden.com.'
+        ? 'Nuestro equipo ha detectado actividad inusual y tu perfil está temporalmente bajo revisión. No apareces en el marketplace mientras dure este proceso.${suspensionReason != null ? '\n\nMotivo: $suspensionReason' : ''}\n\nTe notificaremos cuando se resuelva. Si tienes dudas, escríbenos desde Ayuda en la app.'
         : isPendingReview
             ? 'Tu perfil ha sido enviado correctamente y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado. Esto puede tomar 1-2 días hábiles.'
             : isRejected
-                ? 'Tu perfil fue revisado y necesita correcciones. Revisa los comentarios del equipo GARDEN y vuelve a enviarlo.'
+                ? 'Tu solicitud no fue aprobada.${rejectionReason != null && rejectionReason.isNotEmpty ? '\n\nMotivo: $rejectionReason' : ''}\n\nSi crees que es un error, escríbenos desde Ayuda en la app.'
+            : needsRevision
+                ? 'El equipo GARDEN revisó tu perfil y pidió algunos cambios.${rejectionReason != null && rejectionReason.isNotEmpty ? '\n\nQué cambiar: $rejectionReason' : ' Revisa el detalle en tus notificaciones.'}\n\nCorrígelo y vuelve a enviarlo.'
             : 'Tu perfil aún no está completo. Termina los pasos pendientes para que tu perfil sea visible en el marketplace.';
 
     return Container(

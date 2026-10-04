@@ -20,6 +20,7 @@ import { ConflictError, BadRequestError, UnauthorizedError } from '../../shared/
 import logger from '../../shared/logger.js';
 import bcrypt from 'bcrypt';
 import { randomInt } from 'node:crypto';
+import { issuePinToken } from '../../middleware/require-pin.middleware.js';
 import * as phoneChange from './phone-change.service.js';
 
 /** GET /api/auth/me - Usuario actual (requiere Bearer). */
@@ -853,7 +854,9 @@ export const setSecurityPin = asyncHandler(async (req: Request, res: Response) =
   const { newPin, currentPin } = req.body as { newPin?: string; currentPin?: string };
   if (!newPin) return res.status(400).json({ success: false, error: { message: 'newPin requerido' } });
   await authService.setSecurityPin(userId, newPin, currentPin);
-  res.json({ success: true });
+  // Quien acaba de crear/cambiar el PIN ya lo demostró: puede mover dinero
+  // durante 15 min sin volver a ingresarlo (ver require-pin.middleware.ts).
+  res.json({ success: true, data: { pinToken: issuePinToken(userId) } });
 });
 
 /** POST /api/auth/security-pin/verify — verifica el PIN para desbloquear una pantalla sensible. */
@@ -862,7 +865,7 @@ export const verifySecurityPin = asyncHandler(async (req: Request, res: Response
   const { pin } = req.body as { pin?: string };
   if (!pin) return res.status(400).json({ success: false, error: { message: 'pin requerido' } });
   const result = await authService.verifySecurityPin(userId, pin);
-  res.json({ success: true, data: result });
+  res.json({ success: true, data: result.valid ? { ...result, pinToken: issuePinToken(userId) } : result });
 });
 
 /** GET /api/auth/notification-preferences */

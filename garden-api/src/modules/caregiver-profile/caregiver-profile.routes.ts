@@ -15,6 +15,7 @@ import { validarFoto } from '../../agents/foto-validacion.agent.js';
 import logger from '../../shared/logger.js';
 import { validateBankInfo, persistBankInfo, BANK_ACCOUNT_TYPES } from '../wallet/bank-info.util.js';
 import { EARNING_FILTERS } from '../wallet/wallet-filters.js';
+import { requirePinToken } from '../../middleware/require-pin.middleware.js';
 
 
 const bankInfoSchema = z.object({
@@ -93,7 +94,7 @@ router.get('/pets/:petId', caregiverProfileController.getMyCaregiverPetById);
 router.get('/notifications', caregiverProfileController.getNotifications);
 router.patch('/notifications/:id/read', caregiverProfileController.markNotificationRead);
 
-router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'),
+router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'), requirePinToken,
   asyncHandler(async (req, res) => {
     const parsed = bankInfoSchema.safeParse(req.body);
     if (!parsed.success) {

@@ -3850,6 +3850,21 @@ export async function startService(bookingId: string, caregiverUserId: string, p
       throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
     }
 
+    // No se puede iniciar antes del día del servicio (hora de Bolivia). La app
+    // ya lo bloqueaba, pero el servidor no: llamando directo a la API se podía
+    // iniciar y terminar un servicio días antes y, si el dueño no reclamaba en
+    // autoReleasePaymentHoras, el pago se liberaba solo. Fechas guardadas como
+    // medianoche UTC (fecha sin hora), igual que calculateRefund().
+    const serviceDay = booking.serviceType === ServiceType.HOSPEDAJE ? booking.startDate : booking.walkDate;
+    if (serviceDay) {
+      const todayBolivia = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10); // UTC-4, sin horario de verano
+      const serviceDayStr = serviceDay.toISOString().slice(0, 10);
+      if (todayBolivia < serviceDayStr) {
+        const [, mm, dd] = serviceDayStr.split('-');
+        throw new BadRequestError(`El servicio es el ${dd}/${mm}. Podrás iniciarlo ese día.`);
+      }
+    }
+
     // FIX (auditoría 2026-09-28, C2): a diferencia de cancelBooking()/
     // requestCancellationByCaregiver()/rejectBooking() (que usan updateMany
     // condicionado + chequeo de count), este `update` no tenía guard de status

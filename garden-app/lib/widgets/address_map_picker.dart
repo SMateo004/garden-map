@@ -153,7 +153,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
       if (!mounted) return;
       if (!_isWithinCity(ll)) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Tu ubicación actual está fuera de ${widget.cityName} — marcá manualmente dentro de la ciudad'),
+          content: Text('Tu ubicación actual está fuera de ${widget.cityName} — marca manualmente dentro de la ciudad'),
         ));
         return;
       }

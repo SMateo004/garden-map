@@ -320,7 +320,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
               Text('Todavía no tienes paseos recurrentes',
                   style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 8),
-              Text('Configurá uno desde el perfil de tu cuidador favorito, en "Paseo recurrente".',
+              Text('Configura uno desde el perfil de tu cuidador favorito, en "Paseo recurrente".',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: subtextColor, fontSize: 13)),
             ],

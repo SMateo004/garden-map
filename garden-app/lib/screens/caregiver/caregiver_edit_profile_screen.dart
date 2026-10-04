@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../widgets/ai_write_assist.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/pin_gate.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
@@ -54,6 +55,15 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   final _bankHolderController = TextEditingController();
   String _selectedBankName = '';
   String _selectedBankType = 'CUENTA_AHORRO';
+  /// Datos de cobro tal como llegaron del servidor: solo se reenvían (y se
+  /// pide el PIN) si el cuidador los cambió.
+  String _savedBankSnapshot = '';
+  String get _bankSnapshot => [
+        _selectedBankName,
+        _selectedBankType,
+        _bankAccountController.text.trim(),
+        _bankHolderController.text.trim(),
+      ].join('|');
 
   // Modalidad de cobro (transferencia bancaria vs QR de transferencia) y QR de
   // cobro propio — mismo dato/endpoints que en la billetera (`/api/wallet`,
@@ -109,11 +119,14 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   /// billetera — el backend valida cuál usar al procesar un retiro.
   Future<void> _setWithdrawalMethod(String method) async {
     if (_switchingMethod || _withdrawalMethod == method) return;
+    final headers = await pinTokenHeaders(context,
+        base: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'});
+    if (headers == null || !mounted) return;
     setState(() => _switchingMethod = true);
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/wallet/withdrawal-method'),
-        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({'withdrawalMethod': method}),
       );
       final data = jsonDecode(response.body);
@@ -140,13 +153,16 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
     if (picked == null) return;
 
+    if (!mounted) return;
+    final pinHeaders = await pinTokenHeaders(context, base: {'Authorization': 'Bearer $_caregiverToken'});
+    if (pinHeaders == null || !mounted) return;
     setState(() => _uploadingQr = true);
     try {
       final bytes = await picked.readAsBytes();
       final fileName = picked.name.isEmpty ? 'qr.jpg' : picked.name;
       final uri = Uri.parse('$_baseUrl/wallet/withdrawal-qr');
       final request = http.MultipartRequest('POST', uri);
-      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.headers.addAll(pinHeaders);
       request.files.add(http.MultipartFile.fromBytes(
         'qrImage', bytes, filename: fileName,
         contentType: MediaType('image', 'jpeg'),
@@ -212,6 +228,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
           _selectedBankType = profile['bankType'] as String? ?? 'CUENTA_AHORRO';
           _bankAccountController.text = profile['bankAccount'] as String? ?? '';
 _bankHolderController.text = profile['bankHolder'] as String? ?? '';
+          _savedBankSnapshot = _bankSnapshot;
         });
       }
     } catch (e) {
@@ -339,12 +356,20 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     }
   }
 
+  /// Antes ignoraba la respuesta y tragaba los errores: si el banco no se
+  /// guardaba (datos inválidos), el cuidador veía "guardado" igual.
   Future<void> _saveBankInfo() async {
-    if (_selectedBankName.isEmpty) return;
-    try {
-      await http.patch(
+    if (_selectedBankName.isEmpty || _bankSnapshot == _savedBankSnapshot) return;
+    // Cambiar a dónde va el dinero exige el PIN verificado en el servidor.
+    final headers = await pinTokenHeaders(context,
+        base: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'});
+    if (headers == null) {
+      throw Exception('Tus datos de cobro no se guardaron: falta confirmar tu PIN.');
+    }
+    {
+      final response = await http.patch(
         Uri.parse('$_baseUrl/caregiver/bank-info'),
-        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'bankName': _selectedBankName,
           'bankAccount': _bankAccountController.text.trim(),
@@ -352,8 +377,11 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           'bankType': _selectedBankType,
         }),
       );
-    } catch (e) {
-      debugPrint('Error saving bank info: $e');
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudieron guardar tus datos de cobro');
+      }
+      _savedBankSnapshot = _bankSnapshot;
     }
   }
 

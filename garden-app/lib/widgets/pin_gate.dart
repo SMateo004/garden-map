@@ -46,17 +46,55 @@ Future<bool> requireSecurityPin(BuildContext context) async {
   return _showPinDialog(context);
 }
 
-Future<bool> _showPinDialog(BuildContext context) async {
+Future<bool> _showPinDialog(BuildContext context, {String? reason}) async {
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => const _PinDialog(),
+    builder: (ctx) => _PinDialog(reason: reason),
   );
   return result ?? false;
 }
 
+/// Token de PIN verificado por el servidor (15 min). Lo exigen las rutas que
+/// mueven dinero o cambian a dónde va (retiro, banco, QR y modalidad de cobro)
+/// — ver garden-api/src/middleware/require-pin.middleware.ts. Vive solo en
+/// memoria: al cerrar la app hay que volver a ingresar el PIN.
+class PinSession {
+  static String? _token;
+  static DateTime? _expiresAt;
+
+  static void store(String? token) {
+    if (token == null || token.isEmpty) return;
+    _token = token;
+    // Un poco antes que el servidor (15 min) para no mandar uno recién vencido.
+    _expiresAt = DateTime.now().add(const Duration(minutes: 14));
+  }
+
+  static void clear() {
+    _token = null;
+    _expiresAt = null;
+  }
+
+  static String? get validToken =>
+      (_token != null && _expiresAt != null && DateTime.now().isBefore(_expiresAt!)) ? _token : null;
+}
+
+/// Headers para una operación que mueve dinero. Si no hay token vigente, pide
+/// el PIN (sin atajo biométrico: la huella es local y el servidor no puede
+/// comprobarla). Devuelve null si el usuario cancela.
+Future<Map<String, String>?> pinTokenHeaders(BuildContext context, {Map<String, String> base = const {}}) async {
+  var token = PinSession.validToken;
+  if (token == null) {
+    final ok = await _showPinDialog(context, reason: 'Confirma con tu PIN para mover dinero o cambiar a dónde se envía.');
+    if (!ok) return null;
+    token = PinSession.validToken;
+  }
+  return {...base, if (token != null) 'X-Pin-Token': token};
+}
+
 class _PinDialog extends StatefulWidget {
-  const _PinDialog();
+  final String? reason;
+  const _PinDialog({this.reason});
 
   @override
   State<_PinDialog> createState() => _PinDialogState();
@@ -108,6 +146,7 @@ class _PinDialogState extends State<_PinDialog> {
         );
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
+          PinSession.store((data['data'] as Map<String, dynamic>?)?['pinToken'] as String?);
           if (mounted) Navigator.pop(context, true);
         } else {
           setState(() => _error = data['error']?['message'] ?? 'No se pudo crear el PIN');
@@ -131,6 +170,7 @@ class _PinDialogState extends State<_PinDialog> {
             return;
           }
           if (result['valid'] == true) {
+            PinSession.store(result['pinToken'] as String?);
             if (mounted) Navigator.pop(context, true);
             return;
           }
@@ -162,7 +202,7 @@ class _PinDialogState extends State<_PinDialog> {
           Text(
             _needsSetup
                 ? 'Este PIN de 4 dígitos protege tu billetera y datos sensibles si tu teléfono cae en otras manos.'
-                : 'Por tu seguridad, pedimos tu PIN cada vez que entras a estas pantallas.',
+                : widget.reason ?? 'Por tu seguridad, pedimos tu PIN cada vez que entras a estas pantallas.',
             style: TextStyle(color: textColor, fontSize: 13),
           ),
           const SizedBox(height: 16),
@@ -186,7 +226,7 @@ class _PinDialogState extends State<_PinDialog> {
               maxLength: 4,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 12),
-              decoration: const InputDecoration(counterText: '', hintText: 'Repetí el PIN'),
+              decoration: const InputDecoration(counterText: '', hintText: 'Repite el PIN'),
             ),
           ],
           if (_error != null) ...[

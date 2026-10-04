@@ -1480,13 +1480,32 @@ function assertValidPinFormat(pin: string): void {
 export async function setSecurityPin(userId: string, newPin: string, currentPin?: string): Promise<void> {
   assertValidPinFormat(newPin);
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { securityPinHash: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { securityPinHash: true, pinAttempts: true, pinLockUntil: true },
+  });
   if (!user) throw new BadRequestError('Usuario no encontrado');
 
   if (user.securityPinHash) {
-    if (!currentPin) throw new BadRequestError('Debés ingresar tu PIN actual para cambiarlo');
+    if (!currentPin) throw new BadRequestError('Debes ingresar tu PIN actual para cambiarlo');
+    // Mismo bloqueo que verifySecurityPin: antes este camino comparaba el PIN
+    // actual sin contar intentos, y con una sesión robada se podían probar los
+    // 10.000 PIN posibles por acá esquivando el bloqueo de 5 intentos.
+    if (user.pinLockUntil && user.pinLockUntil > new Date()) {
+      throw new BadRequestError('Demasiados intentos. Espera 15 minutos e intenta de nuevo.');
+    }
     const matches = await bcrypt.compare(currentPin, user.securityPinHash);
-    if (!matches) throw new BadRequestError('El PIN actual no coincide');
+    if (!matches) {
+      const attempts = user.pinAttempts + 1;
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          pinAttempts: attempts,
+          ...(attempts >= PIN_MAX_ATTEMPTS ? { pinLockUntil: new Date(Date.now() + PIN_LOCKOUT_MS) } : {}),
+        },
+      });
+      throw new BadRequestError('El PIN actual no coincide');
+    }
   }
 
   const newHash = await bcrypt.hash(newPin, PIN_SALT_ROUNDS);

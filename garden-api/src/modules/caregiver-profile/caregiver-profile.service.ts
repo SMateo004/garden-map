@@ -2,7 +2,7 @@
  * Servicio: flujo de registro cuidador con guardado progresivo.
  * - getMyProfile: datos para rellenar wizard.
  * - patchProfile: actualización parcial; 403 si status APPROVED; mantiene/cambia a DRAFT.
- * - submitProfile: validar campos obligatorios, status → PENDING_REVIEW, notificar admin.
+ * - submitProfile: validar campos obligatorios y verificaciones; si están completas, status → APPROVED (las verificaciones son la aprobación).
  */
 
 import { randomBytes } from 'crypto';
@@ -491,7 +491,7 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   return { profileId: updated.id, status: updated.status, updatedAt: updated.updatedAt };
 }
 
-/** POST submit: enviar solicitud. Valida campos obligatorios, pone PENDING_REVIEW, notifica admin. */
+/** POST submit: valida campos obligatorios y verificaciones y aprueba el perfil (APPROVED). */
 export async function submitProfile(userId: string): Promise<{ success: true; message: string }> {
   const profile = await prisma.caregiverProfile.findUnique({
     where: { userId },

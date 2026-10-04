@@ -31,7 +31,7 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
         context: context,
         builder: (_) => AlertDialog(
           icon: const GardenIcon(GIcon.soporte, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
-          title: const Text('Iniciá sesión para chatear'),
+          title: const Text('Inicia sesión para chatear'),
           content: const Text('Para hablar con nuestro equipo de soporte primero necesitas iniciar sesión o crear una cuenta.'),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),

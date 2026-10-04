@@ -4334,7 +4334,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // 2. Verificar que la fecha de hoy coincida con la fecha de la reserva
     final serviceType = _booking?['serviceType'] as String? ?? '';
     DateTime? bookingDate;
-    if (serviceType == 'PASEO') {
+    // Paseo y Guardería usan walkDate (un solo día); solo Hospedaje tiene
+    // startDate. Antes Guardería caía en la rama de startDate (null) y se
+    // podía iniciar cualquier día.
+    if (serviceType == 'PASEO' || serviceType == 'GUARDERIA') {
       final walkDateStr = _booking?['walkDate'] as String?;
       if (walkDateStr != null) {
         bookingDate = DateTime.tryParse(walkDateStr);
@@ -4478,7 +4481,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             'En iPhone, si cierras la app por completo (deslizándola desde el '
             'multitarea) se detiene el seguimiento GPS y el dueño deja de ver tu '
             'ubicación en vivo. Puedes minimizarla o usar otras apps con normalidad, '
-            'solo evitá cerrarla del todo hasta terminar el servicio.',
+            'solo evita cerrarla del todo hasta terminar el servicio.',
           ),
           actions: [
             TextButton(

@@ -9,6 +9,7 @@ import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { validateBankInfo, persistBankInfo, isPhoneBasedBankType } from './bank-info.util.js';
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { EARNING_FILTERS, SPENDING_FILTERS } from './wallet-filters.js';
+import { requirePinToken } from '../../middleware/require-pin.middleware.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -128,7 +129,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
 // ──────────────────────────────────────────────────────────────────────────────
 // PUT /api/wallet/withdrawal-method — elegir modalidad de retiro (CLIENT o CAREGIVER)
 // ──────────────────────────────────────────────────────────────────────────────
-router.put('/withdrawal-method', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+router.put('/withdrawal-method', authMiddleware, requirePinToken, asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.userId;
   const { withdrawalMethod } = req.body;
 
@@ -150,7 +151,7 @@ router.put('/withdrawal-method', authMiddleware, asyncHandler(async (req: Reques
 // ──────────────────────────────────────────────────────────────────────────────
 // POST /api/wallet/withdrawal-qr — subir/reemplazar el QR de cobro propio (CLIENT o CAREGIVER)
 // ──────────────────────────────────────────────────────────────────────────────
-router.post('/withdrawal-qr', authMiddleware, upload.single('qrImage'),
+router.post('/withdrawal-qr', authMiddleware, requirePinToken, upload.single('qrImage'),
   asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user.userId;
     const file = req.file;
@@ -180,7 +181,7 @@ router.post('/withdrawal-qr', authMiddleware, upload.single('qrImage'),
 // ──────────────────────────────────────────────────────────────────────────────
 // PUT /api/wallet/bank — actualizar datos bancarios (CLIENT o CAREGIVER)
 // ──────────────────────────────────────────────────────────────────────────────
-router.put('/bank', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+router.put('/bank', authMiddleware, requirePinToken, asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.userId;
   const { bankName, bankAccount, bankHolder, bankType } = req.body;
 
@@ -201,6 +202,7 @@ router.put('/bank', authMiddleware, asyncHandler(async (req: Request, res: Respo
 router.post(
   '/withdraw',
   authMiddleware,
+  requirePinToken,
   asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user.userId;
     const { amount } = req.body;
