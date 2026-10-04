@@ -324,7 +324,7 @@ router.put(
   asyncHandler(async (req: Request, res: Response) => {
     const body = allocationBodySchema.parse(req.body);
     const checked = validateAllocation(body.allocation);
-    if (!checked.ok) throw new BadRequestError(checked.error);
+    if ('error' in checked) throw new BadRequestError(checked.error);
     const adminId = req.user?.userId;
 
     const plans = await loadPlans();
