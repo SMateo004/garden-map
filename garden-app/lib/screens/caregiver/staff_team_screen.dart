@@ -190,7 +190,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                       const SizedBox(height: 20),
                       GardenButton(
                         label: 'Generar código de invitación',
-                        icon: Icons.person_add_alt_1_rounded,
+                        gIcon: GIcon.invitar,
                         loading: _isGeneratingInvite,
                         onPressed: _isGeneratingInvite ? null : _generateInvite,
                       ),

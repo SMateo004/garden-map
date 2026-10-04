@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin de capacitaciones de cuidadores. Dos categorías: AMATEUR
 /// (obligatoria para cuidadores con 0 años de experiencia, una por servicio)
@@ -72,7 +73,7 @@ class _AdminTrainingsScreenState extends State<AdminTrainingsScreen> {
           ));
           if (created == true) _load();
         },
-        icon: const Icon(Icons.add),
+        icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, inheritColor: true),
         label: const Text('Nuevo tema'),
       ),
       body: _isLoading
@@ -131,11 +132,11 @@ class _AdminTrainingsScreenState extends State<AdminTrainingsScreen> {
           Text(_serviceLabels[t['service']] ?? t['service'] as String, style: TextStyle(color: subtextColor, fontSize: 12)),
           const SizedBox(height: 8),
           Row(children: [
-            Icon(hasVideo ? Icons.check_circle_outline : Icons.error_outline, size: 14, color: hasVideo ? GardenColors.success : GardenColors.error),
+            GardenIcon(hasVideo ? GIcon.confirmado : GIcon.conflicto, size: GIconSize.xs, color: hasVideo ? GardenColors.success : GardenColors.error),
             const SizedBox(width: 4),
             Text(hasVideo ? 'Video cargado' : 'Falta video', style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(width: 16),
-            Icon(questionCount == 3 ? Icons.check_circle_outline : Icons.error_outline, size: 14, color: questionCount == 3 ? GardenColors.success : GardenColors.error),
+            GardenIcon(questionCount == 3 ? GIcon.confirmado : GIcon.conflicto, size: GIconSize.xs, color: questionCount == 3 ? GardenColors.success : GardenColors.error),
             const SizedBox(width: 4),
             Text('$questionCount/3 preguntas', style: TextStyle(color: subtextColor, fontSize: 12)),
           ]),
@@ -148,7 +149,7 @@ class _AdminTrainingsScreenState extends State<AdminTrainingsScreen> {
                 ));
                 if (updated == true) _load();
               },
-              icon: const Icon(Icons.edit_outlined, size: 16),
+              icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true),
               label: const Text('Editar'),
             ),
             TextButton.icon(
@@ -167,7 +168,7 @@ class _AdminTrainingsScreenState extends State<AdminTrainingsScreen> {
                 );
                 if (confirmed == true) _delete(t['id'] as String);
               },
-              icon: const Icon(Icons.delete_outline, size: 16, color: GardenColors.error),
+              icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, color: GardenColors.error),
               label: const Text('Eliminar', style: TextStyle(color: GardenColors.error)),
             ),
           ]),
@@ -511,8 +512,7 @@ class CaregiverTrainingsDialogState extends State<CaregiverTrainingsDialog> {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Row(children: [
                             Expanded(child: Text(t['title'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13))),
-                            Icon(completed ? Icons.check_circle : Icons.radio_button_unchecked, size: 16,
-                                color: completed ? GardenColors.success : subtextColor),
+                            GardenIcon(completed ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.sm, state: completed ? GIconState.active : GIconState.idle, color: completed ? GardenColors.success : subtextColor),
                           ]),
                           Text('${_serviceLabels[t['service']] ?? t['service']} · ${mandatory ? 'Obligatoria' : 'Opcional'}',
                               style: TextStyle(color: subtextColor, fontSize: 11)),

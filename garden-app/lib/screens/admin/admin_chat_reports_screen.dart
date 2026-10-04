@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: reportes de chat (acoso, spam, contenido inapropiado, etc.)
 /// enviados por clientes/cuidadores. Requerido por App Store 1.2 (UGC) y
@@ -125,7 +126,7 @@ class _AdminChatReportsScreenState extends State<AdminChatReportsScreen> {
                         child: Padding(
                           padding: const EdgeInsets.all(40),
                           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Icon(Icons.shield_outlined, size: 64, color: subtextColor.withValues(alpha: 0.4)),
+                            GardenIcon(GIcon.protegido, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.4)),
                             const SizedBox(height: 16),
                             Text('Sin reportes de chat', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                             const SizedBox(height: 6),
@@ -266,7 +267,7 @@ class _ChatReportDetailSheetState extends State<_ChatReportDetailSheet> {
           Navigator.pop(context);
           widget.onResolved();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(status == 'ACTION_TAKEN' ? '✅ Reporte marcado con acción tomada' : '✅ Reporte descartado'), backgroundColor: GardenColors.success),
+            SnackBar(content: Text(status == 'ACTION_TAKEN' ? 'Reporte marcado con acción tomada' : 'Reporte descartado'), backgroundColor: GardenColors.success),
           );
         } else {
           GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al resolver');

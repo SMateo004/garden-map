@@ -28,7 +28,6 @@ import 'admin_test_booking_screen.dart';
 import 'admin_finance_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_pricing_screen.dart';
-import '../../design/phosphor_glyphs.dart';
 import 'admin_support_screen.dart';
 import 'admin_blockchain_screen.dart';
 import 'payment_qr_admin_screen.dart';
@@ -36,6 +35,9 @@ import 'audit_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../narrative/booking_story.dart';
+import '../../theme/garden_motion.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -368,7 +370,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   labelText: 'Tu contraseña de admin',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    icon: GardenIcon(obscure ? GIcon.ocultar : GIcon.ver, size: GIconSize.lg, inheritColor: true),
                     onPressed: () => setS(() => obscure = !obscure),
                   ),
                 ),
@@ -522,7 +524,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadIdentityReviews();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Identidad aprobada'), backgroundColor: GardenColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Identidad aprobada'), backgroundColor: GardenColors.success));
       } else { throw Exception(data['error']?['message'] ?? 'Error'); }
     } catch (e) {
       GardenErrorDialog.show(context, e.toString());
@@ -535,7 +537,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadIdentityReviews();
-        GardenSnackBar.warning(context, '❌ Identidad rechazada');
+        GardenSnackBar.warning(context, 'Identidad rechazada');
       } else { throw Exception(data['error']?['message'] ?? 'Error'); }
     } catch (e) {
       GardenErrorDialog.show(context, e.toString());
@@ -554,7 +556,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(children: [
-            const Icon(Icons.delete_forever, color: GardenColors.error),
+            const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error),
             const SizedBox(width: 8),
             Expanded(child: Text('Eliminar cuidador', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 17, fontWeight: FontWeight.bold))),
           ]),
@@ -582,7 +584,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     labelText: 'Tu contraseña de admin',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                      icon: GardenIcon(obscure ? GIcon.ocultar : GIcon.ver, size: GIconSize.lg, inheritColor: true),
                       onPressed: () => setS(() => obscure = !obscure),
                     ),
                   ),
@@ -763,11 +765,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         children: entries.map((e) {
                           final action = e['actionType'] as String? ?? '';
                           final label = action == 'CAREGIVER_SUSPEND'
-                              ? '🔴 Suspendido'
+                              ? 'Suspendido'
                               : action == 'CAREGIVER_ACTIVATE'
-                                  ? '🟢 Reactivado'
+                                  ? 'Reactivado'
                                   : action == 'CAREGIVER_FLAG_REVIEW'
-                                      ? '🟠 Puesto en revisión'
+                                      ? 'Puesto en revisión'
                                       : action;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -966,7 +968,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.logout_rounded, size: 22),
+                icon: const GardenIcon(GIcon.salir, size: GIconSize.md, inheritColor: true),
                 color: textColor,
                 tooltip: 'Cerrar sesión',
                 onPressed: () async {
@@ -1008,54 +1010,54 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // Fuente única de verdad para las 15 secciones — usada tanto por el chip
   // bar horizontal (mobile) como por el sidebar agrupado (web). El índice de
   // cada entrada es el mismo que su posición en _buildIndexedStackBody().
-  static final List<(String, IconData)> _tabs = [
-    ('Cuidadores', Icons.person_search_rounded),
-    ('Solicitudes', Icons.pending_actions_rounded),
-    ('Reservas', Icons.calendar_month_outlined),
-    ('Pagos', Icons.price_check_rounded),
-    ('Identidad', Icons.verified_user_outlined),
-    ('Disputas', Icons.gavel_rounded),
-    ('Retiros', Icons.account_balance_rounded),
-    ('Códigos', Icons.card_giftcard_outlined),
-    ('Dueños', Icons.pets_rounded),
-    ('Veterinarias', Icons.local_hospital_rounded),
-    ('Administración', Icons.business_center_rounded),
-    ('Técnica', Icons.developer_mode_rounded),
-    ('Notificaciones', Icons.campaign_rounded),
-    ('Banners', Icons.view_carousel_rounded),
-    ('Feature Flags', Icons.flag_rounded),
-    ('QR de Pago', Icons.qr_code_2_rounded),
-    ('Auditoría', Icons.fact_check_outlined),
-    ('Reportes de chat', Icons.shield_outlined),
-    ('Verif. telefónica', Icons.phone_forwarded_outlined),
-    ('Verif. de correo', Icons.mark_email_unread_outlined),
-    ('Donaciones', Icons.volunteer_activism_outlined),
-    ('Ciudades', Icons.map_rounded),
-    ('Capacitaciones', Icons.school_rounded),
-    ('Bajas de cuidador', Icons.person_remove_outlined),
-    ('Antecedentes', Icons.gavel_rounded),
-    ('Finanzas', Icons.attach_money_rounded),
-    ('Soporte', Icons.support_agent_rounded),
-    ('Blockchain', Icons.link_rounded),
-    ('Verif. de NIT', Icons.receipt_long_rounded),
-    ('Comisiones', Ph.scales.regular),
-    ('Analítica', Ph.heartbeat.regular),
+  static final List<(String, GIcon)> _tabs = [
+    ('Cuidadores', GIcon.buscar),
+    ('Solicitudes', GIcon.esperando),
+    ('Reservas', GIcon.calendario),
+    ('Pagos', GIcon.precio),
+    ('Identidad', GIcon.protegido),
+    ('Disputas', GIcon.multa),
+    ('Retiros', GIcon.retiro),
+    ('Códigos', GIcon.regalo),
+    ('Dueños', GIcon.mascotas),
+    ('Veterinarias', GIcon.veterinaria),
+    ('Administración', GIcon.trabajo),
+    ('Técnica', GIcon.herramientas),
+    ('Notificaciones', GIcon.anuncio),
+    ('Banners', GIcon.galeria),
+    ('Feature Flags', GIcon.reportar),
+    ('QR de Pago', GIcon.pagarQr),
+    ('Auditoría', GIcon.lista),
+    ('Reportes de chat', GIcon.protegido),
+    ('Verif. telefónica', GIcon.telefono),
+    ('Verif. de correo', GIcon.correo),
+    ('Donaciones', GIcon.donar),
+    ('Ciudades', GIcon.mapa),
+    ('Capacitaciones', GIcon.capacitacion),
+    ('Bajas de cuidador', GIcon.quitar),
+    ('Antecedentes', GIcon.multa),
+    ('Finanzas', GIcon.precio),
+    ('Soporte', GIcon.soporte),
+    ('Blockchain', GIcon.seguridad),
+    ('Verif. de NIT', GIcon.recibo),
+    ('Comisiones', GIcon.comision),
+    ('Analítica', GIcon.estadisticas),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
-    ('Reserva de prueba', Icons.science_outlined),
+    ('Reserva de prueba', GIcon.ia),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
   // NOTA: "Donaciones" (20) va deliberadamente en "Personas", NUNCA en
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
-  static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 31]),
-    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25, 29]),
-    ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24, 28]),
-    ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
-    ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27, 30]),
+  static const List<(String, GIcon, List<int>)> _webNavGroups = [
+    ('Operaciones', GIcon.categoria, [0, 1, 2, 4, 5, 21, 31]),
+    ('Finanzas', GIcon.precio, [3, 6, 7, 15, 25, 29]),
+    ('Personas', GIcon.equipo, [8, 9, 20, 22, 23, 24, 28]),
+    ('Comunicación', GIcon.chat, [12, 13, 17, 18, 19, 26]),
+    ('Sistema', GIcon.ajustes, [10, 11, 14, 16, 27, 30]),
   ];
 
   Widget _buildIndexedStackBody(Color surface, Color textColor, Color subtextColor, Color borderColor) {
@@ -1116,7 +1118,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(children: [
-                      Icon(groupIcon, size: 13, color: subtextColor),
+                      GardenIcon(groupIcon, size: GIconSize.xs, color: subtextColor),
                       const SizedBox(width: 6),
                       Text(groupTitle.toUpperCase(),
                         style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
@@ -1143,7 +1145,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               border: selected ? Border.all(color: GardenColors.primary.withValues(alpha: 0.4)) : null,
                             ),
                             child: Row(children: [
-                              Icon(icon, size: 18, color: selected ? GardenColors.primary : subtextColor),
+                              GardenIcon(icon, size: GIconSize.sm, color: selected ? GardenColors.primary : subtextColor),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(label,
@@ -1200,7 +1202,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(tab.$2, size: 14, color: selected ? Colors.white : subtextColor),
+                    GardenIcon(tab.$2, size: GIconSize.xs, color: selected ? Colors.white : subtextColor),
                     const SizedBox(width: 8),
                     Text(tab.$1, style: TextStyle(
                       color: selected ? Colors.white : subtextColor,
@@ -1250,7 +1252,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'Buscar por nombre o email...',
-              prefixIcon: const Icon(Icons.search, size: 20),
+              prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.md, inheritColor: true),
               isDense: true,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -1345,7 +1347,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.history, size: 14, color: GardenColors.primary),
+              const GardenIcon(GIcon.historial, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 6),
               Text(title, style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ],
@@ -1474,7 +1476,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: GardenColors.warning.withValues(alpha: 0.5)),
                             ),
-                            child: const Text('⚠️ Antecedentes por revisar', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
+                            child: const Text('Antecedentes por revisar', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],
@@ -1493,7 +1495,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5)),
                             ),
-                            child: const Text('🧾 NIT por revisar', style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),
+                            child: const Text('NIT por revisar', style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],
@@ -1506,7 +1508,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: GardenColors.info.withValues(alpha: 0.5)),
                           ),
-                          child: const Text('🔻 Auto-suspendido por rating', style: TextStyle(color: GardenColors.info, fontSize: 10, fontWeight: FontWeight.w700)),
+                          child: const Text('Auto-suspendido por rating', style: TextStyle(color: GardenColors.info, fontSize: 10, fontWeight: FontWeight.w700)),
                         ),
                       ],
                       if (lateCancellationAutoSuspended) ...[
@@ -1518,7 +1520,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: GardenColors.error.withValues(alpha: 0.5)),
                           ),
-                          child: const Text('🚫 Auto-suspendido: cancelaciones tardías', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
+                          child: const Text('Auto-suspendido: cancelaciones tardías', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
                         ),
                       ],
                       if (isProfessional) ...[
@@ -1548,77 +1550,67 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Expanded(
                   child: GardenButton(
                     label: 'Aprobar',
-                    icon: Icons.check_rounded,
+                    gIcon: GIcon.hecho,
                     height: 38,
                     color: GardenColors.success,
-                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'approve'),
-                  ),
+                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'approve')),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GardenButton(
                     label: 'Rechazar',
-                    icon: Icons.close_rounded,
+                    gIcon: GIcon.cerrar,
                     height: 38,
                     color: GardenColors.error,
                     outline: true,
-                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject'),
-                  ),
+                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject')),
                 ),
                 const SizedBox(width: 8),
               ] else if (isApproved) ...[
                 Expanded(
                   child: GardenButton(
                     label: 'Revisar',
-                    icon: Icons.shield_outlined,
+                    gIcon: GIcon.protegido,
                     height: 38,
                     color: const Color(0xFFE65100),
                     outline: true,
-                    onPressed: () => _flagCaregiverForReview(caregiver['id'] as String),
-                  ),
+                    onPressed: () => _flagCaregiverForReview(caregiver['id'] as String)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GardenButton(
                     label: 'Suspender',
-                    icon: Icons.block,
+                    gIcon: GIcon.bloqueado,
                     height: 38,
                     color: GardenColors.warning,
                     outline: true,
-                    onPressed: () => _suspendCaregiver(caregiver['id'] as String),
-                  ),
+                    onPressed: () => _suspendCaregiver(caregiver['id'] as String)),
                 ),
                 const SizedBox(width: 8),
               ] else if (isSuspended) ...[
                 Expanded(
                   child: GardenButton(
                     label: 'Reactivar',
-                    icon: Icons.check_circle_outline,
+                    gIcon: GIcon.confirmado,
                     height: 38,
                     color: GardenColors.success,
                     outline: true,
-                    onPressed: () => _activateCaregiver(caregiver['id'] as String),
-                  ),
+                    onPressed: () => _activateCaregiver(caregiver['id'] as String)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GardenButton(
                     label: 'Historial',
-                    icon: Icons.history_rounded,
+                    gIcon: GIcon.historial,
                     height: 38,
                     color: GardenColors.primary,
                     outline: true,
-                    onPressed: () => _showCaregiverAuditLog(caregiver['id'] as String, '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}'.trim()),
-                  ),
+                    onPressed: () => _showCaregiverAuditLog(caregiver['id'] as String, '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}'.trim())),
                 ),
                 const SizedBox(width: 8),
               ],
               IconButton(
-                icon: Icon(
-                  isProfessional ? Icons.workspace_premium : Icons.workspace_premium_outlined,
-                  size: 20,
-                  color: isProfessional ? GardenColors.primary : subtextColor,
-                ),
+                icon: GardenIcon(GIcon.destacado, size: GIconSize.md, state: isProfessional ? GIconState.active : GIconState.idle, color: isProfessional ? GardenColors.primary : subtextColor),
                 tooltip: isProfessional ? 'Quitar profesional' : 'Marcar como profesional',
                 style: IconButton.styleFrom(
                   side: BorderSide(color: isProfessional ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
@@ -1630,7 +1622,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.visibility_outlined, size: 20),
+                icon: const GardenIcon(GIcon.ver, size: GIconSize.md, inheritColor: true),
                 style: IconButton.styleFrom(
                   side: BorderSide(color: borderColor),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1641,7 +1633,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.delete_forever, size: 20, color: GardenColors.error),
+                icon: const GardenIcon(GIcon.eliminar, size: GIconSize.md, color: GardenColors.error),
                 tooltip: 'Eliminar perfil permanentemente',
                 style: IconButton.styleFrom(
                   side: const BorderSide(color: GardenColors.error),
@@ -1805,33 +1797,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                 Expanded(
                                   child: GardenButton(
                                     label: 'Aprobar',
-                                    icon: Icons.check,
+                                    gIcon: GIcon.hecho,
                                     height: 36,
                                     color: GardenColors.success,
-                                    onPressed: () => _approveIdentity(review['id'] as String),
-                                  ),
+                                    onPressed: () => _approveIdentity(review['id'] as String)),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: GardenButton(
                                     label: 'Rechazar',
-                                    icon: Icons.close,
+                                    gIcon: GIcon.cerrar,
                                     height: 36,
                                     color: GardenColors.error,
                                     outline: true,
-                                    onPressed: () => _rejectIdentity(review['id'] as String),
-                                  ),
+                                    onPressed: () => _rejectIdentity(review['id'] as String)),
                                 ),
                                 const SizedBox(width: 8),
                               ],
                               GardenButton(
                                 label: '',
-                                icon: Icons.image_outlined,
+                                gIcon: GIcon.galeria,
                                 width: 50,
                                 height: 36,
                                 outline: true,
-                                onPressed: () => context.push('/admin/identity-reviews/${review['id']}'),
-                              ),
+                                onPressed: () => context.push('/admin/identity-reviews/${review['id']}')),
                             ],
                           ),
                         ],
@@ -1957,32 +1946,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
     Color statusColor;
     String statusLabel;
-    IconData statusIcon;
+    GIcon statusIcon;
     switch (status) {
       case 'PENDING_CAREGIVER':
         statusColor = GardenColors.warning;
         statusLabel = 'Esperando cuidador';
-        statusIcon = Icons.hourglass_top_rounded;
+        statusIcon = GIcon.esperando;
         break;
       case 'PENDING_AI':
         statusColor = GardenColors.primary;
         statusLabel = 'Analizando IA…';
-        statusIcon = Icons.psychology_rounded;
+        statusIcon = GIcon.ia;
         break;
       case 'APPEALED':
         statusColor = GardenColors.warning;
         statusLabel = 'En apelación';
-        statusIcon = Icons.gavel_rounded;
+        statusIcon = GIcon.multa;
         break;
       case 'RESOLVED':
         statusColor = GardenColors.success;
         statusLabel = 'Resuelta';
-        statusIcon = Icons.check_circle_rounded;
+        statusIcon = GIcon.confirmado;
         break;
       default:
         statusColor = subtextColor;
         statusLabel = status;
-        statusIcon = Icons.help_outline_rounded;
+        statusIcon = GIcon.ayuda;
     }
 
     Color? verdictColor;
@@ -2033,7 +2022,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               color: statusColor.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: Icon(statusIcon, size: 18, color: statusColor),
+            child: GardenIcon(statusIcon, size: GIconSize.sm, color: statusColor),
           ),
           const SizedBox(width: 12),
           // Main info
@@ -2047,12 +2036,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             ]),
             const SizedBox(height: 3),
             Row(children: [
-              Icon(Icons.person_outline, size: 11, color: subtextColor),
+              GardenIcon(GIcon.perfil, size: GIconSize.xs, color: subtextColor),
               const SizedBox(width: 3),
               Expanded(child: Text(clientName,
                 style: TextStyle(color: subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 6),
-              Icon(Icons.supervisor_account_outlined, size: 11, color: subtextColor),
+              GardenIcon(GIcon.equipo, size: GIconSize.xs, color: subtextColor),
               const SizedBox(width: 3),
               Expanded(child: Text(caregiverName,
                 style: TextStyle(color: subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
@@ -2066,7 +2055,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(statusIcon, size: 9, color: statusColor),
+                  GardenIcon(statusIcon, size: GIconSize.xs, color: statusColor),
                   const SizedBox(width: 3),
                   Text(statusLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor)),
                 ]),
@@ -2085,7 +2074,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               const Spacer(),
               Text(dateStr, style: TextStyle(color: subtextColor, fontSize: 10)),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, size: 14, color: subtextColor),
+              GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: subtextColor),
             ]),
           ])),
         ]),
@@ -2109,7 +2098,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadDisputes();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Disputa resuelta manualmente'), backgroundColor: GardenColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disputa resuelta manualmente'), backgroundColor: GardenColors.success));
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al resolver');
       }
@@ -2197,7 +2186,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadDisputes();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Apelación resuelta'), backgroundColor: GardenColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Apelación resuelta'), backgroundColor: GardenColors.success));
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al resolver la apelación');
       }
@@ -2228,27 +2217,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
     Color verdictColor;
     String verdictLabel;
-    IconData verdictIcon;
+    GIcon verdictIcon;
     switch (verdict) {
       case 'CAREGIVER_WINS':
         verdictColor = GardenColors.success;
         verdictLabel = 'CUIDADOR GANÓ';
-        verdictIcon = Icons.person_rounded;
+        verdictIcon = GIcon.perfil;
         break;
       case 'CLIENT_WINS':
         verdictColor = GardenColors.error;
         verdictLabel = 'REEMBOLSO AL DUEÑO';
-        verdictIcon = Icons.undo_rounded;
+        verdictIcon = GIcon.reembolso;
         break;
       case 'PARTIAL':
         verdictColor = GardenColors.warning;
         verdictLabel = 'RESOLUCIÓN 80/20';
-        verdictIcon = Icons.balance_rounded;
+        verdictIcon = GIcon.enRevision;
         break;
       default:
         verdictColor = subtextColor;
         verdictLabel = 'PENDIENTE';
-        verdictIcon = Icons.hourglass_top_rounded;
+        verdictIcon = GIcon.esperando;
     }
 
     await showModalBottomSheet(
@@ -2277,7 +2266,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(color: verdictColor.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: Icon(verdictIcon, size: 20, color: verdictColor),
+                  child: GardenIcon(verdictIcon, size: GIconSize.md, color: verdictColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2302,7 +2291,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      Icon(Icons.psychology_rounded, size: 13, color: verdictColor),
+                      GardenIcon(GIcon.ia, size: GIconSize.xs, color: verdictColor),
                       const SizedBox(width: 5),
                       Text('VEREDICTO GARDEN IA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: verdictColor, letterSpacing: 0.5)),
                     ]),
@@ -2327,7 +2316,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     border: Border.all(color: borderColor),
                   ),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.gavel_rounded, size: 14, color: subtextColor),
+                    GardenIcon(GIcon.multa, size: GIconSize.xs, color: subtextColor),
                     const SizedBox(width: 8),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('Resolución aplicada', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subtextColor)),
@@ -2349,7 +2338,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.confirmation_number_rounded, size: 16, color: GardenColors.warning),
+                    const GardenIcon(GIcon.recibo, size: GIconSize.sm, color: GardenColors.warning),
                     const SizedBox(width: 8),
                     Expanded(child: Text('Código de descuento emitido al dueño (uso único, enviado a notificaciones)',
                       style: const TextStyle(fontSize: 12, color: GardenColors.warning, fontWeight: FontWeight.w600))),
@@ -2391,7 +2380,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ),
                 child: Column(children: [
                   Row(children: [
-                    const Icon(Icons.person_outline, size: 14, color: GardenColors.primary),
+                    const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: GardenColors.primary),
                     const SizedBox(width: 6),
                     Text('Dueño: ', style: TextStyle(fontSize: 12, color: subtextColor)),
                     Expanded(child: Text(d['clientName'] ?? '—',
@@ -2400,7 +2389,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ]),
                   const SizedBox(height: 6),
                   Row(children: [
-                    const Icon(Icons.supervisor_account_outlined, size: 14, color: GardenColors.primary),
+                    const GardenIcon(GIcon.equipo, size: GIconSize.xs, color: GardenColors.primary),
                     const SizedBox(width: 6),
                     Text('Cuidador: ', style: TextStyle(fontSize: 12, color: subtextColor)),
                     Expanded(child: Text(d['caregiverName'] ?? '—',
@@ -2418,7 +2407,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ...clientReasons.map((r) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(children: [
-                    const Icon(Icons.circle, size: 5, color: GardenColors.error),
+                    const GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: GardenColors.error),
                     const SizedBox(width: 8),
                     Expanded(child: Text(r, style: TextStyle(color: textColor, fontSize: 12))),
                   ]),
@@ -2433,7 +2422,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ...caregiverResponse.map((r) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(children: [
-                    const Icon(Icons.circle, size: 5, color: GardenColors.success),
+                    const GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: GardenColors.success),
                     const SizedBox(width: 8),
                     Expanded(child: Text(r, style: TextStyle(color: textColor, fontSize: 12))),
                   ]),
@@ -2472,7 +2461,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.gavel_rounded, size: 13, color: GardenColors.warning),
+                      const GardenIcon(GIcon.multa, size: GIconSize.xs, color: GardenColors.warning),
                       const SizedBox(width: 6),
                       Text('APELACIÓN DE ${appealedBy == 'CLIENT' ? 'DUEÑO' : 'CUIDADOR'}',
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 0.5)),
@@ -2496,7 +2485,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.verified_user_rounded, size: 13, color: GardenColors.primary),
+                      const GardenIcon(GIcon.protegido, size: GIconSize.xs, state: GIconState.active, color: GardenColors.primary),
                       const SizedBox(width: 6),
                       Text('DECISIÓN FINAL DE APELACIÓN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 0.5)),
                     ]),
@@ -2518,7 +2507,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.how_to_reg_rounded, size: 14, color: GardenColors.primary),
+                      const GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.primary),
                       const SizedBox(width: 6),
                       Text('RESOLVER APELACIÓN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
                     ]),
@@ -2534,7 +2523,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         Navigator.pop(context);
                         await _showResolveAppealDialog(d);
                       },
-                      icon: const Icon(Icons.gavel_rounded, size: 14, color: GardenColors.primary),
+                      icon: const GardenIcon(GIcon.multa, size: GIconSize.xs, color: GardenColors.primary),
                       label: const Text('Dar veredicto final', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
                   ]),
@@ -2553,7 +2542,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.gavel_rounded, size: 14, color: GardenColors.warning),
+                      const GardenIcon(GIcon.multa, size: GIconSize.xs, color: GardenColors.warning),
                       const SizedBox(width: 6),
                       Text('RESOLUCIÓN MANUAL FORZADA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 1)),
                     ]),
@@ -2594,7 +2583,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Navigator.pop(context);
                   context.push('/admin/reservations/${d['bookingId']}');
                 },
-                icon: const Icon(Icons.open_in_new_rounded, size: 14, color: GardenColors.primary),
+                icon: const GardenIcon(GIcon.abrirFuera, size: GIconSize.xs, color: GardenColors.primary),
                 label: const Text('Ver reserva completa', style: TextStyle(color: GardenColors.primary, fontSize: 13)),
               ),
             ],
@@ -2670,7 +2659,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final isPaseo = svcType == 'PASEO';
       final isGuarderia = svcType == 'GUARDERIA';
       final svcLabel = isPaseo ? 'Paseo' : isGuarderia ? 'Guardería' : 'Hospedaje';
-      final svcIcon = isPaseo ? Icons.directions_walk_rounded : isGuarderia ? Icons.home_work_rounded : Icons.home_rounded;
+      final svcIcon = isPaseo ? GIcon.paseo : isGuarderia ? GIcon.guarderia : GIcon.hospedaje;
       return Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
@@ -2687,7 +2676,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: Row(children: [
-              Icon(svcIcon, size: 14, color: GardenColors.warning),
+              GardenIcon(svcIcon, size: GIconSize.xs, color: GardenColors.warning),
               const SizedBox(width: 6),
               Text(svcLabel,
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: GardenColors.warning)),
@@ -2715,14 +2704,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ]),
               const SizedBox(height: 10),
               Row(children: [
-                const Icon(Icons.person_outline, size: 13, color: GardenColors.primary),
+                const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: GardenColors.primary),
                 const SizedBox(width: 4),
                 Expanded(child: Text('${p['clientEmail'] ?? p['clientName'] ?? '—'}',
                   style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
               ]),
               const SizedBox(height: 3),
               Row(children: [
-                const Icon(Icons.supervisor_account_outlined, size: 13, color: GardenColors.primary),
+                const GardenIcon(GIcon.equipo, size: GIconSize.xs, color: GardenColors.primary),
                 const SizedBox(width: 4),
                 Expanded(child: Text(p['caregiverName'] as String? ?? '—',
                   style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
@@ -2737,7 +2726,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.warning_amber_rounded, size: 14, color: GardenColors.error),
+                  const GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: GardenColors.error),
                   const SizedBox(width: 6),
                   Expanded(child: Text(
                     'Sin comprobante adjunto — verifica el pago con el cliente por otro medio antes de aprobar.',
@@ -2749,23 +2738,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               Row(children: [
                 Expanded(child: GardenButton(
                   label: 'Aprobar pago',
-                  icon: Icons.check_rounded,
+                  gIcon: GIcon.hecho,
                   height: 40,
                   color: GardenColors.success,
                   onPressed: () async {
                     await _approvePayment(p['id'] as String);
                     await _loadPayments();
-                  },
-                )),
+                  })),
                 const SizedBox(width: 10),
                 Expanded(child: GardenButton(
                   label: 'Rechazar',
-                  icon: Icons.close_rounded,
+                  gIcon: GIcon.cerrar,
                   height: 40,
                   color: GardenColors.error,
                   outline: true,
-                  onPressed: () => _rejectPayment(p['id'] as String),
-                )),
+                  onPressed: () => _rejectPayment(p['id'] as String))),
               ]),
             ]),
           ),
@@ -2785,7 +2772,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final isPaseo = svcType2 == 'PASEO';
       final isGuarderia2 = svcType2 == 'GUARDERIA';
       final svcLabel2 = isPaseo ? 'Paseo' : isGuarderia2 ? 'Guardería' : 'Hospedaje';
-      final svcIcon2 = isPaseo ? Icons.directions_walk_rounded : isGuarderia2 ? Icons.home_work_rounded : Icons.home_rounded;
+      final svcIcon2 = isPaseo ? GIcon.paseo : isGuarderia2 ? GIcon.guarderia : GIcon.hospedaje;
       final paidAt = p['paidAt'] as String?;
       String dateStr = '—';
       if (paidAt != null) {
@@ -2814,7 +2801,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               ),
               child: Row(children: [
-                Icon(svcIcon2, size: 14, color: GardenColors.success),
+                GardenIcon(svcIcon2, size: GIconSize.xs, color: GardenColors.success),
                 const SizedBox(width: 6),
                 Text(svcLabel2,
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: GardenColors.success)),
@@ -2826,7 +2813,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.check_circle_rounded, size: 10, color: GardenColors.success),
+                    const GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                     const SizedBox(width: 3),
                     const Text('Pagado', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.success)),
                   ]),
@@ -2840,7 +2827,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.replay_circle_filled_rounded, size: 10, color: GardenColors.error),
+                      GardenIcon(GIcon.repetir, size: GIconSize.xs, color: GardenColors.error),
                       SizedBox(width: 3),
                       Text('Reembolsado', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.error)),
                     ]),
@@ -2898,13 +2885,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
                 // Client + caregiver
                 Row(children: [
-                  const Icon(Icons.person_outline, size: 13, color: GardenColors.primary),
+                  const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: GardenColors.primary),
                   const SizedBox(width: 4),
                   Expanded(child: Text(
                     p['clientName'] ?? p['clientEmail'] ?? '—',
                     style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
                   const SizedBox(width: 8),
-                  const Icon(Icons.supervisor_account_outlined, size: 13, color: GardenColors.primary),
+                  const GardenIcon(GIcon.equipo, size: GIconSize.xs, color: GardenColors.primary),
                   const SizedBox(width: 4),
                   Expanded(child: Text(
                     p['caregiverName'] as String? ?? '—',
@@ -2916,7 +2903,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Row(children: [
                     Text('Ver reserva', style: TextStyle(fontSize: 11, color: GardenColors.primary, fontWeight: FontWeight.w600)),
                     const SizedBox(width: 2),
-                    const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: GardenColors.primary),
+                    const GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: GardenColors.primary),
                   ]),
                 ]),
               ]),
@@ -2935,13 +2922,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
           // ── Header + refrescar manual (además del auto-refresco cada 20s) ──
           Row(children: [
-            Icon(Icons.price_check_rounded, color: GardenColors.primary, size: 20),
+            GardenIcon(GIcon.precio, size: GIconSize.md, color: GardenColors.primary),
             const SizedBox(width: 8),
             Text('Pagos', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
             const Spacer(),
             TextButton.icon(
               onPressed: _isLoadingPayments ? null : _loadPayments,
-              icon: Icon(Icons.refresh_rounded, size: 16, color: GardenColors.primary),
+              icon: GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
               label: const Text('Actualizar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
             ),
           ]),
@@ -2964,7 +2951,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  const Icon(Icons.bar_chart_rounded, size: 14, color: GardenColors.success),
+                  const GardenIcon(GIcon.estadisticas, size: GIconSize.xs, color: GardenColors.success),
                   const SizedBox(width: 6),
                   Text('RESUMEN FINANCIERO',
                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.success, letterSpacing: 1)),
@@ -2996,18 +2983,18 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(child: _kpiBox('Cuidadores (90%)', 'Bs ${totalCaregiversPaid.toStringAsFixed(2)}',
-                    GardenColors.success, Icons.person_rounded, bg, borderColor, textColor, subtextColor)),
+                    GardenColors.success, GIcon.perfil, bg, borderColor, textColor, subtextColor)),
                   const SizedBox(width: 8),
                   Expanded(child: _kpiBox('Garden (10%)', 'Bs ${totalCommission.toStringAsFixed(2)}',
-                    GardenColors.primary, Icons.eco_rounded, bg, borderColor, textColor, subtextColor)),
+                    GardenColors.primary, GIcon.huella, bg, borderColor, textColor, subtextColor)),
                 ]),
                 const SizedBox(height: 8),
                 Row(children: [
                   Expanded(child: _kpiBox('Este mes', '$countThisMonth pagos',
-                    GardenColors.accent, Icons.calendar_today_rounded, bg, borderColor, textColor, subtextColor)),
+                    GardenColors.accent, GIcon.calendario, bg, borderColor, textColor, subtextColor)),
                   const SizedBox(width: 8),
                   Expanded(child: _kpiBox('Recaudado este mes', 'Bs ${revenueThisMonth.toStringAsFixed(2)}',
-                    GardenColors.warning, Icons.trending_up_rounded, bg, borderColor, textColor, subtextColor)),
+                    GardenColors.warning, GIcon.estadisticas, bg, borderColor, textColor, subtextColor)),
                 ]),
               ]),
             ),
@@ -3016,7 +3003,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
           // ── EXTENSION PAYMENTS PENDING ─────────────────────────
           Row(children: [
-            const Icon(Icons.add_alarm_rounded, size: 16, color: Colors.deepOrange),
+            const GardenIcon(GIcon.alarma, size: GIconSize.sm, color: Colors.deepOrange),
             const SizedBox(width: 6),
             const Text('Extensiones de paseo', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
             const SizedBox(width: 8),
@@ -3033,7 +3020,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
               child: Row(children: [
-                Icon(Icons.check_circle_outline_rounded, size: 16, color: subtextColor),
+                GardenIcon(GIcon.confirmado, size: GIconSize.sm, color: subtextColor),
                 const SizedBox(width: 8),
                 Text('Sin extensiones pendientes', style: TextStyle(color: subtextColor, fontSize: 13)),
               ]),
@@ -3066,7 +3053,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.add_alarm_rounded, size: 14, color: Colors.deepOrange),
+                      const GardenIcon(GIcon.alarma, size: GIconSize.xs, color: Colors.deepOrange),
                       const SizedBox(width: 6),
                       const Text('Extensión de paseo', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                       const Spacer(),
@@ -3099,13 +3086,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       ]),
                       const SizedBox(height: 8),
                       Row(children: [
-                        const Icon(Icons.person_outline, size: 13, color: GardenColors.primary),
+                        const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: GardenColors.primary),
                         const SizedBox(width: 4),
                         Expanded(child: Text(client, style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
                       ]),
                       const SizedBox(height: 3),
                       Row(children: [
-                        const Icon(Icons.supervisor_account_outlined, size: 13, color: GardenColors.primary),
+                        const GardenIcon(GIcon.equipo, size: GIconSize.xs, color: GardenColors.primary),
                         const SizedBox(width: 4),
                         Expanded(child: Text(caregiver, style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
                       ]),
@@ -3115,24 +3102,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       Row(children: [
                         Expanded(child: GardenButton(
                           label: 'Aprobar',
-                          icon: Icons.check_rounded,
+                          gIcon: GIcon.hecho,
                           height: 40,
                           color: GardenColors.success,
                           onPressed: () async {
                             await _approveExtensionPayment(bookingId, extensionId);
-                          },
-                        )),
+                          })),
                         const SizedBox(width: 10),
                         Expanded(child: GardenButton(
                           label: 'Rechazar',
-                          icon: Icons.close_rounded,
+                          gIcon: GIcon.cerrar,
                           height: 40,
                           color: GardenColors.error,
                           outline: true,
                           onPressed: () async {
                             await _rejectExtensionPayment(bookingId, extensionId);
-                          },
-                        )),
+                          })),
                       ]),
                     ]),
                   ),
@@ -3144,7 +3129,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
           // ── PENDING PAYMENTS ───────────────────────────────────
           Row(children: [
-            const Icon(Icons.pending_actions_rounded, size: 16, color: GardenColors.warning),
+            const GardenIcon(GIcon.esperando, size: GIconSize.sm, color: GardenColors.warning),
             const SizedBox(width: 6),
             Text('Por aprobar', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: GardenColors.warning)),
             const SizedBox(width: 8),
@@ -3166,7 +3151,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 border: Border.all(color: borderColor),
               ),
               child: Row(children: [
-                const Icon(Icons.check_circle_outline_rounded, size: 18, color: GardenColors.success),
+                const GardenIcon(GIcon.confirmado, size: GIconSize.sm, color: GardenColors.success),
                 const SizedBox(width: 10),
                 Text('Sin pagos pendientes de aprobación', style: TextStyle(color: subtextColor, fontSize: 13)),
               ]),
@@ -3178,7 +3163,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
           // ── HISTORY SECTION ────────────────────────────────────
           Row(children: [
-            const Icon(Icons.history_rounded, size: 16, color: GardenColors.primary),
+            const GardenIcon(GIcon.historial, size: GIconSize.sm, color: GardenColors.primary),
             const SizedBox(width: 6),
             Expanded(child: Text('Historial de pagos',
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: GardenColors.primary))),
@@ -3192,10 +3177,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'Buscar por cliente, cuidador, mascota o ID...',
-              prefixIcon: const Icon(Icons.search, size: 18),
+              prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.sm, inheritColor: true),
               suffixIcon: _paymentsSearchCtrl.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
+                    icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, inheritColor: true),
                     onPressed: () { _paymentsSearchCtrl.clear(); setState(() {}); },
                   )
                 : null,
@@ -3244,7 +3229,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               padding: const EdgeInsets.symmetric(vertical: 32),
               alignment: Alignment.center,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.receipt_long_outlined, size: 48, color: subtextColor),
+                GardenIcon(GIcon.recibo, size: GIconSize.hero, color: subtextColor),
                 const SizedBox(height: 12),
                 Text('Sin historial de pagos', style: TextStyle(color: subtextColor, fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -3275,7 +3260,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _kpiBox(String label, String value, Color color, IconData icon,
+  Widget _kpiBox(String label, String value, Color color, GIcon icon,
       Color bg, Color borderColor, Color textColor, Color subtextColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3288,7 +3273,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-          child: Icon(icon, size: 14, color: color),
+          child: GardenIcon(icon, size: GIconSize.xs, color: color),
         ),
         const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3362,7 +3347,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               Center(child: Container(width: 36, height: 4,
                 decoration: BoxDecoration(color: GardenColors.darkBorder, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Icon(Icons.check_circle_outline_rounded, color: GardenColors.success, size: 40),
+              const GardenIcon(GIcon.confirmado, size: GIconSize.xl, color: GardenColors.success),
               const SizedBox(height: 12),
               Text('¿Aprobar este pago?', style: TextStyle(
                 color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
@@ -3437,7 +3422,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               Center(child: Container(width: 36, height: 4,
                 decoration: BoxDecoration(color: GardenColors.darkBorder, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              const Icon(Icons.warning_amber_rounded, color: GardenColors.error, size: 40),
+              const GardenIcon(GIcon.advertencia, size: GIconSize.xl, color: GardenColors.error),
               const SizedBox(height: 12),
               Text('¿Rechazar pago?', style: TextStyle(
                 color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
@@ -3613,7 +3598,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                           // de retiro, para que el admin pueda contactarlo rápido ante dudas.
                           Row(
                             children: [
-                              Icon(Icons.phone_rounded, size: 14, color: subtextColor),
+                              GardenIcon(GIcon.telefono, size: GIconSize.xs, color: subtextColor),
                               const SizedBox(width: 6),
                               Text(
                                 userPhone ?? 'Sin teléfono',
@@ -3628,7 +3613,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       const SnackBar(content: Text('Teléfono copiado'), duration: Duration(seconds: 1)),
                                     );
                                   },
-                                  child: Icon(Icons.copy_rounded, size: 14, color: GardenColors.primary),
+                                  child: GardenIcon(GIcon.copiar, size: GIconSize.xs, color: GardenColors.primary),
                                 ),
                               ],
                             ],
@@ -3647,7 +3632,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   child: Image.network(
                                     qrInfo['imageUrl'] as String,
                                     fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error),
+                                    errorBuilder: (_, __, ___) => const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.error),
                                   ),
                                 ),
                               )
@@ -3725,24 +3710,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Canceladas', 'CANCELLED'),
     ];
 
-    String bookingStatusLabel(String s) => switch (s) {
-      'CONFIRMED'                  => 'Confirmada',
-      'IN_PROGRESS'                => 'En curso',
-      'COMPLETED'                  => 'Completada',
-      'CANCELLED'                  => 'Cancelada',
-      'WAITING_CAREGIVER_APPROVAL' => 'Esperando cuidador',
-      'PAYMENT_PENDING_APPROVAL'   => 'Por aprobar',
-      'PENDING_PAYMENT'            => 'Pendiente pago',
-      _                            => s,
-    };
-
-    Color bookingStatusColor(String s) => switch (s) {
-      'CONFIRMED'    => GardenColors.success,
-      'IN_PROGRESS'  => GardenColors.primary,
-      'COMPLETED'    => GardenColors.textSecondary,
-      'CANCELLED'    => GardenColors.error,
-      _              => GardenColors.warning,
-    };
+    // Mismo mapa de estados que ve el resto de la app (booking_story.dart).
+    final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+    BookingStory storyOf(Map r) => BookingStory.of(r['status'] as String?,
+        BookingStoryContext.fromBooking(Map<String, dynamic>.from(r), caregiverFallback: 'el cuidador'));
+    Color storyInk(BookingStory st) => StoryColors.of(st.tone, isDark: isDarkTheme).ink;
 
     final filtered = _reservations.where((r) {
       final query = _reservationsSearchCtrl.text.toLowerCase();
@@ -3763,7 +3735,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'Buscar por cliente, cuidador o mascota...',
-              prefixIcon: const Icon(Icons.search, size: 20),
+              prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.md, inheritColor: true),
               isDense: true,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -3808,7 +3780,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       itemCount: filtered.length,
                       itemBuilder: (context, i) {
                         final r = filtered[i];
-                        final status = r['status'] as String? ?? '';
                         final rSvcType = r['serviceType'] as String? ?? '';
                         final isPaseo = rSvcType == 'PASEO';
                         final isGuarderia = rSvcType == 'GUARDERIA';
@@ -3836,7 +3807,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                                      Icon(Icons.warning_amber_rounded, size: 14, color: GardenColors.error),
+                                      GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: GardenColors.error),
                                       SizedBox(width: 5),
                                       Text('EMERGENCIA ACTIVA', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w800)),
                                     ]),
@@ -3855,26 +3826,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: bookingStatusColor(status).withValues(alpha: 0.15),
+                                        color: storyInk(storyOf(r)).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Text(bookingStatusLabel(status),
-                                        style: TextStyle(color: bookingStatusColor(status), fontSize: 11, fontWeight: FontWeight.w600)),
+                                      child: Text(storyOf(r).pill,
+                                        style: TextStyle(color: storyInk(storyOf(r)), fontSize: 11, fontWeight: FontWeight.w600)),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
-                                _infoRow(Icons.person_outline, r['clientEmail'] ?? '—', subtextColor),
-                                _infoRow(Icons.supervisor_account_outlined, r['caregiverName'] ?? '—', subtextColor),
-                                _infoRow(Icons.calendar_today_outlined, date, subtextColor),
-                                _infoRow(Icons.attach_money_outlined, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
+                                _infoRow(GIcon.perfil, r['clientEmail'] ?? '—', subtextColor),
+                                _infoRow(GIcon.equipo, r['caregiverName'] ?? '—', subtextColor),
+                                _infoRow(GIcon.calendario, date, subtextColor),
+                                _infoRow(GIcon.precio, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
                                 if ((double.tryParse(r['donationAmount']?.toString() ?? '0') ?? 0) > 0)
-                                  _infoRow(Icons.favorite_outline, 'Donación: Bs ${r['donationAmount']}', Colors.amber.shade700),
+                                  _infoRow(GIcon.favorito, 'Donación: Bs ${r['donationAmount']}', Colors.amber.shade700),
                                 if ((double.tryParse(r['walletPaymentAmount']?.toString() ?? '0') ?? 0) > 0)
-                                  _infoRow(Icons.account_balance_wallet_outlined, 'Billetera: Bs ${r['walletPaymentAmount']}', GardenColors.primary),
+                                  _infoRow(GIcon.billetera, 'Billetera: Bs ${r['walletPaymentAmount']}', GardenColors.primary),
                                 const SizedBox(height: 4),
                                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                                  Icon(Icons.chevron_right, size: 14, color: subtextColor),
+                                  GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: subtextColor),
                                   Text('Ver detalle', style: TextStyle(color: subtextColor, fontSize: 11)),
                                 ]),
                               ],
@@ -3889,10 +3860,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _infoRow(IconData icon, String text, Color color) => Padding(
+  Widget _infoRow(GIcon icon, String text, Color color) => Padding(
     padding: const EdgeInsets.only(top: 3),
     child: Row(children: [
-      Icon(icon, size: 13, color: color),
+      GardenIcon(icon, size: GIconSize.xs, color: color),
       const SizedBox(width: 6),
       Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12), overflow: TextOverflow.ellipsis)),
     ]),
@@ -3912,10 +3883,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 width: 140,
                 child: GardenButton(
                   label: 'Nuevo código',
-                  icon: Icons.add_rounded,
+                  gIcon: GIcon.agregar,
                   height: 36,
-                  onPressed: _showCreateGiftCodeDialog,
-                ),
+                  onPressed: _showCreateGiftCodeDialog),
               ),
             ],
           ),
@@ -3970,8 +3940,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                         ),
                                       ),
                                       if (usedByUsers.isNotEmpty)
-                                        Icon(isExpanded ? Icons.expand_less : Icons.expand_more,
-                                          size: 20, color: subtextColor),
+                                        GardenIcon(isExpanded ? GIcon.plegar : GIcon.desplegar, size: GIconSize.md, color: subtextColor),
                                       Switch(
                                         value: active,
                                         activeColor: GardenColors.primary,
@@ -3995,7 +3964,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       ...usedByUsers.map((u) => Padding(
                                         padding: const EdgeInsets.only(bottom: 6),
                                         child: Row(children: [
-                                          const Icon(Icons.person_outline, size: 14, color: GardenColors.primary),
+                                          const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: GardenColors.primary),
                                           const SizedBox(width: 6),
                                           Expanded(child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -4104,7 +4073,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       context: context,
       builder: (ctx) => GardenGlassDialog(
         title: Row(children: [
-          const Icon(Icons.contact_phone_rounded, color: GardenColors.primary, size: 22),
+          const GardenIcon(GIcon.telefono, size: GIconSize.md, color: GardenColors.primary),
           const SizedBox(width: 10),
           const Text('Contactar cuidador', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ]),
@@ -4116,7 +4085,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
               const Text('TELÉFONO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
               const SizedBox(height: 4),
               Row(children: [
-                const Icon(Icons.phone_rounded, size: 16, color: GardenColors.primary),
+                const GardenIcon(GIcon.telefono, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Expanded(child: SelectableText(phone,
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
@@ -4128,7 +4097,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
               const Text('CORREO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
               const SizedBox(height: 4),
               Row(children: [
-                const Icon(Icons.email_outlined, size: 16, color: GardenColors.primary),
+                const GardenIcon(GIcon.correo, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Expanded(child: SelectableText(email,
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
@@ -4175,10 +4144,10 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       );
     }
 
-    Widget sectionHeader(String title, IconData icon) => Padding(
+    Widget sectionHeader(String title, GIcon icon) => Padding(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 10),
       child: Row(children: [
-        Icon(icon, size: 14, color: GardenColors.primary),
+        GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
         const SizedBox(width: 6),
         Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1.1)),
       ]),
@@ -4187,8 +4156,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     Widget checkRow(String label, bool ok) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
-        Icon(ok ? Icons.check_circle_rounded : Icons.cancel_rounded,
-          size: 16, color: ok ? GardenColors.success : GardenColors.error),
+        GardenIcon(ok ? GIcon.confirmado : GIcon.cancelado, size: GIconSize.sm, state: GIconState.active, color: ok ? GardenColors.success : GardenColors.error),
         const SizedBox(width: 8),
         Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: textColor))),
       ]),
@@ -4205,7 +4173,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
           border: Border.all(color: value ? GardenColors.success.withValues(alpha: 0.35) : GardenColors.error.withValues(alpha: 0.3)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(value ? Icons.check : Icons.close, size: 11, color: value ? GardenColors.success : GardenColors.error),
+          GardenIcon(value ? GIcon.hecho : GIcon.cerrar, size: GIconSize.xs, color: value ? GardenColors.success : GardenColors.error),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: value ? GardenColors.success : GardenColors.error)),
         ]),
@@ -4261,7 +4229,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
               ),
               child: Row(children: [
-                const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 16),
+                const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
                 const SizedBox(width: 8),
                 Expanded(child: Text(
                   'No se pudo cargar el perfil completo. Mostrando datos básicos.',
@@ -4298,7 +4266,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 child: Row(children: [
                   if (!isApproved)
                     Expanded(child: ElevatedButton.icon(
-                      icon: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                      icon: const GardenIcon(GIcon.hecho, size: GIconSize.sm, color: Colors.white),
                       label: const Text('Aprobar', style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success, elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -4307,7 +4275,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   const SizedBox(width: 10),
                   if (!isApproved)
                     Expanded(child: OutlinedButton.icon(
-                      icon: const Icon(Icons.close_rounded, size: 16, color: GardenColors.error),
+                      icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: GardenColors.error),
                       label: const Text('Rechazar', style: TextStyle(color: GardenColors.error)),
                       style: OutlinedButton.styleFrom(side: const BorderSide(color: GardenColors.error),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -4325,7 +4293,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 child: SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.lock_open_rounded, size: 16, color: GardenColors.warning),
+                    icon: const GardenIcon(GIcon.desbloqueado, size: GIconSize.sm, color: GardenColors.warning),
                     label: const Text('Desbloquear verificación', style: TextStyle(color: GardenColors.warning)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: GardenColors.warning),
@@ -4362,7 +4330,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     if ((detail?['user']?['phone'] as String?)?.isNotEmpty == true) ...[
                       const SizedBox(height: 2),
                       Row(children: [
-                        Icon(Icons.phone_rounded, size: 12, color: GardenColors.primary),
+                        GardenIcon(GIcon.telefono, size: GIconSize.xs, color: GardenColors.primary),
                         const SizedBox(width: 4),
                         Text(detail!['user']['phone'] as String,
                           style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -4380,7 +4348,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             border: Border.all(color: GardenColors.success.withValues(alpha: 0.4)),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                            Icon(Icons.verified_rounded, size: 11, color: GardenColors.success),
+                            GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
                             SizedBox(width: 3),
                             Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.bold)),
                           ]),
@@ -4394,7 +4362,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             border: Border.all(color: Colors.indigo.withValues(alpha: 0.4)),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.business_rounded, size: 11, color: Colors.indigo),
+                            const GardenIcon(GIcon.empresa, size: GIconSize.xs, color: Colors.indigo),
                             const SizedBox(width: 3),
                             Text(
                               'Empresa${(detail?['companyName'] as String?)?.isNotEmpty == true ? ' · ${detail!['companyName']}' : ''}${_businessTypeLabel(detail?['businessType'] as String?) != null ? ' (${_businessTypeLabel(detail?['businessType'] as String?)})' : ''}',
@@ -4408,11 +4376,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 const SizedBox(height: 12),
                 // Stats row
                 Row(children: [
-                  _statChip(Icons.star_rounded, '${(detail?['rating'] ?? 0.0)}', Colors.amber, subtextColor),
+                  _statChip(GIcon.estrella, '${(detail?['rating'] ?? 0.0)}', Colors.amber, subtextColor),
                   const SizedBox(width: 8),
-                  _statChip(Icons.reviews_outlined, '${detail?['reviewCount'] ?? 0} reseñas', GardenColors.primary, subtextColor),
+                  _statChip(GIcon.estrella, '${detail?['reviewCount'] ?? 0} reseñas', GardenColors.primary, subtextColor),
                   const SizedBox(width: 8),
-                  _statChip(Icons.calendar_today_outlined,
+                  _statChip(GIcon.calendario,
                     detail?['createdAt'] != null ? 'Desde ${(detail!['createdAt'] as String).substring(0, 7)}' : '—',
                     subtextColor, subtextColor),
                 ]),
@@ -4428,7 +4396,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   // CONTACTO
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.contact_phone_rounded, size: 14, color: GardenColors.primary),
+                      const GardenIcon(GIcon.telefono, size: GIconSize.xs, color: GardenColors.primary),
                       const SizedBox(width: 6),
                       Text('CONTACTO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
                       const Spacer(),
@@ -4441,7 +4409,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
+                            GardenIcon(GIcon.abrirFuera, size: GIconSize.xs, color: Colors.white),
                             SizedBox(width: 5),
                             Text('Ver datos', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                           ]),
@@ -4450,7 +4418,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ]),
                     const SizedBox(height: 10),
                     Row(children: [
-                      const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
+                      const GardenIcon(GIcon.telefono, size: GIconSize.xs, color: Colors.grey),
                       const SizedBox(width: 6),
                       Expanded(child: Text(
                         (detail?['user']?['phone'] as String?)?.isNotEmpty == true
@@ -4461,7 +4429,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ]),
                     const SizedBox(height: 6),
                     Row(children: [
-                      const Icon(Icons.email_outlined, size: 14, color: Colors.grey),
+                      const GardenIcon(GIcon.correo, size: GIconSize.xs, color: Colors.grey),
                       const SizedBox(width: 6),
                       Expanded(child: Text(
                         detail?['user']?['email'] ?? summary['email'] ?? '—',
@@ -4491,11 +4459,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             ),
                           ),
                           child: Row(children: [
-                            Icon(
-                              Icons.sms_rounded,
-                              size: 14,
-                              color: expired ? Colors.grey : GardenColors.warning,
-                            ),
+                            GardenIcon(GIcon.chat, size: GIconSize.xs, color: expired ? Colors.grey : GardenColors.warning),
                             const SizedBox(width: 6),
                             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(
@@ -4554,11 +4518,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             ),
                           ),
                           child: Row(children: [
-                            Icon(
-                              Icons.mark_email_read_outlined,
-                              size: 14,
-                              color: expired ? Colors.grey : GardenColors.warning,
-                            ),
+                            GardenIcon(GIcon.correo, size: GIconSize.xs, color: expired ? Colors.grey : GardenColors.warning),
                             const SizedBox(width: 6),
                             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(
@@ -4597,7 +4557,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   if ((detail?['emergencyContacts'] as List?)?.isNotEmpty == true)
                     infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
-                        const Icon(Icons.emergency_outlined, size: 14, color: GardenColors.error),
+                        const GardenIcon(GIcon.emergencia, size: GIconSize.xs, color: GardenColors.error),
                         const SizedBox(width: 6),
                         Text('CONTACTOS DE EMERGENCIA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.error, letterSpacing: 1)),
                       ]),
@@ -4607,11 +4567,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(children: [
-                            const Icon(Icons.person_outline_rounded, size: 14, color: Colors.grey),
+                            const GardenIcon(GIcon.perfil, size: GIconSize.xs, color: Colors.grey),
                             const SizedBox(width: 6),
                             Expanded(child: Text(contact['name']?.toString() ?? '—', style: TextStyle(fontSize: 13, color: textColor))),
                             const SizedBox(width: 6),
-                            const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
+                            const GardenIcon(GIcon.telefono, size: GIconSize.xs, color: Colors.grey),
                             const SizedBox(width: 4),
                             Text(contact['phone']?.toString() ?? '—', style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w600)),
                           ]),
@@ -4622,7 +4582,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   // COMPLETITUD
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      const Icon(Icons.checklist_rounded, size: 14, color: GardenColors.primary),
+                      const GardenIcon(GIcon.lista, size: GIconSize.xs, color: GardenColors.primary),
                       const SizedBox(width: 6),
                       Text('COMPLETITUD DEL PERFIL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
                     ]),
@@ -4643,7 +4603,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       isSuspended || status == 'REJECTED')
                     infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
-                        Icon(Icons.admin_panel_settings_outlined, size: 14, color: GardenColors.error),
+                        GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.error),
                         const SizedBox(width: 6),
                         Text('HISTORIAL ADMINISTRATIVO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.error, letterSpacing: 1)),
                       ]),
@@ -4665,7 +4625,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ])),
 
                   // UBICACIÓN
-                  sectionHeader('UBICACIÓN', Icons.location_on_outlined),
+                  sectionHeader('UBICACIÓN', GIcon.ubicacion),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     row('País', detail?['user']?['country'] as String?),
                     row('Ciudad', detail?['user']?['city'] as String?),
@@ -4674,7 +4634,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // PERFIL
-                  sectionHeader('PERFIL DEL CUIDADOR', Icons.person_outline_rounded),
+                  sectionHeader('PERFIL DEL CUIDADOR', GIcon.perfil),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     row('Biografía', detail?['bio'] as String?),
                     row('Descripción del espacio', detail?['bioDetail'] as String?),
@@ -4692,7 +4652,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // SERVICIOS Y PRECIOS
-                  sectionHeader('SERVICIOS Y PRECIOS', Icons.price_check_rounded),
+                  sectionHeader('SERVICIOS Y PRECIOS', GIcon.precio),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if ((detail?['servicesOffered'] as List?)?.isNotEmpty == true) ...[
                       const Text('SERVICIOS OFRECIDOS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
@@ -4701,15 +4661,15 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       const SizedBox(height: 10),
                     ],
                     Builder(builder: (_) {
-                      final priceEntries = <(String, String, IconData)>[
+                      final priceEntries = <(String, String, GIcon)>[
                         if (detail?['pricePerDay'] != null)
-                          ('Hospedaje / día', 'Bs ${detail!['pricePerDay']}', Icons.home_rounded),
+                          ('Hospedaje / día', 'Bs ${detail!['pricePerDay']}', GIcon.hospedaje),
                         if (detail?['pricePerWalk30'] != null)
-                          ('Paseo 30 min', 'Bs ${detail!['pricePerWalk30']}', Icons.directions_walk_rounded),
+                          ('Paseo 30 min', 'Bs ${detail!['pricePerWalk30']}', GIcon.paseo),
                         if (detail?['pricePerWalk60'] != null)
-                          ('Paseo 60 min', 'Bs ${detail!['pricePerWalk60']}', Icons.directions_walk_rounded),
+                          ('Paseo 60 min', 'Bs ${detail!['pricePerWalk60']}', GIcon.paseo),
                         if (detail?['pricePerGuarderia'] != null)
-                          ('Guardería / día', 'Bs ${detail!['pricePerGuarderia']}', Icons.pets_rounded),
+                          ('Guardería / día', 'Bs ${detail!['pricePerGuarderia']}', GIcon.guarderia),
                       ];
                       if (priceEntries.isEmpty) return const SizedBox.shrink();
                       final rows = <Widget>[];
@@ -4739,7 +4699,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Icon(Icons.add_circle_outline_rounded, size: 14, color: isActive ? GardenColors.primary : Colors.grey),
+                            GardenIcon(GIcon.agregar, size: GIconSize.xs, color: isActive ? GardenColors.primary : Colors.grey),
                             const SizedBox(width: 6),
                             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
@@ -4763,7 +4723,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // EXPERIENCIA
-                  sectionHeader('EXPERIENCIA', Icons.workspace_premium_outlined),
+                  sectionHeader('EXPERIENCIA', GIcon.destacado),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     row('Años de experiencia', detail?['experienceYears']?.toString()),
                     row('Descripción de experiencia', detail?['experienceDescription'] as String?),
@@ -4781,13 +4741,13 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // KIT DE BIENVENIDA
-                  sectionHeader('KIT DE BIENVENIDA', Icons.card_giftcard_rounded),
+                  sectionHeader('KIT DE BIENVENIDA', GIcon.regalo),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     row('Talla (polera/gorra)', detail?['shirtSize'] as String?),
                   ])),
 
                   // CONDICIONES DE SERVICIO
-                  sectionHeader('CONDICIONES DE SERVICIO', Icons.rule_rounded),
+                  sectionHeader('CONDICIONES DE SERVICIO', GIcon.lista),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Wrap(runSpacing: 4, children: [
                       yesNoBadge('Acepta agresivos', detail?['acceptAggressive'] as bool?),
@@ -4818,7 +4778,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // HOGAR
-                  sectionHeader('HOGAR', Icons.house_outlined),
+                  sectionHeader('HOGAR', GIcon.inicio),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Wrap(runSpacing: 4, children: [
                       yesNoBadge('Casa propia', detail?['ownHome'] as bool?),
@@ -4837,7 +4797,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // IDENTIDAD
-                  sectionHeader('VERIFICACIÓN DE IDENTIDAD', Icons.verified_user_outlined),
+                  sectionHeader('VERIFICACIÓN DE IDENTIDAD', GIcon.protegido),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -4866,14 +4826,14 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
 
                   // DOCUMENTOS
                   if (_hasDocuments(detail)) ...[
-                    sectionHeader('DOCUMENTOS', Icons.folder_outlined),
+                    sectionHeader('DOCUMENTOS', GIcon.documento),
                     infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       if (detail?['ciAnversoUrl'] != null || detail?['ciReversoUrl'] != null || detail?['selfieUrl'] != null || detail?['idDocumentUrl'] != null) ...[
                         Wrap(spacing: 8, runSpacing: 8, children: [
-                          if (detail?['ciAnversoUrl'] != null) _docChip('CI Anverso', Icons.credit_card_rounded, GardenColors.primary),
-                          if (detail?['ciReversoUrl'] != null) _docChip('CI Reverso', Icons.credit_card_rounded, GardenColors.primary),
-                          if (detail?['selfieUrl'] != null) _docChip('Selfie', Icons.face_rounded, Colors.teal),
-                          if (detail?['idDocumentUrl'] != null) _docChip('Documento ID', Icons.badge_outlined, Colors.indigo),
+                          if (detail?['ciAnversoUrl'] != null) _docChip('CI Anverso', GIcon.tarjeta, GardenColors.primary),
+                          if (detail?['ciReversoUrl'] != null) _docChip('CI Reverso', GIcon.tarjeta, GardenColors.primary),
+                          if (detail?['selfieUrl'] != null) _docChip('Selfie', GIcon.rostro, Colors.teal),
+                          if (detail?['idDocumentUrl'] != null) _docChip('Documento ID', GIcon.identidadVerificada, Colors.indigo),
                         ]),
                         const SizedBox(height: 8),
                         if (detail?['lastIdentityVerificationSessionId'] != null)
@@ -4887,7 +4847,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
                               ),
                               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.open_in_new_rounded, size: 14, color: GardenColors.primary),
+                                GardenIcon(GIcon.abrirFuera, size: GIconSize.xs, color: GardenColors.primary),
                                 SizedBox(width: 6),
                                 Text('Ver sesión de verificación completa', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                               ]),
@@ -4913,7 +4873,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       return const SizedBox.shrink();
                     }
                     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      sectionHeader('FOTOS', Icons.photo_library_outlined),
+                      sectionHeader('FOTOS', GIcon.galeria),
                       if (caregiverPhotosList.isNotEmpty) ...[
                         const Text('FOTOS DEL CUIDADOR', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
                         const SizedBox(height: 6),
@@ -4936,7 +4896,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   }),
 
                   // REQUISITOS LEGALES
-                  sectionHeader('REQUISITOS LEGALES', Icons.gavel_rounded),
+                  sectionHeader('REQUISITOS LEGALES', GIcon.multa),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     checkRow('Mayor de 18 años', detail?['user']?['isOver18'] == true),
                     checkRow('Términos y condiciones aceptados', detail?['termsAccepted'] == true),
@@ -4950,7 +4910,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // IDENTIFICADORES TÉCNICOS
-                  sectionHeader('IDENTIFICADORES', Icons.tag_rounded),
+                  sectionHeader('IDENTIFICADORES', GIcon.precio),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     _miniIdBadge('Profile ID', detail?['id'] as String? ?? '—', subtextColor, borderColor),
                     const SizedBox(height: 6),
@@ -4961,7 +4921,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ])),
 
                   // CAPACITACIONES
-                  sectionHeader('CAPACITACIONES', Icons.school_rounded),
+                  sectionHeader('CAPACITACIONES', GIcon.capacitacion),
                   infoCard(Row(children: [
                     Expanded(
                       child: Text(
@@ -4984,7 +4944,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(8)),
                         child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
+                          GardenIcon(GIcon.abrirFuera, size: GIconSize.xs, color: Colors.white),
                           SizedBox(width: 5),
                           Text('Ver', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                         ]),
@@ -5006,37 +4966,34 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 Row(children: [
                   Expanded(child: GardenButton(
                     label: 'Contactar cuidador',
-                    icon: Icons.phone_rounded,
+                    gIcon: GIcon.telefono,
                     height: 44,
                     color: GardenColors.primary,
-                    onPressed: () => _showContactDialog(context, detail!),
-                  )),
+                    onPressed: () => _showContactDialog(context, detail!))),
                 ]),
                 const SizedBox(height: 8),
                 if (canReview) ...[
                   Row(children: [
                     Expanded(child: GardenButton(
                       label: 'Aprobar',
-                      icon: Icons.check_rounded,
+                      gIcon: GIcon.hecho,
                       height: 42,
                       color: GardenColors.success,
                       onPressed: () async {
                         Navigator.pop(context);
                         await widget.onReview(widget.caregiverId, 'approve');
-                      },
-                    )),
+                      })),
                     const SizedBox(width: 10),
                     Expanded(child: GardenButton(
                       label: 'Rechazar',
-                      icon: Icons.close_rounded,
+                      gIcon: GIcon.cerrar,
                       height: 42,
                       color: GardenColors.error,
                       outline: true,
                       onPressed: () async {
                         Navigator.pop(context);
                         await widget.onReview(widget.caregiverId, 'reject');
-                      },
-                    )),
+                      })),
                   ]),
                   const SizedBox(height: 8),
                 ],
@@ -5047,52 +5004,48 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                 }()) ...[
                   GardenButton(
                     label: 'Desbloquear verificación',
-                    icon: Icons.lock_open_rounded,
+                    gIcon: GIcon.desbloqueado,
                     height: 42,
                     color: GardenColors.warning,
                     outline: true,
-                    onPressed: _unlockVerification,
-                  ),
+                    onPressed: _unlockVerification),
                   const SizedBox(height: 8),
                 ],
                 if (isApproved) ...[
                   GardenButton(
                     label: 'Solicitar revisión',
-                    icon: Icons.shield_outlined,
+                    gIcon: GIcon.protegido,
                     height: 42,
                     color: const Color(0xFFE65100),
                     outline: true,
                     onPressed: () async {
                       Navigator.pop(context);
                       await widget.onFlagReview(widget.caregiverId);
-                    },
-                  ),
+                    }),
                   const SizedBox(height: 8),
                   GardenButton(
                     label: 'Suspender cuidador',
-                    icon: Icons.block,
+                    gIcon: GIcon.bloqueado,
                     height: 42,
                     color: GardenColors.warning,
                     outline: true,
                     onPressed: () async {
                       Navigator.pop(context);
                       await widget.onSuspend(widget.caregiverId);
-                    },
-                  ),
+                    }),
                   const SizedBox(height: 8),
                 ],
                 if (isSuspended) ...[
                   GardenButton(
                     label: 'Reactivar cuidador',
-                    icon: Icons.check_circle_outline,
+                    gIcon: GIcon.confirmado,
                     height: 42,
                     color: GardenColors.success,
                     outline: true,
                     onPressed: () async {
                       Navigator.pop(context);
                       await widget.onReview(widget.caregiverId, 'approve', force: true);
-                    },
-                  ),
+                    }),
                   const SizedBox(height: 8),
                 ],
                 GardenButton(label: 'Cerrar', height: 40, outline: true, onPressed: () => Navigator.pop(context)),
@@ -5107,11 +5060,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
 
   // Mismo mapeo de businessType usado en company_register_screen.dart
   static const Map<String, String> _businessTypeLabels = {
-    'HOTEL': '🏨 Hotel',
-    'HOSTAL': '🛏️ Hostal',
-    'GUARDERIA': '🏡 Guardería',
-    'PET_HOTEL': '🐾 Hotel para mascotas',
-    'OTHER': '🏢 Otro',
+    'HOTEL': 'Hotel',
+    'HOSTAL': 'Hostal',
+    'GUARDERIA': 'Guardería',
+    'PET_HOTEL': 'Hotel para mascotas',
+    'OTHER': 'Otro',
   };
 
   String? _businessTypeLabel(String? type) {
@@ -5121,11 +5074,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
 
   // Mismas secciones/labels de placePhotos usadas en caregiver_profile_data_screen.dart
   static const List<(String, String)> _placeSectionLabels = [
-    ('sala', '🛋️ Sala / Área principal'),
-    ('descanso', '🛏️ Zona de descanso'),
-    ('alimentacion', '🍽️ Área de alimentación'),
-    ('jardin', '🌿 Jardín / Patio'),
-    ('juego', '🎾 Área de juego'),
+    ('sala', 'Sala / Área principal'),
+    ('descanso', 'Zona de descanso'),
+    ('alimentacion', 'Área de alimentación'),
+    ('jardin', 'Jardín / Patio'),
+    ('juego', 'Área de juego'),
   ];
 
   bool _hasDocuments(Map<String, dynamic>? detail) {
@@ -5134,20 +5087,20 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
            detail['selfieUrl'] != null || detail['idDocumentUrl'] != null;
   }
 
-  Widget _statChip(IconData icon, String text, Color iconColor, Color textColor) => Container(
+  Widget _statChip(GIcon icon, String text, Color iconColor, Color textColor) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(
       color: iconColor.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 12, color: iconColor),
+      GardenIcon(icon, size: GIconSize.xs, color: iconColor),
       const SizedBox(width: 4),
       Text(text, style: TextStyle(fontSize: 11, color: textColor, fontWeight: FontWeight.w600)),
     ]),
   );
 
-  Widget _priceCard(String label, String price, IconData icon, Color textColor, Color subtextColor, Color borderColor) => Expanded(
+  Widget _priceCard(String label, String price, GIcon icon, Color textColor, Color subtextColor, Color borderColor) => Expanded(
     child: Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -5156,7 +5109,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
         border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
       ),
       child: Column(children: [
-        Icon(icon, size: 16, color: GardenColors.primary),
+        GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary),
         const SizedBox(height: 4),
         Text(price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: GardenColors.primary)),
         Text(label, style: TextStyle(fontSize: 10, color: subtextColor), textAlign: TextAlign.center),
@@ -5172,8 +5125,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       border: Border.all(color: done ? GardenColors.success.withValues(alpha: 0.3) : GardenColors.error.withValues(alpha: 0.2)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked, size: 11,
-        color: done ? GardenColors.success : GardenColors.error),
+      GardenIcon(done ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.xs, state: done ? GIconState.active : GIconState.idle, color: done ? GardenColors.success : GardenColors.error),
       const SizedBox(width: 4),
       Text(label, style: TextStyle(fontSize: 11, color: done ? GardenColors.success : GardenColors.error, fontWeight: FontWeight.w600)),
     ]),
@@ -5204,7 +5156,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     );
   }
 
-  Widget _docChip(String label, IconData icon, Color color) => Container(
+  Widget _docChip(String label, GIcon icon, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.08),
@@ -5212,7 +5164,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 14, color: color),
+      GardenIcon(icon, size: GIconSize.xs, color: color),
       const SizedBox(width: 5),
       Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
     ]),
@@ -5230,7 +5182,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
           errorBuilder: (_, __, ___) => Container(
             width: 90, height: 90,
             decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.broken_image_outlined, color: subtextColor),
+            child: GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: subtextColor),
           )),
       ),
     ),
@@ -5270,7 +5222,7 @@ class _PulsingIncidentBorderState extends State<_PulsingIncidentBorder> with Sin
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.35, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _anim = Tween<double>(begin: 0.35, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: GardenMotion.move));
   }
 
   @override
@@ -5390,7 +5342,7 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showForm,
         backgroundColor: GardenColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, color: Colors.white),
         label: const Text('Nuevo Banner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading
@@ -5412,7 +5364,7 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
                       ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(b['imageUrl'], width: 60, height: 60, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 60)))
                     else
                       Container(width: 60, height: 60, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.image_outlined, color: GardenColors.primary)),
+                        child: const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary)),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(b['title'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
@@ -5420,8 +5372,8 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
                       Text('Posición: ${b['position']} · Acción: ${b['actionType']}', style: TextStyle(color: subtextColor, fontSize: 11)),
                     ])),
                     Switch(value: b['active'] == true, onChanged: (v) => _toggle(b['id'], v), activeColor: GardenColors.primary),
-                    IconButton(icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _showForm(b), color: subtextColor),
-                    IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GardenColors.error), onPressed: () => _delete(b['id'])),
+                    IconButton(icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, inheritColor: true), onPressed: () => _showForm(b), color: subtextColor),
+                    IconButton(icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, color: GardenColors.error), onPressed: () => _delete(b['id'])),
                   ]),
                 )),
             ]),
@@ -5579,14 +5531,14 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                   onPressed: _uploading ? null : _pickAndUpload,
                   icon: _uploading
                       ? const SizedBox(width: 16, height: 16, child: GardenLoadingIndicator(size: 16))
-                      : const Icon(Icons.upload_rounded, size: 18),
+                      : const GardenIcon(GIcon.subir, size: GIconSize.sm, inheritColor: true),
                   label: Text(_imageUrl == null ? 'Subir imagen de fondo' : 'Cambiar imagen'),
                 ),
               ),
               if (_imageUrl != null) ...[
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18, color: GardenColors.error),
+                  icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: GardenColors.error),
                   tooltip: 'Quitar imagen',
                   onPressed: () => setState(() => _imageUrl = null),
                 ),
@@ -5601,7 +5553,7 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: GardenColors.primary),
+                const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -5814,7 +5766,7 @@ class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showForm,
         backgroundColor: GardenColors.primary,
-        icon: const Icon(Icons.flag_rounded, color: Colors.white),
+        icon: const GardenIcon(GIcon.reportar, size: GIconSize.lg, state: GIconState.active, color: Colors.white),
         label: const Text('Asignar Flag', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading
@@ -5851,7 +5803,7 @@ class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
                           style: TextStyle(color: f['enabled'] == true ? GardenColors.success : GardenColors.error, fontWeight: FontWeight.w800, fontSize: 12)),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GardenColors.error), onPressed: () => _delete(f['id'])),
+                      IconButton(icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, color: GardenColors.error), onPressed: () => _delete(f['id'])),
                     ]),
                   );
                 }),

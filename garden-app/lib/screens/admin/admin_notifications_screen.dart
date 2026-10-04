@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   final String adminToken;
@@ -109,7 +110,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(children: [
-          const Icon(Icons.send_rounded, color: GardenColors.primary),
+          const GardenIcon(GIcon.enviar, size: GIconSize.lg, color: GardenColors.primary),
           const SizedBox(width: 8),
           Text(_scheduleMode ? 'Programar notificación' : 'Enviar notificación'),
         ]),
@@ -293,8 +294,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                         colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.campaign_rounded,
-                      color: Colors.white, size: 22),
+                  child: const GardenIcon(GIcon.anuncio, size: GIconSize.md, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -318,15 +318,15 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
                 tabs: const [
-                  Tab(icon: Icon(Icons.send_rounded, size: 16), text: 'Enviar'),
+                  Tab(icon: GardenIcon(GIcon.enviar, size: GIconSize.sm, inheritColor: true), text: 'Enviar'),
                   Tab(
-                      icon: Icon(Icons.schedule_rounded, size: 16),
+                      icon: GardenIcon(GIcon.reloj, size: GIconSize.sm, inheritColor: true),
                       text: 'Programadas'),
                   Tab(
-                      icon: Icon(Icons.history_rounded, size: 16),
+                      icon: GardenIcon(GIcon.historial, size: GIconSize.sm, inheritColor: true),
                       text: 'Historial'),
                   Tab(
-                      icon: Icon(Icons.groups_rounded, size: 16),
+                      icon: GardenIcon(GIcon.equipo, size: GIconSize.sm, inheritColor: true),
                       text: 'Masivo'),
                 ],
               ),
@@ -368,13 +368,13 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _templateChip('🎉 Bienvenida', 'Bienvenido a GARDEN',
+                _templateChip('Bienvenida', 'Bienvenido a GARDEN',
                     'Gracias por unirte a GARDEN. Explora los mejores cuidadores cerca de ti.', subtextColor),
-                _templateChip('🐾 Recordatorio', 'Recuerda amar a tu mascota',
+                _templateChip('Recordatorio', 'Recuerda amar a tu mascota',
                     'Las mascotas necesitan amor y cuidado todos los días. ¡Agenda un paseo hoy!', subtextColor),
-                _templateChip('🔥 Promo', '¡Oferta especial!',
+                _templateChip('Promo', '¡Oferta especial!',
                     'Aprovecha los mejores precios de cuidadores en tu zona esta semana.', subtextColor),
-                _templateChip('⚠️ Sistema', 'Aviso de mantenimiento',
+                _templateChip('Sistema', 'Aviso de mantenimiento',
                     'El sistema estará en mantenimiento por 30 minutos. Disculpa las molestias.', subtextColor),
               ],
             ),
@@ -471,8 +471,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.calendar_today_rounded,
-                              color: GardenColors.primary, size: 18),
+                          const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                           const SizedBox(width: 10),
                           Text(
                             _scheduledAt != null
@@ -487,8 +486,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                             ),
                           ),
                           const Spacer(),
-                          const Icon(Icons.arrow_drop_down,
-                              color: GardenColors.primary),
+                          const GardenIcon(GIcon.desplegar, size: GIconSize.lg, color: GardenColors.primary),
                         ],
                       ),
                     ),
@@ -518,10 +516,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               onPressed: _sending ? null : _send,
               icon: _sending
                   ? const GardenLoadingIndicator(size: 18, color: Colors.white)
-                  : Icon(
-                      _scheduleMode
-                          ? Icons.schedule_send_rounded
-                          : Icons.send_rounded),
+                  : GardenIcon(GIcon.enviar, size: GIconSize.lg, inheritColor: true),
               label: Text(
                 _sending
                     ? 'Enviando...'
@@ -564,9 +559,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
 
   Widget _buildTargetSelector(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final options = [
-      ('ALL', '🌍 Todos', 'Cuidadores y dueños'),
-      ('CUIDADORES', '🐕 Cuidadores', 'Solo cuidadores aprobados'),
-      ('DUENOS', '🏠 Dueños', 'Solo dueños de mascotas'),
+      ('ALL', 'Todos', 'Cuidadores y dueños'),
+      ('CUIDADORES', 'Cuidadores', 'Solo cuidadores aprobados'),
+      ('DUENOS', 'Dueños', 'Solo dueños de mascotas'),
     ];
     return Row(
       children: options.map((opt) {
@@ -616,10 +611,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
 
   Widget _buildTypeSelector(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final types = [
-      ('SYSTEM', Icons.info_outline_rounded, Colors.blue, 'Sistema'),
-      ('PROMO', Icons.local_offer_outlined, Colors.orange, 'Promoción'),
-      ('ALERT', Icons.warning_amber_rounded, Colors.red, 'Alerta'),
-      ('NEWS', Icons.newspaper_rounded, Colors.green, 'Novedad'),
+      ('SYSTEM', GIcon.info, Colors.blue, 'Sistema'),
+      ('PROMO', GIcon.precio, Colors.orange, 'Promoción'),
+      ('ALERT', GIcon.advertencia, Colors.red, 'Alerta'),
+      ('NEWS', GIcon.anuncio, Colors.green, 'Novedad'),
     ];
     return Row(
       children: types.map((t) {
@@ -639,7 +634,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               ),
               child: Column(
                 children: [
-                  Icon(t.$2, color: selected ? t.$3 : subtextColor, size: 18),
+                  GardenIcon(t.$2, size: GIconSize.sm, color: selected ? t.$3 : subtextColor),
                   const SizedBox(height: 4),
                   Text(t.$4,
                       style: TextStyle(
@@ -671,7 +666,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.phone_android_rounded, size: 14, color: GardenColors.primary),
+            const GardenIcon(GIcon.dispositivo, size: GIconSize.xs, color: GardenColors.primary),
             const SizedBox(width: 6),
             Text('Vista previa de notificación',
                 style: TextStyle(
@@ -696,7 +691,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                     color: GardenColors.primary,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.pets, color: Colors.white, size: 20),
+                  child: const GardenIcon(GIcon.huella, size: GIconSize.md, state: GIconState.active, color: Colors.white),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -756,8 +751,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               const SizedBox(height: 80),
               Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.schedule_rounded,
-                      size: 48, color: subtextColor.withValues(alpha: 0.5)),
+                  GardenIcon(GIcon.reloj, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.5)),
                   const SizedBox(height: 12),
                   Text('Sin notificaciones programadas',
                       style: TextStyle(color: subtextColor, fontSize: 14)),
@@ -784,10 +778,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         : null;
     final target = item['target'] as String? ?? 'ALL';
     final targetLabel = target == 'ALL'
-        ? '🌍 Todos'
+        ? 'Todos'
         : target == 'CUIDADORES'
-            ? '🐕 Cuidadores'
-            : '🏠 Dueños';
+            ? 'Cuidadores'
+            : 'Dueños';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -801,7 +795,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.schedule_rounded, color: Colors.orange, size: 16),
+            const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: Colors.orange),
             const SizedBox(width: 6),
             Expanded(
               child: Text(item['title'] as String? ?? '',
@@ -818,7 +812,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                   border: Border.all(color: GardenColors.error.withValues(alpha: 0.4)),
                 ),
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.cancel_outlined, color: GardenColors.error, size: 14),
+                  GardenIcon(GIcon.cancelado, size: GIconSize.xs, color: GardenColors.error),
                   SizedBox(width: 4),
                   Text('Cancelar',
                       style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -836,7 +830,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
             _chip(targetLabel, Colors.blue),
             const SizedBox(width: 6),
             if (scheduledAt != null)
-              _chip('📅 ${_formatDate(scheduledAt)}', Colors.orange),
+              _chip('${_formatDate(scheduledAt)}', Colors.orange),
           ]),
         ],
       ),
@@ -860,8 +854,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               const SizedBox(height: 80),
               Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.history_rounded,
-                      size: 48, color: subtextColor.withValues(alpha: 0.5)),
+                  GardenIcon(GIcon.historial, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.5)),
                   const SizedBox(height: 12),
                   Text('Sin historial todavía',
                       style: TextStyle(color: subtextColor, fontSize: 14)),
@@ -886,10 +879,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
             : null);
     final target = item['target'] as String? ?? 'ALL';
     final targetLabel = target == 'ALL'
-        ? '🌍 Todos'
+        ? 'Todos'
         : target == 'CUIDADORES'
-            ? '🐕 Cuidadores'
-            : '🏠 Dueños';
+            ? 'Cuidadores'
+            : 'Dueños';
     final sentCount = item['sentCount'] as int? ?? 0;
     final status = item['status'] as String? ?? 'SENT';
 
@@ -908,7 +901,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                 style: TextStyle(
                     color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
           ),
-          _chip(status == 'SENT' ? '✅ Enviada' : '❌ Cancelada',
+          _chip(status == 'SENT' ? 'Enviada' : 'Cancelada',
               status == 'SENT' ? Colors.green : Colors.red),
         ]),
         const SizedBox(height: 4),
@@ -920,7 +913,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         Row(children: [
           _chip(targetLabel, Colors.blue),
           const SizedBox(width: 6),
-          _chip('👥 $sentCount usuarios', Colors.purple),
+          _chip('$sentCount usuarios', Colors.purple),
           const Spacer(),
           if (sentAt != null)
             Text(_formatDate(sentAt),
@@ -1071,7 +1064,7 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showComposer,
         backgroundColor: GardenColors.primary,
-        icon: const Icon(Icons.send_rounded, color: Colors.white),
+        icon: const GardenIcon(GIcon.enviar, size: GIconSize.lg, color: Colors.white),
         label: const Text('Nueva Notificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading

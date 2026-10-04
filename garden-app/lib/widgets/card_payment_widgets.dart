@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/garden_theme.dart';
+import '../design/garden_icons.dart';
 
 // ── Marca de tarjeta ────────────────────────────────────────────────────────
 
@@ -73,8 +74,8 @@ Color brandColor(CardBrand brand) {
   }
 }
 
-IconData brandIcon(CardBrand brand) =>
-    brand == CardBrand.unknown ? Icons.credit_card_outlined : Icons.credit_card_rounded;
+GIcon brandIcon(CardBrand brand) =>
+    brand == CardBrand.unknown ? GIcon.tarjeta : GIcon.tarjeta;
 
 // ── Luhn ─────────────────────────────────────────────────────────────────
 
@@ -376,7 +377,7 @@ class _AddCardSheetState extends State<AddCardSheet> {
             const SizedBox(height: GardenSpacing.xl),
             Row(
               children: [
-                Icon(brandIcon(_brand), color: brandColor(_brand), size: 22),
+                GardenIcon(brandIcon(_brand), size: GIconSize.md, color: brandColor(_brand)),
                 const SizedBox(width: GardenSpacing.sm),
                 Text('Agregar tarjeta',
                     style: GardenText.h4.copyWith(color: textColor)),
@@ -404,7 +405,7 @@ class _AddCardSheetState extends State<AddCardSheet> {
               decoration: InputDecoration(
                 hintText: '1234 1234 1234 1234',
                 hintStyle: GardenText.bodyMedium.copyWith(color: subtextColor.withValues(alpha: 0.6)),
-                prefixIcon: Icon(brandIcon(_brand), color: brandColor(_brand), size: 20),
+                prefixIcon: GardenIcon(brandIcon(_brand), size: GIconSize.md, color: brandColor(_brand)),
                 filled: true,
                 fillColor: surfaceEl,
                 errorText: _numberError,

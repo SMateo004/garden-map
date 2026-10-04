@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/garden_motion.dart';
 
 /// Indicador de carga de marca — huella de Garden animada.
 ///
@@ -42,10 +43,10 @@ class _GardenLoadingIndicatorState extends State<GardenLoadingIndicator>
     )..repeat(reverse: true);
 
     _scale = Tween<double>(begin: 0.82, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _controller, curve: GardenMotion.move),
     );
     _opacity = Tween<double>(begin: 0.45, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _controller, curve: GardenMotion.move),
     );
   }
 

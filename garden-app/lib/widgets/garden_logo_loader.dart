@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../theme/garden_motion.dart';
 
 /// Logo horizontal de Garden pulsando — reemplaza CircularProgressIndicator.
 /// Imita el splash de la web: fade in/out cíclico + leve escala.
@@ -21,8 +22,8 @@ class GardenLogoLoader extends StatelessWidget {
       child: Center(
         child: Image.asset(logo, width: size)
             .animate(onPlay: (c) => c.repeat(reverse: true))
-            .fadeIn(duration: 900.ms, curve: Curves.easeInOut)
-            .scaleXY(begin: 0.96, end: 1.0, duration: 900.ms, curve: Curves.easeInOut),
+            .fadeIn(duration: 900.ms, curve: GardenMotion.move)
+            .scaleXY(begin: 0.96, end: 1.0, duration: 900.ms, curve: GardenMotion.move),
       ),
     );
   }

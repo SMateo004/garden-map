@@ -370,7 +370,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       subtextColor: subtextColor,
                       surfaceEl: surfaceEl,
                       borderColor: borderColor,
-                      emoji: '📱',
+                      icon: GIcon.telefono,
                       title: 'Teléfono',
                       subtitle: _phoneCodeSent ? 'Enviamos un código SMS a\n$_fullPhone' : (_phoneSending ? 'Enviando código SMS...' : ''),
                       verified: _phoneVerified,
@@ -401,7 +401,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       subtextColor: subtextColor,
                       surfaceEl: surfaceEl,
                       borderColor: borderColor,
-                      emoji: '✉️',
+                      icon: GIcon.correo,
                       title: 'Correo electrónico',
                       subtitle: _emailCodeSent ? 'Enviamos un código a\n$_email' : (_emailSending ? 'Enviando código...' : ''),
                       verified: _emailVerified,
@@ -476,7 +476,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
     required Color subtextColor,
     required Color surfaceEl,
     required Color borderColor,
-    required String emoji,
+    required GIcon icon,
     required String title,
     required String subtitle,
     required bool verified,
@@ -504,7 +504,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text(emoji, style: const TextStyle(fontSize: 22)),
+            GardenIcon(icon, size: GIconSize.md, state: GIconState.active),
             const SizedBox(width: 10),
             Expanded(
               child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor)),

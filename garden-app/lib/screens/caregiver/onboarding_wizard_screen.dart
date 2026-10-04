@@ -61,11 +61,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   late bool _showIntro;
 
   static const List<RegistrationPhase> _phases = [
-    RegistrationPhase(name: 'Tu perfil', icon: Icons.person_outline_rounded, startStep: 0, endStep: 1),
-    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
-    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 7, endStep: 9),
-    RegistrationPhase(name: 'Contrato', icon: Icons.description_outlined, startStep: 10, endStep: 10),
-    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 11, endStep: 11),
+    RegistrationPhase(name: 'Tu perfil', icon: GIcon.perfil, startStep: 0, endStep: 1),
+    RegistrationPhase(name: 'Tu servicio', icon: GIcon.huella, startStep: 2, endStep: 6),
+    RegistrationPhase(name: 'Verificación', icon: GIcon.protegido, startStep: 7, endStep: 9),
+    RegistrationPhase(name: 'Contrato', icon: GIcon.documento, startStep: 10, endStep: 10),
+    RegistrationPhase(name: 'Seguridad', icon: GIcon.seguridad, startStep: 11, endStep: 11),
   ];
 
   // Paso 1: Datos personales
@@ -654,7 +654,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       Scrollable.ensureVisible(
         scrollTo!.currentContext!,
         duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+        curve: GardenMotion.move,
         alignment: 0.1,
       );
     }
@@ -668,7 +668,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 Scrollable.ensureVisible(
                   scrollTo!.currentContext!,
                   duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
+                  curve: GardenMotion.move,
                 );
               }
             }
@@ -1618,9 +1618,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
     final surface      = isDark ? GardenColors.darkSurface        : GardenColors.lightSurface;
 
-    InputDecoration field(String hint, IconData icon) => InputDecoration(
+    InputDecoration field(String hint, GIcon icon) => InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: subtextColor, size: 20),
+      prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
     );
 
     return SingleChildScrollView(
@@ -1675,14 +1675,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     controller: _emergencyNameControllers[i],
                     style: TextStyle(color: textColor),
                     inputFormatters: [noDigitsFormatter],
-                    decoration: field('Nombre completo', Icons.person_outlined),
+                    decoration: field('Nombre completo', GIcon.perfil),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _emergencyPhoneControllers[i],
                     keyboardType: TextInputType.number,
                     style: TextStyle(color: textColor),
-                    decoration: field('Teléfono (ej: 76543210)', Icons.phone_outlined),
+                    decoration: field('Teléfono (ej: 76543210)', GIcon.telefono),
                   ),
                 ],
               ),
@@ -3186,7 +3186,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 final active = i == currentPhase;
                                 return AnimatedContainer(
                                   duration: const Duration(milliseconds: 260),
-                                  curve: Curves.easeOutCubic,
+                                  curve: GardenMotion.enter,
                                   margin: const EdgeInsets.symmetric(horizontal: 2),
                                   width:  active ? 20 : 6,
                                   height: 6,
@@ -3227,8 +3227,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             constraints: const BoxConstraints(maxWidth: 640),
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 320),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
+                              switchInCurve: GardenMotion.enter,
+                              switchOutCurve: GardenMotion.exit,
                               transitionBuilder: stepTransitionBuilder,
                               child: KeyedSubtree(
                                 key: ValueKey(_currentStep),
@@ -3239,8 +3239,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         )
                       : AnimatedSwitcher(
                           duration: const Duration(milliseconds: 320),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
+                          switchInCurve: GardenMotion.enter,
+                          switchOutCurve: GardenMotion.exit,
                           transitionBuilder: stepTransitionBuilder,
                           child: KeyedSubtree(
                             key: ValueKey(_currentStep),

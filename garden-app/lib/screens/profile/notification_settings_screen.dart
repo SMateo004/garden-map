@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
-import '../../design/phosphor_glyphs.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Preferencias de notificación push/email — no afectan el historial in-app
 /// (siempre queda), solo si se interrumpe al usuario. Lo transaccional (pago,
@@ -136,7 +136,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       borderColor: borderColor,
                       textColor: textColor,
                       subtextColor: subtextColor,
-                      icon: Icons.alarm_outlined,
+                      icon: GIcon.alarma,
                       title: 'Recordatorios',
                       subtitle: 'Capacitaciones pendientes, calificaciones sin completar.',
                       value: _notifyReminders,
@@ -148,7 +148,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       borderColor: borderColor,
                       textColor: textColor,
                       subtextColor: subtextColor,
-                      icon: Icons.campaign_outlined,
+                      icon: GIcon.anuncio,
                       title: 'Promociones y novedades',
                       subtitle: 'Nueva cobertura en tu zona, anuncios de Garden.',
                       value: _notifyPromotions,
@@ -160,7 +160,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       borderColor: borderColor,
                       textColor: textColor,
                       subtextColor: subtextColor,
-                      icon: Ph.heartbeat.regular,
+                      icon: GIcon.estadisticas,
                       title: 'Ayúdanos a mejorar',
                       subtitle: 'Datos anónimos de uso (pantallas y tiempos) para mejorar la app. Nunca incluyen tus datos personales.',
                       value: Analytics.instance.enabled,
@@ -179,7 +179,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     required Color borderColor,
     required Color textColor,
     required Color subtextColor,
-    required IconData icon,
+    required GIcon icon,
     required String title,
     required String subtitle,
     required bool value,
@@ -194,7 +194,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       ),
       child: Row(
         children: [
-          Icon(icon, color: GardenColors.primary, size: 22),
+          GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

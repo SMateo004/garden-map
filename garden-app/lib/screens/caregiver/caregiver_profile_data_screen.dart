@@ -13,6 +13,7 @@ import '../../widgets/ai_write_assist.dart';
 import '../../widgets/extra_services_editor.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -603,7 +604,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       Scrollable.ensureVisible(
         scrollTo!.currentContext!,
         duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+        curve: GardenMotion.move,
         alignment: 0.1,
       );
     }
@@ -617,7 +618,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 Scrollable.ensureVisible(
                   scrollTo!.currentContext!,
                   duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
+                  curve: GardenMotion.move,
                 );
               }
             }
@@ -1107,10 +1108,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Widget _nitRow(Color textColor, Color subtextColor, Color borderColor, Color surface) {
     final (statusIcon, statusColor, statusLabel) = switch (_nitStatus) {
-      'VERIFICADO' => (Icons.verified_rounded, GardenColors.success, 'Verificado'),
-      'EN_REVISION' => (Icons.hourglass_top_rounded, GardenColors.warning, 'En revisión'),
-      'RECHAZADO' => (Icons.error_outline_rounded, GardenColors.error, 'Rechazado — sube uno nuevo'),
-      _ => (Icons.upload_file_outlined, subtextColor, 'Pendiente'),
+      'VERIFICADO' => (GIcon.verificado, GardenColors.success, 'Verificado'),
+      'EN_REVISION' => (GIcon.esperando, GardenColors.warning, 'En revisión'),
+      'RECHAZADO' => (GIcon.conflicto, GardenColors.error, 'Rechazado — sube uno nuevo'),
+      _ => (GIcon.documento, subtextColor, 'Pendiente'),
     };
     final canEdit = _nitStatus == 'PENDING' || _nitStatus == 'RECHAZADO';
 
@@ -1133,7 +1134,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   ],
                 ),
               ),
-              Icon(statusIcon, color: statusColor, size: 20),
+              GardenIcon(statusIcon, size: GIconSize.md, color: statusColor),
             ],
           ),
           const SizedBox(height: 10),
@@ -1264,10 +1265,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Widget _antecedentesRow(Color textColor, Color subtextColor, Color borderColor) {
     final (statusIcon, statusColor, statusLabel) = switch (_antecedentesStatus) {
-      'LIMPIO' => (Icons.check_circle_rounded, GardenColors.success, 'Verificado'),
-      'EN_REVISION' => (Icons.hourglass_top_rounded, GardenColors.warning, 'En revisión'),
-      'FLAGGED' => (Icons.flag_rounded, GardenColors.error, 'En revisión por un admin'),
-      _ => (Icons.upload_file_outlined, subtextColor, 'Pendiente'),
+      'LIMPIO' => (GIcon.confirmado, GardenColors.success, 'Verificado'),
+      'EN_REVISION' => (GIcon.esperando, GardenColors.warning, 'En revisión'),
+      'FLAGGED' => (GIcon.reportar, GardenColors.error, 'En revisión por un admin'),
+      _ => (GIcon.documento, subtextColor, 'Pendiente'),
     };
     final canUpload = _antecedentesStatus == 'PENDING';
 
@@ -1290,7 +1291,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   ],
                 ),
               ),
-              Icon(statusIcon, color: statusColor, size: 20),
+              GardenIcon(statusIcon, size: GIconSize.md, color: statusColor),
             ],
           ),
           const SizedBox(height: 10),
@@ -2508,7 +2509,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   // Redes sociales (opcional) — se muestran con ícono en el perfil público
   // y también las ve el admin en el detalle del cuidador.
   Widget _socialLinksField(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    Widget field(TextEditingController ctrl, IconData icon, String hint, String domain) {
+    Widget field(TextEditingController ctrl, GIcon icon, String hint, String domain) {
       final text = ctrl.text.trim();
       final looksValid = text.isEmpty || text.contains(domain);
       return Padding(
@@ -2519,7 +2520,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           onChanged: (_) => setState(() {}),
           style: TextStyle(color: textColor, fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: subtextColor, size: 20),
+            prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
             hintText: hint,
             hintStyle: TextStyle(color: subtextColor, fontSize: 12.5),
             filled: true,
@@ -2542,8 +2543,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         Text('Se muestran en tu perfil público — genera más confianza en quien te busca.',
             style: TextStyle(color: subtextColor, fontSize: 11.5)),
         const SizedBox(height: 8),
-        field(_instagramController, Icons.camera_alt_outlined, 'https://instagram.com/tu_usuario', 'instagram.com'),
-        field(_facebookController, Icons.facebook_outlined, 'https://facebook.com/tu_pagina', 'facebook.com'),
+        field(_instagramController, GIcon.foto, 'https://instagram.com/tu_usuario', 'instagram.com'),
+        field(_facebookController, GIcon.marcaFacebook, 'https://facebook.com/tu_pagina', 'facebook.com'),
       ],
     );
   }

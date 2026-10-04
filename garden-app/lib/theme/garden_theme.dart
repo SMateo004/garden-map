@@ -494,7 +494,7 @@ class _GardenPressableState extends State<GardenPressable> {
       child: AnimatedScale(
         scale: _pressed ? widget.pressedScale : 1.0,
         duration: Duration(milliseconds: _pressed ? 110 : 200),
-        curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+        curve: _pressed ? GardenMotion.enter : GardenMotion.pop,
         child: widget.child,
       ),
     );
@@ -919,7 +919,7 @@ class _GardenSkeletonState extends State<GardenSkeleton>
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _animation = Tween<double>(begin: 0.06, end: 0.18).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _controller, curve: GardenMotion.move),
     );
   }
 
@@ -1297,35 +1297,6 @@ class GardenInput extends StatelessWidget {
   }
 }
 
-// ── HELPER: Badge de estado de booking ────────────────────────────────────
-GardenBadge bookingStatusBadge(String status) {
-  switch (status) {
-    case 'PENDING_MG':
-      return const GardenBadge(text: 'Meet & Greet', color: Color(0xFF6C63FF), icon: Icons.handshake_outlined);
-    case 'PENDING_PAYMENT':
-      return const GardenBadge(text: 'Pendiente de pago', color: GardenColors.warmBeige, textColor: Color(0xFF7A6A5A));
-    case 'PAYMENT_PENDING_APPROVAL':
-      return const GardenBadge(text: 'Pago en revisión', color: GardenColors.warning, icon: Icons.schedule);
-    case 'WAITING_CAREGIVER_APPROVAL':
-      return const GardenBadge(text: 'Esperando cuidador', color: GardenColors.primary, icon: Icons.hourglass_top);
-    case 'CONFIRMED':
-      return const GardenBadge(text: 'Confirmada', color: GardenColors.success, icon: Icons.check_circle_outline);
-    case 'IN_PROGRESS':
-      return const GardenBadge(text: 'En curso', color: GardenColors.accent, icon: Icons.play_circle_outline);
-    case 'COMPLETED':
-      return const GardenBadge(text: 'Completada', color: GardenColors.primary, icon: Icons.done_all);
-    case 'CANCELLED':
-      return const GardenBadge(text: 'Cancelada', color: GardenColors.error);
-    case 'REJECTED_BY_CAREGIVER':
-      return const GardenBadge(text: 'Rechazada', color: GardenColors.error);
-    case 'MG_PASSED':
-      return const GardenBadge(text: 'M&G aprobado', color: GardenColors.success, icon: Icons.check_circle_outline);
-    case 'MG_FAILED':
-      return const GardenBadge(text: 'M&G no salió bien', color: GardenColors.error);
-    default:
-      return const GardenBadge(text: 'Pendiente', color: GardenColors.textSecondary);
-  }
-}
 
 // ── TEMA GLOBAL ────────────────────────────────────────────────────────────
 
@@ -1625,7 +1596,7 @@ ThemeData gardenTheme({bool dark = false}) {
 // icons, colours, and typography across the app.
 //
 // Usage:
-//   GardenSnackBar.success(context, '✅ Mascota guardada');
+//   GardenSnackBar.success(context, 'Mascota guardada');
 //   GardenSnackBar.error(context, 'No se pudo conectar');
 //   GardenSnackBar.warning(context, 'Debes agregar al menos una mascota');
 //   GardenSnackBar.info(context, 'Tu reserva está pendiente de pago');

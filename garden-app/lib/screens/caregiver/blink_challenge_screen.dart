@@ -256,44 +256,44 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
   }
 
   Widget _buildStatusCard() {
-    final IconData icon;
+    final GIcon icon;
     final Color color;
     final String title;
     final String? subtitle;
 
     switch (_phase) {
       case _Phase.initializing:
-        icon = Icons.camera_alt_rounded;
+        icon = GIcon.foto;
         color = Colors.white70;
         title = 'Preparando cámara...';
         subtitle = null;
       case _Phase.instructionOpen:
-        icon = Icons.visibility_rounded;
+        icon = GIcon.ver;
         color = Colors.greenAccent;
         title = 'Mantén los ojos\nBIEN ABIERTOS';
         subtitle = 'Mira directo a la cámara';
       case _Phase.capturingOpen:
-        icon = Icons.fiber_manual_record_rounded;
+        icon = GIcon.seleccionado;
         color = Colors.redAccent;
         title = 'Capturando... $_countdown';
         subtitle = 'Mantén los ojos abiertos';
       case _Phase.instructionClose:
-        icon = Icons.visibility_off_rounded;
+        icon = GIcon.ocultar;
         color = Colors.amber;
         title = 'Ahora CIÉRRA\nlos ojos';
         subtitle = 'Ciérralos lentamente';
       case _Phase.capturingClose:
-        icon = Icons.fiber_manual_record_rounded;
+        icon = GIcon.seleccionado;
         color = Colors.redAccent;
         title = 'Capturando...';
         subtitle = 'Mantén los ojos cerrados';
       case _Phase.sending:
-        icon = Icons.psychology_rounded;
+        icon = GIcon.ia;
         color = Colors.cyanAccent;
         title = 'Analizando...';
         subtitle = 'Verificando parpadeo con IA';
       case _Phase.failed:
-        icon = Icons.error_outline;
+        icon = GIcon.conflicto;
         color = Colors.redAccent;
         title = _errorMsg;
         subtitle = null;
@@ -310,7 +310,7 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 36),
+          GardenIcon(icon, size: GIconSize.xl, color: color),
           const SizedBox(height: 10),
           Text(
             title,

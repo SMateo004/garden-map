@@ -42,6 +42,7 @@ import 'phone_verification_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
   /// When true, the screen queries the backend on load to jump straight to
@@ -62,12 +63,12 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   late bool _showIntro;
 
   static const List<RegistrationPhase> _phases = [
-    RegistrationPhase(name: 'Acceso', icon: Icons.vpn_key_outlined, startStep: 0, endStep: 0),
-    RegistrationPhase(name: 'Tu empresa', icon: Icons.storefront_outlined, startStep: 1, endStep: 3),
-    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 4, endStep: 7),
-    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 8, endStep: 10),
-    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 11, endStep: 12),
-    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 13, endStep: 13),
+    RegistrationPhase(name: 'Acceso', icon: GIcon.seguridad, startStep: 0, endStep: 0),
+    RegistrationPhase(name: 'Tu empresa', icon: GIcon.empresa, startStep: 1, endStep: 3),
+    RegistrationPhase(name: 'Tu servicio', icon: GIcon.huella, startStep: 4, endStep: 7),
+    RegistrationPhase(name: 'Verificación', icon: GIcon.protegido, startStep: 8, endStep: 10),
+    RegistrationPhase(name: 'Perfil y contrato', icon: GIcon.documento, startStep: 11, endStep: 12),
+    RegistrationPhase(name: 'Seguridad', icon: GIcon.seguridad, startStep: 13, endStep: 13),
   ];
   // Cubre TODO _next() (registro, patch, subida de fotos/logo) para que el
   // botón se deshabilite/muestre loading durante cualquier paso, no solo los
@@ -943,8 +944,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
               // scrolleado a la mitad si el anterior había quedado así.
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 280),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
+                switchInCurve: GardenMotion.enter,
+                switchOutCurve: GardenMotion.exit,
                 transitionBuilder: stepTransitionBuilder,
                 child: SingleChildScrollView(
                   key: ValueKey(_currentStep),

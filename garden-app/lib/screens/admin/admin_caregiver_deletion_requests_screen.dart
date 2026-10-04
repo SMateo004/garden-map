@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: solicitudes de eliminación de cuenta de cuidador.
 ///
@@ -189,7 +190,7 @@ class _AdminCaregiverDeletionRequestsScreenState extends State<AdminCaregiverDel
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.person_remove_outlined, color: GardenColors.warning, size: 22),
+                                      const GardenIcon(GIcon.quitar, size: GIconSize.md, color: GardenColors.warning),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -214,7 +215,7 @@ class _AdminCaregiverDeletionRequestsScreenState extends State<AdminCaregiverDel
                                       onTap: () => _openInMaps(lat, lng),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.location_on_outlined, color: GardenColors.primary, size: 16),
+                                          const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, color: GardenColors.primary),
                                           const SizedBox(width: 4),
                                           Text('Ver última ubicación conocida', style: TextStyle(color: GardenColors.primary, fontSize: 12.5, decoration: TextDecoration.underline)),
                                         ],

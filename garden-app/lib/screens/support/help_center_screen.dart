@@ -150,7 +150,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(entry.category.icon, color: GardenColors.primary, size: 20),
+                          GardenIcon(entry.category.icon, size: GIconSize.md, color: GardenColors.primary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -201,7 +201,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                               color: GardenColors.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(GardenRadius.md),
                             ),
-                            child: Icon(category.icon, color: GardenColors.primary, size: 22),
+                            child: GardenIcon(category.icon, size: GIconSize.md, color: GardenColors.primary),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -262,7 +262,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 const SizedBox(height: 14),
                 GardenButton(
                   label: 'Chatear con soporte',
-                  icon: Icons.chat_rounded,
+                  gIcon: GIcon.chat,
                   onPressed: _openSupportChat,
                 ),
               ],

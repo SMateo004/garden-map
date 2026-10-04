@@ -210,7 +210,7 @@ class _ServicePainter extends CustomPainter {
       final start = i * 0.15;
       final local = ((t - start) / 0.25).clamp(0.0, 1.0);
       final fade = t > 0.8 ? (1 - (t - 0.8) / 0.2).clamp(0.0, 1.0) : 1.0;
-      final appear = Curves.easeOutBack.transform(local);
+      final appear = GardenMotion.pop.transform(local);
       if (local <= 0) continue;
       _paw(canvas, paws[i], _fill(local.clamp(0.0, 1.0) * fade), 0.6 + 0.4 * appear);
     }

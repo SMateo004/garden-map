@@ -179,7 +179,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                       const SizedBox(height: 10),
                       GardenButton(
                         label: 'Compartir por WhatsApp',
-                        icon: Icons.chat_rounded,
+                        gIcon: GIcon.chat,
                         onPressed: _code == null ? null : () async {
                           final text = Uri.encodeComponent(
                               'Te invito a Garden: encuentra cuidadores de mascotas verificados en Santa Cruz. Usa mi código $_code al registrarte y los dos ganamos Bs ${_rewardBS.toStringAsFixed(0)}.');

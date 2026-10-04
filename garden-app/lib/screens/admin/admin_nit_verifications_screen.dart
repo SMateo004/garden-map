@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: NIT de empresas en revisión. A diferencia de antecedentes,
 /// acá NO hay auto-aprobación ni acción de "suspender" — el agente de IA
@@ -154,7 +155,7 @@ class _AdminNitVerificationsScreenState extends State<AdminNitVerificationsScree
             padding: const EdgeInsets.all(16),
             color: GardenColors.primary.withValues(alpha: 0.08),
             child: Text(
-              'El agente de IA solo da contexto sobre si el documento se ve auténtico — vos siempre decidís. Revisá el documento antes de aprobar o rechazar.',
+              'El agente de IA solo da contexto sobre si el documento se ve auténtico — vos siempre decidís. Revisa el documento antes de aprobar o rechazar.',
               style: TextStyle(color: textColor, fontSize: 12.5),
             ),
           ),
@@ -196,7 +197,7 @@ class _AdminNitVerificationsScreenState extends State<AdminNitVerificationsScree
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.receipt_long_rounded, color: GardenColors.primary, size: 20),
+                                      const GardenIcon(GIcon.recibo, size: GIconSize.md, color: GardenColors.primary),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
@@ -219,7 +220,7 @@ class _AdminNitVerificationsScreenState extends State<AdminNitVerificationsScree
                                       onTap: () => _openDocument(docUrl),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.description_outlined, color: GardenColors.primary, size: 16),
+                                          const GardenIcon(GIcon.documento, size: GIconSize.sm, color: GardenColors.primary),
                                           const SizedBox(width: 4),
                                           Text('Ver documento subido', style: TextStyle(color: GardenColors.primary, fontSize: 12.5, decoration: TextDecoration.underline)),
                                         ],

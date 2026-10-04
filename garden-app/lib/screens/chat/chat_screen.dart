@@ -14,6 +14,7 @@ import '../../narrative/chat_event.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../theme/garden_motion.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
@@ -482,7 +483,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+          curve: GardenMotion.enter,
         );
       }
     });

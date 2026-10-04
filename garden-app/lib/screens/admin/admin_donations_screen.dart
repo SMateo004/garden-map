@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: trazabilidad completa de donaciones a hogares de mascotas.
 /// Deliberadamente SEPARADO del área financiera — no representa ingresos de
@@ -210,8 +211,7 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
                                   child: Row(
                                     children: [
                                       if (isPending) ...[
-                                        Icon(isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                                            color: isSelected ? GardenColors.primary : subtextColor, size: 20),
+                                        GardenIcon(isSelected ? GIcon.confirmado : GIcon.pendiente, size: GIconSize.md, state: isSelected ? GIconState.active : GIconState.idle, color: isSelected ? GardenColors.primary : subtextColor),
                                         const SizedBox(width: 10),
                                       ],
                                       Expanded(
@@ -258,7 +258,7 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
           ? FloatingActionButton.extended(
               onPressed: _openDisburseDialog,
               backgroundColor: GardenColors.success,
-              icon: const Icon(Icons.volunteer_activism_rounded, color: Colors.white),
+              icon: const GardenIcon(GIcon.donar, size: GIconSize.lg, state: GIconState.active, color: Colors.white),
               label: Text('Marcar ${_selected.length} como transferida(s)', style: const TextStyle(color: Colors.white)),
             )
           : null,
@@ -367,7 +367,7 @@ class _DisburseSheetState extends State<_DisburseSheet> {
         if (data['success'] == true) {
           Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ Donación(es) marcadas como transferidas'), backgroundColor: GardenColors.success),
+            const SnackBar(content: Text('Donación(es) marcadas como transferidas'), backgroundColor: GardenColors.success),
           );
         } else {
           GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al confirmar');
@@ -427,7 +427,7 @@ class _DisburseSheetState extends State<_DisburseSheet> {
                   ),
                 TextButton.icon(
                   onPressed: () => setState(() { _creatingNew = true; _selectedBeneficiaryId = null; }),
-                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true),
                   label: const Text('Registrar nuevo beneficiario'),
                 ),
               ] else ...[
@@ -459,10 +459,9 @@ class _DisburseSheetState extends State<_DisburseSheet> {
               const SizedBox(height: 20),
               GardenButton(
                 label: 'Confirmar transferencia',
-                icon: Icons.check_rounded,
+                gIcon: GIcon.hecho,
                 loading: _submitting,
-                onPressed: (_selectedBeneficiaryId == null && !_creatingNew) ? null : _submit,
-              ),
+                onPressed: (_selectedBeneficiaryId == null && !_creatingNew) ? null : _submit),
             ],
           ),
         ),

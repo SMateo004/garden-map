@@ -359,25 +359,25 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
             // ── Benefit bullets ────────────────────────────────────────
             _benefit(
-              icon: Icons.monetization_on_outlined,
+              icon: GIcon.precio,
               title: 'Genera ingresos',
               desc: 'Cobra por paseos, guardería y hospedaje a tu propio precio.',
               surface: surface, border: borderColor, text: textColor, sub: subtextColor,
             ),
             _benefit(
-              icon: Icons.schedule_outlined,
+              icon: GIcon.reloj,
               title: 'Tú eliges cuándo trabajas',
               desc: 'Configura tu disponibilidad según tu horario y acepta solo las reservas que quieras.',
               surface: surface, border: borderColor, text: textColor, sub: subtextColor,
             ),
             _benefit(
-              icon: Icons.verified_user_outlined,
+              icon: GIcon.protegido,
               title: 'Perfil verificado',
               desc: 'Tu cuenta ya tiene los datos básicos. Solo completa la información de cuidador y la verificación.',
               surface: surface, border: borderColor, text: textColor, sub: subtextColor,
             ),
             _benefit(
-              icon: Icons.swap_horiz_rounded,
+              icon: GIcon.intercambiar,
               title: 'Cambia de modo cuando quieras',
               desc: 'Puedes alternar entre modo dueño y modo cuidador en cualquier momento desde tu perfil.',
               surface: surface, border: borderColor, text: textColor, sub: subtextColor,
@@ -414,7 +414,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
   }
 
   Widget _benefit({
-    required IconData icon,
+    required GIcon icon,
     required String title,
     required String desc,
     required Color surface,
@@ -440,7 +440,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                 color: GardenColors.primary.withValues(alpha: 0.09),
                 borderRadius: BorderRadius.circular(GardenRadius.sm),
               ),
-              child: Icon(icon, color: GardenColors.primary, size: 18),
+              child: GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary),
             ),
             const SizedBox(width: 14),
             Expanded(

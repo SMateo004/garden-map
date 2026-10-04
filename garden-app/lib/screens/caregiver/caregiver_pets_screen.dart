@@ -272,8 +272,8 @@ class _PetCard extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 4, children: [
-                if (animalType == 'DOGS') _pill('🐕 Perro', GardenColors.info),
-                if (animalType == 'CATS') _pill('🐈 Gato', GardenColors.accent),
+                if (animalType == 'DOGS') _pill('Perro', GardenColors.info),
+                if (animalType == 'CATS') _pill('Gato', GardenColors.accent),
                 if (size != null && sizeLabels.containsKey(size))
                   _pill(sizeLabels[size]!, GardenColors.primaryLight),
                 if (isAggressive) _pill('Agresiva', GardenColors.error),

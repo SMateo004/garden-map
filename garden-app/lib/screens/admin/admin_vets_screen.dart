@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class AdminVetsScreen extends StatefulWidget {
   final String adminToken;
@@ -135,7 +136,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
             onPressed: _showRedemptionForm,
             backgroundColor: const Color(0xFF232323),
             foregroundColor: const Color(0xFFD4AF37),
-            icon: const Icon(Icons.card_giftcard_rounded),
+            icon: const GardenIcon(GIcon.regalo, size: GIconSize.lg, state: GIconState.active, inheritColor: true),
             label: const Text('Registrar canje', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
           const SizedBox(height: 12),
@@ -144,7 +145,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
             onPressed: () => _showForm(),
             backgroundColor: GardenColors.primary,
             foregroundColor: Colors.white,
-            icon: const Icon(Icons.add_rounded),
+            icon: const GardenIcon(GIcon.agregar, size: GIconSize.lg, inheritColor: true),
             label: const Text('Agregar', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
@@ -183,13 +184,9 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
                                         : Colors.grey.withValues(alpha: 0.1),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
-                                    Icons.local_hospital_rounded,
-                                    color: isActive
+                                  child: GardenIcon(GIcon.veterinaria, size: GIconSize.md, state: GIconState.active, color: isActive
                                         ? const Color(0xFF00897B)
-                                        : Colors.grey,
-                                    size: 22,
-                                  ),
+                                        : Colors.grey),
                                 ),
                                 title: Text(
                                   vet['name'] as String,
@@ -257,7 +254,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
                                   Expanded(
                                     child: TextButton.icon(
                                       onPressed: () => _showForm(vet: vet),
-                                      icon: const Icon(Icons.edit_rounded, size: 15),
+                                      icon: const GardenIcon(GIcon.editar, size: GIconSize.xs, inheritColor: true),
                                       label: const Text('Editar',
                                           style: TextStyle(fontSize: 12)),
                                       style: TextButton.styleFrom(
@@ -269,12 +266,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
                                     child: TextButton.icon(
                                       onPressed: () =>
                                           _toggleActive(vet['id'] as String, isActive),
-                                      icon: Icon(
-                                        isActive
-                                            ? Icons.visibility_off_rounded
-                                            : Icons.visibility_rounded,
-                                        size: 15,
-                                      ),
+                                      icon: GardenIcon(isActive ? GIcon.ocultar : GIcon.ver, size: GIconSize.xs, inheritColor: true),
                                       label: Text(
                                         isActive ? 'Desactivar' : 'Activar',
                                         style: const TextStyle(fontSize: 12),
@@ -290,8 +282,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
                                     child: TextButton.icon(
                                       onPressed: () =>
                                           _delete(vet['id'] as String),
-                                      icon: const Icon(Icons.delete_outline_rounded,
-                                          size: 15),
+                                      icon: const GardenIcon(GIcon.eliminar, size: GIconSize.xs, inheritColor: true),
                                       label: const Text('Eliminar',
                                           style: TextStyle(fontSize: 12)),
                                       style: TextButton.styleFrom(
@@ -340,8 +331,7 @@ class _EmptyVets extends StatelessWidget {
                 color: GardenColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.local_hospital_rounded,
-                  color: GardenColors.primary, size: 36),
+              child: const GardenIcon(GIcon.veterinaria, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary),
             ),
             const SizedBox(height: 20),
             Text('Sin veterinarias registradas',
@@ -366,7 +356,7 @@ class _EmptyVets extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
-              icon: const Icon(Icons.add_rounded, size: 18),
+              icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true),
               label: const Text('Agregar veterinaria',
                   style: TextStyle(fontWeight: FontWeight.w700)),
             ),
@@ -552,8 +542,7 @@ class _VetFormSheetState extends State<_VetFormSheet> {
                     color: const Color(0xFF00897B).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.local_hospital_rounded,
-                      color: Color(0xFF00897B), size: 20),
+                  child: const GardenIcon(GIcon.veterinaria, size: GIconSize.md, state: GIconState.active, color: Color(0xFF00897B)),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -610,8 +599,7 @@ class _VetFormSheetState extends State<_VetFormSheet> {
                 keyboardType: TextInputType.phone,
                 decoration: inputDecoration.copyWith(
                     hintText: '+591 XXXXXXXX',
-                    prefixIcon: const Icon(Icons.phone_rounded,
-                        size: 18, color: GardenColors.primary)),
+                    prefixIcon: const GardenIcon(GIcon.telefono, size: GIconSize.sm, color: GardenColors.primary)),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Obligatorio' : null,
               ),
@@ -675,7 +663,7 @@ class _VetFormSheetState extends State<_VetFormSheet> {
               ]),
               const SizedBox(height: 6),
               Text(
-                '💡 Puedes obtener las coordenadas desde Google Maps → clic derecho → "¿Qué hay aquí?"',
+                'Puedes obtener las coordenadas desde Google Maps → clic derecho → "¿Qué hay aquí?"',
                 style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 11, height: 1.4),
               ),
               const SizedBox(height: 16),
@@ -859,13 +847,13 @@ class _RedemptionFormSheetState extends State<_RedemptionFormSheet> {
               Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 20),
               Row(children: [
-                const Icon(Icons.card_giftcard_rounded, color: Color(0xFFD4AF37)),
+                const GardenIcon(GIcon.regalo, size: GIconSize.lg, state: GIconState.active, color: Color(0xFFD4AF37)),
                 const SizedBox(width: 10),
                 Text('Registrar canje de donador', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
               ]),
               const SizedBox(height: 4),
               Text(
-                'Cargá el código que el negocio te informó — el uso queda asociado al cliente dueño de ese código.',
+                'Carga el código que el negocio te informó — el uso queda asociado al cliente dueño de ese código.',
                 style: TextStyle(color: subtextColor, fontSize: 12.5),
               ),
               const SizedBox(height: 20),

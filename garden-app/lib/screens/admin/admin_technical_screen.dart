@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'professional_invites_card.dart';
+import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class AdminTechnicalScreen extends StatefulWidget {
   final String adminToken;
@@ -90,7 +92,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         vsync: this, duration: const Duration(milliseconds: 800))
       ..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
-        CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+        CurvedAnimation(parent: _pulseCtrl, curve: GardenMotion.move));
     _loadSettings();
     _loadStats();
     _loadLogs();
@@ -209,15 +211,15 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     ),
     'maintenance': (
       key: 'maintenanceMode', pausedValue: true,
-      activeLabel: '🔧 Modo mantenimiento', pausedLabel: '✅ Quitar mantenimiento',
+      activeLabel: 'Modo mantenimiento', pausedLabel: 'Quitar mantenimiento',
     ),
     'disable_marketplace': (
       key: 'marketplaceEnabled', pausedValue: false,
-      activeLabel: '🛒 Pausar marketplace', pausedLabel: '▶️ Reactivar marketplace',
+      activeLabel: 'Pausar marketplace', pausedLabel: '▶️ Reactivar marketplace',
     ),
     'disable_registrations': (
       key: 'newRegistrationsEnabled', pausedValue: false,
-      activeLabel: '🔒 Bloquear registros', pausedLabel: '🔓 Permitir registros',
+      activeLabel: 'Bloquear registros', pausedLabel: 'Permitir registros',
     ),
   };
 
@@ -247,8 +249,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(children: [
-          Icon(engaged ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-              color: engaged ? GardenColors.success : Colors.orange),
+          GardenIcon(engaged ? GIcon.confirmado : GIcon.advertencia, size: GIconSize.lg, color: engaged ? GardenColors.success : Colors.orange),
           const SizedBox(width: 8),
           Text(engaged ? 'Revertir acción' : 'Acción de emergencia'),
         ]),
@@ -338,8 +339,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                       colors: [Color(0xFF6C63FF), Color(0xFF3F51B5)]),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.developer_mode_rounded,
-                    color: Colors.white, size: 22),
+                child: const GardenIcon(GIcon.herramientas, size: GIconSize.md, color: Colors.white),
               ),
               const SizedBox(width: 12),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -366,33 +366,33 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             else
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 // ── Categoría: Servicios ───────────────────
-                _categoryHeader('🐾 Servicios', subtextColor),
+                _categoryHeader('Servicios', subtextColor),
                 _settingsCard(surface, borderColor, [
-                  _buildBoolTile(icon: Icons.store_mall_directory_outlined, iconColor: GardenColors.primary,
+                  _buildBoolTile(icon: GIcon.empresa, iconColor: GardenColors.primary,
                     title: 'Marketplace activo', subtitle: 'Cuidadores visibles para dueños',
                     settingKey: 'marketplaceEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.home_outlined, iconColor: Colors.indigo,
+                  _buildBoolTile(icon: GIcon.inicio, iconColor: Colors.indigo,
                     title: 'Hospedaje habilitado', subtitle: 'Permite reservas de hospedaje',
                     settingKey: 'hospedajeEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.pets_outlined, iconColor: Colors.teal,
+                  _buildBoolTile(icon: GIcon.huella, iconColor: Colors.teal,
                     title: 'Paseos habilitados', subtitle: 'Permite reservas de paseos',
                     settingKey: 'paseoEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.home_work_outlined, iconColor: Colors.green,
+                  _buildBoolTile(icon: GIcon.empresa, iconColor: Colors.green,
                     title: 'Guardería habilitada', subtitle: 'Permite reservas de guardería',
                     settingKey: 'guarderiaEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.handshake_outlined, iconColor: Colors.amber,
+                  _buildBoolTile(icon: GIcon.meetGreet, iconColor: Colors.amber,
                     title: 'Meet & Greet activo', subtitle: 'Reuniones de presentación',
                     settingKey: 'meetGreetEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.directions_walk_rounded, iconColor: Colors.blue,
+                  _buildBoolTile(icon: GIcon.paseo, iconColor: Colors.blue,
                     title: 'Paseos de 30 min', subtitle: 'Precio = mitad del paseo de 1 hora (sin campo separado)',
                     settingKey: 'walk30Enabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.trending_up_rounded, iconColor: Colors.deepOrange,
+                  _buildBoolTile(icon: GIcon.estadisticas, iconColor: Colors.deepOrange,
                     title: 'Precios dinámicos', subtitle: 'Ajuste automático por demanda/temporada',
                     settingKey: 'preciosDinamicosEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
@@ -400,17 +400,17 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Usuarios ────────────────────
-                _categoryHeader('👤 Usuarios y Seguridad', subtextColor),
+                _categoryHeader('Usuarios y Seguridad', subtextColor),
                 _settingsCard(surface, borderColor, [
-                  _buildBoolTile(icon: Icons.person_add_outlined, iconColor: Colors.orange,
+                  _buildBoolTile(icon: GIcon.invitar, iconColor: Colors.orange,
                     title: 'Nuevos registros', subtitle: 'Se pueden crear nuevas cuentas',
                     settingKey: 'newRegistrationsEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.construction_rounded, iconColor: Colors.red,
+                  _buildBoolTile(icon: GIcon.herramientas, iconColor: Colors.red,
                     title: 'Modo mantenimiento', subtitle: 'Muestra aviso a todos los usuarios',
                     settingKey: 'maintenanceMode', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.pin_outlined, iconColor: Colors.deepPurple,
+                  _buildBoolTile(icon: GIcon.seguridad, iconColor: Colors.deepPurple,
                     title: 'Mostrar códigos OTP al admin',
                     subtitle: 'Muestra el código de verificación de email y teléfono en el detalle de cada cuidador — solo para pruebas, no dejar activo en producción real.',
                     settingKey: 'otpVisibleToAdminEnabled', surface: surface, textColor: textColor,
@@ -418,7 +418,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   ProfessionalInvitesCard(
                     adminToken: widget.adminToken,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildStringTile(icon: Icons.business_rounded, iconColor: Colors.teal,
+                  _buildStringTile(icon: GIcon.empresa, iconColor: Colors.teal,
                     title: 'Código registro de empresas', subtitle: 'Código para hoteles, hostales, guarderías, etc.',
                     settingKey: 'companyRegistrationCode', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
@@ -426,24 +426,24 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Versión de App (force-update) ──
-                _categoryHeader('📱 Versión de App', subtextColor),
+                _categoryHeader('Versión de App', subtextColor),
                 Text('Usuarios con una versión menor a la mínima verán pantalla de actualización obligatoria al abrir la app.',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
                 const SizedBox(height: 8),
                 _settingsCard(surface, borderColor, [
-                  _buildBoolTile(icon: Icons.power_settings_new_rounded, iconColor: Colors.red,
+                  _buildBoolTile(icon: GIcon.salir, iconColor: Colors.red,
                     title: 'Forzar actualización ahora', subtitle: 'Manda a TODOS a la pantalla de actualización al instante, sin esperar a comparar versión',
                     settingKey: 'forceUpdateEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildStringTile(icon: Icons.system_update_rounded, iconColor: Colors.red,
+                  _buildStringTile(icon: GIcon.descargar, iconColor: Colors.red,
                     title: 'Versión mínima requerida', subtitle: 'Ej: 1.2.0 — formato semver',
                     settingKey: 'minAppVersion', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildStringTile(icon: Icons.apple_rounded, iconColor: Colors.grey,
+                  _buildStringTile(icon: GIcon.marcaApple, iconColor: Colors.grey,
                     title: 'URL App Store', subtitle: 'Link de la app en App Store',
                     settingKey: 'storeUrlIos', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildStringTile(icon: Icons.android_rounded, iconColor: Colors.green,
+                  _buildStringTile(icon: GIcon.marcaAndroid, iconColor: Colors.green,
                     title: 'URL Play Store', subtitle: 'Link de la app en Google Play',
                     settingKey: 'storeUrlAndroid', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
@@ -451,66 +451,66 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Pagos y Finanzas ────────────
-                _categoryHeader('💰 Pagos y Finanzas', subtextColor),
+                _categoryHeader('Pagos y Finanzas', subtextColor),
                 _settingsCard(surface, borderColor, [
-                  _buildBoolTile(icon: Icons.payment_outlined, iconColor: Colors.green,
+                  _buildBoolTile(icon: GIcon.tarjeta, iconColor: Colors.green,
                     title: 'Pagos habilitados', subtitle: 'Los usuarios pueden realizar pagos',
                     settingKey: 'paymentsEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.account_balance_wallet_outlined, iconColor: Colors.cyan,
+                  _buildBoolTile(icon: GIcon.billetera, iconColor: Colors.cyan,
                     title: 'Retiros habilitados', subtitle: 'Cuidadores pueden solicitar retiros',
                     settingKey: 'retirosEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.gavel_rounded, iconColor: Colors.purple,
+                  _buildBoolTile(icon: GIcon.multa, iconColor: Colors.purple,
                     title: 'Disputas habilitadas', subtitle: 'Clientes pueden abrir disputas',
                     settingKey: 'disputasEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildBoolTile(icon: Icons.credit_card_rounded, iconColor: Colors.indigo,
+                  _buildBoolTile(icon: GIcon.tarjeta, iconColor: Colors.indigo,
                     title: 'Pago con tarjeta', subtitle: 'Muestra la opción de tarjeta de crédito/débito como método de pago (aún sin pasarela real conectada)',
                     settingKey: 'cardPaymentEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.percent_rounded, iconColor: Colors.green,
+                  _buildNumericTile(icon: GIcon.comision, iconColor: Colors.green,
                     title: 'Comisión GARDEN por defecto', subtitle: 'Se usa en servicios sin comisión propia. Por servicio y por empresa: pestaña Comisiones',
                     settingKey: 'platformCommissionPct', unit: '%', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.cyan,
+                  _buildNumericTile(icon: GIcon.abajo, iconColor: Colors.cyan,
                     title: 'Retiro mínimo', subtitle: 'Monto mínimo para solicitar retiro',
                     settingKey: 'montoMinimoRetiro', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.timer_outlined, iconColor: Colors.teal,
+                  _buildNumericTile(icon: GIcon.cronometro, iconColor: Colors.teal,
                     title: 'Ventana QR (minutos)', subtitle: 'Minutos para iniciar pago con QR',
                     settingKey: 'qrValidityMinutes', unit: 'min', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.auto_mode_rounded, iconColor: Colors.amber,
+                  _buildNumericTile(icon: GIcon.repetir, iconColor: Colors.amber,
                     title: 'Auto-liberación (horas)', subtitle: 'Horas para liberar pago sin reseña del cliente',
                     settingKey: 'autoReleasePaymentHoras', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.gavel_outlined, iconColor: Colors.deepPurple,
+                  _buildNumericTile(icon: GIcon.multa, iconColor: Colors.deepPurple,
                     title: 'SLA disputa / calificación baja (horas)',
                     subtitle: 'Si el admin no resuelve una disputa u ON_HOLD en este plazo, se libera el pago al cuidador automáticamente',
                     settingKey: 'onHoldSlaHoras', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.pending_actions_rounded, iconColor: Colors.redAccent,
+                  _buildNumericTile(icon: GIcon.esperando, iconColor: Colors.redAccent,
                     title: 'Ventana de aceptación del cuidador (horas)',
                     subtitle: 'Si el cuidador no acepta la reserva en este plazo, se cancela sola y se reembolsa el 100% a la billetera del dueño. También actúa como piso mínimo de anticipación al reservar (además del mínimo específico por tipo de servicio, abajo).',
                     settingKey: 'caregiverAcceptWindowHoras', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.event_busy_rounded, iconColor: Colors.brown,
+                  _buildNumericTile(icon: GIcon.calendario, iconColor: Colors.brown,
                     title: 'Gracia por no-show (minutos)',
                     subtitle: 'Si el servicio no arranca (el cuidador nunca marca "iniciar servicio") pasado este tiempo desde la hora acordada, se cancela sola sin reembolso (política de no-show).',
                     settingKey: 'noShowGracePeriodMinutos', unit: 'min', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.directions_walk_rounded, iconColor: Colors.lightGreen,
+                  _buildNumericTile(icon: GIcon.paseo, iconColor: Colors.lightGreen,
                     title: 'Anticipación mínima — Paseo (horas)',
                     subtitle: 'Horas mínimas de anticipación para reservar un paseo. Puede ser menor a 24h (ej. 3h) para permitir reservas para el mismo día.',
                     settingKey: 'paseoMinAdvanceHoras', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.cottage_rounded, iconColor: Colors.indigo,
+                  _buildNumericTile(icon: GIcon.inicio, iconColor: Colors.indigo,
                     title: 'Anticipación mínima — Hospedaje (horas)',
                     subtitle: 'Horas mínimas de anticipación para reservar un hospedaje. Puede ser menor a 24h para permitir reservas para el mismo día.',
                     settingKey: 'hospedajeMinAdvanceHoras', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.pets_rounded, iconColor: Colors.teal,
+                  _buildNumericTile(icon: GIcon.huella, iconColor: Colors.teal,
                     title: 'Anticipación mínima — Guardería (horas)',
                     subtitle: 'Horas mínimas de anticipación para reservar una guardería. Puede ser menor a 24h para permitir reservas para el mismo día.',
                     settingKey: 'guarderiaMinAdvanceHoras', unit: 'h', surface: surface,
@@ -519,17 +519,17 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Política HOSPEDAJE ──────────
-                _categoryHeader('🏠 Política Cancelación — Hospedaje', subtextColor),
+                _categoryHeader('Política Cancelación — Hospedaje', subtextColor),
                 _settingsCard(surface, borderColor, [
-                  _buildNumericTile(icon: Icons.monetization_on_outlined, iconColor: Colors.orange,
+                  _buildNumericTile(icon: GIcon.precio, iconColor: Colors.orange,
                     title: 'Tarifa admin (Bs)', subtitle: 'Fee fijo que retiene GARDEN al cancelar',
                     settingKey: 'hospedajeRefundAdminFeeBS', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.check_circle_outline_rounded, iconColor: Colors.green,
+                  _buildNumericTile(icon: GIcon.confirmado, iconColor: Colors.green,
                     title: 'Reembolso 100% (horas)', subtitle: 'Horas antes del servicio → 100% devuelto',
                     settingKey: 'hospedajeRefund100Horas', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.timelapse_rounded, iconColor: Colors.amber,
+                  _buildNumericTile(icon: GIcon.cronometro, iconColor: Colors.amber,
                     title: 'Reembolso 50% (horas)', subtitle: 'Horas antes del servicio → 50% devuelto',
                     settingKey: 'hospedajeRefund50Horas', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
@@ -537,13 +537,13 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Política PASEO ──────────────
-                _categoryHeader('🦮 Política Cancelación — Paseo', subtextColor),
+                _categoryHeader('Política Cancelación — Paseo', subtextColor),
                 _settingsCard(surface, borderColor, [
-                  _buildNumericTile(icon: Icons.check_circle_outline_rounded, iconColor: Colors.green,
+                  _buildNumericTile(icon: GIcon.confirmado, iconColor: Colors.green,
                     title: 'Reembolso 100% (horas)', subtitle: 'Horas antes del paseo → 100% devuelto',
                     settingKey: 'paseoRefund100Horas', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.timelapse_rounded, iconColor: Colors.amber,
+                  _buildNumericTile(icon: GIcon.cronometro, iconColor: Colors.amber,
                     title: 'Reembolso 50% (horas)', subtitle: 'Horas antes del paseo → 50% devuelto',
                     settingKey: 'paseoRefund50Horas', unit: 'h', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
@@ -551,32 +551,32 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 const SizedBox(height: 16),
 
                 // ── Categoría: Límites de precio ──────────
-                _categoryHeader('💰 Límites de Precio por Servicio', subtextColor),
+                _categoryHeader('Límites de Precio por Servicio', subtextColor),
                 Text('Rango que los cuidadores pueden configurar. Cambios aplican en el próximo onboarding.',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
                 const SizedBox(height: 8),
                 _settingsCard(surface, borderColor, [
-                  _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.green,
+                  _buildNumericTile(icon: GIcon.abajo, iconColor: Colors.green,
                     title: 'Paseo — mínimo (Bs)', subtitle: 'Precio mínimo por hora de paseo',
                     settingKey: 'paseoMinPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_upward_rounded, iconColor: Colors.red,
+                  _buildNumericTile(icon: GIcon.arriba, iconColor: Colors.red,
                     title: 'Paseo — máximo (Bs)', subtitle: 'Precio máximo por hora de paseo',
                     settingKey: 'paseoMaxPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.indigo,
+                  _buildNumericTile(icon: GIcon.abajo, iconColor: Colors.indigo,
                     title: 'Hospedaje — mínimo (Bs)', subtitle: 'Precio mínimo por noche',
                     settingKey: 'hospedajeMinPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_upward_rounded, iconColor: Colors.deepPurple,
+                  _buildNumericTile(icon: GIcon.arriba, iconColor: Colors.deepPurple,
                     title: 'Hospedaje — máximo (Bs)', subtitle: 'Precio máximo por noche',
                     settingKey: 'hospedajeMaxPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.teal,
+                  _buildNumericTile(icon: GIcon.abajo, iconColor: Colors.teal,
                     title: 'Guardería — mínimo (Bs)', subtitle: 'Precio mínimo por hora de guardería',
                     settingKey: 'guarderiaMinPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: Icons.arrow_upward_rounded, iconColor: Colors.cyan,
+                  _buildNumericTile(icon: GIcon.arriba, iconColor: Colors.cyan,
                     title: 'Guardería — máximo (Bs)', subtitle: 'Precio máximo por hora de guardería',
                     settingKey: 'guarderiaMaxPrice', unit: 'Bs', surface: surface,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
@@ -651,8 +651,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                         ),
                       )
                     else
-                      const Icon(Icons.play_circle_outline,
-                          size: 12, color: GardenColors.primary),
+                      const GardenIcon(GIcon.iniciar, size: GIconSize.xs, color: GardenColors.primary),
                     const SizedBox(width: 6),
                     Text(
                       _liveMode ? 'EN VIVO' : 'Ver en vivo',
@@ -668,7 +667,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
                 color: subtextColor,
                 onPressed: () => Future.wait([_loadLogs(), _loadStats()]),
                 tooltip: 'Recargar',
@@ -762,8 +761,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.fiber_new_rounded,
-                          color: Colors.green, size: 16),
+                      GardenIcon(GIcon.destacado, size: GIconSize.sm, color: Colors.green),
                       SizedBox(width: 6),
                       Text('Nuevos eventos detectados',
                           style: TextStyle(
@@ -790,9 +788,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                           child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                            const Icon(Icons.smart_toy_outlined,
-                                size: 40,
-                                color: Color(0xFF484F58)),
+                            const GardenIcon(GIcon.ia, size: GIconSize.xl, color: Color(0xFF484F58)),
                             const SizedBox(height: 8),
                             Text('Sin actividad registrada',
                                 style: TextStyle(
@@ -822,8 +818,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
-                const Icon(Icons.info_outline_rounded,
-                    color: Colors.blue, size: 14),
+                const GardenIcon(GIcon.info, size: GIconSize.xs, color: Colors.blue),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -873,7 +868,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   elevation: 0,
                 ),
                 onPressed: _sendInstruction,
-                child: const Icon(Icons.send_rounded, size: 20),
+                child: const GardenIcon(GIcon.enviar, size: GIconSize.md, inheritColor: true),
               ),
             ]),
             const SizedBox(height: 40),
@@ -907,17 +902,17 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     final success = byStatus['SUCCESS'] as int? ?? 0;
 
     return Row(children: [
-      Expanded(child: _statCard('Total', '$total', Icons.analytics_outlined, Colors.blue, surface, textColor, subtextColor)),
+      Expanded(child: _statCard('Total', '$total', GIcon.estadisticas, Colors.blue, surface, textColor, subtextColor)),
       const SizedBox(width: 8),
-      Expanded(child: _statCard('Últimas 24h', '$last24h', Icons.access_time_rounded, Colors.green, surface, textColor, subtextColor)),
+      Expanded(child: _statCard('Últimas 24h', '$last24h', GIcon.reloj, Colors.green, surface, textColor, subtextColor)),
       const SizedBox(width: 8),
-      Expanded(child: _statCard('Errores', '$errors', Icons.error_outline_rounded, errors > 0 ? Colors.red : Colors.grey, surface, textColor, subtextColor)),
+      Expanded(child: _statCard('Errores', '$errors', GIcon.conflicto, errors > 0 ? Colors.red : Colors.grey, surface, textColor, subtextColor)),
       const SizedBox(width: 8),
-      Expanded(child: _statCard('Éxitos', '$success', Icons.check_circle_outline_rounded, Colors.teal, surface, textColor, subtextColor)),
+      Expanded(child: _statCard('Éxitos', '$success', GIcon.confirmado, Colors.teal, surface, textColor, subtextColor)),
     ]);
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color,
+  Widget _statCard(String label, String value, GIcon icon, Color color,
       Color surface, Color textColor, Color subtextColor) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -927,7 +922,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(children: [
-        Icon(icon, color: color, size: 20),
+        GardenIcon(icon, size: GIconSize.md, color: color),
         const SizedBox(height: 6),
         Text(value,
             style: TextStyle(
@@ -962,7 +957,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
   }
 
   Widget _buildBoolTile({
-    required IconData icon,
+    required GIcon icon,
     required Color iconColor,
     required String title,
     required String subtitle,
@@ -985,7 +980,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
           color: enabled ? iconColor.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: enabled ? iconColor : Colors.grey.shade500, size: 18),
+        child: GardenIcon(icon, size: GIconSize.sm, color: enabled ? iconColor : Colors.grey.shade500),
       ),
       title: Text(title,
           style: TextStyle(
@@ -1018,7 +1013,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
   }
 
   Widget _buildNumericTile({
-    required IconData icon,
+    required GIcon icon,
     required Color iconColor,
     required String title,
     required String subtitle,
@@ -1042,7 +1037,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
           color: iconColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: iconColor, size: 18),
+        child: GardenIcon(icon, size: GIconSize.sm, color: iconColor),
       ),
       title: Text(title,
           style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1062,7 +1057,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             const SizedBox(width: 3),
             Text(unit, style: TextStyle(color: iconColor.withValues(alpha: 0.7), fontSize: 11)),
             const SizedBox(width: 4),
-            Icon(Icons.edit_rounded, color: iconColor.withValues(alpha: 0.6), size: 13),
+            GardenIcon(GIcon.editar, size: GIconSize.xs, color: iconColor.withValues(alpha: 0.6)),
           ]),
         ),
       ),
@@ -1132,7 +1127,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
   }
 
   Widget _buildStringTile({
-    required IconData icon,
+    required GIcon icon,
     required Color iconColor,
     required String title,
     required String subtitle,
@@ -1153,7 +1148,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
           color: iconColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: iconColor, size: 18),
+        child: GardenIcon(icon, size: GIconSize.sm, color: iconColor),
       ),
       title: Text(title,
           style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1175,7 +1170,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   style: TextStyle(color: iconColor, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.edit_rounded, color: iconColor.withValues(alpha: 0.6), size: 13),
+            GardenIcon(GIcon.editar, size: GIconSize.xs, color: iconColor.withValues(alpha: 0.6)),
           ]),
         ),
       ),
@@ -1275,19 +1270,19 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     final isExpanded = _expandedLogId == id;
 
     Color statusColor;
-    IconData statusIcon;
+    GIcon statusIcon;
     switch (status) {
       case 'ERROR':
         statusColor = Colors.red;
-        statusIcon = Icons.error_outline;
+        statusIcon = GIcon.conflicto;
         break;
       case 'PENDING':
         statusColor = Colors.orange;
-        statusIcon = Icons.pending_outlined;
+        statusIcon = GIcon.esperando;
         break;
       default:
         statusColor = Colors.green;
-        statusIcon = Icons.check_circle_outline;
+        statusIcon = GIcon.confirmado;
     }
 
     Color agentColor;
@@ -1340,7 +1335,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(statusIcon, color: statusColor, size: 13),
+              GardenIcon(statusIcon, size: GIconSize.xs, color: statusColor),
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -1373,13 +1368,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   style: const TextStyle(
                       color: Color(0xFF484F58), fontSize: 10)),
               const SizedBox(width: 4),
-              Icon(
-                isExpanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                color: const Color(0xFF484F58),
-                size: 14,
-              ),
+              GardenIcon(isExpanded ? GIcon.plegar : GIcon.desplegar, size: GIconSize.xs, color: const Color(0xFF484F58)),
             ]),
             if (isExpanded && (input != null || output != null)) ...[
               const SizedBox(height: 8),

@@ -48,8 +48,8 @@ class _WebShellScreenState extends State<WebShellScreen> {
 
   // Tab 0 (Inicio/Marketplace) se activa con el logo — no aparece en el nav
   static const _tabs = [
-    _NavTab(icon: Icons.list_alt_outlined, activeIcon: Icons.list_alt_rounded, label: 'Reservas'),
-    _NavTab(icon: Icons.pets_outlined, activeIcon: Icons.pets, label: 'Mascotas'),
+    _NavTab(icon: GIcon.lista, activeIcon: GIcon.lista, label: 'Reservas'),
+    _NavTab(icon: GIcon.huella, activeIcon: GIcon.huella, label: 'Mascotas'),
   ];
 
   @override
@@ -329,14 +329,14 @@ class _HelpFooterBar extends StatelessWidget {
 }
 
 class _NavTab {
-  final IconData icon;
-  final IconData activeIcon;
+  final GIcon icon;
+  final GIcon activeIcon;
   final String label;
   const _NavTab({required this.icon, required this.activeIcon, required this.label});
 }
 
 class _WebNavButton extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final bool isActive;
   final bool isDark;
@@ -372,7 +372,7 @@ class _WebNavButton extends StatelessWidget {
                 ? Border.all(color: GardenColors.primary.withValues(alpha: 0.25), width: 1)
                 : null,
           ),
-          child: Icon(icon, size: 22, color: isActive ? activeColor : inactiveColor),
+          child: GardenIcon(icon, size: GIconSize.md, color: isActive ? activeColor : inactiveColor),
         ),
       ),
     );

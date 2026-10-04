@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
+import '../theme/garden_motion.dart';
 
 /// Barra de progreso para wizards de varios pasos, con transición suave
 /// entre valores (en vez del salto abrupto de LinearProgressIndicator) + un
@@ -23,7 +24,7 @@ class AnimatedStepProgressBar extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: value),
       duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      curve: GardenMotion.enter,
       builder: (context, animatedValue, _) {
         return Container(
           height: height,

@@ -6,10 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../design/phosphor_glyphs.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../narrative/booking_story.dart';
 
 class AdminReservationDetailScreen extends StatefulWidget {
   final String bookingId;
@@ -98,7 +99,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
                   labelText: 'Tu contraseña de admin',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    icon: GardenIcon(obscure ? GIcon.ocultar : GIcon.ver, size: GIconSize.lg, inheritColor: true),
                     onPressed: () => setS(() => obscure = !obscure),
                   ),
                 ),
@@ -138,7 +139,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         await _load();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pago aprobado'), backgroundColor: GardenColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pago aprobado'), backgroundColor: GardenColors.success));
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al aprobar');
       }
@@ -163,17 +164,17 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
                 style: TextStyle(color: GardenColors.warning, fontSize: 13, height: 1.4)),
             const SizedBox(height: 12),
             ListTile(
-              leading: const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.primary),
+              leading: const GardenIcon(GIcon.billetera, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
               title: const Text('A la billetera Garden'),
               onTap: () => Navigator.pop(ctx, 'WALLET'),
             ),
             ListTile(
-              leading: const Icon(Icons.card_giftcard_rounded, color: GardenColors.warning),
+              leading: const GardenIcon(GIcon.regalo, size: GIconSize.lg, state: GIconState.active, color: GardenColors.warning),
               title: const Text('Como cupón'),
               onTap: () => Navigator.pop(ctx, 'COUPON'),
             ),
             ListTile(
-              leading: const Icon(Icons.sync_alt_rounded, color: GardenColors.success),
+              leading: const GardenIcon(GIcon.repetir, size: GIconSize.lg, color: GardenColors.success),
               title: const Text('Ya transferí manualmente (solo registrar)'),
               onTap: () => Navigator.pop(ctx, 'MANUAL_TRANSACTION'),
             ),
@@ -203,7 +204,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         final code = data['data']?['couponCode'] as String?;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(code != null ? '✅ Reembolso procesado — cupón: $code' : '✅ Reembolso procesado'),
+            content: Text(code != null ? 'Reembolso procesado — cupón: $code' : 'Reembolso procesado'),
             backgroundColor: GardenColors.success,
           ));
         }
@@ -249,7 +250,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         await _load();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Emergencia resuelta — tiempo reanudado'), backgroundColor: GardenColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Emergencia resuelta — tiempo reanudado'), backgroundColor: GardenColors.success));
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al resolver la emergencia');
       }
@@ -276,7 +277,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
             backgroundColor: surface,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: textColor),
+              icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: textColor),
               onPressed: () => Navigator.of(context).pop(),
             ),
             title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -332,11 +333,11 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
   Widget _buildError() => Center(child: Padding(
     padding: const EdgeInsets.all(24),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.error_outline_rounded, size: 48, color: GardenColors.error),
+      const GardenIcon(GIcon.conflicto, size: GIconSize.hero, color: GardenColors.error),
       const SizedBox(height: 12),
       Text(_error!, style: const TextStyle(color: GardenColors.error), textAlign: TextAlign.center),
       const SizedBox(height: 16),
-      ElevatedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Reintentar')),
+      ElevatedButton.icon(onPressed: _load, icon: const GardenIcon(GIcon.repetir, size: GIconSize.lg, inheritColor: true), label: const Text('Reintentar')),
     ]),
   ));
 
@@ -352,7 +353,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(isPaseo ? Icons.directions_walk_rounded : Icons.home_rounded, color: GardenColors.primary, size: 24),
+            child: GardenIcon(isPaseo ? GIcon.paseo : GIcon.inicio, size: GIconSize.lg, state: isPaseo ? GIconState.idle : GIconState.active, color: GardenColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -365,22 +366,22 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         const SizedBox(height: 12),
         Row(children: [
           if (isPaseo) ...[
-            _infoChip(Icons.calendar_today_outlined, d['walkDate'] ?? '—', subtextColor),
+            _infoChip(GIcon.calendario, d['walkDate'] ?? '—', subtextColor),
             const SizedBox(width: 8),
-            if (d['timeSlot'] != null) _infoChip(Icons.schedule_outlined, d['timeSlot'].toString(), subtextColor),
-            if (d['startTime'] != null) _infoChip(Icons.access_time_rounded, d['startTime'].toString(), subtextColor),
+            if (d['timeSlot'] != null) _infoChip(GIcon.reloj, d['timeSlot'].toString(), subtextColor),
+            if (d['startTime'] != null) _infoChip(GIcon.reloj, d['startTime'].toString(), subtextColor),
           ] else ...[
-            _infoChip(Icons.calendar_today_outlined, '${d['startDate'] ?? '?'} → ${d['endDate'] ?? '?'}', subtextColor),
+            _infoChip(GIcon.calendario, '${d['startDate'] ?? '?'} → ${d['endDate'] ?? '?'}', subtextColor),
             if (d['totalDays'] != null) ...[
               const SizedBox(width: 8),
-              _infoChip(Icons.nights_stay_outlined, '${d['totalDays']} días', subtextColor),
+              _infoChip(GIcon.modoOscuro, '${d['totalDays']} días', subtextColor),
             ],
           ],
         ]),
       ])),
 
       // Mascota
-      _sectionTitle('MASCOTA', Icons.pets_rounded),
+      _sectionTitle('MASCOTA', GIcon.huella),
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           if (d['petPhotoUrl'] != null)
@@ -388,11 +389,11 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
               borderRadius: BorderRadius.circular(10),
               child: Image.network(d['petPhotoUrl'] as String, width: 56, height: 56, fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(width: 56, height: 56, color: borderColor,
-                  child: Icon(Icons.pets_rounded, color: subtextColor))),
+                  child: GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, color: subtextColor))),
             )
           else
             Container(width: 56, height: 56, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 28)),
+              child: const GardenIcon(GIcon.huella, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(d['petName'] as String? ?? '—', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
@@ -410,7 +411,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
             decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8),
               border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3))),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.warning_amber_rounded, size: 16, color: GardenColors.warning),
+              const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
               const SizedBox(width: 6),
               Expanded(child: Text(d['specialNeeds'] as String,
                 style: const TextStyle(fontSize: 12, color: GardenColors.warning))),
@@ -420,7 +421,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       ])),
 
       // Cliente
-      _sectionTitle('CLIENTE / DUEÑO', Icons.person_outline_rounded),
+      _sectionTitle('CLIENTE / DUEÑO', GIcon.perfil),
       _card(surface, borderColor, child: Column(children: [
         Row(children: [
           GardenAvatar(imageUrl: null, size: 44, initials: (d['clientName'] as String? ?? 'C')[0]),
@@ -434,7 +435,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         ]),
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: _outlineBtn(Icons.visibility_outlined, 'Ver perfil cliente', () {
+          Expanded(child: _outlineBtn(GIcon.ver, 'Ver perfil cliente', () {
             // Navigate to client view (same admin panel but with user info)
             _showUserQuickView(context, {
               'name': d['clientName'],
@@ -445,7 +446,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
             }, surface, textColor, subtextColor, borderColor);
           })),
           const SizedBox(width: 8),
-          Expanded(child: _outlineBtn(Icons.copy_rounded, 'Copiar email', () {
+          Expanded(child: _outlineBtn(GIcon.copiar, 'Copiar email', () {
             Clipboard.setData(ClipboardData(text: d['clientEmail'] as String? ?? ''));
             _snack('Email copiado');
           })),
@@ -453,7 +454,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       ])),
 
       // Cuidador
-      _sectionTitle('CUIDADOR', Icons.supervisor_account_outlined),
+      _sectionTitle('CUIDADOR', GIcon.equipo),
       _card(surface, borderColor, child: Column(children: [
         Row(children: [
           GardenAvatar(imageUrl: null, size: 44, initials: (d['caregiverName'] as String? ?? 'C')[0]),
@@ -467,11 +468,11 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         ]),
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: _outlineBtn(Icons.manage_accounts_outlined, 'Ver perfil admin', () {
+          Expanded(child: _outlineBtn(GIcon.ajustes, 'Ver perfil admin', () {
             context.push('/admin'); // go back to admin and navigate from there
           })),
           const SizedBox(width: 8),
-          Expanded(child: _outlineBtn(Icons.copy_rounded, 'Copiar email', () {
+          Expanded(child: _outlineBtn(GIcon.copiar, 'Copiar email', () {
             Clipboard.setData(ClipboardData(text: d['caregiverEmail'] as String? ?? ''));
             _snack('Email copiado');
           })),
@@ -479,7 +480,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       ])),
 
       // Timestamps
-      _sectionTitle('FECHAS Y ESTADO', Icons.schedule_outlined),
+      _sectionTitle('FECHAS Y ESTADO', GIcon.reloj),
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _dataRow('Creada', _fmtDate(d['createdAt'] as String? ?? ''), textColor, subtextColor),
         _dataRow('Actualizada', _fmtDate(d['updatedAt'] as String? ?? ''), textColor, subtextColor),
@@ -488,7 +489,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       ])),
 
       // IDs técnicos
-      _sectionTitle('IDENTIFICADORES', Icons.tag_rounded),
+      _sectionTitle('IDENTIFICADORES', GIcon.precio),
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _idBadge('Booking ID', d['id'] as String? ?? '—', subtextColor, borderColor),
         const SizedBox(height: 6),
@@ -535,7 +536,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
     return _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Row(children: [
-        Icon(Icons.shield_outlined, size: 16, color: GardenColors.warning),
+        GardenIcon(GIcon.protegido, size: GIconSize.sm, color: GardenColors.warning),
         SizedBox(width: 6),
         Text('CONTROL DE CASOS ESPECIALES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 1)),
       ]),
@@ -548,28 +549,25 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           label: approveWithinWindow
               ? 'Aprobar pago (${remaining!.inHours}h ${remaining.inMinutes % 60}m restantes)'
               : 'Aprobar pago (ventana de 24h expirada)',
-          icon: Icons.check_circle_outline_rounded,
+          gIcon: GIcon.confirmado,
           color: GardenColors.success,
-          onPressed: approveWithinWindow ? _approvePaymentSecure : null,
-        ),
+          onPressed: approveWithinWindow ? _approvePaymentSecure : null),
         const SizedBox(height: 10),
       ],
       if (!alreadyRefunded)
         GardenButton(
           label: 'Reembolso',
-          icon: Icons.replay_circle_filled_outlined,
+          gIcon: GIcon.repetir,
           color: GardenColors.error,
           outline: true,
-          onPressed: _refundBooking,
-        )
+          onPressed: _refundBooking)
       else
         GardenButton(
           label: 'Ya reembolsado',
-          icon: Icons.check_rounded,
+          gIcon: GIcon.hecho,
           color: GardenColors.success,
           outline: true,
-          onPressed: null,
-        ),
+          onPressed: null),
     ]));
   }
 
@@ -600,7 +598,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       // Resumen visual
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
-          Icon(Icons.account_balance_wallet_rounded, size: 16, color: GardenColors.primary),
+          GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
           SizedBox(width: 6),
           Text('RESUMEN DE PAGO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
         ]),
@@ -626,12 +624,12 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         Container(
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
           child: Column(children: [
-            _payRow('Pago al cuidador (${caregiverPct.toStringAsFixed(0)}%)', caregiversPayout, GardenColors.success, Icons.person_rounded),
+            _payRow('Pago al cuidador (${caregiverPct.toStringAsFixed(0)}%)', caregiversPayout, GardenColors.success, GIcon.perfil),
             Divider(height: 1, color: borderColor),
-            _payRow('Comisión Garden (${commissionPct.toStringAsFixed(0)}%)', commission, GardenColors.primary, Icons.eco_rounded),
+            _payRow('Comisión Garden (${commissionPct.toStringAsFixed(0)}%)', commission, GardenColors.primary, GIcon.comision),
             if (tax > 0) ...[
               Divider(height: 1, color: borderColor),
-              _payRow('Impuestos IVA + IT (${taxPct.toStringAsFixed(0)}%)', tax, GardenColors.warning, Ph.scales.regular),
+              _payRow('Impuestos IVA + IT (${taxPct.toStringAsFixed(0)}%)', tax, GardenColors.warning, GIcon.enRevision),
             ],
           ]),
         ),
@@ -687,7 +685,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Transacciones en billetera
       if (txs.isNotEmpty) ...[
-        _sectionTitle('TRANSACCIONES EN BILLETERA', Icons.receipt_long_outlined),
+        _sectionTitle('TRANSACCIONES EN BILLETERA', GIcon.recibo),
         ...txs.map((tx) => _card(surface, borderColor, child: Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -695,7 +693,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
               color: _txColor(tx['type'] as String? ?? '').withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(_txIcon(tx['type'] as String? ?? ''), size: 18, color: _txColor(tx['type'] as String? ?? '')),
+            child: GardenIcon(_txIcon(tx['type'] as String? ?? ''), size: GIconSize.sm, color: _txColor(tx['type'] as String? ?? '')),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -750,7 +748,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Icon(Icons.warning_rounded, color: GardenColors.error),
+              const GardenIcon(GIcon.advertencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
               const SizedBox(width: 8),
               Expanded(child: Text('EMERGENCIA ACTIVA — tiempo del servicio pausado',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: GardenColors.error))),
@@ -761,7 +759,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
                 onPressed: _resolveIncident,
-                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                icon: const GardenIcon(GIcon.confirmado, size: GIconSize.sm, inheritColor: true),
                 label: const Text('Resolver emergencia'),
               ),
             ),
@@ -771,7 +769,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Mapa en tiempo real (solo paseos activos)
       if (isPaseo && isServiceActive) ...[
-        _sectionTitle('UBICACIÓN EN TIEMPO REAL', Icons.map_rounded),
+        _sectionTitle('UBICACIÓN EN TIEMPO REAL', GIcon.mapa),
         _card(surface, borderColor, child: SizedBox(
           height: 260,
           child: ClipRRect(
@@ -788,7 +786,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       // Tiempos
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
-          Icon(Icons.timer_outlined, size: 14, color: GardenColors.primary),
+          GardenIcon(GIcon.cronometro, size: GIconSize.xs, color: GardenColors.primary),
           SizedBox(width: 6),
           Text('EJECUCIÓN DEL SERVICIO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
         ]),
@@ -801,9 +799,9 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           ))
         else ...[
           Row(children: [
-            Expanded(child: _timeBox('INICIO', startedAt, Icons.play_arrow_rounded, GardenColors.success, subtextColor, borderColor)),
+            Expanded(child: _timeBox('INICIO', startedAt, GIcon.iniciar, GardenColors.success, subtextColor, borderColor)),
             const SizedBox(width: 10),
-            Expanded(child: _timeBox('FIN', endedAt, Icons.stop_rounded, GardenColors.error, subtextColor, borderColor)),
+            Expanded(child: _timeBox('FIN', endedAt, GIcon.pausar, GardenColors.error, subtextColor, borderColor)),
           ]),
           if (serviceDuration != null) ...[
             const SizedBox(height: 12),
@@ -828,19 +826,19 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Fotos del servicio
       if (startPhoto != null || endPhoto != null) ...[
-        _sectionTitle('FOTOS DEL SERVICIO', Icons.photo_camera_outlined),
+        _sectionTitle('FOTOS DEL SERVICIO', GIcon.foto),
         _card(surface, borderColor, child: Row(children: [
           if (startPhoto != null)
-            Expanded(child: _servicePhoto(startPhoto, 'Foto inicio', Icons.play_arrow_rounded, GardenColors.success, subtextColor, borderColor)),
+            Expanded(child: _servicePhoto(startPhoto, 'Foto inicio', GIcon.iniciar, GardenColors.success, subtextColor, borderColor)),
           if (startPhoto != null && endPhoto != null) const SizedBox(width: 10),
           if (endPhoto != null)
-            Expanded(child: _servicePhoto(endPhoto, 'Foto fin', Icons.stop_rounded, GardenColors.error, subtextColor, borderColor)),
+            Expanded(child: _servicePhoto(endPhoto, 'Foto fin', GIcon.pausar, GardenColors.error, subtextColor, borderColor)),
         ])),
       ],
 
       // Eventos del servicio
       if (events != null && events.isNotEmpty) ...[
-        _sectionTitle('EVENTOS DEL SERVICIO', Icons.event_note_outlined),
+        _sectionTitle('EVENTOS DEL SERVICIO', GIcon.nota),
         ...events.map((e) {
           final ev = e as Map<String, dynamic>? ?? {};
           final isEmergency = (ev['type'] as String? ?? '').toLowerCase().contains('emergency') ||
@@ -854,11 +852,12 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
               border: Border.all(color: isEmergency ? GardenColors.error.withValues(alpha: 0.3) : borderColor),
             ),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(
-                isEmergency ? Icons.warning_rounded : Icons.circle,
-                size: isEmergency ? 18 : 8,
-                color: isEmergency ? GardenColors.error : GardenColors.primary,
-              ),
+              isEmergency
+                  ? const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.error, state: GIconState.active)
+                  : Container(
+                      width: 8, height: 8, margin: const EdgeInsets.only(top: 4),
+                      decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                    ),
               const SizedBox(width: 10),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (ev['type'] != null)
@@ -879,7 +878,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Tracking GPS data
       if (trackingPoints != null && trackingPoints.isNotEmpty) ...[
-        _sectionTitle('TRACKING GPS (${trackingPoints.length} puntos)', Icons.gps_fixed_rounded),
+        _sectionTitle('TRACKING GPS (${trackingPoints.length} puntos)', GIcon.miUbicacion),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _dataRow('Puntos registrados', '${trackingPoints.length}', textColor, subtextColor),
           if (trackingPoints.first is Map) ...[
@@ -895,7 +894,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         Center(child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.hourglass_empty_rounded, size: 48, color: subtextColor),
+            GardenIcon(GIcon.esperando, size: GIconSize.hero, color: subtextColor),
             const SizedBox(height: 12),
             Text('Sin datos de ejecución del servicio todavía',
               style: TextStyle(color: subtextColor), textAlign: TextAlign.center),
@@ -912,14 +911,14 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final caregiverRating = d['caregiverRating'] as int?;
 
     if (review == null && ownerRating == null && caregiverRating == null) {
-      return _emptyState(Icons.star_outline_rounded, 'Sin reseña', 'El cliente aún no ha calificado este servicio.', subtextColor);
+      return _emptyState(GIcon.estrella, 'Sin reseña', 'El cliente aún no ha calificado este servicio.', subtextColor);
     }
 
     return ListView(padding: const EdgeInsets.all(16), children: [
 
       // Reseña pública
       if (review != null) ...[
-        _sectionTitle('RESEÑA PÚBLICA', Icons.rate_review_outlined),
+        _sectionTitle('RESEÑA PÚBLICA', GIcon.estrella),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             _starRow(review['rating'] as int? ?? 0),
@@ -966,7 +965,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Calificación del dueño (interna)
       if (ownerRating != null) ...[
-        _sectionTitle('CALIFICACIÓN DEL DUEÑO (INTERNA)', Icons.person_rounded),
+        _sectionTitle('CALIFICACIÓN DEL DUEÑO (INTERNA)', GIcon.perfil),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _starRow(ownerRating),
           if (d['ownerComment'] != null) ...[
@@ -978,7 +977,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Calificación del cuidador (interna)
       if (caregiverRating != null) ...[
-        _sectionTitle('CALIFICACIÓN DEL CUIDADOR AL DUEÑO', Icons.supervisor_account_outlined),
+        _sectionTitle('CALIFICACIÓN DEL CUIDADOR AL DUEÑO', GIcon.equipo),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _starRow(caregiverRating),
           if (d['caregiverComment'] != null) ...[
@@ -999,11 +998,10 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
     if (!chatAvailable) {
       return _emptyState(
-        Icons.chat_bubble_outline_rounded,
+        GIcon.chat,
         'Chat no disponible',
         'El historial del chat solo está disponible durante los 7 días posteriores a la finalización del servicio. Después se elimina automáticamente.',
-        subtextColor,
-      );
+        subtextColor);
     }
 
     return Column(children: [
@@ -1013,7 +1011,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           color: GardenColors.warning.withValues(alpha: 0.1),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(children: [
-            const Icon(Icons.timer_outlined, size: 14, color: GardenColors.warning),
+            const GardenIcon(GIcon.cronometro, size: GIconSize.xs, color: GardenColors.warning),
             const SizedBox(width: 8),
             Expanded(child: Text(
               'Chat disponible hasta el ${_fmtDateShort(chatExpiresAt)} · Se eliminará automáticamente',
@@ -1024,7 +1022,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       Expanded(
         child: messages.isEmpty
-          ? _emptyState(Icons.chat_bubble_outline_rounded, 'Sin mensajes', 'No hay mensajes en este chat.', subtextColor)
+          ? _emptyState(GIcon.chat, 'Sin mensajes', 'No hay mensajes en este chat.', subtextColor)
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               itemCount: messages.length,
@@ -1092,7 +1090,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final dispute = d['dispute'] as Map<String, dynamic>?;
 
     if (dispute == null) {
-      return _emptyState(Icons.gavel_outlined, 'Sin disputa', 'No se ha abierto ninguna disputa para esta reserva.', subtextColor);
+      return _emptyState(GIcon.multa, 'Sin disputa', 'No se ha abierto ninguna disputa para esta reserva.', subtextColor);
     }
 
     final aiVerdict = dispute['aiVerdict'] as String?;
@@ -1106,7 +1104,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Estado de la disputa
       _card(surface, borderColor, child: Row(children: [
-        const Icon(Icons.gavel_rounded, color: GardenColors.error, size: 20),
+        const GardenIcon(GIcon.multa, size: GIconSize.md, color: GardenColors.error),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Disputa abierta', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
@@ -1117,7 +1115,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Veredicto IA
       if (aiVerdict != null) ...[
-        _sectionTitle('VEREDICTO DE LA IA', Icons.psychology_rounded),
+        _sectionTitle('VEREDICTO DE LA IA', GIcon.ia),
         Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
@@ -1128,7 +1126,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Icon(Icons.smart_toy_rounded, color: GardenColors.primary, size: 18),
+              const GardenIcon(GIcon.ia, size: GIconSize.sm, color: GardenColors.primary),
               const SizedBox(width: 8),
               Text(verdictLabel,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: verdictColor)),
@@ -1151,12 +1149,12 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Razones del cliente
       if ((dispute['clientReasons'] as List?)?.isNotEmpty == true) ...[
-        _sectionTitle('RAZONES DEL CLIENTE', Icons.person_rounded),
+        _sectionTitle('RAZONES DEL CLIENTE', GIcon.perfil),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start,
           children: (dispute['clientReasons'] as List).map((r) => Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.circle, size: 6, color: GardenColors.error),
+              const GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: GardenColors.error),
               const SizedBox(width: 8),
               Expanded(child: Text(r.toString(), style: TextStyle(fontSize: 13, color: textColor))),
             ]),
@@ -1166,12 +1164,12 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Respuesta del cuidador
       if ((dispute['caregiverResponse'] as List?)?.isNotEmpty == true) ...[
-        _sectionTitle('RESPUESTA DEL CUIDADOR', Icons.supervisor_account_outlined),
+        _sectionTitle('RESPUESTA DEL CUIDADOR', GIcon.equipo),
         _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start,
           children: (dispute['caregiverResponse'] as List).map((r) => Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.circle, size: 6, color: GardenColors.primary),
+              const GardenIcon(GIcon.pendiente, size: GIconSize.xs, color: GardenColors.primary),
               const SizedBox(width: 8),
               Expanded(child: Text(r.toString(), style: TextStyle(fontSize: 13, color: textColor))),
             ]),
@@ -1181,13 +1179,13 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
       // Resolución
       if (dispute['resolution'] != null) ...[
-        _sectionTitle('RESOLUCIÓN FINAL', Icons.check_circle_outline_rounded),
+        _sectionTitle('RESOLUCIÓN FINAL', GIcon.confirmado),
         _card(surface, borderColor, child: Text(dispute['resolution'] as String,
           style: TextStyle(fontSize: 14, color: textColor, height: 1.5))),
       ],
 
       // ID disputa
-      _sectionTitle('IDENTIFICADORES', Icons.tag_rounded),
+      _sectionTitle('IDENTIFICADORES', GIcon.precio),
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _idBadge('Dispute ID', dispute['id'] as String? ?? '—', subtextColor, borderColor),
       ])),
@@ -1231,10 +1229,10 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     child: child,
   );
 
-  Widget _sectionTitle(String title, IconData icon) => Padding(
+  Widget _sectionTitle(String title, GIcon icon) => Padding(
     padding: const EdgeInsets.only(bottom: 8, top: 4),
     child: Row(children: [
-      Icon(icon, size: 14, color: GardenColors.primary),
+      GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
       const SizedBox(width: 6),
       Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
     ]),
@@ -1258,16 +1256,16 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       const SizedBox(width: 4),
       GestureDetector(
         onTap: () { Clipboard.setData(ClipboardData(text: value)); _snack('$label copiado'); },
-        child: const Icon(Icons.copy_rounded, size: 12, color: GardenColors.primary),
+        child: const GardenIcon(GIcon.copiar, size: GIconSize.xs, color: GardenColors.primary),
       ),
     ]),
   );
 
-  Widget _infoChip(IconData icon, String text, Color color) => Container(
+  Widget _infoChip(GIcon icon, String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 12, color: color),
+      GardenIcon(icon, size: GIconSize.xs, color: color),
       const SizedBox(width: 4),
       Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
     ]),
@@ -1280,7 +1278,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     child: Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold)),
   );
 
-  Widget _outlineBtn(IconData icon, String label, VoidCallback onTap) => GestureDetector(
+  Widget _outlineBtn(GIcon icon, String label, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 9),
@@ -1289,17 +1287,17 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(icon, size: 14, color: GardenColors.primary),
+        GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
         const SizedBox(width: 6),
         Text(label, style: const TextStyle(fontSize: 12, color: GardenColors.primary, fontWeight: FontWeight.w600)),
       ]),
     ),
   );
 
-  Widget _payRow(String label, double amount, Color color, IconData icon) => Padding(
+  Widget _payRow(String label, double amount, Color color, GIcon icon) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     child: Row(children: [
-      Icon(icon, size: 16, color: color),
+      GardenIcon(icon, size: GIconSize.sm, color: color),
       const SizedBox(width: 10),
       Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
       Text('Bs ${amount.toStringAsFixed(2)}',
@@ -1307,7 +1305,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     ]),
   );
 
-  Widget _timeBox(String label, String? iso, IconData icon, Color color, Color subtextColor, Color borderColor) => Container(
+  Widget _timeBox(String label, String? iso, GIcon icon, Color color, Color subtextColor, Color borderColor) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.07),
@@ -1315,26 +1313,26 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Icon(icon, size: 14, color: color), const SizedBox(width: 5), Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color, letterSpacing: 1))]),
+      Row(children: [GardenIcon(icon, size: GIconSize.xs, color: color), const SizedBox(width: 5), Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color, letterSpacing: 1))]),
       const SizedBox(height: 4),
       Text(iso != null ? _fmtDate(iso) : 'Sin registrar', style: TextStyle(fontSize: 12, color: iso != null ? color : subtextColor, fontWeight: FontWeight.w600)),
     ]),
   );
 
-  Widget _servicePhoto(String url, String label, IconData icon, Color color, Color subtextColor, Color borderColor) => ClipRRect(
+  Widget _servicePhoto(String url, String label, GIcon icon, Color color, Color subtextColor, Color borderColor) => ClipRRect(
     borderRadius: BorderRadius.circular(10),
     child: Stack(children: [
       Image.network(url, height: 130, width: double.infinity, fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Container(height: 130, color: borderColor,
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.broken_image_outlined, color: subtextColor),
+            GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: subtextColor),
             Text('No disponible', style: TextStyle(color: subtextColor, fontSize: 11)),
           ]))),
       Positioned(bottom: 6, left: 6, child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(6)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 11, color: Colors.white),
+          GardenIcon(icon, size: GIconSize.xs, color: Colors.white),
           const SizedBox(width: 4),
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
         ]),
@@ -1342,14 +1340,14 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     ]),
   );
 
-  Widget _starRow(int rating) => Row(children: List.generate(5, (i) => Icon(
-    i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
-    color: Colors.amber, size: 20,
-  )));
+  Widget _starRow(int rating) => Row(children: List.generate(5, (i) => GardenIcon(GIcon.estrella, size: GIconSize.md, state: i < rating ? GIconState.active : GIconState.idle, color: Colors.amber)));
 
   Widget _statusBadge(String status) {
-    final color = _statusColor(status);
-    final label = _statusLabel(status);
+    final story = BookingStory.of(status,
+        BookingStoryContext.fromBooking(_data ?? const {}, caregiverFallback: 'el cuidador'));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = StoryColors.of(story.tone, isDark: isDark).ink;
+    final label = story.pill;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.4))),
@@ -1373,11 +1371,11 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     );
   }
 
-  Widget _emptyState(IconData icon, String title, String subtitle, Color subtextColor) => Center(
+  Widget _emptyState(GIcon icon, String title, String subtitle, Color subtextColor) => Center(
     child: Padding(
       padding: const EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 48, color: subtextColor.withValues(alpha: 0.5)),
+        GardenIcon(icon, size: GIconSize.hero, color: subtextColor.withValues(alpha: 0.5)),
         const SizedBox(height: 12),
         Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: subtextColor)),
         const SizedBox(height: 6),
@@ -1385,28 +1383,6 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
       ]),
     ),
   );
-
-  Color _statusColor(String s) => switch (s) {
-    'CONFIRMED'                  => GardenColors.success,
-    'IN_PROGRESS'                => GardenColors.primary,
-    'COMPLETED'                  => Colors.grey,
-    'CANCELLED'                  => GardenColors.error,
-    'WAITING_CAREGIVER_APPROVAL' => Colors.orange,
-    'PENDING_PAYMENT'            => GardenColors.warning,
-    'PAYMENT_PENDING_APPROVAL'   => Colors.deepOrange,
-    _                            => Colors.grey,
-  };
-
-  String _statusLabel(String s) => switch (s) {
-    'CONFIRMED'                  => 'Confirmada',
-    'IN_PROGRESS'                => 'En curso',
-    'COMPLETED'                  => 'Completada',
-    'CANCELLED'                  => 'Cancelada',
-    'WAITING_CAREGIVER_APPROVAL' => 'Esp. cuidador',
-    'PENDING_PAYMENT'            => 'Pago pendiente',
-    'PAYMENT_PENDING_APPROVAL'   => 'Aprobando pago',
-    _                            => s,
-  };
 
   Color _txColor(String type) => switch (type) {
     'EARNING'    => GardenColors.success,
@@ -1416,12 +1392,12 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     _            => Colors.grey,
   };
 
-  IconData _txIcon(String type) => switch (type) {
-    'EARNING'    => Icons.arrow_downward_rounded,
-    'COMMISSION' => Icons.eco_rounded,
-    'REFUND'     => Icons.replay_rounded,
-    'WITHDRAWAL' => Icons.account_balance_rounded,
-    _            => Icons.swap_horiz_rounded,
+  GIcon _txIcon(String type) => switch (type) {
+    'EARNING'    => GIcon.abajo,
+    'COMMISSION' => GIcon.comision,
+    'REFUND'     => GIcon.repetir,
+    'WITHDRAWAL' => GIcon.retiro,
+    _            => GIcon.intercambiar,
   };
 
   String _fmtDate(String iso) {
@@ -1542,7 +1518,7 @@ class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
             point: current,
             width: 40,
             height: 40,
-            child: const Icon(Icons.pets_rounded, color: GardenColors.error, size: 34),
+            child: const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.error),
           ),
         ]),
       ],

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin de ciudades y zonas (multi-ciudad). Reemplaza el enum fijo
 /// `Zone` — acá se agregan ciudades nuevas (ej. Cochabamba) y sus zonas
@@ -111,7 +112,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
         onPressed: _showCityForm,
         backgroundColor: GardenColors.primary,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_location_alt_rounded),
+        icon: const GardenIcon(GIcon.ubicacion, size: GIconSize.lg, inheritColor: true),
         label: const Text('Agregar ciudad', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: _isLoading
@@ -145,7 +146,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
                               color: (active ? GardenColors.primary : Colors.grey).withValues(alpha: 0.12),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.location_city_rounded, color: active ? GardenColors.primary : Colors.grey, size: 22),
+                            child: GardenIcon(GIcon.edificio, size: GIconSize.md, color: active ? GardenColors.primary : Colors.grey),
                           ),
                           title: Text(city['name'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
                           subtitle: Text('$zoneCount zona${zoneCount == 1 ? '' : 's'} · ${active ? 'Activa' : 'Inactiva'}',
@@ -153,7 +154,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                             Switch(value: active, onChanged: (_) => _toggleCityActive(cityId, active), activeColor: GardenColors.primary),
                             IconButton(
-                              icon: Icon(expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: subtextColor),
+                              icon: GardenIcon(expanded ? GIcon.plegar : GIcon.desplegar, size: GIconSize.lg, color: subtextColor),
                               onPressed: () {
                                 setState(() => _expandedCityId = expanded ? null : cityId);
                                 if (!expanded && !_zonesByCity.containsKey(cityId)) _loadZones(cityId);
@@ -174,7 +175,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
                                     Text('Zonas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
                                     TextButton.icon(
                                       onPressed: () => _showZoneForm(cityId),
-                                      icon: const Icon(Icons.add_rounded, size: 16),
+                                      icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true),
                                       label: const Text('Agregar zona'),
                                     ),
                                   ],
@@ -189,7 +190,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
                                     subtitle: Text('${zone['lat']}, ${zone['lng']}', style: TextStyle(color: subtextColor, fontSize: 11)),
                                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                                       IconButton(
-                                        icon: Icon(Icons.edit_outlined, size: 18, color: subtextColor),
+                                        icon: GardenIcon(GIcon.editar, size: GIconSize.sm, color: subtextColor),
                                         onPressed: () => _showZoneForm(cityId, zone: zone),
                                       ),
                                       Switch(
@@ -535,9 +536,9 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
               const SizedBox(height: 20),
               Row(children: [
                 Expanded(child: Text('Polígono de la zona (mínimo 4 puntos)', style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w700))),
-                TextButton.icon(onPressed: _addPointRow, icon: const Icon(Icons.add, size: 18), label: const Text('Punto')),
+                TextButton.icon(onPressed: _addPointRow, icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true), label: const Text('Punto')),
               ]),
-              Text('Se pintan en el mapa del marketplace en el orden en que los cargues. Dejá todas las filas vacías si preferís que la zona se muestre solo como un marcador (punto), sin polígono.',
+              Text('Se pintan en el mapa del marketplace en el orden en que los cargues. Deja todas las filas vacías si preferís que la zona se muestre solo como un marcador (punto), sin polígono.',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
               const SizedBox(height: 10),
               ...List.generate(_pointLat.length, (i) => Padding(
@@ -550,7 +551,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
                       Expanded(child: TextFormField(controller: _pointLng[i], keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), style: TextStyle(color: textColor), decoration: deco.copyWith(labelText: 'Lng ${i + 1}'))),
                       if (_pointLat.length > 4) ...[
                         const SizedBox(width: 4),
-                        IconButton(onPressed: () => _removePointRow(i), icon: const Icon(Icons.close, size: 18), color: subtextColor),
+                        IconButton(onPressed: () => _removePointRow(i), icon: const GardenIcon(GIcon.cerrar, size: GIconSize.sm, inheritColor: true), color: subtextColor),
                       ],
                     ]),
                   )),
@@ -567,7 +568,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
                       color: c, shape: BoxShape.circle,
                       border: selected ? Border.all(color: textColor, width: 2.5) : null,
                     ),
-                    child: selected ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
+                    child: selected ? const GardenIcon(GIcon.hecho, size: GIconSize.sm, color: Colors.white) : null,
                   ),
                 );
               }).toList()),

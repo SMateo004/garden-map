@@ -19,6 +19,7 @@ import '../../services/work_mode.dart';
 import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../theme/garden_motion.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -116,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     )..forward(); // una vez y queda resaltado: sin bucles (GardenMotion)
-    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
+    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: GardenMotion.move);
     _loadInitialData();
   }
 

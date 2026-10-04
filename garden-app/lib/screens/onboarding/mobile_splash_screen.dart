@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
+import '../../theme/garden_motion.dart';
 
 const _kSplashVersion = 'v4.0-fast';
 
@@ -41,7 +42,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       duration: const Duration(milliseconds: 350),
     );
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+      CurvedAnimation(parent: _ctrl, curve: GardenMotion.enter),
     );
     _run();
   }

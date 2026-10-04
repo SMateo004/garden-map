@@ -86,6 +86,13 @@ void main() {
     });
   });
 
+  test('el admin lee "Esperando al cuidador" cuando no hay nombre', () {
+    final s = BookingStory.of('WAITING_CAREGIVER_APPROVAL', const BookingStoryContext(caregiverFallback: 'el cuidador'));
+    expect(s.pill, 'Esperando al cuidador');
+    final d = BookingStory.of('WAITING_CAREGIVER_APPROVAL', const BookingStoryContext(caregiverName: 'Andrea López'));
+    expect(d.pill, 'Esperando a Andrea');
+  });
+
   group('Reserva protagonista', () {
     Map<String, dynamic> bk(String status, {String? date, String? time, Map<String, dynamic> extra = const {}}) =>
         {'id': status, 'status': status, 'walkDate': date, 'startTime': time, ...extra};

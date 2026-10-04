@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/garden_motion.dart';
 
 /// Envuelve un widget interactivo (chip, card, toggle) y le da feedback táctil
 /// de "presión" (leve escala hacia abajo) al tocar. Sin AnimationController
@@ -38,7 +39,7 @@ class _TapScaleState extends State<TapScale> {
       child: AnimatedScale(
         scale: _pressed ? widget.pressedScale : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
+        curve: GardenMotion.enter,
         child: widget.child,
       ),
     );

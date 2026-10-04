@@ -115,14 +115,14 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
                     children: [
                       _FeedbackButton(
                         label: 'Sí',
-                        icon: Icons.thumb_up_alt_outlined,
+                        icon: GIcon.meGusta,
                         onTap: () => setState(() => _wasHelpful = true),
                         isDark: isDark,
                       ),
                       const SizedBox(width: 12),
                       _FeedbackButton(
                         label: 'No',
-                        icon: Icons.thumb_down_alt_outlined,
+                        icon: GIcon.noMeGusta,
                         onTap: () => setState(() => _wasHelpful = false),
                         isDark: isDark,
                       ),
@@ -179,7 +179,7 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
 
 class _FeedbackButton extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final GIcon icon;
   final VoidCallback onTap;
   final bool isDark;
 
@@ -208,7 +208,7 @@ class _FeedbackButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: text),
+              GardenIcon(icon, size: GIconSize.sm, color: text),
               const SizedBox(width: 8),
               Text(label, style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 13)),
             ],

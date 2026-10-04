@@ -483,11 +483,11 @@ class _MyDataScreenState extends State<MyDataScreen> {
         final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-        InputDecoration fieldDeco(String label, IconData icon, {bool missing = false}) => InputDecoration(
+        InputDecoration fieldDeco(String label, GIcon icon, {bool missing = false}) => InputDecoration(
           labelText: label,
           errorText: (_showErrors && missing) ? 'Requerido' : null,
           labelStyle: TextStyle(color: subtextColor, fontSize: 13),
-          prefixIcon: Icon(icon, color: subtextColor, size: 20),
+          prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
           filled: true, fillColor: surfaceEl,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
@@ -583,7 +583,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   controller: _emailCtrl,
                   style: TextStyle(color: textColor),
                   keyboardType: TextInputType.emailAddress,
-                  decoration: fieldDeco('Correo electrónico', Icons.email_outlined, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
+                  decoration: fieldDeco('Correo electrónico', GIcon.correo, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
                     suffixIcon: const Tooltip(
                       message: 'Correo no verificado',
                       child: GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
@@ -600,12 +600,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
               Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
                   onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Nombre *', Icons.person_outline, missing: _firstCtrl.text.trim().isEmpty))),
+                  decoration: fieldDeco('Nombre *', GIcon.perfil, missing: _firstCtrl.text.trim().isEmpty))),
               const SizedBox(width: 12),
               Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
                   onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Apellido *', Icons.person_outlined, missing: _lastCtrl.text.trim().isEmpty))),
+                  decoration: fieldDeco('Apellido *', GIcon.perfil, missing: _lastCtrl.text.trim().isEmpty))),
             ]),
             const SizedBox(height: 16),
 
@@ -642,7 +642,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 keyboardType: TextInputType.phone,
                 readOnly: _phoneLocked,
                 onChanged: (_) => setState(() {}),
-                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined, missing: !_phoneRegex.hasMatch(_phoneCtrl.text.trim())).copyWith(
+                decoration: fieldDeco('Número de teléfono', GIcon.telefono, missing: !_phoneRegex.hasMatch(_phoneCtrl.text.trim())).copyWith(
                   suffixIcon: _phoneLocked ? Padding(padding: const EdgeInsets.all(14), child: GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor)) : null,
                 )),
             if (_phoneLocked) ...[
@@ -769,7 +769,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
               controller: _bioCtrl,
               maxLines: 3, maxLength: 300,
               style: TextStyle(color: textColor, fontSize: 14),
-              decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined, missing: _bioCtrl.text.trim().isEmpty).copyWith(
+              decoration: fieldDeco('Una breve descripción de ti', GIcon.documento, missing: _bioCtrl.text.trim().isEmpty).copyWith(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
@@ -795,13 +795,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('NIT o Carnet', Icons.badge_outlined, missing: _nitCtrl.text.trim().isEmpty),
+              decoration: fieldDeco('NIT o Carnet', GIcon.identidadVerificada, missing: _nitCtrl.text.trim().isEmpty),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _nitRazonSocialCtrl,
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('Razón social', Icons.article_outlined, missing: _nitRazonSocialCtrl.text.trim().isEmpty),
+              decoration: fieldDeco('Razón social', GIcon.documento, missing: _nitRazonSocialCtrl.text.trim().isEmpty),
             ),
             const SizedBox(height: 16),
 

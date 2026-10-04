@@ -147,7 +147,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       if (status == 'VERIFIED') {
         _stopPolling();
-        debugPrint('[VerifyWeb] ✅ VERIFIED — avanzando wizard');
+        debugPrint('[VerifyWeb] VERIFIED — avanzando wizard');
         if (widget.onComplete != null) {
           widget.onComplete!();
         } else {
@@ -161,7 +161,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           debugPrint('[VerifyWeb] REJECTED ignorado — grace period (${secondsSinceQr}s < 30s)');
         } else {
           _stopPolling();
-          debugPrint('[VerifyWeb] ❌ REJECTED — mostrando pantalla de reintento');
+          debugPrint('[VerifyWeb] REJECTED — mostrando pantalla de reintento');
           setState(() { _step = 2; });
         }
       } else if (status == 'REVIEW') {

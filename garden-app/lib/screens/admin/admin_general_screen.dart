@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../narrative/booking_story.dart';
 
 class AdminGeneralScreen extends StatefulWidget {
   final String adminToken;
@@ -51,11 +53,11 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
             indicatorColor: GardenColors.primary,
             indicatorWeight: 2,
             tabs: const [
-              Tab(icon: Icon(Icons.bolt_rounded, size: 16), text: 'En Vivo'),
-              Tab(icon: Icon(Icons.account_balance_rounded, size: 16), text: 'Financiero'),
-              Tab(icon: Icon(Icons.map_rounded, size: 16), text: 'Zonas'),
-              Tab(icon: Icon(Icons.favorite_rounded, size: 16), text: 'Donaciones'),
-              Tab(icon: Icon(Icons.image_rounded, size: 16), text: 'Icono'),
+              Tab(icon: GardenIcon(GIcon.ia, size: GIconSize.sm, inheritColor: true), text: 'En Vivo'),
+              Tab(icon: GardenIcon(GIcon.retiro, size: GIconSize.sm, inheritColor: true), text: 'Financiero'),
+              Tab(icon: GardenIcon(GIcon.mapa, size: GIconSize.sm, inheritColor: true), text: 'Zonas'),
+              Tab(icon: GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, inheritColor: true), text: 'Donaciones'),
+              Tab(icon: GardenIcon(GIcon.galeria, size: GIconSize.sm, inheritColor: true), text: 'Icono'),
             ],
           ),
         ),
@@ -212,8 +214,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
                   const Spacer(),
                   GestureDetector(
                     onTap: _load,
-                    child: const Icon(Icons.refresh_rounded,
-                        color: GardenColors.primary, size: 18),
+                    child: const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
@@ -254,17 +255,17 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
               childAspectRatio: 1.1,
               children: [
                 _liveCard('Servicios\nactivos', '${rt['activeServices']}',
-                    Icons.directions_walk_rounded, GardenColors.primary, surface, borderColor, textColor, subtextColor),
+                    GIcon.paseo, GardenColors.primary, surface, borderColor, textColor, subtextColor),
                 _liveCard('Pagos por\naprobar', '${rt['pendingPayments']}',
-                    Icons.price_check_rounded, GardenColors.warning, surface, borderColor, textColor, subtextColor),
+                    GIcon.precio, GardenColors.warning, surface, borderColor, textColor, subtextColor),
                 _liveCard('Retiros\npendientes', '${rt['pendingWithdrawals']}',
-                    Icons.account_balance_rounded, GardenColors.error, surface, borderColor, textColor, subtextColor),
+                    GIcon.retiro, GardenColors.error, surface, borderColor, textColor, subtextColor),
                 _liveCard('Disputas\nabiertas', '${rt['pendingDisputes']}',
-                    Icons.gavel_rounded, const Color(0xFFE91E63), surface, borderColor, textColor, subtextColor),
+                    GIcon.multa, const Color(0xFFE91E63), surface, borderColor, textColor, subtextColor),
                 _liveCard('Cuidadores\nen revisión', '${rt['pendingCaregivers']}',
-                    Icons.person_search_rounded, GardenColors.accent, surface, borderColor, textColor, subtextColor),
+                    GIcon.buscar, GardenColors.accent, surface, borderColor, textColor, subtextColor),
                 _liveCard('Servicios\nhoy', '${today['newBookings']}',
-                    Icons.today_rounded, GardenColors.success, surface, borderColor, textColor, subtextColor),
+                    GIcon.calendario, GardenColors.success, surface, borderColor, textColor, subtextColor),
               ],
             ),
             const SizedBox(height: 20),
@@ -347,7 +348,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
 
   Widget _divider(Color c) => Divider(height: 16, color: c, thickness: 0.5);
 
-  Widget _liveCard(String label, String value, IconData icon, Color color,
+  Widget _liveCard(String label, String value, GIcon icon, Color color,
       Color surface, Color borderColor, Color textColor, Color subtextColor) {
     return Container(
       padding: const EdgeInsets.all(10),
@@ -359,7 +360,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 20),
+          GardenIcon(icon, size: GIconSize.md, color: color),
           const SizedBox(height: 4),
           Text(value,
               style: TextStyle(
@@ -424,11 +425,10 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
   Widget _activityItem(Map<String, dynamic> a, Color textColor,
       Color subtextColor, Color borderColor, Color surface) {
     final type = a['type'] as String? ?? '';
-    final status = a['status'] as String? ?? '';
     final client = a['clientName'] as String? ?? '—';
     final caregiver = a['caregiverName'] as String? ?? '—';
     final createdAt = a['createdAt'] as String? ?? '';
-    final emoji = type == 'PASEO' ? '🦮' : '🏠';
+    final svcIcon = type == 'PASEO' ? GIcon.paseo : GIcon.hospedaje;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -440,7 +440,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
       ),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
+          GardenIcon(svcIcon, size: GIconSize.md, state: GIconState.active),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -451,7 +451,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
                         color: textColor,
                         fontWeight: FontWeight.w600,
                         fontSize: 12)),
-                Text(_statusLabel(status),
+                Text(_statusLabel(a),
                     style: TextStyle(color: subtextColor, fontSize: 11)),
               ],
             ),
@@ -463,17 +463,8 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
     );
   }
 
-  String _statusLabel(String s) {
-    const m = {
-      'PAYMENT_PENDING_APPROVAL': 'Pago por aprobar',
-      'WAITING_CAREGIVER_APPROVAL': 'Esperando cuidador',
-      'CONFIRMED': 'Confirmada',
-      'IN_PROGRESS': 'En curso',
-      'COMPLETED': 'Completada',
-      'CANCELLED': 'Cancelada',
-    };
-    return m[s] ?? s;
-  }
+  String _statusLabel(Map<String, dynamic> a) => BookingStory.of(a['status'] as String?,
+      BookingStoryContext.fromBooking(a, caregiverFallback: 'el cuidador')).pill;
 
   String _timeAgo(String iso) {
     try {
@@ -581,7 +572,7 @@ class _FinancialTabState extends State<_FinancialTab>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
                 color: GardenColors.primary,
                 onPressed: _load,
                 tooltip: 'Actualizar',
@@ -644,7 +635,7 @@ class _FinancialTabState extends State<_FinancialTab>
             ),
             child: Row(
               children: [
-                const Text('💡', style: TextStyle(fontSize: 14)),
+                const GardenIcon(GIcon.idea, size: GIconSize.xs, state: GIconState.active),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -662,11 +653,11 @@ class _FinancialTabState extends State<_FinancialTab>
             children: [
               Expanded(child: _kpiCard('Facturado a clientes',
                   'Bs ${_fmt(grossBilled)}', GardenColors.primary,
-                  Icons.receipt_rounded, surface, borderColor, textColor, subtextColor)),
+                  GIcon.recibo, surface, borderColor, textColor, subtextColor)),
               const SizedBox(width: 10),
               Expanded(child: _kpiCard('Ganancia GARDEN (${effectiveCommissionPct.toStringAsFixed(1)}%)',
                   'Bs ${_fmt(gardenEarns)}', GardenColors.success,
-                  Icons.business_center_rounded, surface, borderColor, textColor, subtextColor)),
+                  GIcon.trabajo, surface, borderColor, textColor, subtextColor)),
             ],
           ),
           const SizedBox(height: 10),
@@ -674,13 +665,13 @@ class _FinancialTabState extends State<_FinancialTab>
             children: [
               Expanded(child: _kpiCard('Neto este mes',
                   'Bs ${_fmt(thisMonthInc)}', GardenColors.warning,
-                  Icons.calendar_month_rounded, surface, borderColor, textColor, subtextColor,
+                  GIcon.calendario, surface, borderColor, textColor, subtextColor,
                   badge: growth != 0 ? '${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(0)}%' : null,
                   badgeColor: growth >= 0 ? GardenColors.success : GardenColors.error)),
               const SizedBox(width: 10),
               Expanded(child: _kpiCard('Utilidad neta acum.',
                   'Bs ${_fmt(netIncome)}', const Color(0xFF6C3483),
-                  Icons.account_balance_wallet_rounded, surface, borderColor, textColor, subtextColor)),
+                  GIcon.billetera, surface, borderColor, textColor, subtextColor)),
             ],
           ),
           const SizedBox(height: 20),
@@ -694,7 +685,7 @@ class _FinancialTabState extends State<_FinancialTab>
                   GardenColors.error, surface, borderColor, textColor, subtextColor)),
               const SizedBox(width: 10),
               Expanded(child: _alertCard(
-                  '🎁 Marketing', 'Bs ${_fmt(mktSpend)}',
+                  'Marketing', 'Bs ${_fmt(mktSpend)}',
                   '$mktRedemptions códigos usados\n(inversión en adquisición)',
                   GardenColors.warning, surface, borderColor, textColor, subtextColor)),
             ],
@@ -714,11 +705,11 @@ class _FinancialTabState extends State<_FinancialTab>
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _serviceBreakdownCard('🦮 Paseos',
+              Expanded(child: _serviceBreakdownCard('Paseos',
                   breakdown['paseo'] as Map<String, dynamic>,
                   GardenColors.primary, surface, borderColor, textColor, subtextColor)),
               const SizedBox(width: 10),
-              Expanded(child: _serviceBreakdownCard('🏠 Hospedaje',
+              Expanded(child: _serviceBreakdownCard('Hospedaje',
                   breakdown['hospedaje'] as Map<String, dynamic>,
                   GardenColors.accent, surface, borderColor, textColor, subtextColor)),
             ],
@@ -771,7 +762,7 @@ class _FinancialTabState extends State<_FinancialTab>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _finHeader('Estado de Resultados', 'Income Statement',
-              Icons.bar_chart_rounded, GardenColors.primary, textColor, subtextColor, surface, borderColor),
+              GIcon.estadisticas, GardenColors.primary, textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 16),
 
           // Explicación del modelo
@@ -831,7 +822,7 @@ class _FinancialTabState extends State<_FinancialTab>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('⚠ Nota sobre cancelaciones',
+                const Text('Nota sobre cancelaciones',
                     style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text(
@@ -876,7 +867,7 @@ class _FinancialTabState extends State<_FinancialTab>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _finHeader('Balance General', 'Balance Sheet',
-              Icons.account_balance_rounded, GardenColors.success, textColor, subtextColor, surface, borderColor),
+              GIcon.retiro, GardenColors.success, textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 16),
 
           _finSection('ACTIVOS', textColor, borderColor, surface, [
@@ -936,7 +927,7 @@ class _FinancialTabState extends State<_FinancialTab>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _finHeader('Estado de Flujo de Efectivo', 'Cash Flow — Este mes',
-              Icons.waterfall_chart_rounded, GardenColors.warning, textColor, subtextColor, surface, borderColor),
+              GIcon.estadisticas, GardenColors.warning, textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 16),
 
           _finSection('Entradas este mes', textColor, borderColor, surface, [
@@ -971,7 +962,7 @@ class _FinancialTabState extends State<_FinancialTab>
 
   // ── helpers ──
 
-  Widget _finHeader(String title, String subtitle, IconData icon, Color color,
+  Widget _finHeader(String title, String subtitle, GIcon icon, Color color,
       Color textColor, Color subtextColor, Color surface, Color borderColor) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -987,7 +978,7 @@ class _FinancialTabState extends State<_FinancialTab>
             decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 20),
+            child: GardenIcon(icon, size: GIconSize.md, color: color),
           ),
           const SizedBox(width: 12),
           Column(
@@ -1062,7 +1053,7 @@ class _FinancialTabState extends State<_FinancialTab>
     );
   }
 
-  Widget _kpiCard(String label, String value, Color color, IconData icon,
+  Widget _kpiCard(String label, String value, Color color, GIcon icon,
       Color surface, Color borderColor, Color textColor, Color subtextColor,
       {String? badge, Color? badgeColor}) {
     return Container(
@@ -1083,7 +1074,7 @@ class _FinancialTabState extends State<_FinancialTab>
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 14),
+                child: GardenIcon(icon, size: GIconSize.xs, color: color),
               ),
               if (badge != null) ...[
                 const Spacer(),
@@ -1531,8 +1522,7 @@ class _ZonesTabState extends State<_ZonesTab> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: GardenColors.warning, size: 16),
+                  const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1585,15 +1575,9 @@ class _ZonesTabState extends State<_ZonesTab> {
                             : GardenColors.success.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(
-                        isBlocked
-                            ? Icons.location_off_rounded
-                            : Icons.location_on_rounded,
-                        color: isBlocked
+                      child: GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: isBlocked ? GIconState.idle : GIconState.active, color: isBlocked
                             ? GardenColors.error
-                            : GardenColors.success,
-                        size: 18,
-                      ),
+                            : GardenColors.success),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1735,7 +1719,7 @@ class _DonationsTabState extends State<_DonationsTab> {
             ),
             child: Column(
               children: [
-                const Text('🐾', style: TextStyle(fontSize: 36)),
+                const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
                 const SizedBox(height: 8),
                 const Text(
                   'Total pendiente de transferir',
@@ -1796,11 +1780,7 @@ class _DonationsTabState extends State<_DonationsTab> {
                             : const Color(0xFFFFCC02).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        disbursed ? Icons.check_circle_rounded : Icons.favorite_rounded,
-                        color: disbursed ? subtextColor : const Color(0xFFFFCC02),
-                        size: 20,
-                      ),
+                      child: GardenIcon(disbursed ? GIcon.confirmado : GIcon.favorito, size: GIconSize.md, state: GIconState.active, color: disbursed ? subtextColor : const Color(0xFFFFCC02)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1968,7 +1948,7 @@ class _IconScheduleTabState extends State<_IconScheduleTab> {
   Future<void> _createRule() async {
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Elegí fecha de inicio y fin')),
+        const SnackBar(content: Text('Elige fecha de inicio y fin')),
       );
       return;
     }
@@ -2069,7 +2049,7 @@ class _IconScheduleTabState extends State<_IconScheduleTab> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('⚠️', style: TextStyle(fontSize: 14)),
+                  const GardenIcon(GIcon.advertencia, size: GIconSize.xs, state: GIconState.active),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2101,7 +2081,7 @@ class _IconScheduleTabState extends State<_IconScheduleTab> {
                       color: GardenColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.image_rounded, color: GardenColors.primary, size: 22),
+                    child: const GardenIcon(GIcon.galeria, size: GIconSize.md, color: GardenColors.primary),
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -2238,7 +2218,7 @@ class _IconScheduleTabState extends State<_IconScheduleTab> {
                         onChanged: (_) => _toggleEnabled(r),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                        icon: const GardenIcon(GIcon.eliminar, size: GIconSize.md, inheritColor: true),
                         color: GardenColors.error,
                         onPressed: () => _deleteRule(r['id'] as String),
                       ),

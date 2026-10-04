@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Herramienta de admin EXCLUSIVA para pruebas: crea una reserva a mano
 /// (cuidador + dueño + horario elegidos manualmente, sin Meet&Greet, sin
@@ -148,23 +149,23 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
   Future<void> _create() async {
     setState(() => _error = null);
     if (_selectedCaregiver == null) {
-      setState(() => _error = 'Elegí un cuidador');
+      setState(() => _error = 'Elige un cuidador');
       return;
     }
     if (_selectedOwner == null) {
-      setState(() => _error = 'Elegí un dueño');
+      setState(() => _error = 'Elige un dueño');
       return;
     }
     if (_selectedPetId == null && _petNameCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Elegí una mascota o escribí un nombre');
+      setState(() => _error = 'Elige una mascota o escribe un nombre');
       return;
     }
     if (_serviceType == 'HOSPEDAJE' && (_startDate == null || _endDate == null)) {
-      setState(() => _error = 'Elegí fecha de inicio y fin');
+      setState(() => _error = 'Elige fecha de inicio y fin');
       return;
     }
     if (_serviceType != 'HOSPEDAJE' && _walkDate == null) {
-      setState(() => _error = 'Elegí la fecha');
+      setState(() => _error = 'Elige la fecha');
       return;
     }
     final price = double.tryParse(_priceCtrl.text.trim());
@@ -173,7 +174,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
       return;
     }
     if (_passwordCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Ingresá tu contraseña de admin');
+      setState(() => _error = 'Ingresa tu contraseña de admin');
       return;
     }
 
@@ -302,7 +303,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const Icon(Icons.science_outlined, color: GardenColors.warning),
+                const GardenIcon(GIcon.ia, size: GIconSize.lg, color: GardenColors.warning),
                 const SizedBox(width: 8),
                 Text('Crear reserva de prueba', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
               ]),
@@ -362,7 +363,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
               if (_selectedCaregiver != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text('✓ ${_selectedCaregiver!['fullName']}', style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  child: Text('${_selectedCaregiver!['fullName']}', style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ),
               const SizedBox(height: 18),
 
@@ -403,7 +404,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
               if (_selectedOwner != null) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text('✓ ${_selectedOwner!['name']}', style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  child: Text('${_selectedOwner!['name']}', style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(height: 10),
                 if (_loadingPets)
@@ -416,7 +417,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                     dropdownColor: surfaceEl,
                     style: TextStyle(color: textColor, fontSize: 14),
                     decoration: deco,
-                    hint: Text('Elegí una mascota (o dejá vacío y escribí un nombre)', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    hint: Text('Elige una mascota (o deja vacío y escribe un nombre)', style: TextStyle(color: subtextColor, fontSize: 13)),
                     items: _ownerPets.map((p) => DropdownMenuItem(value: p['id'] as String, child: Text(p['name'] as String? ?? '—'))).toList(),
                     onChanged: (v) => setState(() => _selectedPetId = v),
                   ),
@@ -549,7 +550,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                         _deleting.contains(b['id'])
                             ? const GardenLoadingIndicator(size: 18)
                             : IconButton(
-                                icon: const Icon(Icons.delete_outline, color: GardenColors.error, size: 20),
+                                icon: const GardenIcon(GIcon.eliminar, size: GIconSize.md, color: GardenColors.error),
                                 onPressed: () => _deleteTestBooking(b['id'] as String),
                               ),
                       ]),

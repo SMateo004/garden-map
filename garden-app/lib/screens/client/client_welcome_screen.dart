@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
+import '../../theme/garden_motion.dart';
 
 class ClientWelcomeScreen extends StatefulWidget {
   const ClientWelcomeScreen({super.key});
@@ -33,10 +34,10 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _illustrationController,
-      curve: Curves.easeOut,
+      curve: GardenMotion.enter,
     ));
     _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _illustrationController, curve: Curves.easeOut),
+      CurvedAnimation(parent: _illustrationController, curve: GardenMotion.enter),
     );
     _illustrationController.forward();
   }
@@ -69,7 +70,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
     if (_currentPage < 2) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 380),
-        curve: Curves.easeInOut,
+        curve: GardenMotion.move,
       );
     } else {
       _complete();
@@ -179,7 +180,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
                           final active = _currentPage == i;
                           return AnimatedContainer(
                             duration: const Duration(milliseconds: 280),
-                            curve: Curves.easeInOut,
+                            curve: GardenMotion.move,
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             height: 6,
                             width: active ? 28 : 6,

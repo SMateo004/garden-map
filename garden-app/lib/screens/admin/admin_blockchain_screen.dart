@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: estado de la sincronización on-chain (GardenEscrow /
 /// GardenProfiles en Polygon Amoy) y las fallas BLOCKCHAIN_FAILURE que
@@ -125,7 +126,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
                     const SizedBox(height: 100),
                     Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 40),
+                        const GardenIcon(GIcon.conflicto, size: GIconSize.xl, color: GardenColors.error),
                         const SizedBox(height: 12),
                         Text(_error!, style: TextStyle(color: subtextColor, fontSize: 13), textAlign: TextAlign.center),
                         const SizedBox(height: 12),
@@ -162,7 +163,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
           gradient: const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF4776E6)]),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.link_rounded, color: Colors.white, size: 22),
+        child: const GardenIcon(GIcon.compartir, size: GIconSize.md, color: Colors.white),
       ),
       const SizedBox(width: 12),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -173,7 +174,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
       ]),
       const Spacer(),
       IconButton(
-        icon: const Icon(Icons.refresh_rounded, size: 20),
+        icon: const GardenIcon(GIcon.repetir, size: GIconSize.md, inheritColor: true),
         color: subtextColor,
         onPressed: _load,
         tooltip: 'Recargar',
@@ -220,8 +221,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
               border: Border.all(color: (enabled ? GardenColors.success : GardenColors.error).withValues(alpha: 0.4)),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(enabled ? Icons.check_circle_rounded : Icons.pause_circle_filled_rounded,
-                  color: enabled ? GardenColors.success : GardenColors.error, size: 14),
+              GardenIcon(enabled ? GIcon.confirmado : GIcon.pausar, size: GIconSize.xs, state: GIconState.active, color: enabled ? GardenColors.success : GardenColors.error),
               const SizedBox(width: 6),
               Text(enabled ? 'ACTIVO' : 'DESACTIVADO (modo mock)',
                   style: TextStyle(
@@ -244,7 +244,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
             GestureDetector(
               onTap: () => _copyAddress(walletAddress),
               child: Row(children: [
-                Icon(Icons.account_balance_wallet_outlined, color: subtextColor, size: 16),
+                GardenIcon(GIcon.billetera, size: GIconSize.sm, color: subtextColor),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -252,12 +252,12 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
                     style: TextStyle(color: textColor, fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600),
                   ),
                 ),
-                Icon(Icons.copy_rounded, color: subtextColor, size: 14),
+                GardenIcon(GIcon.copiar, size: GIconSize.xs, color: subtextColor),
               ]),
             ),
           const SizedBox(height: 10),
           Row(children: [
-            Icon(Icons.local_gas_station_outlined, color: balanceColor, size: 16),
+            GardenIcon(GIcon.auto, size: GIconSize.sm, color: balanceColor),
             const SizedBox(width: 8),
             Text(
               balance != null ? '${balance.toStringAsFixed(4)} POL' : '—',
@@ -273,7 +273,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(children: [
-                Icon(Icons.warning_amber_rounded, color: balanceColor, size: 14),
+                GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: balanceColor),
                 const SizedBox(width: 6),
                 Expanded(child: Text(balanceWarning, style: TextStyle(color: balanceColor, fontSize: 11.5))),
               ]),
@@ -300,7 +300,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ok ? Icons.check_rounded : Icons.close_rounded, color: color, size: 12),
+        GardenIcon(ok ? GIcon.hecho : GIcon.cerrar, size: GIconSize.xs, color: color),
         const SizedBox(width: 3),
         Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700)),
       ]),
@@ -323,16 +323,16 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
           style: TextStyle(color: subtextColor, fontSize: 12)),
       const SizedBox(height: 12),
       Row(children: [
-        Expanded(child: _syncTile('Creadas', created, createdTotal, Icons.add_circle_outline_rounded, Colors.blue, surface, textColor, subtextColor, borderColor)),
+        Expanded(child: _syncTile('Creadas', created, createdTotal, GIcon.agregar, Colors.blue, surface, textColor, subtextColor, borderColor)),
         const SizedBox(width: 8),
-        Expanded(child: _syncTile('Finalizadas', finalized, finalizedTotal, Icons.check_circle_outline_rounded, Colors.teal, surface, textColor, subtextColor, borderColor)),
+        Expanded(child: _syncTile('Finalizadas', finalized, finalizedTotal, GIcon.confirmado, Colors.teal, surface, textColor, subtextColor, borderColor)),
         const SizedBox(width: 8),
-        Expanded(child: _syncTile('Canceladas', cancelled, cancelledTotal, Icons.cancel_outlined, Colors.orange, surface, textColor, subtextColor, borderColor)),
+        Expanded(child: _syncTile('Canceladas', cancelled, cancelledTotal, GIcon.cancelado, Colors.orange, surface, textColor, subtextColor, borderColor)),
       ]),
     ]);
   }
 
-  Widget _syncTile(String label, int done, int total, IconData icon, Color color,
+  Widget _syncTile(String label, int done, int total, GIcon icon, Color color,
       Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final pct = total > 0 ? (done / total * 100).round() : null;
     final isHealthy = total == 0 || done == total;
@@ -344,7 +344,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
         border: Border.all(color: (isHealthy ? borderColor : Colors.orange.withValues(alpha: 0.4))),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 18),
+        GardenIcon(icon, size: GIconSize.sm, color: color),
         const SizedBox(height: 8),
         Text('$done / $total',
             style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
@@ -433,8 +433,7 @@ class _AdminBlockchainScreenState extends State<AdminBlockchainScreen> {
         border: Border.all(color: accentColor.withValues(alpha: 0.4)),
       ),
       child: Row(children: [
-        Icon(resolved ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-            color: accentColor, size: 20),
+        GardenIcon(resolved ? GIcon.confirmado : GIcon.conflicto, size: GIconSize.md, color: accentColor),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

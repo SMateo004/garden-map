@@ -317,10 +317,10 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             style: TextStyle(color: _subtext, height: 1.6),
           ),
           const SizedBox(height: 28),
-          _req(Icons.face_rounded, 'Verificación de vida (parpadeo)'),
-          _req(Icons.photo_camera_rounded, 'Selfie de tu rostro'),
-          _req(Icons.credit_card_rounded, 'Foto del anverso (frente) de tu CI'),
-          _req(Icons.credit_card_outlined, 'Foto del reverso (dorso) de tu CI'),
+          _req(GIcon.rostro, 'Verificación de vida (parpadeo)'),
+          _req(GIcon.foto, 'Selfie de tu rostro'),
+          _req(GIcon.tarjeta, 'Foto del anverso (frente) de tu CI'),
+          _req(GIcon.tarjeta, 'Foto del reverso (dorso) de tu CI'),
           const SizedBox(height: 36),
           SizedBox(
             width: double.infinity,
@@ -340,12 +340,12 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
     );
   }
 
-  Widget _req(IconData icon, String label) {
+  Widget _req(GIcon icon, String label) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, color: GardenColors.primary, size: 22),
+          GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary),
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: TextStyle(color: _text))),
         ],

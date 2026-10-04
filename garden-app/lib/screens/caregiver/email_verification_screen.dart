@@ -9,6 +9,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -57,7 +58,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
     _successScale = CurvedAnimation(
       parent: _successAnimController,
-      curve: Curves.elasticOut,
+      curve: GardenMotion.pop,
     );
     _loadUserAndSendCode();
   }

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Reporte financiero mensual — libro diario (partida doble), estado de
 /// resultados, descarga de PDF para mostrar a los socios, y carga de
@@ -129,20 +130,20 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
               children: [
                 Text('Finanzas', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                 const Spacer(),
-                IconButton(icon: Icon(Icons.chevron_left_rounded, color: textColor), onPressed: () => _changeMonth(-1)),
+                IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: textColor), onPressed: () => _changeMonth(-1)),
                 Text('${_meses[_selectedMonth.month - 1]} ${_selectedMonth.year}',
                     style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                IconButton(icon: Icon(Icons.chevron_right_rounded, color: textColor), onPressed: () => _changeMonth(1)),
+                IconButton(icon: GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: textColor), onPressed: () => _changeMonth(1)),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: _loading ? null : _downloadPdf,
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  icon: const GardenIcon(GIcon.documento, size: GIconSize.sm, inheritColor: true),
                   label: const Text('Descargar PDF'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: _showManualEntryDialog,
-                  icon: const Icon(Icons.add_rounded, size: 16),
+                  icon: const GardenIcon(GIcon.agregar, size: GIconSize.sm, inheritColor: true),
                   label: const Text('Asiento manual'),
                   style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white),
                 ),
@@ -293,7 +294,7 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (_debitAccount == null || _creditAccount == null || amount <= 0 || _descController.text.trim().isEmpty) {
-      setState(() => _error = 'Completá cuenta de débito, cuenta de crédito, monto y descripción');
+      setState(() => _error = 'Completa cuenta de débito, cuenta de crédito, monto y descripción');
       return;
     }
     setState(() { _saving = true; _error = null; });

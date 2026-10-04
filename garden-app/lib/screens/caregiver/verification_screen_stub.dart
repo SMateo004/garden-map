@@ -618,20 +618,20 @@ class _VerificationScreenState extends State<VerificationScreen> {
     final isReview = _resultStatus == 'review' || _resultStatus == 'pending_review';
     final isRejected = _resultStatus == 'rejected';
 
-    final IconData icon;
+    final GIcon icon;
     final Color iconColor;
     final String titleText;
 
     if (isApproved) {
-      icon = Icons.check_circle;
+      icon = GIcon.confirmado;
       iconColor = GardenColors.success;
       titleText = 'Verificacion exitosa!';
     } else if (isReview) {
-      icon = Icons.schedule;
+      icon = GIcon.reloj;
       iconColor = GardenColors.warning;
       titleText = 'En revision';
     } else {
-      icon = Icons.cancel;
+      icon = GIcon.cancelado;
       iconColor = GardenColors.error;
       titleText = 'Verificacion fallida';
     }
@@ -646,10 +646,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
               tween: Tween(begin: 0.0, end: 1.0),
               duration: const Duration(milliseconds: 600),
               builder: (context, value, child) =>
-                  Transform.scale(scale: value, child: Icon(icon, color: iconColor, size: 100)),
+                  Transform.scale(scale: value, child: GardenIcon(icon, size: GIconSize.hero, color: iconColor)),
             )
           else
-            Icon(icon, color: iconColor, size: 100),
+            GardenIcon(icon, size: GIconSize.hero, color: iconColor),
           const SizedBox(height: 32),
           Text(
             titleText,

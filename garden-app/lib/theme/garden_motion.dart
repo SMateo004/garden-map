@@ -16,6 +16,7 @@ import 'package:flutter/widgets.dart';
 //   enter  — algo aparece
 //   exit   — algo se va
 //   pop    — algo cambia de estado (reemplaza a Curves.elasticOut)
+//   move   — algo se desplaza o respira (scroll, pulso "en vivo")
 //
 // Reglas:
 //   • Los iconos se animan al CAMBIAR de estado, una vez. Lo único que puede
@@ -34,6 +35,7 @@ class GardenMotion {
   static const Curve enter = Curves.easeOutCubic;
   static const Curve exit  = Curves.easeInCubic;
   static const Curve pop   = Curves.easeOutBack;
+  static const Curve move  = Curves.easeInOut;
 
   /// True si el sistema operativo pidió reducir animaciones.
   static bool reduced(BuildContext context) =>

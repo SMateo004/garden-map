@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import '../design/garden_icons.dart';
 
 /// Contenido del Centro de Ayuda — Garden Bolivia.
@@ -33,7 +32,7 @@ class HelpCategory {
   final String id;
   final String title;
   final String description;
-  final IconData icon;
+  final GIcon icon;
   final List<HelpArticle> articles;
   const HelpCategory({
     required this.id,
@@ -50,7 +49,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'reservas',
     title: 'Reservas y cancelaciones',
     description: 'Cómo reservar, el Meet & Greet, y cómo cancelar',
-    icon: Icons.calendar_month_rounded,
+    icon: GIcon.calendario,
     articles: [
       HelpArticle(
         id: 'como-reservar',
@@ -194,7 +193,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'pagos',
     title: 'Pagos',
     description: 'Precio, impuestos, QR bancario, Billetera Garden y donaciones',
-    icon: Icons.qr_code_scanner_rounded,
+    icon: GIcon.pagarQr,
     articles: [
       HelpArticle(
         id: 'como-funciona-pago',
@@ -308,7 +307,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'retiros',
     title: 'Retiros y billetera',
     description: 'Configurar tus datos de cobro y solicitar un retiro',
-    icon: Icons.account_balance_wallet_rounded,
+    icon: GIcon.billetera,
     articles: [
       HelpArticle(
         id: 'configurar-datos-cobro',
@@ -380,7 +379,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'cuidador',
     title: 'Ser cuidador en Garden',
     description: 'Registro, verificación, precios y disponibilidad',
-    icon: Icons.volunteer_activism_rounded,
+    icon: GIcon.donar,
     articles: [
       HelpArticle(
         id: 'como-registrarme',
@@ -519,7 +518,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'disputas',
     title: 'Disputas y problemas con el servicio',
     description: 'Cómo reportar un problema y cómo se resuelve',
-    icon: Icons.gavel_rounded,
+    icon: GIcon.multa,
     articles: [
       HelpArticle(
         id: 'reportar-problema',
@@ -637,7 +636,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'calificaciones',
     title: 'Calificaciones y reseñas',
     description: 'Cómo calificar un servicio y qué significan las estrellas',
-    icon: Icons.star_rounded,
+    icon: GIcon.estrella,
     articles: [
       HelpArticle(
         id: 'como-calificar',
@@ -690,7 +689,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'chat',
     title: 'Chat y coordinación',
     description: 'Cómo hablar con tu cuidador o cliente de forma segura',
-    icon: Icons.chat_bubble_rounded,
+    icon: GIcon.chat,
     articles: [
       HelpArticle(
         id: 'usar-el-chat',
@@ -738,7 +737,7 @@ const List<HelpCategory> helpCenterCategories = [
     id: 'cuenta',
     title: 'Cuenta y seguridad',
     description: 'Contraseña, verificación, y eliminar tu cuenta',
-    icon: Icons.shield_rounded,
+    icon: GIcon.protegido,
     articles: [
       HelpArticle(
         id: 'eliminar-cuenta',

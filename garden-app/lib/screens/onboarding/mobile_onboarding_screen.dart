@@ -89,7 +89,7 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
     super.initState();
     _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
     _fadeAnim = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn));
+        .animate(CurvedAnimation(parent: _fadeCtrl, curve: GardenMotion.exit));
     _fadeCtrl.forward();
   }
 
@@ -112,7 +112,7 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
       _fadeCtrl.reverse().then((_) {
         _pageCtrl.nextPage(
           duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
+          curve: GardenMotion.move,
         );
         _fadeCtrl.forward();
       });
@@ -132,7 +132,7 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
           // Fondo degradado animado
           AnimatedContainer(
             duration: const Duration(milliseconds: 450),
-            curve: Curves.easeInOut,
+            curve: GardenMotion.move,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,

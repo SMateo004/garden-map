@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: documentos de antecedentes penales (FELCC/REJAP) marcados
 /// por el agente de IA (documento-antecedentes.agent.ts) — el agente NUNCA
@@ -203,7 +204,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
             padding: const EdgeInsets.all(16),
             color: GardenColors.error.withValues(alpha: 0.08),
             child: Text(
-              'El agente de IA solo marca documentos dudosos o con antecedentes explícitos — nunca suspende solo. Revisá el documento antes de decidir.',
+              'El agente de IA solo marca documentos dudosos o con antecedentes explícitos — nunca suspende solo. Revisa el documento antes de decidir.',
               style: TextStyle(color: textColor, fontSize: 12.5),
             ),
           ),
@@ -246,7 +247,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.gavel_rounded, color: GardenColors.error, size: 20),
+                                      const GardenIcon(GIcon.multa, size: GIconSize.md, color: GardenColors.error),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
@@ -269,7 +270,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                                       onTap: () => _openDocument(docUrl),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.description_outlined, color: GardenColors.primary, size: 16),
+                                          const GardenIcon(GIcon.documento, size: GIconSize.sm, color: GardenColors.primary),
                                           const SizedBox(width: 4),
                                           Text('Ver documento subido', style: TextStyle(color: GardenColors.primary, fontSize: 12.5, decoration: TextDecoration.underline)),
                                         ],

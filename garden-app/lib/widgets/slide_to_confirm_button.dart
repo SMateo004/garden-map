@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
 import './garden_loading_indicator.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 /// Botón deslizante de confirmación.
 /// El usuario debe arrastrar el thumb de izquierda a derecha hasta el
@@ -50,7 +51,7 @@ class _SlideToConfirmButtonState extends State<SlideToConfirmButton>
     );
     _snapAnimation = CurvedAnimation(
       parent: _snapController,
-      curve: Curves.elasticOut,
+      curve: GardenMotion.pop,
     );
   }
 
@@ -95,7 +96,7 @@ class _SlideToConfirmButtonState extends State<SlideToConfirmButton>
   void _snapBack() {
     final startPos = _position;
     _snapAnimation = Tween<double>(begin: startPos, end: 0.0).animate(
-      CurvedAnimation(parent: _snapController, curve: Curves.elasticOut),
+      CurvedAnimation(parent: _snapController, curve: GardenMotion.pop),
     );
     _snapController.forward(from: 0).then((_) {
       if (mounted) setState(() => _position = 0.0);

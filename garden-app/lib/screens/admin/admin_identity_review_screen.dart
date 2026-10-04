@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 class AdminIdentityReviewScreen extends StatefulWidget {
   final String sessionId;
@@ -63,7 +64,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Identidad aprobada'), backgroundColor: GardenColors.success));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Identidad aprobada'), backgroundColor: GardenColors.success));
           await _loadSession();
         }
       } else {
@@ -87,7 +88,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
         if (mounted) {
           // Confirmación de que la acción del admin se aplicó bien — no es
           // un error del sistema, por eso NO usa GardenErrorDialog.
-          GardenSnackBar.warning(context, '❌ Identidad rechazada');
+          GardenSnackBar.warning(context, 'Identidad rechazada');
           await _loadSession();
         }
       } else {
@@ -132,7 +133,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
           backgroundColor: surface,
           elevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: textColor),
+            icon: GardenIcon(GIcon.atras, size: GIconSize.lg, color: textColor),
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: Column(
@@ -174,11 +175,11 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.error_outline_rounded, size: 48, color: GardenColors.error),
+        const GardenIcon(GIcon.conflicto, size: GIconSize.hero, color: GardenColors.error),
         const SizedBox(height: 16),
         Text(_error!, style: const TextStyle(color: GardenColors.error), textAlign: TextAlign.center),
         const SizedBox(height: 16),
-        ElevatedButton.icon(onPressed: _loadSession, icon: const Icon(Icons.refresh), label: const Text('Reintentar')),
+        ElevatedButton.icon(onPressed: _loadSession, icon: const GardenIcon(GIcon.repetir, size: GIconSize.lg, inheritColor: true), label: const Text('Reintentar')),
       ]),
     ),
   );
@@ -194,15 +195,15 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
 
     // Collect all images
     final images = <_ImageItem>[];
-    if (s['selfieUrlSigned'] != null) images.add(_ImageItem('Selfie', s['selfieUrlSigned'] as String, Icons.face_rounded, GardenColors.primary));
-    if (s['ciFrontUrlSigned'] != null) images.add(_ImageItem('CI Anverso', s['ciFrontUrlSigned'] as String, Icons.credit_card_rounded, Colors.teal));
-    if (s['ciBackUrlSigned'] != null) images.add(_ImageItem('CI Reverso', s['ciBackUrlSigned'] as String, Icons.credit_card_outlined, Colors.teal));
-    if (s['faceCroppedSelfieUrlSigned'] != null) images.add(_ImageItem('Cara (selfie)', s['faceCroppedSelfieUrlSigned'] as String, Icons.face_retouching_natural_rounded, Colors.indigo));
-    if (s['faceCroppedDocumentUrlSigned'] != null) images.add(_ImageItem('Cara (documento)', s['faceCroppedDocumentUrlSigned'] as String, Icons.face_retouching_natural_outlined, Colors.indigo));
+    if (s['selfieUrlSigned'] != null) images.add(_ImageItem('Selfie', s['selfieUrlSigned'] as String, GIcon.rostro, GardenColors.primary));
+    if (s['ciFrontUrlSigned'] != null) images.add(_ImageItem('CI Anverso', s['ciFrontUrlSigned'] as String, GIcon.tarjeta, Colors.teal));
+    if (s['ciBackUrlSigned'] != null) images.add(_ImageItem('CI Reverso', s['ciBackUrlSigned'] as String, GIcon.tarjeta, Colors.teal));
+    if (s['faceCroppedSelfieUrlSigned'] != null) images.add(_ImageItem('Cara (selfie)', s['faceCroppedSelfieUrlSigned'] as String, GIcon.rostro, Colors.indigo));
+    if (s['faceCroppedDocumentUrlSigned'] != null) images.add(_ImageItem('Cara (documento)', s['faceCroppedDocumentUrlSigned'] as String, GIcon.rostro, Colors.indigo));
 
     final livenessFrames = (s['livenessFrameUrlsSigned'] as List?)?.cast<String>() ?? [];
     for (var i = 0; i < livenessFrames.length; i++) {
-      images.add(_ImageItem('Liveness ${i + 1}', livenessFrames[i], Icons.videocam_outlined, Colors.orange));
+      images.add(_ImageItem('Liveness ${i + 1}', livenessFrames[i], GIcon.video, Colors.orange));
     }
 
     return Column(
@@ -227,7 +228,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                   if ((user['phone'] as String?)?.isNotEmpty == true) ...[
                     const SizedBox(height: 2),
                     Row(children: [
-                      const Icon(Icons.phone_rounded, size: 12, color: GardenColors.primary),
+                      const GardenIcon(GIcon.telefono, size: GIconSize.xs, color: GardenColors.primary),
                       const SizedBox(width: 4),
                       Text(user['phone'] as String, style: const TextStyle(color: GardenColors.primary, fontSize: 12)),
                     ]),
@@ -235,7 +236,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                   if ((profile['ciNumber'] as String?)?.isNotEmpty == true) ...[
                     const SizedBox(height: 2),
                     Row(children: [
-                      const Icon(Icons.badge_outlined, size: 12, color: Colors.grey),
+                      const GardenIcon(GIcon.identidadVerificada, size: GIconSize.xs, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text('CI: ${profile['ciNumber']}', style: TextStyle(color: subtextColor, fontSize: 11)),
                     ]),
@@ -247,7 +248,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
               const SizedBox(height: 12),
 
               // ── SCORES ──
-              _sectionTitle('SCORES DE VERIFICACIÓN', Icons.analytics_outlined),
+              _sectionTitle('SCORES DE VERIFICACIÓN', GIcon.estadisticas),
               _card(borderColor, surface, child: Column(children: [
                 _scoreBar('Similitud facial', _toNum(s['similarityScore'] ?? s['similarity']), subtextColor),
                 _scoreBar('Liveness (vida real)', _toNum(s['livenessScore']), subtextColor),
@@ -265,7 +266,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
 
               // ── PHOTOS ──
               if (images.isNotEmpty) ...[
-                _sectionTitle('DOCUMENTOS Y FOTOS', Icons.photo_library_outlined),
+                _sectionTitle('DOCUMENTOS Y FOTOS', GIcon.galeria),
                 // Thumbnail selector
                 SizedBox(
                   height: 60,
@@ -286,7 +287,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                             border: Border.all(color: selected ? img.color : borderColor, width: selected ? 2 : 1),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(img.icon, size: 14, color: selected ? img.color : subtextColor),
+                            GardenIcon(img.icon, size: GIconSize.xs, color: selected ? img.color : subtextColor),
                             const SizedBox(width: 5),
                             Text(img.label, style: TextStyle(
                               fontSize: 11, fontWeight: selected ? FontWeight.bold : FontWeight.normal,
@@ -306,7 +307,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
 
               // ── OCR DATA ──
               if (ocr != null && ocr.isNotEmpty) ...[
-                _sectionTitle('DATOS EXTRAÍDOS DEL CI (OCR)', Icons.document_scanner_outlined),
+                _sectionTitle('DATOS EXTRAÍDOS DEL CI (OCR)', GIcon.documento),
                 _card(borderColor, surface, child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: ocr.entries.where((e) => e.value != null).map((e) =>
@@ -317,7 +318,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
               ],
 
               // ── DATES ──
-              _sectionTitle('FECHAS Y REVISIÓN', Icons.schedule_outlined),
+              _sectionTitle('FECHAS Y REVISIÓN', GIcon.reloj),
               _card(borderColor, surface, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (s['createdAt'] != null) _dataRow('Iniciada', _formatDate(s['createdAt'] as String), textColor, subtextColor),
                 if (s['completedAt'] != null) _dataRow('Completada', _formatDate(s['completedAt'] as String), textColor, subtextColor),
@@ -328,7 +329,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
 
               // ── SECURITY ──
               if (s['ipAddress'] != null || s['userAgent'] != null || deviceDetails != null || locationData != null) ...[
-                _sectionTitle('SEGURIDAD Y DISPOSITIVO', Icons.security_outlined),
+                _sectionTitle('SEGURIDAD Y DISPOSITIVO', GIcon.seguridad),
                 _card(borderColor, surface, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (s['ipAddress'] != null) ...[
                     _dataRow('IP Address', s['ipAddress'] as String, textColor, subtextColor),
@@ -339,7 +340,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('IP copiada'), duration: Duration(seconds: 1)));
                       },
                       child: const Row(children: [
-                        Icon(Icons.copy_rounded, size: 12, color: GardenColors.primary),
+                        GardenIcon(GIcon.copiar, size: GIconSize.xs, color: GardenColors.primary),
                         SizedBox(width: 4),
                         Text('Copiar IP', style: TextStyle(color: GardenColors.primary, fontSize: 11)),
                       ]),
@@ -384,7 +385,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                   Expanded(child: Text(s['id'] as String? ?? '—',
                     style: TextStyle(fontSize: 11, color: subtextColor, fontFamily: 'monospace'))),
                   IconButton(
-                    icon: const Icon(Icons.copy_rounded, size: 16, color: GardenColors.primary),
+                    icon: const GardenIcon(GIcon.copiar, size: GIconSize.sm, color: GardenColors.primary),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: s['id'] as String? ?? ''));
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ID copiado'), duration: Duration(seconds: 1)));
@@ -407,20 +408,18 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
             ? Row(children: [
                 Expanded(child: GardenButton(
                   label: 'Aprobar identidad',
-                  icon: Icons.verified_rounded,
+                  gIcon: GIcon.verificado,
                   height: 48,
                   color: GardenColors.success,
-                  onPressed: _approve,
-                )),
+                  onPressed: _approve)),
                 const SizedBox(width: 12),
                 Expanded(child: GardenButton(
                   label: 'Rechazar',
-                  icon: Icons.cancel_outlined,
+                  gIcon: GIcon.cancelado,
                   height: 48,
                   color: GardenColors.error,
                   outline: true,
-                  onPressed: _reject,
-                )),
+                  onPressed: _reject)),
               ])
             : Row(children: [
                 Expanded(child: Container(
@@ -431,7 +430,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                     border: Border.all(color: _statusColor(status).withValues(alpha: 0.4)),
                   ),
                   child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(_statusIcon(status), color: _statusColor(status), size: 20),
+                    GardenIcon(_statusIcon(status), size: GIconSize.md, color: _statusColor(status)),
                     const SizedBox(width: 8),
                     Text(_statusLabel(status),
                       style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold, fontSize: 15)),
@@ -468,7 +467,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                   ]));
                 },
                 errorBuilder: (_, __, ___) => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.broken_image_outlined, size: 48, color: subtextColor),
+                  GardenIcon(GIcon.sinImagen, size: GIconSize.hero, color: subtextColor),
                   const SizedBox(height: 8),
                   Text('No se pudo cargar', style: TextStyle(color: subtextColor, fontSize: 12)),
                 ])),
@@ -483,7 +482,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(img.icon, size: 13, color: Colors.white),
+                  GardenIcon(img.icon, size: GIconSize.xs, color: Colors.white),
                   const SizedBox(width: 5),
                   Text(img.label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                 ]),
@@ -507,10 +506,10 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
     child: child,
   );
 
-  Widget _sectionTitle(String title, IconData icon) => Padding(
+  Widget _sectionTitle(String title, GIcon icon) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(children: [
-      Icon(icon, size: 14, color: GardenColors.primary),
+      GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary),
       const SizedBox(width: 6),
       Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
     ]),
@@ -588,11 +587,11 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
     _                        => s,
   };
 
-  IconData _statusIcon(String s) => switch (s) {
-    'VERIFIED' || 'APPROVED' => Icons.verified_rounded,
-    'REJECTED'               => Icons.cancel_rounded,
-    'REVIEW'                 => Icons.hourglass_top_rounded,
-    _                        => Icons.info_outline_rounded,
+  GIcon _statusIcon(String s) => switch (s) {
+    'VERIFIED' || 'APPROVED' => GIcon.verificado,
+    'REJECTED'               => GIcon.cancelado,
+    'REVIEW'                 => GIcon.esperando,
+    _                        => GIcon.info,
   };
 
   num? _toNum(dynamic v) {
@@ -612,7 +611,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
 class _ImageItem {
   final String label;
   final String url;
-  final IconData icon;
+  final GIcon icon;
   final Color color;
   const _ImageItem(this.label, this.url, this.icon, this.color);
 }

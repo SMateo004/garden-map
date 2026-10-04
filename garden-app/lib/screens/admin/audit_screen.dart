@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../utils/txt_saver.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Pantalla de solo-auditoría: un archivo .txt descargable por mes, con TODO
 /// el registro de auditoría del sistema (AuditLog) — quién hizo qué, cuándo,
@@ -76,7 +77,7 @@ class _AuditScreenState extends State<AuditScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.fact_check_outlined, color: GardenColors.primary, size: 22),
+            const GardenIcon(GIcon.lista, size: GIconSize.md, color: GardenColors.primary),
             const SizedBox(width: 8),
             Text('Auditoría', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
           ]),
@@ -114,7 +115,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: const Icon(Icons.description_outlined, size: 18, color: GardenColors.primary),
+                  child: const GardenIcon(GIcon.documento, size: GIconSize.sm, color: GardenColors.primary),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -134,7 +135,7 @@ class _AuditScreenState extends State<AuditScreen> {
                   onPressed: isDownloading ? null : () => _download(year, month),
                   icon: isDownloading
                       ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                      : const Icon(Icons.download_rounded, size: 16),
+                      : const GardenIcon(GIcon.descargar, size: GIconSize.sm, inheritColor: true),
                   label: Text(isDownloading ? 'Generando...' : 'Descargar .txt'),
                   style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
                 ),

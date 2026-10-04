@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -35,13 +36,13 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
     _iconCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1200))
       ..forward();
-    _iconAnim = CurvedAnimation(parent: _iconCtrl, curve: Curves.elasticOut);
+    _iconAnim = CurvedAnimation(parent: _iconCtrl, curve: GardenMotion.pop);
 
     _pulseCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1800))
       ..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.96, end: 1.04).animate(
-        CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+        CurvedAnimation(parent: _pulseCtrl, curve: GardenMotion.move));
 
     // Revisa automáticamente cada 30 segundos si el mantenimiento terminó
     _checkTimer =

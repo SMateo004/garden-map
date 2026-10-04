@@ -9,6 +9,7 @@ import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../narrative/booking_story.dart';
+import '../../design/garden_status_pill.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
@@ -27,6 +28,7 @@ import 'reception_screen.dart';
 import 'trainings_screen.dart';
 import 'caregiver_profile_data_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../theme/garden_motion.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -2100,7 +2102,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: [
-                  bookingStatusBadge(status),
+                  GardenStatusPill(BookingStory.of(status, BookingStoryContext.fromBooking(Map<String, dynamic>.from(booking), caregiverView: true)), service: GardenService.fromApi(booking['serviceType'] as String?), dense: true),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -2232,8 +2234,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         const SizedBox(height: 6),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 260),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          switchInCurve: GardenMotion.enter,
+          switchOutCurve: GardenMotion.exit,
           transitionBuilder: (child, animation) {
             final slide = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(animation);
             return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
@@ -3959,7 +3961,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      bookingStatusBadge(status),
+                      GardenStatusPill(BookingStory.of(status, BookingStoryContext.fromBooking(Map<String, dynamic>.from(booking), caregiverView: true)), service: GardenService.fromApi(booking['serviceType'] as String?), dense: true),
                       const SizedBox(height: 4),
                       Text(
                         'Bs ${_caregiverNetAmount(booking)}',

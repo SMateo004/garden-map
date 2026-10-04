@@ -1217,7 +1217,7 @@ class _OfflineDialogState extends State<_OfflineDialog> {
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     return AlertDialog(
-      icon: const Text('📡', style: TextStyle(fontSize: 32)),
+      icon: const GardenIcon(GIcon.sinConexion, size: GIconSize.xl, state: GIconState.active),
       title: const Text('Sin conexión'),
       content: Text(
         'No pudimos conectar con el servidor. Revisa tu conexión a internet '

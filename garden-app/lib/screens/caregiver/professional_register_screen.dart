@@ -36,6 +36,7 @@ import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilde
 import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -51,12 +52,12 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   bool _showIntro = true;
 
   static const List<RegistrationPhase> _phases = [
-    RegistrationPhase(name: 'Acceso', icon: Icons.vpn_key_outlined, startStep: 0, endStep: 0),
-    RegistrationPhase(name: 'Tu perfil', icon: Icons.person_outline_rounded, startStep: 1, endStep: 1),
-    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
-    RegistrationPhase(name: 'Verificación', icon: Icons.description_outlined, startStep: 7, endStep: 8),
-    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 9, endStep: 10),
-    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 11, endStep: 11),
+    RegistrationPhase(name: 'Acceso', icon: GIcon.seguridad, startStep: 0, endStep: 0),
+    RegistrationPhase(name: 'Tu perfil', icon: GIcon.perfil, startStep: 1, endStep: 1),
+    RegistrationPhase(name: 'Tu servicio', icon: GIcon.huella, startStep: 2, endStep: 6),
+    RegistrationPhase(name: 'Verificación', icon: GIcon.documento, startStep: 7, endStep: 8),
+    RegistrationPhase(name: 'Perfil y contrato', icon: GIcon.documento, startStep: 9, endStep: 10),
+    RegistrationPhase(name: 'Seguridad', icon: GIcon.seguridad, startStep: 11, endStep: 11),
   ];
 
   // Paso 0: Código de admin
@@ -179,7 +180,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       Scrollable.ensureVisible(
         scrollTo!.currentContext!,
         duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+        curve: GardenMotion.move,
         alignment: 0.1,
       );
     }
@@ -823,9 +824,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   }
 
   Widget _buildStep1(Color textColor, Color subtextColor, Color borderColor, Color surfaceEl) {
-    InputDecoration field(String hint, IconData icon) => InputDecoration(
+    InputDecoration field(String hint, GIcon icon) => InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: subtextColor, size: 20),
+      prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
     );
 
     return SingleChildScrollView(
@@ -844,27 +845,27 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           Row(children: [
             Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
                 inputFormatters: [noDigitsFormatter],
-                decoration: field('Nombre', Icons.person_outlined))),
+                decoration: field('Nombre', GIcon.perfil))),
             const SizedBox(width: 12),
             Expanded(child: TextFormField(controller: _lastNameController, style: TextStyle(color: textColor),
                 inputFormatters: [noDigitsFormatter],
-                decoration: field('Apellido', Icons.person_outline))),
+                decoration: field('Apellido', GIcon.perfil))),
           ]),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep1Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
-              style: TextStyle(color: textColor), decoration: field('Correo electrónico', Icons.email_outlined)),
+              style: TextStyle(color: textColor), decoration: field('Correo electrónico', GIcon.correo)),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep1Password, height: 0),
           TextFormField(controller: _passwordController, obscureText: true,
-              style: TextStyle(color: textColor), decoration: field('Contraseña (mínimo 8 caracteres)', Icons.lock_outlined)),
+              style: TextStyle(color: textColor), decoration: field('Contraseña (mínimo 8 caracteres)', GIcon.seguridad)),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep1Phone, height: 0),
           TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
-              style: TextStyle(color: textColor), decoration: field('Teléfono (ej: 76543210)', Icons.phone_outlined)),
+              style: TextStyle(color: textColor), decoration: field('Teléfono (ej: 76543210)', GIcon.telefono)),
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.only(left: 4),
@@ -873,7 +874,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           const SizedBox(height: 16),
 
           TextFormField(controller: _addressController,
-              style: TextStyle(color: textColor), decoration: field('Dirección (opcional)', Icons.home_work_outlined)),
+              style: TextStyle(color: textColor), decoration: field('Dirección (opcional)', GIcon.empresa)),
           const SizedBox(height: 16),
 
           TextFormField(
@@ -1611,16 +1612,16 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                           constraints: const BoxConstraints(maxWidth: 620),
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 280),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
+                            switchInCurve: GardenMotion.enter,
+                            switchOutCurve: GardenMotion.exit,
                             transitionBuilder: stepTransitionBuilder,
                             child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
                           ),
                         ))
                       : AnimatedSwitcher(
                           duration: const Duration(milliseconds: 280),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
+                          switchInCurve: GardenMotion.enter,
+                          switchOutCurve: GardenMotion.exit,
                           transitionBuilder: stepTransitionBuilder,
                           child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
                         ),

@@ -4,6 +4,7 @@ import '../../services/support_chat_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 /// Chat de soporte de Garden — reemplaza el botón de WhatsApp del Centro de
 /// Ayuda. Responde un asistente automático (Claude, grounded en el centro
@@ -43,7 +44,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _scrollController.animateTo(
       _scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+      curve: GardenMotion.enter,
     );
   }
 

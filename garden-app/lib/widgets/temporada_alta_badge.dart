@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 import '../theme/garden_theme.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 class TemporadaAltaBadge extends StatefulWidget {
   final String zona;
@@ -39,7 +40,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 0.1, end: 0.3).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _pulseController, curve: GardenMotion.move),
     );
   }
 
@@ -221,10 +222,8 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              "🔥 ",
-              style: TextStyle(fontSize: 12),
-            ),
+            const GardenIcon(GIcon.estadisticas, size: GIconSize.xs, color: Colors.white),
+            const SizedBox(width: 4),
             Text(
               "+${widget.porcentajeAjuste}%",
               style: const TextStyle(

@@ -15,6 +15,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../theme/garden_motion.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -455,17 +456,17 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               Text('¿Qué servicio necesitas?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
               if (offersHospedaje) ...[
-                _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'HOSPEDAJE'}); }),
+                _ServiceOption(icon: GIcon.inicio, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'HOSPEDAJE'}); }),
                 const SizedBox(height: 12),
               ],
               if (offersPaseo) ...[
-                _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
+                _ServiceOption(icon: GIcon.paseo, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
                 const SizedBox(height: 12),
-                _ServiceOption(icon: Icons.repeat_rounded, label: 'Paseo recurrente', sublabel: 'Se repite solo cada semana', onTap: () { Navigator.pop(sheetCtx); context.push('/recurring-booking/${widget.caregiverId}', extra: {'caregiver': _caregiver, 'pets': _clientPets}); }),
+                _ServiceOption(icon: GIcon.repetir, label: 'Paseo recurrente', sublabel: 'Se repite solo cada semana', onTap: () { Navigator.pop(sheetCtx); context.push('/recurring-booking/${widget.caregiverId}', extra: {'caregiver': _caregiver, 'pets': _clientPets}); }),
                 const SizedBox(height: 12),
               ],
               if (offersGuarderia)
-                _ServiceOption(icon: Icons.home_work_outlined, label: 'Guardería', sublabel: 'Bs $pricePerGuarderia/hora', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'GUARDERIA'}); }),
+                _ServiceOption(icon: GIcon.empresa, label: 'Guardería', sublabel: 'Bs $pricePerGuarderia/hora', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'GUARDERIA'}); }),
             ],
           ),
         ),
@@ -1667,7 +1668,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 Row(children: List.generate(5, (i) {
                   final filled = i < rating.floor();
                   final half = !filled && i < rating;
-                  return Icon(half ? Icons.star_half_rounded : (filled ? Icons.star_rounded : Icons.star_outline_rounded), color: GardenColors.star, size: 22);
+                  return GardenIcon(half ? GIcon.estrella : (filled ? GIcon.estrella : GIcon.estrella), size: GIconSize.md, color: GardenColors.star);
                 })),
                 const SizedBox(height: 4),
                 Text('Calificación promedio', style: TextStyle(color: subtextColor, fontSize: 12)),
@@ -2171,7 +2172,7 @@ class _PhotoCarouselState extends State<_PhotoCarousel> {
                   final sel = i == _index;
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
+                    curve: GardenMotion.enter,
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     width: sel ? 20 : 6,
                     height: 6,
@@ -2336,7 +2337,7 @@ class _PhotoLightboxState extends State<_PhotoLightbox> {
               left: 16, top: 0, bottom: 0,
               child: Center(
                 child: GestureDetector(
-                  onTap: () { _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut); },
+                  onTap: () { _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: GardenMotion.move); },
                   child: Container(
                     width: 44, height: 44,
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
@@ -2351,7 +2352,7 @@ class _PhotoLightboxState extends State<_PhotoLightbox> {
               right: 16, top: 0, bottom: 0,
               child: Center(
                 child: GestureDetector(
-                  onTap: () { _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut); },
+                  onTap: () { _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: GardenMotion.move); },
                   child: Container(
                     width: 44, height: 44,
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
@@ -2381,7 +2382,7 @@ class _PhotoLightboxState extends State<_PhotoLightbox> {
 
 class _ServiceOption extends StatelessWidget {
   const _ServiceOption({required this.icon, required this.label, required this.sublabel, required this.onTap});
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final String sublabel;
   final VoidCallback onTap;
@@ -2403,7 +2404,7 @@ class _ServiceOption extends StatelessWidget {
           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
         ),
         child: Row(children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: GardenColors.primary, size: 22)),
+          Container(width: 44, height: 44, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: TextStyle(color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 16, fontWeight: FontWeight.w700)),

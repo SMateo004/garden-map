@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'secure_storage_service.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 /// In-app notification polling service for web.
 /// On mobile, FCM handles push — this service only activates on kIsWeb.
@@ -156,8 +157,8 @@ class _WebToastState extends State<_WebToast> with SingleTickerProviderStateMixi
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+        .animate(CurvedAnimation(parent: _controller, curve: GardenMotion.enter));
+    _fade = CurvedAnimation(parent: _controller, curve: GardenMotion.enter);
     _controller.forward();
   }
 

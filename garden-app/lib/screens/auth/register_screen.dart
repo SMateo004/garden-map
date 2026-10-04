@@ -13,6 +13,7 @@ import '../../utils/input_formatters.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../services/auth_state.dart';
+import '../../theme/garden_motion.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -1029,7 +1030,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _revealStep({required bool show, required Widget child}) {
     return AnimatedSize(
       duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+      curve: GardenMotion.enter,
       alignment: Alignment.topCenter,
       child: show ? child : const SizedBox(width: double.infinity, height: 0),
     );

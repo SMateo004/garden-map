@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_status_pill.dart';
+import '../../narrative/booking_story.dart';
+import '../../design/garden_service.dart';
 
 class AdminOwnersScreen extends StatefulWidget {
   final String adminToken;
@@ -142,10 +146,10 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
                   decoration: InputDecoration(
                     hintText: 'Buscar por nombre o email…',
                     hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 18),
+                    prefixIcon: GardenIcon(GIcon.buscar, size: GIconSize.sm, color: subtextColor),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear_rounded, size: 16, color: subtextColor),
+                            icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _searchQuery = '');
@@ -177,7 +181,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
               ),
               const SizedBox(width: 10),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded),
+                icon: const GardenIcon(GIcon.repetir, size: GIconSize.lg, inheritColor: true),
                 color: GardenColors.primary,
                 onPressed: () => _loadOwners(reset: true),
                 tooltip: 'Recargar',
@@ -194,7 +198,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('🐾', style: TextStyle(fontSize: 40)),
+                          const GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active),
                           const SizedBox(height: 12),
                           Text('No hay dueños registrados',
                               style: TextStyle(color: subtextColor, fontSize: 14)),
@@ -307,7 +311,7 @@ class _OwnerCard extends StatelessWidget {
                         color: GardenColors.success,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check, size: 9, color: Colors.white),
+                      child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: Colors.white),
                     ),
                   ),
               ],
@@ -331,9 +335,9 @@ class _OwnerCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      _chip('🐾 $petsCount mascotas', GardenColors.primary),
+                      _chip('$petsCount mascotas', GardenColors.primary),
                       const SizedBox(width: 6),
-                      _chip('📋 $completedBookings/$bookingsCount', GardenColors.success),
+                      _chip('$completedBookings/$bookingsCount', GardenColors.success),
                     ],
                   ),
                 ],
@@ -349,7 +353,7 @@ class _OwnerCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         fontSize: 13)),
                 const SizedBox(height: 4),
-                Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
               ],
             ),
           ],
@@ -441,7 +445,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   labelText: 'Tu contraseña de admin',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    icon: GardenIcon(obscure ? GIcon.ocultar : GIcon.ver, size: GIconSize.lg, inheritColor: true),
                     onPressed: () => setS(() => obscure = !obscure),
                   ),
                 ),
@@ -577,7 +581,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                         onPressed: _resettingPin ? null : _confirmResetPin,
                         icon: _resettingPin
                             ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.pin_outlined, size: 16),
+                            : const GardenIcon(GIcon.seguridad, size: GIconSize.sm, inheritColor: true),
                         label: const Text('Resetear PIN de billetera', style: TextStyle(fontSize: 12.5)),
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: borderColor),
@@ -713,7 +717,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('🐶', style: TextStyle(fontSize: 36)),
+            const GardenIcon(GIcon.perro, size: GIconSize.xl, state: GIconState.active),
             const SizedBox(height: 10),
             Text('Sin mascotas registradas',
                 style: TextStyle(color: subtextColor, fontSize: 13)),
@@ -763,7 +767,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                       backgroundColor: GardenColors.accent.withValues(alpha: 0.15),
                       child: photo == null
                           ? Text(
-                              petName.isNotEmpty ? petName[0].toUpperCase() : '🐾',
+                              petName.isNotEmpty ? petName[0].toUpperCase() : '?',
                               style: const TextStyle(color: GardenColors.accent, fontWeight: FontWeight.bold, fontSize: 20),
                             )
                           : null,
@@ -781,8 +785,8 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                           const SizedBox(height: 6),
                           Wrap(spacing: 6, runSpacing: 4, children: [
                             if (size != null) _sizeChip(size),
-                            if (gender == 'MALE') _infoChip('♂ Macho', GardenColors.secondary),
-                            if (gender == 'FEMALE') _infoChip('♀ Hembra', GardenColors.accent),
+                            if (gender == 'MALE') _infoChip('Macho', GardenColors.secondary),
+                            if (gender == 'FEMALE') _infoChip('Hembra', GardenColors.accent),
                             if (weight != null) _infoChip('${weight}kg', GardenColors.primary),
                             if (sterilized == true) _infoChip('Esterilizado', GardenColors.success),
                           ]),
@@ -800,11 +804,11 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (microchip != null && microchip.isNotEmpty)
-                        _petInfoRow(Icons.memory_outlined, 'Microchip: $microchip', subtextColor),
+                        _petInfoRow(GIcon.ia, 'Microchip: $microchip', subtextColor),
                       if (specialNeeds != null && specialNeeds.isNotEmpty)
-                        _petInfoRow(Icons.medical_services_outlined, specialNeeds, subtextColor),
+                        _petInfoRow(GIcon.veterinaria, specialNeeds, subtextColor),
                       if (notes != null && notes.isNotEmpty)
-                        _petInfoRow(Icons.notes_outlined, notes, subtextColor),
+                        _petInfoRow(GIcon.nota, notes, subtextColor),
                     ],
                   ),
                 ),
@@ -829,7 +833,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                         child: Image.network(fixImageUrl(extraPhotos[j]), fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: GardenColors.primary.withValues(alpha: 0.1),
-                            child: const Icon(Icons.pets, size: 20, color: GardenColors.primary),
+                            child: const GardenIcon(GIcon.huella, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
                           )),
                       ),
                     ),
@@ -857,7 +861,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                         child: Image.network(fixImageUrl(vaccinePhotos[j]), fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: GardenColors.success.withValues(alpha: 0.1),
-                            child: const Icon(Icons.vaccines, size: 20, color: GardenColors.success),
+                            child: const GardenIcon(GIcon.vacuna, size: GIconSize.md, color: GardenColors.success),
                           )),
                       ),
                     ),
@@ -869,7 +873,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                   child: Row(children: [
-                    const Icon(Icons.insert_drive_file_outlined, size: 14, color: GardenColors.primary),
+                    const GardenIcon(GIcon.documento, size: GIconSize.xs, color: GardenColors.primary),
                     const SizedBox(width: 6),
                     Text('${documents.length} documento${documents.length > 1 ? 's' : ''} adjunto${documents.length > 1 ? 's' : ''}',
                       style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -918,10 +922,10 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
     child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
   );
 
-  Widget _petInfoRow(IconData icon, String text, Color color) => Padding(
+  Widget _petInfoRow(GIcon icon, String text, Color color) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
     child: Row(children: [
-      Icon(icon, size: 13, color: color),
+      GardenIcon(icon, size: GIconSize.xs, color: color),
       const SizedBox(width: 6),
       Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis)),
     ]),
@@ -971,8 +975,8 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(serviceType == 'PASEO' ? '🦮' : serviceType == 'GUARDERIA' ? '🏡' : '🏠',
-                      style: const TextStyle(fontSize: 16)),
+                  child: GardenIcon(GIcon.forService(GardenService.fromApi(serviceType) ?? GardenService.hospedaje),
+                      size: GIconSize.sm, state: GIconState.active),
                 ),
               ),
               const SizedBox(width: 10),
@@ -990,7 +994,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                               fontSize: 12),
                         ),
                         const SizedBox(width: 8),
-                        _bookingStatusBadge(status),
+                        _bookingStatusBadge(Map<String, dynamic>.from(b)),
                       ],
                     ),
                     Text('Con $caregiverName · $petName',
@@ -1016,7 +1020,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star_rounded, color: GardenColors.star, size: 11),
+                        const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                         const SizedBox(width: 2),
                         Text(
                           '${b['caregiverRating']}',
@@ -1057,13 +1061,13 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
             children: [
               Expanded(
                   child: _statCard('Total reservas', '$totalBookings',
-                      Icons.calendar_today_rounded, GardenColors.primary,
+                      GIcon.calendario, GardenColors.primary,
                       textColor: textColor, subtextColor: subtextColor,
                       borderColor: borderColor)),
               const SizedBox(width: 10),
               Expanded(
                   child: _statCard('Completadas', '$completed',
-                      Icons.check_circle_rounded, GardenColors.success,
+                      GIcon.confirmado, GardenColors.success,
                       textColor: textColor, subtextColor: subtextColor,
                       borderColor: borderColor)),
             ],
@@ -1074,13 +1078,13 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
               Expanded(
                   child: _statCard('Total gastado',
                       'Bs ${totalSpent.toStringAsFixed(0)}',
-                      Icons.payments_rounded, GardenColors.warning,
+                      GIcon.billetera, GardenColors.warning,
                       textColor: textColor, subtextColor: subtextColor,
                       borderColor: borderColor)),
               const SizedBox(width: 10),
               Expanded(
                   child: _statCard('Mascotas', '$petsCount',
-                      Icons.pets_rounded, GardenColors.accent,
+                      GIcon.huella, GardenColors.accent,
                       textColor: textColor, subtextColor: subtextColor,
                       borderColor: borderColor)),
             ],
@@ -1102,7 +1106,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                     color: GardenColors.star.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.star_rounded, color: GardenColors.star, size: 22),
+                  child: const GardenIcon(GIcon.estrella, size: GIconSize.md, state: GIconState.active, color: GardenColors.star),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1129,10 +1133,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: List.generate(5, (i) => Icon(
-                          i < avgCaregiverRating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
-                          color: GardenColors.star, size: 12,
-                        )),
+                        children: List.generate(5, (i) => GardenIcon(GIcon.estrella, size: GIconSize.xs, state: i < avgCaregiverRating.round() ? GIconState.active : GIconState.idle, color: GardenColors.star)),
                       ),
                     ],
                   )
@@ -1228,7 +1229,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color,
+  Widget _statCard(String label, String value, GIcon icon, Color color,
       {required Color textColor,
       required Color subtextColor,
       required Color borderColor}) {
@@ -1250,7 +1251,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: GardenIcon(icon, size: GIconSize.sm, color: color),
           ),
           const SizedBox(height: 8),
           Text(value,
@@ -1280,27 +1281,13 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
     );
   }
 
-  Widget _bookingStatusBadge(String status) {
-    final map = {
-      'COMPLETED': (GardenColors.success, 'Completada'),
-      'IN_PROGRESS': (GardenColors.primary, 'En curso'),
-      'CONFIRMED': (GardenColors.warning, 'Confirmada'),
-      'CANCELLED': (GardenColors.error, 'Cancelada'),
-    };
-    final entry = map[status];
-    final color = entry?.$1 ?? Colors.grey;
-    final label = entry?.$2 ?? status;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 9, fontWeight: FontWeight.bold)),
-    );
-  }
+  // Mismo mapa de estados que el resto de la app (booking_story.dart).
+  Widget _bookingStatusBadge(Map<String, dynamic> b) => GardenStatusPill(
+        BookingStory.of(b['status'] as String?, BookingStoryContext.fromBooking(b, caregiverFallback: 'el cuidador')),
+        service: GardenService.fromApi(b['serviceType'] as String?),
+        dense: true,
+      );
+
 
   Color _statusColor(String status) {
     switch (status) {

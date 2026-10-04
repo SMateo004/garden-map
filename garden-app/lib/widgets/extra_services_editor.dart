@@ -266,7 +266,7 @@ class _ExtraServicesEditorState extends State<ExtraServicesEditor> {
           label: '+ Agregar servicio extra',
           outline: true,
           height: 46,
-          icon: Icons.add_rounded,
+          gIcon: GIcon.agregar,
           onPressed: () => _openForm(),
         ),
       ],

@@ -623,7 +623,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    InputDecoration fieldDeco(String label, {IconData? icon}) => InputDecoration(
+    InputDecoration fieldDeco(String label, {GIcon? icon}) => InputDecoration(
       labelText: label,
       labelStyle: TextStyle(color: subtextColor, fontSize: 13),
       filled: true, fillColor: surfaceEl,
@@ -631,7 +631,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      prefixIcon: icon != null ? Icon(icon, color: GardenColors.primary, size: 18) : null,
+      prefixIcon: icon != null ? GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary) : null,
     );
 
     Widget sectionHeader(GIcon icon, String title) => Padding(
@@ -764,7 +764,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             TextFormField(
               controller: _nameCtrl,
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('Nombre *', icon: Icons.badge_outlined),
+              decoration: fieldDeco('Nombre *', icon: GIcon.identidadVerificada),
               validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
@@ -792,14 +792,14 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               Expanded(child: TextFormField(
                 controller: _breedCtrl,
                 style: TextStyle(color: textColor),
-                decoration: fieldDeco('Raza', icon: Icons.category_outlined),
+                decoration: fieldDeco('Raza', icon: GIcon.categoria),
               )),
               const SizedBox(width: 12),
               Expanded(child: TextFormField(
                 controller: _ageCtrl,
                 style: TextStyle(color: textColor),
                 keyboardType: TextInputType.number,
-                decoration: fieldDeco('Edad (años)', icon: Icons.cake_outlined),
+                decoration: fieldDeco('Edad (años)', icon: GIcon.cumpleanos),
               )),
             ]),
             const SizedBox(height: 12),
@@ -822,14 +822,14 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                 controller: _weightCtrl,
                 style: TextStyle(color: textColor),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: fieldDeco('Peso (kg)', icon: Icons.monitor_weight_outlined),
+                decoration: fieldDeco('Peso (kg)', icon: GIcon.peso),
               )),
             ]),
             const SizedBox(height: 12),
             TextFormField(
               controller: _colorCtrl,
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('Color / pelaje', icon: Icons.palette_outlined),
+              decoration: fieldDeco('Color / pelaje', icon: GIcon.apariencia),
             ),
 
             // ── Salud ───────────────────────────────────────────────────
@@ -911,14 +911,14 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             TextFormField(
               controller: _microchipCtrl,
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('Número de microchip (opcional)', icon: Icons.memory_outlined),
+              decoration: fieldDeco('Número de microchip (opcional)', icon: GIcon.ia),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _specialCtrl,
               style: TextStyle(color: textColor),
               maxLines: 2,
-              decoration: fieldDeco('Necesidades especiales (opcional)', icon: Icons.medical_services_outlined),
+              decoration: fieldDeco('Necesidades especiales (opcional)', icon: GIcon.veterinaria),
             ),
 
             // ── Fotos adicionales ──────────────────────────────────────

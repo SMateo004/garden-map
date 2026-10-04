@@ -829,19 +829,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       .toList();
                   if (exts.isEmpty) return const SizedBox();
                   final String summaryText;
-                  final IconData summaryIcon;
+                  final GIcon summaryIcon;
                   final String sectionLabel;
                   if (isPaseo) {
                     final totalMins = exts.fold<int>(0,
                         (s, e) => s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
                     summaryText = '+$totalMins min · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}';
-                    summaryIcon = Icons.add_alarm_rounded;
+                    summaryIcon = GIcon.alarma;
                     sectionLabel = 'Tiempo ampliado';
                   } else {
                     final totalDays = exts.fold<int>(0,
                         (s, e) => s + ((e['additionalDays'] as num?)?.toInt() ?? 0));
                     summaryText = '+$totalDays noche${totalDays == 1 ? '' : 's'} · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}';
-                    summaryIcon = Icons.nightlight_round;
+                    summaryIcon = GIcon.modoOscuro;
                     sectionLabel = 'Noches añadidas';
                   }
                   return Padding(
@@ -856,7 +856,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(summaryIcon, size: 13, color: subtextColor),
+                          GardenIcon(summaryIcon, size: GIconSize.xs, color: subtextColor),
                           const SizedBox(width: 7),
                           Text(sectionLabel,
                               style: TextStyle(

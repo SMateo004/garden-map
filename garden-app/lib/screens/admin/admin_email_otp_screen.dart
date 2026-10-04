@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
 
 /// Panel admin: verificación de correo manual — normalmente SOLO recibe
 /// entradas cuando Resend realmente falla al enviar el correo. Con el
@@ -119,10 +120,7 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        isRealFailure ? Icons.mark_email_unread_outlined : Icons.visibility_outlined,
-                                        color: accentColor, size: 22,
-                                      ),
+                                      GardenIcon(isRealFailure ? GIcon.correo : GIcon.ver, size: GIconSize.md, color: accentColor),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -136,7 +134,7 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
                                           ],
                                         ),
                                       ),
-                                      Icon(Icons.chevron_right_rounded, color: subtextColor),
+                                      GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
                                     ],
                                   ),
                                 ),
@@ -303,7 +301,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _copyMessage,
-                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    icon: const GardenIcon(GIcon.copiar, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Copiar'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: textColor,
@@ -317,7 +315,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _openEmailClient,
-                    icon: const Icon(Icons.email_outlined, size: 18),
+                    icon: const GardenIcon(GIcon.correo, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Abrir correo'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
@@ -332,7 +330,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _openWhatsApp,
-              icon: const Icon(Icons.chat_rounded, size: 18),
+              icon: const GardenIcon(GIcon.chat, size: GIconSize.sm, inheritColor: true),
               label: const Text('Enviar por WhatsApp en su lugar'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: GardenColors.success,
@@ -345,7 +343,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
             const SizedBox(height: 10),
             TextButton.icon(
               onPressed: _generate,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
+              icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
               label: Text(_reused ? 'Actualizar (sigue siendo el mismo código mientras sea válido)' : 'Generar código nuevo'),
             ),
           ],

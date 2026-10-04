@@ -91,6 +91,10 @@ class BookingStoryContext {
   final bool rated;
   final bool disputed;
 
+  /// Cómo se nombra al cuidador si no hay nombre. El dueño lee "tu
+  /// cuidador"; el admin, que no es parte de la reserva, "el cuidador".
+  final String caregiverFallback;
+
   const BookingStoryContext({
     this.petName,
     this.caregiverName,
@@ -98,13 +102,16 @@ class BookingStoryContext {
     this.start,
     this.rated = false,
     this.disputed = false,
+    this.caregiverFallback = 'tu cuidador',
   });
 
   /// Lee el JSON de una reserva tal como lo devuelve garden-api
   /// (bookingToResponse en booking.types.ts). [caregiverView]: el "otro" de la
   /// historia es el dueño, no el cuidador — por ahora solo cambia el nombre.
-  factory BookingStoryContext.fromBooking(Map<String, dynamic> b, {bool caregiverView = false}) {
+  factory BookingStoryContext.fromBooking(Map<String, dynamic> b,
+      {bool caregiverView = false, String caregiverFallback = 'tu cuidador'}) {
     return BookingStoryContext(
+      caregiverFallback: caregiverFallback,
       petName: b['petName'] as String?,
       caregiverName: (caregiverView ? b['clientName'] : b['caregiverName']) as String?,
       service: GardenService.fromApi(b['serviceType'] as String?),
@@ -129,7 +136,7 @@ class BookingStoryContext {
   }
 
   String get pet => _clean(petName) ?? 'tu mascota';
-  String get caregiver => _firstName(caregiverName) ?? 'tu cuidador';
+  String get caregiver => _firstName(caregiverName) ?? caregiverFallback;
 
   static String? _clean(String? s) {
     final v = s?.trim();
@@ -173,6 +180,8 @@ class BookingStory {
     final status = BookingStatus.fromApi(apiStatus);
     final pet = c.pet;
     final cg = c.caregiver;
+    // "a el cuidador" -> "al cuidador" (el admin usa ese genérico).
+    final toCg = cg.startsWith('el ') ? 'al ${cg.substring(3)}' : 'a $cg';
     final svc = c.service;
     final when = c.start != null ? whenLabel(c.start!, now: now ?? DateTime.now()) : null;
     final whenSuffix = when != null ? ' $when' : '';
@@ -230,10 +239,10 @@ class BookingStory {
           status: status,
           tone: StoryTone.waiting,
           icon: GIcon.esperando,
-          pill: 'Esperando a $cg',
+          pill: 'Esperando $toCg',
           ownerHeadline: '$cg está viendo tu solicitud para $pet.',
           caregiverHeadline: '$pet quiere ${_wantVerb(svc)} contigo$whenSuffix.',
-          ownerNext: StoryStep(StoryAction.chat, 'Escribir a $cg'),
+          ownerNext: StoryStep(StoryAction.chat, 'Escribir $toCg'),
           caregiverNext: const StoryStep(StoryAction.respond, 'Responder'),
         );
 
@@ -256,7 +265,7 @@ class BookingStory {
           pill: 'Confirmado',
           ownerHeadline: '¡Listo! $cg ${_doVerb(svc)} $pet$whenSuffix.',
           caregiverHeadline: '${_cap(when) ?? 'Pronto'} ${_youVerb(svc)} $pet. Revisa sus notas.',
-          ownerNext: StoryStep(StoryAction.chat, 'Escribir a $cg'),
+          ownerNext: StoryStep(StoryAction.chat, 'Escribir $toCg'),
           caregiverNext: StoryStep(StoryAction.viewNotes, 'Ver notas de $pet'),
         );
 
@@ -270,7 +279,7 @@ class BookingStory {
           caregiverHeadline: '${_liveCaregiver(svc, pet)} Envía una foto.',
           ownerNext: svc == GardenService.paseo
               ? const StoryStep(StoryAction.viewMap, 'Ver mapa')
-              : StoryStep(StoryAction.chat, 'Escribir a $cg'),
+              : StoryStep(StoryAction.chat, 'Escribir $toCg'),
           caregiverNext: const StoryStep(StoryAction.sendPhoto, 'Enviar foto'),
         );
 

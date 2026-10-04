@@ -1087,10 +1087,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
               ),
               child: Row(
                 children: [
-                  Icon(
-                    _selectedBankName.isEmpty ? Icons.account_balance_rounded : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
-                    color: _selectedBankName.isEmpty ? subtextColor : GardenColors.primary, size: 20,
-                  ),
+                  GardenIcon(_selectedBankName.isEmpty ? GIcon.retiro : (isWallet ? GIcon.billetera : GIcon.retiro), size: GIconSize.md, color: _selectedBankName.isEmpty ? subtextColor : GardenColors.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _selectedBankName.isEmpty

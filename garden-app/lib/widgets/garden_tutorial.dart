@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/garden_theme.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 // ── Data model ───────────────────────────────────────────────────────────────
 
@@ -104,13 +105,13 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
     _pulseAnim = Tween<double>(
       begin: 1.0,
       end: 1.22,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: GardenMotion.move));
 
     _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 280),
     )..forward();
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: GardenMotion.enter);
   }
 
   @override

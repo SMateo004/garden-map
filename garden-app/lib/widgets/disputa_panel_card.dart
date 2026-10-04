@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 import '../theme/garden_theme.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 enum _PanelState { cargando, exito, error }
 
@@ -58,7 +59,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 0.1, end: 0.3).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _pulseController, curve: GardenMotion.move),
     );
 
     _fetchDisputa();

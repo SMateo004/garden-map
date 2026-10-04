@@ -15,6 +15,7 @@ import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
+import '../../theme/garden_motion.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -556,10 +557,10 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                   icon: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 200),
                                     transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                                    child: Icon(
-                                      _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                    child: GardenIcon(
+                                      _showPayoutDetails ? GIcon.ocultar : GIcon.ver,
                                       key: ValueKey(_showPayoutDetails),
-                                      color: subtextColor, size: 18,
+                                      color: subtextColor, size: GIconSize.md,
                                     ),
                                   ),
                                   tooltip: _showPayoutDetails ? 'Ocultar datos de cobro' : 'Ver datos de cobro',
@@ -670,7 +671,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
             key: ValueKey((_walletData?['balance'] ?? 0).toString()),
             tween: Tween(begin: 0, end: (_walletData?['balance'] as num? ?? 0).toDouble()),
             duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOutCubic,
+            curve: GardenMotion.enter,
             builder: (context, value, _) => Text(
               'Bs ${value.toStringAsFixed(2)}',
               style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
@@ -783,7 +784,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           // El QR es un dato de cobro escaneable — se oculta por
                           // defecto igual que el número de cuenta, y se revela
                           // con el mismo toque que el ojo de "Datos bancarios".
-                          : Icon(Icons.visibility_off_rounded, key: const ValueKey('qr-hidden'), color: subtextColor.withValues(alpha: 0.5), size: 24),
+                          : GardenIcon(GIcon.ocultar, key: const ValueKey('qr-hidden'), color: subtextColor.withValues(alpha: 0.5), size: GIconSize.lg),
                     )
                   : GardenIcon(GIcon.pagarQr, size: GIconSize.lg, color: subtextColor.withValues(alpha: 0.4)),
             ),
@@ -807,10 +808,10 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         icon: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
                           transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                          child: Icon(
-                            _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          child: GardenIcon(
+                            _showPayoutDetails ? GIcon.ocultar : GIcon.ver,
                             key: ValueKey(_showPayoutDetails),
-                            color: subtextColor, size: 18,
+                            color: subtextColor, size: GIconSize.md,
                           ),
                         ),
                         tooltip: _showPayoutDetails ? 'Ocultar QR' : 'Ver QR',
@@ -1399,13 +1400,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            selectedBankName.isEmpty
-                                ? Icons.account_balance_rounded
-                                : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
-                            color: selectedBankName.isEmpty ? subtextColor : GardenColors.primary,
-                            size: 20,
-                          ),
+                          GardenIcon(selectedBankName.isEmpty
+                                ? GIcon.retiro
+                                : (isWallet ? GIcon.billetera : GIcon.retiro), size: GIconSize.md, color: selectedBankName.isEmpty ? subtextColor : GardenColors.primary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: selectedBankName.isEmpty

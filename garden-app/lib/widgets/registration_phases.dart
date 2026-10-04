@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 /// Agrupa los pasos de un wizard de registro en fases con nombre — mismo
 /// patrón que usan Airbnb/Uber en sus onboardings de host/conductor: un
@@ -8,7 +9,7 @@ import '../design/garden_icons.dart';
 /// que como "Paso 7 de 11", aunque sea exactamente el mismo recorrido.
 class RegistrationPhase {
   final String name;
-  final IconData icon;
+  final GIcon icon;
   final int startStep; // inclusive
   final int endStep; // inclusive
 
@@ -81,7 +82,7 @@ class PhaseProgressBar extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: target),
       duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      curve: GardenMotion.enter,
       builder: (context, animatedValue, _) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(3),
@@ -159,7 +160,7 @@ class RegistrationPhaseIntro extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           alignment: Alignment.center,
-                          child: Icon(phases[i].icon, color: GardenColors.primary, size: 20),
+                          child: GardenIcon(phases[i].icon, size: GIconSize.md, color: GardenColors.primary),
                         ),
                         const SizedBox(width: 14),
                         Expanded(

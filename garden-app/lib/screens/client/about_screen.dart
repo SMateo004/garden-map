@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 // ─── Paleta día/noche de la página "Sobre Garden" ───────────────────────────────
 class _P {
@@ -185,7 +186,7 @@ class _HeroSection extends StatelessWidget {
             ),
             child: Text('Nuestra historia',
               style: TextStyle(color: pal.accent, fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.3)),
-          ).animate().fadeIn(delay: 100.ms, duration: 600.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
+          ).animate().fadeIn(delay: 100.ms, duration: 600.ms).slideY(begin: 0.2, end: 0, curve: GardenMotion.enter),
           const SizedBox(height: 28),
           Text(
             'Nacimos para darle\na tu mascota lo mejor.',
@@ -197,7 +198,7 @@ class _HeroSection extends StatelessWidget {
               height: 1.1,
               letterSpacing: -2,
             ),
-          ).animate().fadeIn(delay: 200.ms, duration: 700.ms).slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic),
+          ).animate().fadeIn(delay: 200.ms, duration: 700.ms).slideY(begin: 0.15, end: 0, curve: GardenMotion.enter),
           const SizedBox(height: 24),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 620),
@@ -212,11 +213,11 @@ class _HeroSection extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
             ),
-          ).animate().fadeIn(delay: 350.ms, duration: 700.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
+          ).animate().fadeIn(delay: 350.ms, duration: 700.ms).slideY(begin: 0.1, end: 0, curve: GardenMotion.enter),
           const SizedBox(height: 48),
           // Stats row
           _StatsRow(mobile: mobile)
-            .animate().fadeIn(delay: 500.ms, duration: 700.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
+            .animate().fadeIn(delay: 500.ms, duration: 700.ms).slideY(begin: 0.1, end: 0, curve: GardenMotion.enter),
         ],
       ),
     );
@@ -333,18 +334,18 @@ class _AboutSection extends StatelessWidget {
         border: Border.all(color: pal.primary.withValues(alpha: 0.25)),
       ),
       child: Column(children: [
-        _FeatureRow(Icons.verified_rounded, 'Cuidadores verificados por IA', pal),
-        _FeatureRow(Icons.hexagon_outlined, 'Pagos protegidos con escrow', pal),
-        _FeatureRow(Icons.location_on_rounded, 'GPS en tiempo real en cada paseo', pal),
-        _FeatureRow(Icons.star_rounded, 'Solo reseñas de clientes reales', pal),
-        _FeatureRow(Icons.support_agent_rounded, 'Soporte de emergencia 24/7', pal),
+        _FeatureRow(GIcon.verificado, 'Cuidadores verificados por IA', pal),
+        _FeatureRow(GIcon.pagoProtegido, 'Pago protegido hasta terminar el servicio', pal),
+        _FeatureRow(GIcon.ubicacion, 'GPS en tiempo real en cada paseo', pal),
+        _FeatureRow(GIcon.estrella, 'Solo reseñas de clientes reales', pal),
+        _FeatureRow(GIcon.soporte, 'Soporte de emergencia 24/7', pal),
       ]),
     ),
   );
 }
 
 class _FeatureRow extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final _P pal;
   const _FeatureRow(this.icon, this.label, this.pal);
@@ -359,7 +360,7 @@ class _FeatureRow extends StatelessWidget {
           color: pal.primary.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: pal.accent, size: 18),
+        child: GardenIcon(icon, size: GIconSize.sm, color: pal.accent),
       ),
       const SizedBox(width: 14),
       Expanded(child: Text(label,
@@ -399,7 +400,7 @@ class _MissionVisionSection extends StatelessWidget {
         mobile
             ? Column(children: [
                 _Reveal(scroll: scroll, delay: 150.ms, child: _MVCard(
-                  icon: Icons.flag_rounded,
+                  icon: GIcon.reportar,
                   tag: 'MISIÓN',
                   title: 'Conectar con confianza',
                   body: 'Conectar a dueños de mascotas con cuidadores verificados, garantizando transparencia, '
@@ -409,7 +410,7 @@ class _MissionVisionSection extends StatelessWidget {
                 )),
                 const SizedBox(height: 20),
                 _Reveal(scroll: scroll, delay: 250.ms, child: _MVCard(
-                  icon: Icons.visibility_rounded,
+                  icon: GIcon.ver,
                   tag: 'VISIÓN',
                   title: 'Líderes en Latinoamérica',
                   body: 'Ser la plataforma de referencia en Latinoamérica para el cuidado responsable y verificado '
@@ -423,7 +424,7 @@ class _MissionVisionSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: _Reveal(scroll: scroll, delay: 150.ms, child: _MVCard(
-                    icon: Icons.flag_rounded,
+                    icon: GIcon.reportar,
                     tag: 'MISIÓN',
                     title: 'Conectar con confianza',
                     body: 'Conectar a dueños de mascotas con cuidadores verificados, garantizando transparencia, '
@@ -433,7 +434,7 @@ class _MissionVisionSection extends StatelessWidget {
                   ))),
                   const SizedBox(width: 24),
                   Expanded(child: _Reveal(scroll: scroll, delay: 250.ms, child: _MVCard(
-                    icon: Icons.visibility_rounded,
+                    icon: GIcon.ver,
                     tag: 'VISIÓN',
                     title: 'Líderes en Latinoamérica',
                     body: 'Ser la plataforma de referencia en Latinoamérica para el cuidado responsable y verificado '
@@ -450,7 +451,7 @@ class _MissionVisionSection extends StatelessWidget {
 }
 
 class _MVCard extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String tag, title, body;
   final _P pal;
   final List<Color> gradient;
@@ -482,7 +483,7 @@ class _MVCard extends StatelessWidget {
               color: color.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: GardenIcon(icon, size: GIconSize.md, color: color),
           ),
           const SizedBox(width: 14),
           Container(
@@ -518,10 +519,10 @@ class _ValuesSection extends StatelessWidget {
   const _ValuesSection({required this.scroll, required this.mobile});
 
   static const _values = [
-    (Icons.shield_rounded,       'Confianza',     'Cada cuidador pasa por verificación de identidad con IA antes de aparecer en la plataforma.'),
-    (Icons.favorite_rounded,     'Bienestar',     'El bienestar de cada mascota es nuestra prioridad absoluta, antes que cualquier métrica de negocio.'),
-    (Icons.lightbulb_rounded,    'Innovación',    'Escrow blockchain, GPS en tiempo real y IA fotométrica — tecnología al servicio del amor por las mascotas.'),
-    (Icons.handshake_rounded,    'Comunidad',     'Construimos una comunidad de dueños y cuidadores que comparten el mismo compromiso con los animales.'),
+    (GIcon.protegido,       'Confianza',     'Cada cuidador pasa por verificación de identidad con IA antes de aparecer en la plataforma.'),
+    (GIcon.favorito,     'Bienestar',     'El bienestar de cada mascota es nuestra prioridad absoluta, antes que cualquier métrica de negocio.'),
+    (GIcon.idea,    'Innovación',    'Escrow blockchain, GPS en tiempo real y IA fotométrica — tecnología al servicio del amor por las mascotas.'),
+    (GIcon.meetGreet,    'Comunidad',     'Construimos una comunidad de dueños y cuidadores que comparten el mismo compromiso con los animales.'),
   ];
 
   @override
@@ -560,7 +561,7 @@ class _ValuesSection extends StatelessWidget {
 }
 
 class _ValueCard extends StatefulWidget {
-  final (IconData, String, String) data;
+  final (GIcon, String, String) data;
   final bool mobile;
   final _P pal;
   const _ValueCard(this.data, {required this.mobile, required this.pal});
@@ -593,7 +594,7 @@ class _ValueCardState extends State<_ValueCard> {
               color: pal.primary.withValues(alpha: _h ? 0.22 : 0.10),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: pal.accent, size: 22),
+            child: GardenIcon(icon, size: GIconSize.md, color: pal.accent),
           ),
           const SizedBox(height: 18),
           Text(title, style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 17)),
@@ -846,14 +847,14 @@ class _LegalSection extends StatelessWidget {
               runSpacing: 12,
               children: [
                 _LegalBtn(
-                  icon: Icons.description_outlined,
+                  icon: GIcon.documento,
                   label: 'Términos y condiciones',
                   onTap: () => ctx.go('/terms'),
                   pal: pal,
                   filled: true,
                 ),
                 _LegalBtn(
-                  icon: Icons.privacy_tip_outlined,
+                  icon: GIcon.protegido,
                   label: 'Política de privacidad',
                   onTap: () => ctx.go('/privacy'),
                   pal: pal,
@@ -869,7 +870,7 @@ class _LegalSection extends StatelessWidget {
 }
 
 class _LegalBtn extends StatefulWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final VoidCallback onTap;
   final _P pal;
@@ -903,9 +904,7 @@ class _LegalBtnState extends State<_LegalBtn> {
             ),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(widget.icon,
-              color: widget.filled ? Colors.white : (_h ? pal.accent : pal.textSec),
-              size: 16),
+            GardenIcon(widget.icon, size: GIconSize.sm, color: widget.filled ? Colors.white : (_h ? pal.accent : pal.textSec)),
             const SizedBox(width: 8),
             Text(widget.label,
               style: TextStyle(
@@ -1056,11 +1055,11 @@ class _RevealState extends State<_Reveal> {
       key: _key,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 600), opacity: _vis ? 1.0 : 0.0,
-        curve: Curves.easeOut,
+        curve: GardenMotion.enter,
         child: AnimatedSlide(
           duration: const Duration(milliseconds: 600),
           offset: _vis ? Offset.zero : const Offset(0, 0.05),
-          curve: Curves.easeOut,
+          curve: GardenMotion.enter,
           child: widget.child,
         ),
       ),

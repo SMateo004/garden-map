@@ -5,14 +5,16 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 /// Los 3 tipos de servicio que aceptan un QR de pago provisional propio
 /// (mientras SIP_ENABLED=false) — deben coincidir con el enum ServiceType
 /// del backend (prisma/schema.prisma).
 const _serviceTypes = [
-  ('PASEO', 'Paseo', Icons.directions_walk_rounded),
-  ('HOSPEDAJE', 'Hospedaje', Icons.home_rounded),
-  ('GUARDERIA', 'Guardería', Icons.pets_rounded),
+  ('PASEO', 'Paseo', GIcon.paseo),
+  ('HOSPEDAJE', 'Hospedaje', GIcon.inicio),
+  ('GUARDERIA', 'Guardería', GIcon.huella),
 ];
 
 const double _kAmountRowHeight = 62.0;
@@ -213,7 +215,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
     _amountScrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
+      curve: GardenMotion.enter,
     );
   }
 
@@ -266,9 +268,9 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(11),
                             child: Image.network(_urls[serviceType]!, fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                                errorBuilder: (_, __, ___) => const GardenIcon(GIcon.sinImagen, size: GIconSize.lg, color: GardenColors.error)),
                           )
-                        : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 36),
+                        : GardenIcon(GIcon.pagarQr, size: GIconSize.xl, color: subtextColor.withValues(alpha: 0.4)),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -276,7 +278,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
-                          Icon(icon, color: GardenColors.primary, size: 18),
+                          GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary),
                           const SizedBox(width: 6),
                           Text(label, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                         ]),
@@ -292,7 +294,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                           onPressed: _uploadingServiceType == serviceType ? null : () => _pickAndUpload(serviceType),
                           icon: _uploadingServiceType == serviceType
                               ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                              : const Icon(Icons.upload_rounded, size: 16),
+                              : const GardenIcon(GIcon.subir, size: GIconSize.sm, inheritColor: true),
                           label: Text(_uploadingServiceType == serviceType
                               ? 'Subiendo...'
                               : (_urls[serviceType] != null && _urls[serviceType]!.isNotEmpty ? 'Reemplazar QR' : 'Subir QR')),
@@ -360,7 +362,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   onPressed: _jumpToAmount,
-                  icon: const Icon(Icons.search_rounded),
+                  icon: const GardenIcon(GIcon.buscar, size: GIconSize.lg, inheritColor: true),
                   color: GardenColors.primary,
                   tooltip: 'Ir al monto',
                 ),
@@ -402,9 +404,9 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(7),
                                   child: Image.network(url, fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 16, color: GardenColors.error)),
+                                      errorBuilder: (_, __, ___) => const GardenIcon(GIcon.sinImagen, size: GIconSize.sm, color: GardenColors.error)),
                                 )
-                              : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.35), size: 18),
+                              : GardenIcon(GIcon.pagarQr, size: GIconSize.sm, color: subtextColor.withValues(alpha: 0.35)),
                         ),
                         const SizedBox(width: 12),
                         SizedBox(
@@ -426,7 +428,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                             onPressed: isDeleting ? null : () => _deleteAmountQr(amount),
                             icon: isDeleting
                                 ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
-                                : const Icon(Icons.delete_outline_rounded, size: 18),
+                                : const GardenIcon(GIcon.eliminar, size: GIconSize.sm, inheritColor: true),
                             color: GardenColors.error,
                             tooltip: 'Quitar QR',
                             visualDensity: VisualDensity.compact,
@@ -435,7 +437,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                           onPressed: isUploading ? null : () => _pickAndUploadAmount(amount),
                           icon: isUploading
                               ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
-                              : Icon(hasQr ? Icons.autorenew_rounded : Icons.upload_rounded, size: 18),
+                              : GardenIcon(hasQr ? GIcon.repetir : GIcon.subir, size: GIconSize.sm, inheritColor: true),
                           color: GardenColors.primary,
                           tooltip: hasQr ? 'Reemplazar' : 'Subir QR',
                           visualDensity: VisualDensity.compact,

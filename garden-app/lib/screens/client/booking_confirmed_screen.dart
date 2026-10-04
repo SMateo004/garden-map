@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 class BookingConfirmedScreen extends StatelessWidget {
   final String bookingId;
@@ -51,7 +52,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.0, end: 1.0),
                     duration: const Duration(milliseconds: 700),
-                    curve: Curves.elasticOut,
+                    curve: GardenMotion.pop,
                     builder: (context, value, _) {
                       return Transform.scale(
                         scale: value,

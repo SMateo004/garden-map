@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 
 /// Panel admin: chat de soporte — inbox estilo WhatsApp. Lista de
 /// conversaciones a la izquierda (todas persistentes, ver comentario en
@@ -122,7 +124,7 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
                   children: [
                     Text('Soporte', style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800)),
                     const Spacer(),
-                    IconButton(icon: Icon(Icons.refresh_rounded, color: subtext), onPressed: () => _loadThreads()),
+                    IconButton(icon: GardenIcon(GIcon.repetir, size: GIconSize.lg, color: subtext), onPressed: () => _loadThreads()),
                   ],
                 ),
               ),
@@ -198,7 +200,7 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
         Expanded(
           child: selected == null
               ? Center(
-                  child: Text('Elegí una conversación', style: TextStyle(color: subtext, fontSize: 14)),
+                  child: Text('Elige una conversación', style: TextStyle(color: subtext, fontSize: 14)),
                 )
               : _ThreadDetail(
                   key: ValueKey(_selectedThreadId),
@@ -225,9 +227,9 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'ESCALATED' => ('🧑‍💼 Necesita atención', const Color(0xFFE58A00)),
-      'RESOLVED' => ('✅ Resuelto', GardenColors.success),
-      _ => ('🌿 Bot atendiendo', GardenColors.primary),
+      'ESCALATED' => ('Necesita atención', const Color(0xFFE58A00)),
+      'RESOLVED' => ('Resuelto', GardenColors.success),
+      _ => ('Bot atendiendo', GardenColors.primary),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -327,7 +329,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
     _scrollController.animateTo(
       _scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+      curve: GardenMotion.enter,
     );
   }
 
@@ -449,7 +451,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
                     onPressed: _resolving ? null : _resolve,
                     icon: _resolving
                         ? const SizedBox(width: 14, height: 14, child: GardenLoadingIndicator(size: 14))
-                        : const Icon(Icons.check_circle_outline_rounded, size: 16),
+                        : const GardenIcon(GIcon.confirmado, size: GIconSize.sm, inheritColor: true),
                     label: const Text('Marcar resuelto', style: TextStyle(fontSize: 12.5)),
                   ),
               ],
@@ -470,7 +472,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
                       final aligned = isAdmin || isBot; // "nuestro lado" de la conversación
                       final createdAt = DateTime.tryParse(m['createdAt'] as String? ?? '')?.toLocal();
                       final hh = createdAt == null ? '' : '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-                      final label = isBot ? '🌿 Asistente' : isAdmin ? '🧑‍💼 Vos' : null;
+                      final label = isBot ? 'Asistente' : isAdmin ? 'Vos' : null;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Column(
@@ -549,7 +551,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
                       padding: const EdgeInsets.all(10),
                       child: _sending
                           ? const SizedBox(width: 20, height: 20, child: GardenLoadingIndicator(size: 20, color: Colors.white))
-                          : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                          : const GardenIcon(GIcon.enviar, size: GIconSize.md, color: Colors.white),
                     ),
                   ),
                 ),

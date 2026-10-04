@@ -1184,7 +1184,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           methodCard(
             method: 'card',
             label: _savedCard != null ? _savedCard!.maskedLabel : 'Tarjeta',
-            iconWidget: Icon(brandIcon(_savedCard?.brand ?? CardBrand.unknown), color: cardIconColor, size: 26),
+            iconWidget: GardenIcon(brandIcon(_savedCard?.brand ?? CardBrand.unknown), color: cardIconColor, size: GIconSize.lg),
             enabled: _cardPaymentEnabled,
             onTap: _onTapCardMethod,
           ),

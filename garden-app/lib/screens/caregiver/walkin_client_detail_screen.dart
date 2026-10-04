@@ -186,11 +186,11 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 if ((c['phone'] as String?)?.isNotEmpty == true)
-                                  _infoRow(Icons.phone_outlined, c['phone'] as String, textColor, subtextColor),
+                                  _infoRow(GIcon.telefono, c['phone'] as String, textColor, subtextColor),
                                 if ((c['email'] as String?)?.isNotEmpty == true)
-                                  _infoRow(Icons.email_outlined, c['email'] as String, textColor, subtextColor),
+                                  _infoRow(GIcon.correo, c['email'] as String, textColor, subtextColor),
                                 if ((c['notes'] as String?)?.isNotEmpty == true)
-                                  _infoRow(Icons.notes_rounded, c['notes'] as String, textColor, subtextColor),
+                                  _infoRow(GIcon.nota, c['notes'] as String, textColor, subtextColor),
                                 if ((c['phone'] as String?)?.isNotEmpty != true &&
                                     (c['email'] as String?)?.isNotEmpty != true &&
                                     (c['notes'] as String?)?.isNotEmpty != true)
@@ -238,12 +238,12 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
     );
   }
 
-  Widget _infoRow(IconData icon, String text, Color textColor, Color subtextColor) => Padding(
+  Widget _infoRow(GIcon icon, String text, Color textColor, Color subtextColor) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 16, color: subtextColor),
+            GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
             const SizedBox(width: 8),
             Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 13))),
           ],

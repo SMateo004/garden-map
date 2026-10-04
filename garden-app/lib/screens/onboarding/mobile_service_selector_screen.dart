@@ -10,6 +10,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../client/my_data_screen.dart';
+import '../../theme/garden_motion.dart';
 
 class MobileServiceSelectorScreen extends StatefulWidget {
   const MobileServiceSelectorScreen({super.key});
@@ -50,39 +51,39 @@ class _MobileServiceSelectorScreenState
 
     _headerFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.0, 0.4, curve: Curves.easeOut)),
+          curve: const Interval(0.0, 0.4, curve: GardenMotion.enter)),
     );
     _headerSlide =
         Tween<Offset>(begin: const Offset(0, -0.2), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.0, 0.4, curve: Curves.easeOut)),
+          curve: const Interval(0.0, 0.4, curve: GardenMotion.enter)),
     );
     _card1Fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.25, 0.65, curve: Curves.easeOut)),
+          curve: const Interval(0.25, 0.65, curve: GardenMotion.enter)),
     );
     _card1Slide =
         Tween<Offset>(begin: const Offset(-0.2, 0), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.25, 0.65, curve: Curves.easeOut)),
+          curve: const Interval(0.25, 0.65, curve: GardenMotion.enter)),
     );
     _card2Fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.45, 0.80, curve: Curves.easeOut)),
+          curve: const Interval(0.45, 0.80, curve: GardenMotion.enter)),
     );
     _card2Slide =
         Tween<Offset>(begin: const Offset(0.2, 0), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.45, 0.80, curve: Curves.easeOut)),
+          curve: const Interval(0.45, 0.80, curve: GardenMotion.enter)),
     );
     _card3Fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.60, 1.0, curve: Curves.easeOut)),
+          curve: const Interval(0.60, 1.0, curve: GardenMotion.enter)),
     );
     _card3Slide =
         Tween<Offset>(begin: const Offset(-0.2, 0), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.60, 1.0, curve: Curves.easeOut)),
+          curve: const Interval(0.60, 1.0, curve: GardenMotion.enter)),
     );
 
     _entranceCtrl.forward();

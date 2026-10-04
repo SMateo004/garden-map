@@ -5,6 +5,7 @@ import '../services/cities_service.dart';
 import '../services/zones_service.dart';
 import 'address_map_picker.dart';
 import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 
 /// Sección de dirección reutilizable: abre el mapa picker primero,
 /// luego muestra los campos de texto detallados y un selector de
@@ -369,7 +370,7 @@ class _AddressSectionState extends State<AddressSection> {
         // confirmado — evita mostrar todo el bloque de dirección de una.
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+          curve: GardenMotion.enter,
           alignment: Alignment.topCenter,
           child: (!widget.progressive || hasPin)
               ? Column(
@@ -406,7 +407,7 @@ class _AddressSectionState extends State<AddressSection> {
         // En modo progresivo, recién aparece cuando ya se escribió la calle.
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+          curve: GardenMotion.enter,
           alignment: Alignment.topCenter,
           child: (!widget.progressive || (hasPin && widget.streetController.text.trim().isNotEmpty))
               ? Column(

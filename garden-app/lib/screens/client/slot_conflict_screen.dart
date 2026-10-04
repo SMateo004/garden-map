@@ -210,9 +210,9 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                   children: ['MANANA', 'TARDE', 'NOCHE'].map((slot) {
                     final labels = {'MANANA': 'Mañana', 'TARDE': 'Tarde', 'NOCHE': 'Noche'};
                     final icons = {
-                      'MANANA': Icons.wb_sunny_outlined,
-                      'TARDE': Icons.wb_twilight_rounded,
-                      'NOCHE': Icons.nights_stay_outlined,
+                      'MANANA': GIcon.modoClaro,
+                      'TARDE': GIcon.tarde,
+                      'NOCHE': GIcon.modoOscuro,
                     };
                     final isSelected = _selectedTimeSlot == slot;
                     return Expanded(
@@ -244,11 +244,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                             ),
                             child: Column(
                               children: [
-                                Icon(
-                                  icons[slot]!,
-                                  color: isSelected ? GardenColors.primary : subtextColor,
-                                  size: 22,
-                                ),
+                                GardenIcon(icons[slot]!, size: GIconSize.md, color: isSelected ? GardenColors.primary : subtextColor),
                                 const SizedBox(height: 4),
                                 Text(
                                   labels[slot]!,

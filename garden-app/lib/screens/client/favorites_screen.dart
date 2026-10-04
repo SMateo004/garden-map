@@ -353,7 +353,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     return GardenEmptyState(
       type: GardenEmptyType.caregivers,
       title: 'Aún no tienes favoritos',
-      subtitle: 'Guarda a los cuidadores que más te gusten tocando el ❤️ en su perfil.',
+      subtitle: 'Guarda a los cuidadores que más te gusten tocando el corazón en su perfil.',
       ctaLabel: 'Explorar cuidadores',
       onCta: () => context.go('/marketplace'),
     );

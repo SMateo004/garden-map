@@ -80,13 +80,13 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
         final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-        Widget statCard(String label, String value, IconData icon, {Color? color}) => Container(
+        Widget statCard(String label, String value, GIcon icon, {Color? color}) => Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: color ?? GardenColors.primary, size: 20),
+                  GardenIcon(icon, size: GIconSize.md, color: color ?? GardenColors.primary),
                   const SizedBox(height: 10),
                   Text(value, style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 2),
@@ -128,11 +128,11 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
                         crossAxisSpacing: 10,
                         childAspectRatio: 1.5,
                         children: [
-                          statCard('Ocupación promedio/día', '${_occupancy?['avgOccupancy'] ?? '—'} de ${_occupancy?['capacity'] ?? '—'}', Icons.pets_rounded),
+                          statCard('Ocupación promedio/día', '${_occupancy?['avgOccupancy'] ?? '—'} de ${_occupancy?['capacity'] ?? '—'}', GIcon.huella),
                           statCard(
                             'Día pico',
                             (peak != null && (peak['count'] as int) > 0) ? '${peak['count']} el ${peak['date']}' : 'Sin ocupación en el período',
-                            Icons.trending_up_rounded,
+                            GIcon.estadisticas,
                             color: GardenColors.warning,
                           ),
                         ],
@@ -150,10 +150,10 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
                         crossAxisSpacing: 10,
                         childAspectRatio: 1.5,
                         children: [
-                          statCard('Total cobrado', 'Bs ${((_cash?['totalCollected'] as num?) ?? 0).toStringAsFixed(2)}', Icons.payments_outlined, color: GardenColors.success),
-                          statCard('Promedio por visita', 'Bs ${((_cash?['avgCollected'] as num?) ?? 0).toStringAsFixed(2)}', Icons.calculate_outlined),
-                          statCard('Visitas con monto cargado', '${_cash?['visitsWithAmount'] ?? 0}', Icons.check_circle_outline),
-                          statCard('Total visitas cerradas', '${_cash?['totalCheckedOutVisits'] ?? 0}', Icons.event_available_outlined),
+                          statCard('Total cobrado', 'Bs ${((_cash?['totalCollected'] as num?) ?? 0).toStringAsFixed(2)}', GIcon.billetera, color: GardenColors.success),
+                          statCard('Promedio por visita', 'Bs ${((_cash?['avgCollected'] as num?) ?? 0).toStringAsFixed(2)}', GIcon.calculadora),
+                          statCard('Visitas con monto cargado', '${_cash?['visitsWithAmount'] ?? 0}', GIcon.confirmado),
+                          statCard('Total visitas cerradas', '${_cash?['totalCheckedOutVisits'] ?? 0}', GIcon.calendario),
                         ],
                       ),
                     ],

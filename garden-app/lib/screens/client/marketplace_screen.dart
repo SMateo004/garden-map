@@ -612,7 +612,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ClipRect(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeInOut,
+                    curve: GardenMotion.move,
                     width: _showFilters ? 300.0 : 0.0,
                     child: SizedBox(
                       width: 300,
@@ -637,7 +637,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ClipRect(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeInOut,
+                    curve: GardenMotion.move,
                     width: _showMap ? 420.0 : 0.0,
                     child: SizedBox(
                       width: 420,
@@ -1426,7 +1426,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   // ── Tipo de servicio ──
                   // Chips de ancho natural + scroll horizontal en vez de
                   // Expanded a partes iguales: con 4 opciones de largo muy
-                  // distinto ("Todos" vs "Hospedaje 🏠"), forzar el mismo
+                  // distinto ("Todos" vs "Hospedaje"), forzar el mismo
                   // ancho partía el texto en dos líneas. Así siempre quedan
                   // en una sola línea, tanto en el sidebar web como en mobile.
                   _sectionTitle('Tipo de servicio', textColor),
