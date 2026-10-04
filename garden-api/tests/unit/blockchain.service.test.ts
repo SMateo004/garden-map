@@ -103,7 +103,7 @@ describe('BlockchainService', () => {
       expect(hash).toBe('0xabc123TXHASH');
       expect(mockEscrowContract.createBooking).toHaveBeenCalledWith(
         'booking-1', 'client-1', 'caregiver-1', 300,
-        expect.any(Number), expect.any(Number), 'Max', 'HOSPEDAJE'
+        expect.any(Number), expect.any(Number), '', 'HOSPEDAJE' // sin nombre de mascota on-chain
       );
     });
 
@@ -269,12 +269,12 @@ describe('BlockchainService', () => {
   describe('syncProfileOnChain', () => {
     it('calls syncProfile with role 2 for CAREGIVER', async () => {
       await blockchainService.syncProfileOnChain('user-1', 'Juan Lopez', 'CAREGIVER', false);
-      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-1', 'Juan Lopez', 2, false, '');
+      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-1', '', 2, false, ''); // el nombre nunca va a la cadena pública
     });
 
     it('calls syncProfile with role 1 for CLIENT', async () => {
       await blockchainService.syncProfileOnChain('user-2', 'Maria P', 'CLIENT', true, 'ipfs://hash');
-      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-2', 'Maria P', 1, true, 'ipfs://hash');
+      expect(mockProfileContract.syncProfile).toHaveBeenCalledWith('user-2', '', 1, true, 'ipfs://hash');
     });
 
     it('returns null on error without throwing', async () => {
@@ -305,7 +305,7 @@ describe('BlockchainService', () => {
     it('calls addPetToOwner and returns txHash', async () => {
       const hash = await blockchainService.addPetOnChain('owner-1', 'Max', 'Labrador');
       expect(hash).toBe('0xabc123TXHASH');
-      expect(mockProfileContract.addPetToOwner).toHaveBeenCalledWith('owner-1', 'Max', 'Labrador');
+      expect(mockProfileContract.addPetToOwner).toHaveBeenCalledWith('owner-1', '', 'Labrador');
     });
 
     it('returns null on error', async () => {

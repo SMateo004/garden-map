@@ -22,6 +22,7 @@ import '../../narrative/service_moments.dart';
 import '../../theme/garden_motion.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/tip_sheet.dart';
 import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
@@ -124,7 +125,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Timer? _gpsInfoTimer;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-  bool get _alreadyRated => _booking?['ownerRating'] != null;
+  // ownerRated también queda en true cuando el pago se libera solo (sin nota):
+  // ahí ya no se puede calificar y no hay que mostrar la encuesta.
+  bool get _alreadyRated => _booking?['ownerRated'] == true || _booking?['ownerRating'] != null;
 
   // Setting admin `cardPaymentEnabled` para el chip "Tarjeta" en los sheets
   // de ampliación de tiempo/hospedaje — fail-closed (false) si el fetch
@@ -5853,7 +5856,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    final canSubmit = _surveyRating > 0 && _surveyCommentController.text.trim().isNotEmpty;
+    // El comentario es obligatorio solo si algo salió mal (< 3): ahí hace
+    // falta para el reclamo. Con una buena nota es opcional, como en Uber.
+    final commentRequired = _surveyRating > 0 && _surveyRating < 3;
+    final canSubmit = _surveyRating > 0 &&
+        (!commentRequired || _surveyCommentController.text.trim().isNotEmpty);
     final ratingLabels = ['', 'Muy malo', 'Malo', 'Regular', 'Bueno', 'Excelente'];
     final starColor = _surveyRating >= 4
         ? GardenColors.star
@@ -5971,14 +5978,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 maxLines: 4,
                 style: TextStyle(color: textColor, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Cuéntanos tu experiencia... (requerido)',
+                  hintText: commentRequired
+                      ? 'Cuéntanos qué pasó (requerido)'
+                      : 'Cuéntanos tu experiencia (opcional)',
                   hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.5), fontSize: 14),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.all(18),
                 ),
               ),
             ),
-            if (_surveyShowValidationError && _surveyCommentController.text.trim().isEmpty) ...[
+            if (_surveyShowValidationError && commentRequired && _surveyCommentController.text.trim().isEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -5986,7 +5995,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'El comentario es obligatorio para calificar al cuidador',
+                      'Cuéntanos qué pasó para poder ayudarte con el reclamo',
                       style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -6141,7 +6150,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/confirm-receipt'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'rating': rating, 'comment': comment, 'skillTags': skillTags ?? []}),
+        body: jsonEncode({
+          'rating': rating,
+          // Sin comentario se omite la clave (el schema la acepta opcional, no null).
+          if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+          'skillTags': skillTags ?? [],
+        }),
       );
       debugPrint('SERVICE: Confirmation response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
@@ -6159,6 +6173,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           return;
         }
 
+        // Misma propina que desde "Mis reservas" (widgets/tip_sheet.dart).
+        await showTipSheet(context, bookingId: widget.bookingId, baseUrl: _baseUrl, token: _token);
+        if (!mounted) return;
         _showSmartContractDialog(rating);
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');

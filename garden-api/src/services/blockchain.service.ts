@@ -42,6 +42,16 @@ const GARDEN_PROFILES_ABI = [
 // reintentar y, si se agotan los intentos, avisar al admin — antes de este
 // cambio los catch() de los llamadores nunca se disparaban porque el método
 // nunca fallaba "hacia afuera", así que las fallas quedaban invisibles.
+
+// Privacidad (2026-10-04): la cadena es pública y no se puede borrar. Los
+// Términos (sección 19) prometen que ahí solo van ids internos, montos, fechas,
+// estados y veredictos — "no datos personales directos". Antes se enviaban en
+// texto plano el nombre completo de cada usuario y el nombre de cada mascota.
+// Los contratos no exigen esos campos, así que se mandan vacíos; la identidad
+// queda referida solo por el id interno (uuid seudónimo). Los logs del
+// servidor (privados) siguen mostrando los nombres para soporte.
+const OFF_CHAIN = '';
+
 class BlockchainService {
     private provider: ethers.Provider | null = null;
     private wallet: ethers.Wallet | null = null;
@@ -122,7 +132,7 @@ class BlockchainService {
 
             const tx = await (this.escrowContract as any).createBooking(
                 bookingId, clientId, caregiverId, Math.floor(amountBs),
-                startTimestamp, endTimestamp, petName, serviceType
+                startTimestamp, endTimestamp, OFF_CHAIN, serviceType
             );
 
             const receipt = await tx.wait();
@@ -256,7 +266,7 @@ class BlockchainService {
 
         try {
             const roleIdx = role === 'CLIENT' ? 1 : 2;
-            const tx = await (this.profileContract as any).syncProfile(userId, name, roleIdx, isVerified, metadata);
+            const tx = await (this.profileContract as any).syncProfile(userId, OFF_CHAIN, roleIdx, isVerified, metadata);
             const receipt = await tx.wait();
             logger.info('[Blockchain] Profile synced on-chain', { userId, txHash: receipt.hash });
             return receipt.hash;
@@ -282,7 +292,7 @@ class BlockchainService {
     async addPetOnChain(ownerId: string, petName: string, breed: string): Promise<string | null> {
         if (!this.ensureInitialized() || !this.profileContract) return null;
         try {
-            const tx = await (this.profileContract as any).addPetToOwner(ownerId, petName, breed);
+            const tx = await (this.profileContract as any).addPetToOwner(ownerId, OFF_CHAIN, breed);
             const receipt = await tx.wait();
             logger.info('[Blockchain] Pet added on-chain', { ownerId, petName, txHash: receipt.hash });
             return receipt.hash;
