@@ -482,3 +482,26 @@ Map<String, dynamic>? pickHeroBooking(List<Map<String, dynamic>> bookings, {requ
   }
   return null;
 }
+
+/// Reserva protagonista del inicio del cuidador: lo que lo necesita ahora.
+///   en curso → solicitud por responder → Meet & Greet → la confirmada más
+///   próxima (hasta 3 h después de su hora de inicio).
+Map<String, dynamic>? pickCaregiverHeroBooking(List<Map<String, dynamic>> bookings, {required DateTime now}) {
+  for (final status in const ['IN_PROGRESS', 'WAITING_CAREGIVER_APPROVAL', 'PENDING_MG']) {
+    for (final b in bookings) {
+      if (b['status'] == status) return b;
+    }
+  }
+  Map<String, dynamic>? soonest;
+  DateTime? soonestStart;
+  for (final b in bookings) {
+    if (b['status'] != 'CONFIRMED') continue;
+    final start = BookingStoryContext.bookingStart(b);
+    if (start == null || now.isAfter(start.add(const Duration(hours: 3)))) continue;
+    if (soonestStart == null || start.isBefore(soonestStart)) {
+      soonest = b;
+      soonestStart = start;
+    }
+  }
+  return soonest;
+}

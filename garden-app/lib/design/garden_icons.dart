@@ -100,6 +100,7 @@ enum GIcon {
   chat(Ph.chatCircleDots),
   foto(Ph.camera),
   galeria(Ph.image),
+  video(Ph.videoCamera),
   ubicacion(Ph.mapPin),
   enviar(Ph.paperPlaneTilt),
   nota(Ph.notepad),

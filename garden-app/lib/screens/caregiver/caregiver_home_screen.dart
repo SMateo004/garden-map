@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
+import '../../narrative/booking_story.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
@@ -44,7 +47,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   String _caregiverToken = '';
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
-  Map<String, dynamic>? _nextBookingWithin24h;
   String _userName = 'Cuidador';
 
 
@@ -109,7 +111,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
 
       _computeDayStatuses();
-      _computeNextBookingWithin24h();
     } catch (e) {
       // silencioso
     } finally {
@@ -337,39 +338,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         ],
       ),
     );
-  }
-
-  void _computeNextBookingWithin24h() {
-    final now = DateTime.now();
-    Map<String, dynamic>? nearest;
-    Duration? nearestDiff;
-    for (final b in _bookings) {
-      if (b['status'] != 'CONFIRMED') continue;
-      final dateStr = b['walkDate'] as String? ?? b['startDate'] as String?;
-      if (dateStr == null) continue;
-      final timeStr = b['startTime'] as String?;
-      try {
-        final parts = dateStr.split('-');
-        final timeParts = timeStr?.split(':');
-        final hour = timeParts != null && timeParts.isNotEmpty ? int.tryParse(timeParts.first) ?? 9 : 9;
-        final minute = timeParts != null && timeParts.length > 1 ? int.tryParse(timeParts.last) ?? 0 : 0;
-        final serviceTime = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), hour, minute);
-        final diff = serviceTime.difference(now);
-        if (diff.isNegative || diff.inHours >= 24) continue;
-        final nd = nearestDiff;
-        if (nd == null || diff < nd) {
-          nearest = b;
-          nearestDiff = diff;
-        }
-      } catch (e) {
-        // Antes era completamente silencioso: si walkDate/startTime venía
-        // malformado, esa reserva simplemente se excluía del banner de
-        // "servicio en menos de 24h" sin ningún rastro — el cuidador podía
-        // no enterarse de un servicio inminente por un dato mal formado.
-        debugPrint('Error calculando urgencia de reserva ${b['id']}: $e');
-      }
-    }
-    if (mounted) setState(() => _nextBookingWithin24h = nearest);
   }
 
   Future<void> _loadDashboardStats() async {
@@ -770,38 +738,18 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final completeness = (stats?['profileCompleteness'] as num? ?? 0).toInt();
     final acceptanceRate = (stats?['acceptanceRate'] as num? ?? 100).toInt();
     final pendingCount = (stats?['pendingBookings'] as int? ?? 0);
-    final nb = _nextBookingWithin24h;
 
-    // Banner 24h compartido entre móvil y web
-    Widget? urgentBanner;
-    if (nb != null) {
-      urgentBanner = Container(
-        margin: EdgeInsets.fromLTRB(kIsWeb ? 0 : 16, kIsWeb ? 0 : 12, kIsWeb ? 0 : 16, kIsWeb ? 16 : 0),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: GardenColors.warning.withValues(alpha: 0.10),
-          borderRadius: GardenRadius.lg_,
-          border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
-        ),
-        child: Row(children: [
-          const Text('⏰', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Servicio próximo', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13)),
-            Text('${nb['petName'] ?? '—'} · hoy a las ${nb['startTime'] ?? nb['walkDate'] ?? ''}',
-                style: TextStyle(color: subtextColor, fontSize: 12)),
-          ])),
-          GardenButton(label: 'Ver', height: 32, width: 56, onPressed: () => setState(() => _selectedTab = 2)),
-        ]),
-      );
-    }
+    // Reserva protagonista: la que más necesita al cuidador ahora (en curso,
+    // solicitud por responder, Meet & Greet o la próxima confirmada). Mismo
+    // componente y mismo relato que ve el dueño, contado desde este lado.
+    final heroBooking = pickCaregiverHeroBooking(_bookings, now: DateTime.now());
+    final Widget? heroCard = heroBooking == null ? null : _buildHeroBooking(heroBooking);
 
     // ── WEB: layout de 2 columnas centrado ────────────────────────────────────
     if (kIsWeb) {
       return RefreshIndicator(
         onRefresh: () async {
           await Future.wait([_loadDashboardStats(), _loadBookings()]);
-          _computeNextBookingWithin24h();
         },
         color: GardenColors.primary,
         child: SingleChildScrollView(
@@ -820,7 +768,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     Text('Bienvenido, ${_userName.split(' ').first}', style: TextStyle(color: subtextColor, fontSize: 13)),
                     const SizedBox(height: 20),
 
-                    if (urgentBanner != null) ...[urgentBanner, const SizedBox(height: 16)],
+                    if (heroCard != null) ...[
+                      ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640), child: heroCard),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── 2 COLUMNS ──────────────────────────────────────────
                     IntrinsicHeight(
@@ -838,14 +789,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                   surface: surface, textColor: textColor,
                                   subtextColor: subtextColor, borderColor: borderColor,
                                 ),
-                                // Reserva en curso
-                                if (_bookings.any((b) => b['status'] == 'IN_PROGRESS')) ...[
-                                  _buildActiveBookingCard(
-                                    _bookings.firstWhere((b) => b['status'] == 'IN_PROGRESS'),
-                                    surface, textColor, subtextColor, borderColor,
-                                  ),
-                                  const SizedBox(height: 16),
-                                ],
                                 // Reservas confirmadas
                                 ..._buildConfirmedBookingsSection(
                                   surface: surface, textColor: textColor,
@@ -881,19 +824,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                   reviewCount: allTime?['reviewCount'] as int? ?? 0,
                                   pendingCount: pendingCount,
                                 ),
+                                const SizedBox(height: 10),
+                                _buildMonthPride(stats, textColor, subtextColor, surface, borderColor),
                                 const SizedBox(height: 14),
                                 // Métricas en 2 chips
                                 Row(children: [
                                   Expanded(child: _totalStatChip(
                                     '${allTime?['bookings'] ?? 0}',
-                                    Icons.check_circle_outline_rounded,
+                                    GIcon.terminado,
                                     GardenColors.success, surface, borderColor, subtextColor,
                                     sublabel: 'Servicios',
                                   )),
                                   const SizedBox(width: 8),
                                   Expanded(child: _totalStatChip(
                                     '$acceptanceRate%',
-                                    Icons.thumb_up_outlined,
+                                    GIcon.confirmado,
                                     GardenColors.secondary, surface, borderColor, subtextColor,
                                     sublabel: 'Aceptación',
                                   )),
@@ -936,34 +881,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       );
     }
 
-    // ── MOBILE: layout original ───────────────────────────────────────────────
+    // ── MOBILE ────────────────────────────────────────────────────────────────
     return Column(
       children: [
-        if (nb != null)
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: GardenColors.warning.withValues(alpha: 0.12),
-              borderRadius: GardenRadius.lg_,
-              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
-            ),
-            child: Row(children: [
-              const Text('⏰', style: TextStyle(fontSize: 20)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Servicio próximo', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13)),
-                Text('${nb['petName'] ?? '—'} · hoy a las ${nb['startTime'] ?? nb['walkDate'] ?? ''}',
-                    style: TextStyle(color: subtextColor, fontSize: 12)),
-              ])),
-              GardenButton(label: 'Ver', height: 34, width: 60, onPressed: () => setState(() => _selectedTab = 2)),
-            ]),
-          ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
               await Future.wait([_loadDashboardStats(), _loadBookings()]);
-              _computeNextBookingWithin24h();
             },
             color: GardenColors.primary,
             child: SingleChildScrollView(
@@ -972,6 +896,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (heroCard != null) ...[heroCard, const SizedBox(height: 16)],
                   _buildWelcomeCard(
                     isDark: isDark, surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor,
@@ -979,14 +904,12 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     reviewCount: allTime?['reviewCount'] as int? ?? 0,
                     pendingCount: pendingCount,
                   ),
+                  const SizedBox(height: 10),
+                  _buildMonthPride(stats, textColor, subtextColor, surface, borderColor),
                   const SizedBox(height: 16),
                   PriceSuggestionBanner(token: _caregiverToken, baseUrl: _baseUrl, onPriceUpdated: _loadCaregiverProfile),
                   const SizedBox(height: 8),
                   ..._buildPendingRequestsSection(surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  if (_bookings.any((b) => b['status'] == 'IN_PROGRESS')) ...[
-                    _buildActiveBookingCard(_bookings.firstWhere((b) => b['status'] == 'IN_PROGRESS'), surface, textColor, subtextColor, borderColor),
-                    const SizedBox(height: 16),
-                  ],
                   ..._buildConfirmedBookingsSection(surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                   Text('Próxima reserva', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
@@ -997,9 +920,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     const SizedBox(height: 16),
                   ],
                   Row(children: [
-                    Expanded(child: _totalStatChip('${allTime?['bookings'] ?? 0} servicios totales', Icons.check_circle_outline_rounded, GardenColors.success, surface, borderColor, subtextColor)),
+                    Expanded(child: _totalStatChip('${allTime?['bookings'] ?? 0} servicios totales', GIcon.terminado, GardenColors.success, surface, borderColor, subtextColor)),
                     const SizedBox(width: 8),
-                    Expanded(child: _totalStatChip('$acceptanceRate% aceptación', Icons.thumb_up_outlined, GardenColors.secondary, surface, borderColor, subtextColor)),
+                    Expanded(child: _totalStatChip('$acceptanceRate% aceptación', GIcon.confirmado, GardenColors.secondary, surface, borderColor, subtextColor)),
                   ]),
                   const SizedBox(height: 16),
                   if (_bookings.isNotEmpty) ...[
@@ -1016,6 +939,100 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHeroBooking(Map<String, dynamic> b) {
+    final id = b['id'] as String? ?? '';
+    Future<void> openService() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ServiceExecutionScreen(bookingId: id, role: 'CAREGIVER')),
+      );
+      if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
+    }
+
+    void openChat() {
+      final clientName = (b['clientName'] as String?) ?? 'Cliente';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            bookingId: id,
+            otherPersonName: clientName,
+            otherPersonPhoto: b['clientPhoto'] as String?,
+            token: _caregiverToken,
+            role: 'CAREGIVER',
+            bookingStatus: b['status'] as String?,
+          ),
+        ),
+      );
+    }
+
+    final status = b['status'] as String?;
+    return GardenBookingHeroCard(
+      booking: b,
+      caregiverView: true,
+      onTap: status == 'WAITING_CAREGIVER_APPROVAL' ? () => setState(() => _selectedTab = 2) : openService,
+      onChat: openChat,
+      onAction: (action) {
+        switch (action) {
+          case StoryAction.respond:
+            setState(() => _selectedTab = 2);
+          case StoryAction.chat:
+            openChat();
+          case StoryAction.viewMeet:
+            context.push('/meet-and-greet/$id', extra: {'role': 'CAREGIVER'});
+          default:
+            openService();
+        }
+      },
+    );
+  }
+
+  /// Orgullo y progreso del mes (plan, interfaz M): lo ganado y lo hecho,
+  /// con datos que ya manda /caregiver/dashboard-stats.
+  Widget _buildMonthPride(Map<String, dynamic>? stats, Color textColor, Color subtextColor,
+      Color surface, Color borderColor) {
+    final month = stats?['thisMonth'] as Map<String, dynamic>?;
+    if (month == null) return const SizedBox.shrink();
+    final earnings = (month['earnings'] as num? ?? 0).toDouble();
+    final bookings = month['bookings'] as int? ?? 0;
+    final hours = (month['hoursWorked'] as num? ?? 0).toDouble();
+    String fmtHours(double h) => h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toStringAsFixed(1).replaceAll('.', ',');
+
+    Widget item(GIcon icon, String value, String label, Color color) => Expanded(
+          child: Row(children: [
+            GardenIcon(icon, color: color, state: GIconState.active),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GardenText.metadata.copyWith(color: textColor, fontSize: 15)),
+                Text(label, style: GardenText.caption.copyWith(color: subtextColor)),
+              ]),
+            ),
+          ]),
+        );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Este mes', style: GardenText.labelSmall.copyWith(color: subtextColor)),
+        const SizedBox(height: 8),
+        Row(children: [
+          item(GIcon.billetera, 'Bs ${earnings.toStringAsFixed(0)}', 'ganados', GardenColors.primary),
+          item(GIcon.terminado, '$bookings', bookings == 1 ? 'servicio' : 'servicios', GardenColors.successDark),
+          item(GIcon.reloj, '${fmtHours(hours)} h', 'cuidando', GardenColors.warning),
+        ]),
+      ]),
     );
   }
 
@@ -1295,7 +1312,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 const Text('Esperando tu respuesta',
                   style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
                 const Spacer(),
-                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 20)),
+                GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje),
+                    size: GIconSize.lg, state: GIconState.active),
               ],
             ),
           ),
@@ -1363,7 +1381,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Text(
-                        '🤝 Meet & Greet incluido — coordina antes de aceptar',
+                        'Meet & Greet incluido: coordina antes de aceptar',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: GardenColors.success, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
@@ -1567,7 +1585,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
                 ),
                 const Spacer(),
-                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 20)),
+                GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje),
+                    size: GIconSize.lg, state: GIconState.active),
               ],
             ),
           ),
@@ -1718,8 +1737,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 final d = DateTime.parse(dateStr);
                 dayLabel = '${d.day} ${months[d.month - 1]}';
               } catch (_) {}
-              final slotEmoji = slot == 'MANANA' ? '🌤' : slot == 'TARDE' ? '🌇' : '🌙';
-              final label = time != null ? '$dayLabel · $time' : '$dayLabel $slotEmoji';
+              final slotLabel = slot == 'MANANA' ? 'mañana' : slot == 'TARDE' ? 'tarde' : 'noche';
+              final label = time != null ? '$dayLabel · $time' : '$dayLabel · $slotLabel';
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -1755,102 +1774,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   }
 
   // ── RESERVA EN CURSO ────────────────────────────────────────────────────
-  Widget _buildActiveBookingCard(
-    Map<String, dynamic> booking,
-    Color surface,
-    Color textColor,
-    Color subtextColor,
-    Color borderColor,
-  ) {
-    final petName    = booking['petName']    as String? ?? '—';
-    final serviceType = booking['serviceType'] as String? ?? '';
-    final dateStr    = booking['walkDate']   as String? ?? booking['startDate'] as String?;
-    final startTime  = booking['startTime']  as String?;
-    final bookingId  = booking['id']         as String? ?? '';
-    final isPaseo    = serviceType == 'PASEO';
-
-    void openService() async {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
-        ),
-      );
-      // Igual que en la tarjeta de "Reservas recientes": refrescar al volver
-      // para que esta card deje de aparecer como "EN CURSO" si el servicio ya
-      // terminó/canceló mientras estaba abierto.
-      if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
-    }
-
-    return GestureDetector(
-      onTap: openService,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              GardenColors.primary.withValues(alpha: 0.18),
-              GardenColors.primary.withValues(alpha: 0.05),
-            ],
-          ),
-          borderRadius: GardenRadius.xl_,
-          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.45), width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary,
-                    borderRadius: GardenRadius.full_,
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.radio_button_checked, color: Colors.white, size: 10),
-                      SizedBox(width: 5),
-                      Text('EN CURSO', style: TextStyle(
-                        color: Colors.white, fontSize: 11,
-                        fontWeight: FontWeight.w800, letterSpacing: 0.5,
-                      )),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 26)),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(petName,
-              style: TextStyle(color: textColor, fontSize: 22,
-                fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-            const SizedBox(height: 4),
-            Text(
-              '${isPaseo ? 'Paseo' : 'Hospedaje'}'
-              '${dateStr != null ? ' · ${_formatNextDate(dateStr)}' : ''}'
-              '${startTime != null ? ' · $startTime' : ''}',
-              style: TextStyle(color: subtextColor, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            GardenButton(
-              label: '🔴  Ver servicio en curso',
-              height: 44,
-              color: GardenColors.primary,
-              onPressed: openService,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── PRÓXIMA RESERVA ─────────────────────────────────────────────────────
   Widget _buildNextBookingCard({
     required Map<String, dynamic>? nextBooking,
     required Color surface,
@@ -1920,9 +1843,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: Text(
-                serviceType == 'PASEO' ? '🦮' : '🏠',
-                style: const TextStyle(fontSize: 22),
+              child: GardenIcon(
+                GIcon.forService(GardenService.fromApi(serviceType) ?? GardenService.hospedaje),
+                size: GIconSize.lg,
+                state: GIconState.active,
               ),
             ),
           ),
@@ -2077,7 +2001,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   // ── STAT CHIP TOTAL ─────────────────────────────────────────────────────
   Widget _totalStatChip(
     String label,
-    IconData icon,
+    GIcon icon,
     Color color,
     Color surface,
     Color borderColor,
@@ -2100,7 +2024,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               color: color.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: Center(child: GardenIcon(icon, color: color, size: GIconSize.sm, state: GIconState.active)),
           ),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2121,7 +2045,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 14),
+          GardenIcon(icon, color: color, size: GIconSize.sm, state: GIconState.active),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -2138,7 +2062,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Buenos días,';
-    if (hour < 18) return 'Buenas tardes,';
+    if (hour < 19) return 'Buenas tardes,';
     return 'Buenas noches,';
   }
 

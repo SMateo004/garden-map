@@ -88,6 +88,7 @@ class Ph {
   static const tree = PhGlyph(IconData(0xe6da, fontFamily: _reg), IconData(0xe6db, fontFamily: _duo), IconData(0xe6da, fontFamily: _duo));
   static const user = PhGlyph(IconData(0xe4c2, fontFamily: _reg), IconData(0xe4c3, fontFamily: _duo), IconData(0xe4c2, fontFamily: _duo));
   static const users = PhGlyph(IconData(0xe4d6, fontFamily: _reg), IconData(0xe4d7, fontFamily: _duo), IconData(0xe4d6, fontFamily: _duo));
+  static const videoCamera = PhGlyph(IconData(0xe4da, fontFamily: _reg), IconData(0xe4db, fontFamily: _duo), IconData(0xe4da, fontFamily: _duo));
   static const wallet = PhGlyph(IconData(0xe68a, fontFamily: _reg), IconData(0xe68b, fontFamily: _duo), IconData(0xe68a, fontFamily: _duo));
   static const warningCircle = PhGlyph(IconData(0xe4e2, fontFamily: _reg), IconData(0xe4e3, fontFamily: _duo), IconData(0xe4e2, fontFamily: _duo));
   static const x = PhGlyph(IconData(0xe4f6, fontFamily: _reg), IconData(0xe4f7, fontFamily: _duo), IconData(0xe4f6, fontFamily: _duo));

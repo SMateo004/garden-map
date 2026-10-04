@@ -18,6 +18,7 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_live_hero.dart';
 import '../../design/garden_pet_avatar.dart';
 import '../../narrative/booking_story.dart';
+import '../../narrative/service_moments.dart';
 import '../../theme/garden_motion.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
@@ -94,6 +95,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   // Photo/video upload state
   bool _isSendingPhoto = false;
+  // Notas rápidas del cuidador: la que se está enviando y las enviadas hace
+  // poco (se apagan 60 s para no mandar la misma dos veces por error).
+  QuickNote? _sendingNote;
+  final Set<QuickNote> _recentNotes = {};
   bool _isSendingVideo = false;
 
   // Photo reminder timers (caregiver side) — persisted to SharedPreferences so
@@ -352,6 +357,150 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         });
       }
     } catch (_) {}
+  }
+
+  /// Eventos NOTE del servicio, el más reciente primero.
+  List<Map<String, dynamic>> get _noteEvents => (_booking?['serviceEvents'] as List? ?? [])
+      .map((e) => Map<String, dynamic>.from(e as Map))
+      .where((e) => e['type'] == 'NOTE' && (e['description']?.toString().isNotEmpty ?? false))
+      .toList()
+      .reversed
+      .toList();
+
+  Future<void> _sendQuickNote(QuickNote note) async {
+    if (_sendingNote != null || _recentNotes.contains(note)) return;
+    HapticFeedback.lightImpact();
+    setState(() => _sendingNote = note);
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'type': 'NOTE', 'description': note.describe(_booking?['petName'] as String?)}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        final owner = (_booking?['clientName'] as String? ?? 'El dueño').split(' ').first;
+        setState(() => _recentNotes.add(note));
+        Future.delayed(const Duration(seconds: 60), () {
+          if (mounted) setState(() => _recentNotes.remove(note));
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Listo, $owner lo ve en los momentos del servicio'),
+          duration: const Duration(seconds: 2),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(data['error']?['message']?.toString() ?? 'No se pudo enviar la nota. Intenta de nuevo.'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Sin conexión. La nota no se envió.'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _sendingNote = null);
+    }
+  }
+
+  Widget _buildQuickNotes(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final owner = (_booking?['clientName'] as String? ?? 'al dueño').split(' ').first;
+    final ink = _svc.ink(themeNotifier.isDark);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Cuéntale a $owner', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+        const SizedBox(height: 4),
+        Text('Un toque y lo ve al instante', style: TextStyle(color: subtextColor, fontSize: 12)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final n in QuickNote.values)
+              Builder(builder: (_) {
+                final sent = _recentNotes.contains(n);
+                final sending = _sendingNote == n;
+                return Semantics(
+                  button: true,
+                  label: sent ? '${n.chip}, enviado' : n.chip,
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    onTap: (sent || _sendingNote != null) ? null : () => _sendQuickNote(n),
+                    child: AnimatedContainer(
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: sent ? _svc.soft(themeNotifier.isDark) : surface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: sent ? ink.withValues(alpha: 0.5) : borderColor),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        sending
+                            ? SizedBox(width: 20, height: 20, child: GardenLoadingIndicator(size: 18, color: ink))
+                            : GardenIcon(sent ? GIcon.confirmado : n.icon,
+                                color: ink, state: sent ? GIconState.active : GIconState.idle),
+                        const SizedBox(width: 6),
+                        Text(n.chip,
+                            style: TextStyle(
+                                color: sent ? ink : textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                      ]),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoteMoments(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final notes = _noteEvents.take(6).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Lo que cuenta ${(_booking?['caregiverName'] as String? ?? 'tu cuidador').split(' ').first}',
+            GIcon.nota, textColor, subtextColor),
+        Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(children: [
+            for (var i = 0; i < notes.length; i++) ...[
+              if (i > 0) Divider(height: 1, color: borderColor, indent: 52),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                child: Row(children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(color: _svc.soft(themeNotifier.isDark), shape: BoxShape.circle),
+                    child: Center(
+                      child: GardenIcon(iconForNote(notes[i]['description'] as String?),
+                          size: GIconSize.sm, color: _svc.ink(themeNotifier.isDark), state: GIconState.active),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(notes[i]['description'] as String,
+                        style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  ),
+                  Text(_formatEventTime(notes[i]['timestamp']?.toString() ?? ''),
+                      style: GardenText.metadata.copyWith(color: subtextColor, fontSize: 11)),
+                ]),
+              ),
+            ],
+          ]),
+        ),
+      ],
+    );
   }
 
   GardenService get _svc =>
@@ -2825,6 +2974,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
+                  // ── Notas del cuidador ("Luna tomó agua") ──────────────────
+                  if (_noteEvents.isNotEmpty) ...[
+                    _buildNoteMoments(textColor, subtextColor, surface, borderColor),
+                    const SizedBox(height: 20),
+                  ],
+
                   // ── Marcar servicio como terminado (dueño) ──────────────────
                   // Al final de la columna (prioridad más baja) — gateado por
                   // tiempo: solo aparece cuando el tiempo total pagado
@@ -2905,7 +3060,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         child: Row(
           children: [
             _BottomActionBtn(
-              icon: Icons.info_outline_rounded,
+              icon: GIcon.ayuda,
               label: 'Info',
               onTap: _showServiceInfoSheet,
               color: textColor,
@@ -2913,7 +3068,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
             const SizedBox(width: 8),
             _BottomActionBtn(
-              icon: Icons.camera_alt_rounded,
+              icon: GIcon.foto,
               label: 'Pedir foto',
               onTap: _requestPhotoFromCaregiver,
               color: Colors.white,
@@ -2921,13 +3076,15 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
             const SizedBox(width: 8),
             _BottomActionBtn(
-              icon: Icons.chat_bubble_outline_rounded,
+              icon: GIcon.chat,
               label: 'Chat',
               onTap: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) => ChatScreen(
                   bookingId: widget.bookingId,
                   otherPersonName: _booking?['caregiverName'] ?? 'Cuidador',
                   token: _token,
+                  role: 'CLIENT',
+                  bookingStatus: _booking?['status'] as String?,
                 ),
               )),
               color: Colors.white,
@@ -2935,7 +3092,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
             const SizedBox(width: 8),
             _BottomActionBtn(
-              icon: Icons.sos_rounded,
+              icon: GIcon.emergencia,
               label: 'SOS',
               onTap: _showSosDialog,
               color: Colors.white,
@@ -2975,9 +3132,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: isHospedaje
-                    ? [const Color(0xFF7A3200), GardenColors.primaryDark]
-                    : [GardenColors.forest, const Color(0xFF0B5C2E)],
+                colors: _svc.hero,
               ),
             ),
             child: SafeArea(
@@ -3247,6 +3402,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 16),
 
+                  // ── Notas rápidas: un toque y el dueño lo ve en sus momentos ─
+                  _buildQuickNotes(textColor, subtextColor, surface, borderColor),
+                  const SizedBox(height: 20),
+
                   // ── Grid de acciones ─────────────────────────────────────
                   Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(height: 12),
@@ -3255,7 +3414,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     children: [
                       Expanded(
                         child: _ActionTile(
-                          icon: Icons.camera_alt_rounded,
+                          icon: GIcon.foto,
                           label: _isSendingPhoto ? 'Enviando...' : 'Foto',
                           sublabel: 'Obligatorio',
                           color: GardenColors.primary,
@@ -3267,10 +3426,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       const SizedBox(width: 12),
                       Expanded(
                         child: _ActionTile(
-                          icon: Icons.videocam_rounded,
+                          icon: GIcon.video,
                           label: _isSendingVideo ? 'Enviando...' : 'Video',
                           sublabel: 'Opcional',
-                          color: const Color(0xFF7C4DFF),
+                          color: GardenColors.info,
                           onTap: _isSendingVideo ? () {} : _sendServiceVideo,
                           isDark: isDark,
                           loading: _isSendingVideo,
@@ -3284,15 +3443,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     children: [
                       Expanded(
                         child: _ActionTile(
-                          icon: Icons.chat_bubble_rounded,
+                          icon: GIcon.chat,
                           label: 'Chat',
                           sublabel: 'Con el dueño',
-                          color: GardenColors.forest,
+                          color: GardenService.paseo.hero.first,
                           onTap: () => Navigator.push(context, MaterialPageRoute(
                             builder: (_) => ChatScreen(
                               bookingId: widget.bookingId,
                               otherPersonName: _booking?['clientName'] ?? 'Dueño',
                               token: _token,
+                              role: 'CAREGIVER',
+                              bookingStatus: _booking?['status'] as String?,
                             ),
                           )),
                           isDark: isDark,
@@ -3301,7 +3462,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       const SizedBox(width: 12),
                       Expanded(
                         child: _ActionTile(
-                          icon: Icons.emergency_rounded,
+                          icon: GIcon.emergencia,
                           label: 'Emergencia',
                           sublabel: 'Reportar',
                           color: GardenColors.error,
@@ -3318,7 +3479,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       children: [
                         Expanded(
                           child: _ActionTile(
-                            icon: Icons.map_rounded,
+                            icon: GIcon.mapa,
                             label: 'Mapa GPS',
                             sublabel: 'Compartir ruta',
                             color: GardenColors.secondary,
@@ -3349,7 +3510,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     label: _isServicePaused
                         ? 'Resuelve la emergencia activa primero'
                         : isPhotoMet
-                            ? 'Desliza para finalizar servicio'
+                            ? (isPaseo
+                                ? 'Desliza cuando ${_booking?['petName'] ?? 'la mascota'} esté en casa'
+                                : 'Desliza para terminar el servicio')
                             : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
                     color: _isServicePaused
                         ? GardenColors.error
@@ -6414,7 +6577,7 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
 }
 
 class _ActionTile extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final String sublabel;
   final Color color;
@@ -6463,7 +6626,7 @@ class _ActionTile extends StatelessWidget {
                         padding: const EdgeInsets.all(9),
                         child: GardenLoadingIndicator(color: color),
                       )
-                    : Icon(icon, color: color, size: 20),
+                    : Center(child: GardenIcon(icon, color: color, state: GIconState.active)),
               ),
               const SizedBox(height: 10),
               Text(label,
@@ -6480,7 +6643,7 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _BottomActionBtn extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final VoidCallback onTap;
   final Color color;
@@ -6506,7 +6669,7 @@ class _BottomActionBtn extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 22),
+              GardenIcon(icon, color: color, size: GIconSize.lg, state: GIconState.active),
               const SizedBox(height: 4),
               Text(label,
                 style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),

@@ -11,6 +11,7 @@ import 'package:garden_app/design/garden_service.dart';
 import 'package:garden_app/design/garden_status_pill.dart';
 import 'package:garden_app/narrative/booking_story.dart';
 import 'package:garden_app/narrative/chat_event.dart';
+import 'package:garden_app/narrative/service_moments.dart';
 
 void main() {
   final now = DateTime(2026, 10, 2, 10); // viernes
@@ -132,6 +133,36 @@ void main() {
       expect(BookingStory.elapsedLabel(now.subtract(const Duration(minutes: 23)), now: now), '23 min');
       expect(BookingStory.elapsedLabel(now.subtract(const Duration(minutes: 65)), now: now), '1 h 05 min');
       expect(BookingStory.elapsedLabel(now.subtract(const Duration(hours: 50)), now: now), '2 días');
+    });
+  });
+
+  group('Cuidador', () {
+    Map<String, dynamic> bk(String status, {String? date, String? time}) =>
+        {'id': '$status$date$time', 'status': status, 'walkDate': date, 'startTime': time};
+
+    test('protagonista: en curso, luego solicitud por responder', () {
+      expect(pickCaregiverHeroBooking([bk('CONFIRMED', date: '2026-10-02', time: '15:00'), bk('IN_PROGRESS')], now: now)?['status'],
+          'IN_PROGRESS');
+      expect(pickCaregiverHeroBooking([bk('CONFIRMED', date: '2026-10-02', time: '15:00'), bk('WAITING_CAREGIVER_APPROVAL')], now: now)?['status'],
+          'WAITING_CAREGIVER_APPROVAL');
+    });
+
+    test('protagonista: de las confirmadas, la más próxima que no pasó', () {
+      final picked = pickCaregiverHeroBooking([
+        bk('CONFIRMED', date: '2026-10-05', time: '09:00'),
+        bk('CONFIRMED', date: '2026-10-03', time: '09:00'),
+        bk('CONFIRMED', date: '2026-10-01', time: '09:00'),
+      ], now: now);
+      expect(picked?['walkDate'], '2026-10-03');
+    });
+
+    test('notas rápidas: se arman con la mascota y se reconocen del otro lado', () {
+      final text = QuickNote.agua.describe('Luna');
+      expect(text, 'Luna tomó agua');
+      expect(QuickNote.fromDescription(text), QuickNote.agua);
+      expect(iconForNote(text), GIcon.agua);
+      expect(iconForNote('Le cambié el agua del plato'), GIcon.nota);
+      expect(QuickNote.descanso.describe(null), 'La mascota está descansando');
     });
   });
 

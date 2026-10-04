@@ -21,6 +21,8 @@ import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
+import '../../theme/garden_motion.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
@@ -1875,11 +1877,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     // Secciones del lugar con metadata
     final placeSections = [
-      (key: 'sala',         emoji: '🛋️',  label: 'Sala / Área principal',   required: true),
-      (key: 'descanso',     emoji: '🛏️',  label: 'Zona de descanso',         required: true),
-      (key: 'alimentacion', emoji: '🍽️',  label: 'Área de alimentación',     required: true),
-      (key: 'jardin',       emoji: '🌿',  label: 'Jardín / Patio',           required: false),
-      (key: 'juego',        emoji: '🎾',  label: 'Área de juego',            required: false),
+      (key: 'sala',         icon: GIcon.inicio,  label: 'Sala / Área principal',   required: true),
+      (key: 'descanso',     icon: GIcon.modoOscuro,  label: 'Zona de descanso',         required: true),
+      (key: 'alimentacion', icon: GIcon.comida,  label: 'Área de alimentación',     required: true),
+      (key: 'jardin',       icon: GIcon.necesidades,  label: 'Jardín / Patio',           required: false),
+      (key: 'juego',        icon: GIcon.juego,  label: 'Área de juego',            required: false),
     ];
 
     return SingleChildScrollView(
@@ -1900,7 +1902,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
           // ── Sección: Fotos del cuidador ───────────────────────────
           _buildPhotoSectionHeader(
-            emoji: '📸',
+            icon: GIcon.foto,
             title: 'Fotos tuyas en acción',
             subtitle: 'Paseando, jugando, cuidando mascotas — muéstrate como cuidador '
                 '(mínimo ${_servicesOffered.length == 1 && _servicesOffered.contains('PASEO') ? 2 : 4}, máximo 6)',
@@ -1932,7 +1934,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
             // ── Sección: Fotos del hogar ──────────────────────────
             _buildPhotoSectionHeader(
-              emoji: '🏠',
+              icon: GIcon.inicio,
               title: 'Fotos de tu espacio',
               subtitle: 'Muestra los lugares donde estarán las mascotas. Mínimo 1 foto por sección obligatoria.',
               isRequired: true,
@@ -1979,7 +1981,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
                         child: Row(children: [
-                          Text(sec.emoji, style: const TextStyle(fontSize: 20)),
+                          GardenIcon(sec.icon, size: GIconSize.lg, state: GIconState.active),
                           const SizedBox(width: 10),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [
@@ -2029,11 +2031,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Widget _buildPhotoSectionHeader({
-    required String emoji, required String title, required String subtitle,
+    required GIcon icon, required String title, required String subtitle,
     required bool isRequired, required Color textColor, required Color subtextColor,
   }) {
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(emoji, style: const TextStyle(fontSize: 22)),
+      GardenIcon(icon, size: GIconSize.lg, state: GIconState.active),
       const SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -2194,7 +2196,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
     final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
 
-    Widget serviceCard(String service, String emoji, String label) {
+    Widget serviceCard(String service, String label) {
+      final svc = GardenService.fromApi(service) ?? GardenService.hospedaje;
       final selected = _servicesOffered.contains(service);
       return GestureDetector(
         onTap: () {
@@ -2220,7 +2223,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 30)),
+              GardenIcon(GIcon.forService(svc), size: GIconSize.xl,
+                  state: selected ? GIconState.active : GIconState.idle),
               const SizedBox(height: 8),
               Text(
                 label,
@@ -2261,11 +2265,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Text('SERVICIOS', style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
+            Expanded(child: serviceCard('HOSPEDAJE', 'Hospedaje')),
             const SizedBox(width: 12),
-            Expanded(child: serviceCard('PASEO', '🦮', 'Paseo')),
+            Expanded(child: serviceCard('PASEO', 'Paseo')),
             const SizedBox(width: 12),
-            Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
+            Expanded(child: serviceCard('GUARDERIA', 'Guardería')),
           ]),
           const SizedBox(height: 16),
           EstimatedEarningsBanner(
@@ -2294,7 +2298,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     alignment: Alignment.center,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Casa 🏡', style: TextStyle(
+                      child: Text('Casa', style: TextStyle(
                         color: _homeType == 'HOUSE' ? Colors.white : textColor,
                         fontWeight: _homeType == 'HOUSE' ? FontWeight.bold : FontWeight.normal,
                         fontSize: 14,
@@ -2317,7 +2321,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     alignment: Alignment.center,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Departamento 🏢', style: TextStyle(
+                      child: Text('Departamento', style: TextStyle(
                         color: _homeType == 'APARTMENT' ? Colors.white : textColor,
                         fontWeight: _homeType == 'APARTMENT' ? FontWeight.bold : FontWeight.normal,
                         fontSize: 14,
@@ -2388,9 +2392,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Wrap(
             spacing: 8, runSpacing: 8,
             children: [
-              {'label': 'Mañana ☀️', 'value': 'MORNING'},
-              {'label': 'Tarde 🌤️', 'value': 'AFTERNOON'},
-              {'label': 'Noche 🌙', 'value': 'NIGHT'},
+              {'label': 'Mañana', 'value': 'MORNING'},
+              {'label': 'Tarde', 'value': 'AFTERNOON'},
+              {'label': 'Noche', 'value': 'NIGHT'},
             ].map((item) {
               final val = item['value']!;
               final selected = _times.contains(val);
@@ -2418,7 +2422,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Widget _buildPriceCard({
     required String titulo,
     required String unidad,
-    required String emoji,
+    required GardenService service,
     required double value,
     required ValueChanged<double> onChanged,
     String? infoNote,
@@ -2454,7 +2458,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
+          GardenIcon(GIcon.forService(service), size: GIconSize.lg, state: GIconState.active),
           const SizedBox(width: 8),
           Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
         ]),
@@ -2543,14 +2547,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 24),
 
           if (offersHospedaje) ...[
-            _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠', value: _precioHospedaje,
+            _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', service: GardenService.hospedaje, value: _precioHospedaje,
               sliderMinOverride: _hospMin, sliderMaxOverride: _hospMax,
               onChanged: (v) => setState(() => _precioHospedaje = v)),
             const SizedBox(height: 20),
           ],
           if (offersPaseo) ...[
             _buildPriceCard(
-              titulo: 'Paseo', unidad: '/ 1 hora', emoji: '🦮',
+              titulo: 'Paseo', unidad: '/ 1 hora', service: GardenService.paseo,
               value: _precioPaseo,
               sliderMinOverride: _paseoMin, sliderMaxOverride: _paseoMax,
               onChanged: (v) => setState(() => _precioPaseo = v),
@@ -2559,7 +2563,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             const SizedBox(height: 20),
           ],
           if (offersGuarderia) ...[
-            _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡', value: _precioGuarderia,
+            _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', service: GardenService.guarderia, value: _precioGuarderia,
               sliderMinOverride: _guarMin, sliderMaxOverride: _guarMax,
               onChanged: (v) => setState(() => _precioGuarderia = v)),
             const SizedBox(height: 12),
@@ -2579,7 +2583,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               ),
               child: Row(
                 children: [
-                  const Text('🦮', style: TextStyle(fontSize: 22)),
+                  const GardenIcon(GIcon.paseo, size: GIconSize.lg, state: GIconState.active),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -2660,7 +2664,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             children: ['DOGS', 'CATS'].map((type) {
               final isSelected = _animalTypes.contains(type);
               return ChoiceChip(
-                label: Text(type == 'DOGS' ? '🐶 Perros' : '🐱 Gatos'),
+                avatar: GardenIcon(type == 'DOGS' ? GIcon.perro : GIcon.gato,
+                    size: GIconSize.sm, color: isSelected ? Colors.white : kTextSecondary),
+                label: Text(type == 'DOGS' ? 'Perros' : 'Gatos'),
                 selected: isSelected,
                 selectedColor: kPrimaryColor,
                 backgroundColor: kSurfaceColor,
@@ -2950,6 +2956,39 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'PIN de seguridad',
     ];
 
+    // Qué gana el cuidador con cada paso — una línea, sin cifras inventadas.
+    const stepWhy = <(GIcon, String)>[
+      (GIcon.perfil, 'Así las familias saben con quién hablan'),
+      (GIcon.foto, 'Una foto clara genera confianza desde el primer vistazo'),
+      (GIcon.huella, 'Elige solo lo que de verdad vas a ofrecer'),
+      (GIcon.billetera, 'Puedes cambiarlo cuando quieras'),
+      (GIcon.disponibilidad, 'Solo te llegan solicitudes en estos horarios'),
+      (GIcon.galeria, 'Las fotos ayudan a las familias a decidirse'),
+      (GIcon.nota, 'Cuéntales cómo cuidas: es lo que más leen'),
+      (GIcon.identidadVerificada, 'Es el sello "Identidad verificada" de tu perfil'),
+      (GIcon.telefono, 'Para avisarte al instante de cada reserva'),
+      (GIcon.emergencia, 'Solo se usan si algo pasa durante un servicio'),
+      (GIcon.nota, 'Lo que acordamos tú y GARDEN, por escrito'),
+      (GIcon.seguridad, 'Protege tu billetera y la dirección de tus clientes'),
+    ];
+    Widget whyLine(Color subtextColor) => AnimatedSwitcher(
+          duration: GardenMotion.standard,
+          child: Padding(
+            key: ValueKey('why-$_currentStep'),
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              GardenIcon(stepWhy[_currentStep].$1, size: GIconSize.sm, state: GIconState.active),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Paso ${_currentStep + 1} de ${stepWhy.length} · ${stepWhy[_currentStep].$2}',
+                  style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ]),
+          ),
+        );
+
     // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
     // Steps 9-11 (contactos de emergencia, contrato, PIN) usan el nav genérico, como 0-5.
     final bool showNavButtons = _currentStep <= 5 || _currentStep == 9 || _currentStep == 10 || _currentStep == 11;
@@ -3099,6 +3138,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               backgroundColor: borderColor,
                               height: 3,
                             ),
+                            whyLine(subtextColor),
                             const SizedBox(height: 14),
                           ],
                         ),
@@ -3175,7 +3215,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                           backgroundColor: borderColor,
                           height: 3,
                         ),
-                        const SizedBox(height: 1),
+                        whyLine(subtextColor),
+                        const SizedBox(height: 10),
                       ],
                     ),
                   ),
