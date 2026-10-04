@@ -101,7 +101,10 @@ export const ALLOWED_SETTING_KEYS = [
   'betaInviteRequired',
   'betaInviteCodes',
   // Pagos y finanzas (numeric)
-  'platformCommissionPct',
+  // platformCommissionPct NO va aquí: la comisión se edita solo en Admin > Comisiones
+  // (PUT /admin/pricing/global), que valida el rango, invalida los precios cacheados de
+  // los listados y deja auditoría. Escribirla por esta vía genérica dejaba dos lugares
+  // para lo mismo y precios desactualizados.
   'montoMinimoRetiro',
   'qrValidityMinutes',
   'autoReleasePaymentHoras',

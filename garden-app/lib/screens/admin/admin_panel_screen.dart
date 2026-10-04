@@ -2617,10 +2617,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       // el total cuadre con lo que Garden efectivamente conservó.
       if (p['refundStatus'] == 'PROCESSED') continue;
       final amount = double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0;
-      // commissionAmount = 10% del precio del cuidador (ya calculado en el backend al crear la reserva)
-      // totalAmount = precioDelCuidador + commissionAmount
-      // El cuidador recibe: totalAmount - commissionAmount (su precio original)
-      final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? (amount * 0.10);
+      // commissionAmount = comisión GARDEN guardada en la reserva (tarifa de Admin > Comisiones al reservar).
+      // El cuidador recibe: totalAmount − commissionAmount − taxAmount (su precio original).
+      final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? 0;
       totalRevenue += amount;
       totalCommission += commission;
       // taxAmount = impuestos (IVA+IT) incluidos en totalAmount; no son del cuidador ni de Garden.
@@ -2760,14 +2759,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       );
     }
 
+    // Proporciones reales del historial (la comisión varía por servicio y empresa).
+    final pctCaregivers = totalRevenue > 0 ? totalCaregiversPaid / totalRevenue * 100 : 0.0;
+    final pctGarden = totalRevenue > 0 ? totalCommission / totalRevenue * 100 : 0.0;
+
     // ── History payment card (expanded) ───────────────────────────
     Widget historyCard(Map<String, dynamic> p) {
       final amount = double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0;
-      // commissionAmount = lo que Garden cobra (10% del precio del cuidador, sumado encima)
-      // caregiverPayout  = totalAmount − commissionAmount = precio original del cuidador
-      final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? (amount * 0.10);
+      // commissionAmount = lo que Garden cobra (tarifa de Admin > Comisiones al reservar)
+      // caregiverPayout  = totalAmount − commissionAmount − taxAmount = precio original del cuidador
+      final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? 0;
       final tax = double.tryParse(p['taxAmount']?.toString() ?? '0') ?? 0;
       final caregiverPayout = amount - commission - tax;
+      // Proporciones reales de ESTA reserva, no un 90/10 fijo.
+      final cardPctCaregiver = amount > 0 ? caregiverPayout / amount * 100 : 0.0;
+      final cardPctGarden = amount > 0 ? commission / amount * 100 : 0.0;
+      final cardPctTax = amount > 0 ? tax / amount * 100 : 0.0;
       final svcType2 = p['serviceType'] as String? ?? '';
       final isPaseo = svcType2 == 'PASEO';
       final isGuarderia2 = svcType2 == 'GUARDERIA';
@@ -2857,23 +2864,24 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
                 const SizedBox(height: 12),
 
-                // 90/10 split bar
+                // Reparto real: cuidador / Garden / impuestos
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Row(children: [
-                    Flexible(flex: 90, child: Container(height: 6, color: GardenColors.success)),
-                    Flexible(flex: 10, child: Container(height: 6, color: GardenColors.primary)),
+                    Flexible(flex: (cardPctCaregiver * 10).round().clamp(0, 1000), child: Container(height: 6, color: GardenColors.success)),
+                    Flexible(flex: (cardPctGarden * 10).round().clamp(0, 1000), child: Container(height: 6, color: GardenColors.primary)),
+                    Flexible(flex: (cardPctTax * 10).round().clamp(0, 1000), child: Container(height: 6, color: GardenColors.warning)),
                   ]),
                 ),
                 const SizedBox(height: 6),
                 Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Cuidador (90%)', style: TextStyle(fontSize: 10, color: GardenColors.success, fontWeight: FontWeight.bold)),
+                    Text('Cuidador (${cardPctCaregiver.toStringAsFixed(0)}%)', style: TextStyle(fontSize: 10, color: GardenColors.success, fontWeight: FontWeight.bold)),
                     Text('Bs ${caregiverPayout.toStringAsFixed(2)}',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: GardenColors.success)),
                   ])),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('Garden (10%)', style: TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.bold)),
+                    Text('Garden (${cardPctGarden.toStringAsFixed(0)}%)', style: TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.bold)),
                     Text('Bs ${commission.toStringAsFixed(2)}',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: GardenColors.primary)),
                   ]),
@@ -2972,20 +2980,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: GardenColors.primary)),
                 Text('Total recaudado', style: TextStyle(fontSize: 11, color: subtextColor)),
                 const SizedBox(height: 14),
-                // Split bar
+                // Reparto real: cuidadores / Garden / impuestos
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: Row(children: [
-                    Flexible(flex: 90, child: Container(height: 8, color: GardenColors.success)),
-                    Flexible(flex: 10, child: Container(height: 8, color: GardenColors.primary)),
+                    Flexible(flex: (pctCaregivers * 10).round().clamp(0, 1000), child: Container(height: 8, color: GardenColors.success)),
+                    Flexible(flex: (pctGarden * 10).round().clamp(0, 1000), child: Container(height: 8, color: GardenColors.primary)),
+                    Flexible(flex: ((100 - pctCaregivers - pctGarden) * 10).round().clamp(0, 1000), child: Container(height: 8, color: GardenColors.warning)),
                   ]),
                 ),
                 const SizedBox(height: 10),
                 Row(children: [
-                  Expanded(child: _kpiBox('Cuidadores (90%)', 'Bs ${totalCaregiversPaid.toStringAsFixed(2)}',
+                  Expanded(child: _kpiBox('Cuidadores (${pctCaregivers.toStringAsFixed(0)}%)', 'Bs ${totalCaregiversPaid.toStringAsFixed(2)}',
                     GardenColors.success, GIcon.perfil, bg, borderColor, textColor, subtextColor)),
                   const SizedBox(width: 8),
-                  Expanded(child: _kpiBox('Garden (10%)', 'Bs ${totalCommission.toStringAsFixed(2)}',
+                  Expanded(child: _kpiBox('Garden (${pctGarden.toStringAsFixed(0)}%)', 'Bs ${totalCommission.toStringAsFixed(2)}',
                     GardenColors.primary, GIcon.huella, bg, borderColor, textColor, subtextColor)),
                 ]),
                 const SizedBox(height: 8),

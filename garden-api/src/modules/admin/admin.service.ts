@@ -23,7 +23,16 @@ import * as notificationService from '../../services/notification.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import * as authService from '../auth/auth.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
-import { getCommissionRate, getTaxRate, caregiverUnitFromPriced, caregiverNetOf } from '../pricing/pricing.service.js';
+import {
+  getCommissionRate,
+  getTaxRate,
+  caregiverUnitFromPriced,
+  caregiverNetOf,
+  getPricingConfig,
+  resolveCommissionPct,
+  PRICED_SERVICES,
+} from '../pricing/pricing.service.js';
+import { getAllocationReport } from '../pricing/commission-allocation.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -2912,12 +2921,13 @@ export async function getFinancialStats() {
    * MODELO FINANCIERO GARDEN
    * ─────────────────────────────────────────────────────────────
    * El cuidador fija su precio P (pricePerUnit × días/duración).
-   * GARDEN añade su comisión configurable encima (Admin > Técnico >
-   * "Comisión GARDEN", platformCommissionPct — NUNCA fija, el admin la
-   * cambia seguido) → el cliente paga totalAmount = P × (1 + pct/100).
-   * commissionAmount = P × (pct/100) ← ganancia real de GARDEN por esa
-   * reserva puntual (ya guardada en DB con la tarifa vigente al momento).
-   * Cuidador recibe  = totalAmount − commissionAmount = P
+   * GARDEN suma su comisión encima → precio = P × (1 + comisión) y luego el
+   * impuesto (IVA+IT) sobre ese precio. La comisión se configura en UN solo
+   * lugar: Admin > Comisiones (por servicio y por cuidador/empresa) — ver
+   * pricing.service.ts. Aquí solo se LEE esa configuración para describirla.
+   * commissionAmount = ganancia real de GARDEN por esa reserva (guardada en DB
+   * con la tarifa vigente al momento de reservar, no se recalcula).
+   * Cuidador recibe  = totalAmount − commissionAmount − taxAmount = P
    *
    * Devoluciones (refundAmount procesadas) → dinero del dueño que
    * se regresa; NO es ganancia de GARDEN, se muestra separado.
@@ -2926,12 +2936,16 @@ export async function getFinancialStats() {
    * del neto como inversión en adquisición de usuarios.
    * ─────────────────────────────────────────────────────────────
    */
-  // Tarifa VIGENTE ahora mismo — solo para describir el modelo en curso
-  // (ej. "GARDEN cobra X% ..."). Los montos reales (commissionAmount de cada
-  // reserva) ya están guardados con la tarifa que aplicaba en su momento;
-  // esto no los recalcula, solo evita mostrar un "10%" fijo y desactualizado
-  // en el texto explicativo cuando el admin cambió la comisión desde entonces.
-  const currentCommissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
+  // Tarifas VIGENTES (Admin > Comisiones) — solo para describir el modelo en curso.
+  const pricingCfg = await getPricingConfig();
+  const currentPricing = {
+    defaultCommissionPct: pricingCfg.defaultCommissionPct,
+    taxRatePct: pricingCfg.taxRatePct,
+    services: Object.fromEntries(
+      PRICED_SERVICES.map((svc) => [svc, resolveCommissionPct(pricingCfg, svc, null)])
+    ) as Record<string, number>,
+    customOverrides: pricingCfg.overrides.size,
+  };
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -2939,7 +2953,7 @@ export async function getFinancialStats() {
   const startOfYear = new Date(now.getFullYear(), 0, 1);
 
   // ── Reservas completadas ─────────────────────────────────────
-  // commissionAmount = ganancia GARDEN por reserva (10% del precio del cuidador)
+  // commissionAmount = ganancia GARDEN por reserva (% vigente al reservar, por servicio/cuidador)
   // totalAmount      = lo que pagó el cliente
   // taxAmount        = impuestos (IVA+IT) cobrados al cliente, incluidos en totalAmount: GARDEN los tributa, no son ingreso
   // totalAmount - commissionAmount - taxAmount = lo que recibe el cuidador
@@ -3027,9 +3041,14 @@ export async function getFinancialStats() {
   }
 
   // ── Desglose por tipo de servicio ────────────────────────────
-  const [paseoStats, hospedajeStats] = await Promise.all([
+  const [paseoStats, guarderiaStats, hospedajeStats] = await Promise.all([
     prisma.booking.aggregate({
       where: { status: 'COMPLETED', serviceType: 'PASEO' },
+      _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
+      _count: true,
+    }),
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceType: 'GUARDERIA' },
       _sum: { totalAmount: true, commissionAmount: true, taxAmount: true },
       _count: true,
     }),
@@ -3042,9 +3061,14 @@ export async function getFinancialStats() {
 
   // ── Cálculos finales ─────────────────────────────────────────
   const grossBilled        = Number(allCompleted._sum.totalAmount ?? 0);      // total facturado a clientes
-  const gardenCommissions  = Number(allCompleted._sum.commissionAmount ?? 0); // ganancia real GARDEN (10%)
+  const gardenCommissions  = Number(allCompleted._sum.commissionAmount ?? 0); // ganancia real GARDEN
   const taxesCollected     = Number(allCompleted._sum.taxAmount ?? 0);        // impuestos a tributar (no son ingreso)
   const caregiverPayouts   = grossBilled - gardenCommissions - taxesCollected; // lo que reciben cuidadores
+  // Comisión promedio REAL cobrada, medida igual que se configura: % sobre el precio del
+  // cuidador (no sobre el total facturado, que incluye impuestos y la propia comisión).
+  // Es un promedio histórico: mezcla servicios, empresas con comisión propia y reservas
+  // hechas con tarifas anteriores, así que puede diferir de las tarifas vigentes.
+  const avgCommissionPct   = caregiverPayouts > 0 ? (gardenCommissions / caregiverPayouts) * 100 : 0;
   const refundsToClients   = Number(refundStats._sum.refundAmount ?? 0);      // devoluciones (≠ ganancia)
   const refundCommLost     = Number(refundStats._sum.commissionAmount ?? 0);  // comisiones perdidas por cancelaciones
   // netGardenIncome: solo resta marketing real (gift codes). refundCommLost son comisiones
@@ -3056,6 +3080,22 @@ export async function getFinancialStats() {
   const lastMonthGardenInc = Number(lastMonthCompleted._sum.commissionAmount ?? 0);
   const yearGardenInc      = Number(yearCompleted._sum.commissionAmount ?? 0);
 
+  // Informativo: si las tablas de distribución aún no existen (deploy a medias), el resto
+  // del reporte financiero sigue funcionando.
+  let commissionAllocation: Array<{ key: string; label: string; pct: number; allocated: number; available: number }> | null = null;
+  try {
+    const report = await getAllocationReport('all');
+    commissionAllocation = report.buckets.map((b) => ({
+      key: b.key,
+      label: b.label,
+      pct: b.pct,
+      allocated: b.allocatedAllTime,
+      available: b.available,
+    }));
+  } catch (err) {
+    logger.warn('[FINANCE] no se pudo calcular la distribución de la comisión', { err });
+  }
+
   const pendingWd    = withdrawalStats.find((w) => w.status === 'PENDING');
   const completedWd  = withdrawalStats.find((w) => w.status === 'COMPLETED');
   const processingWd = withdrawalStats.find((w) => w.status === 'PROCESSING');
@@ -3064,8 +3104,9 @@ export async function getFinancialStats() {
     /**
      * summary: KPIs principales del dashboard
      * - grossBilled: total cobrado a clientes (incluye comisión GARDEN)
-     * - gardenCommissions: 10% sobre precio cuidador = ganancia bruta GARDEN
-     * - caregiverPayouts: lo que reciben los cuidadores (90% del total)
+     * - gardenCommissions: comisión cobrada = ganancia bruta GARDEN
+     * - caregiverPayouts: lo que reciben los cuidadores
+     * - avgCommissionPct: comisión promedio real sobre el precio del cuidador (histórica)
      * - netGardenIncome: ganancia neta tras devoluciones y marketing
      */
     summary: {
@@ -3073,6 +3114,7 @@ export async function getFinancialStats() {
       gardenCommissions,
       taxesCollected,
       caregiverPayouts,
+      avgCommissionPct,
       netGardenIncome,
       thisMonthGardenIncome: thisMonthGardenInc,
       lastMonthGardenIncome: lastMonthGardenInc,
@@ -3107,6 +3149,12 @@ export async function getFinancialStats() {
         gardenEarnings: Number(paseoStats._sum.commissionAmount ?? 0),
         caregiverEarnings: Number(paseoStats._sum.totalAmount ?? 0) - Number(paseoStats._sum.commissionAmount ?? 0) - Number(paseoStats._sum.taxAmount ?? 0),
       },
+      guarderia: {
+        count: guarderiaStats._count,
+        billedToClient: Number(guarderiaStats._sum.totalAmount ?? 0),
+        gardenEarnings: Number(guarderiaStats._sum.commissionAmount ?? 0),
+        caregiverEarnings: Number(guarderiaStats._sum.totalAmount ?? 0) - Number(guarderiaStats._sum.commissionAmount ?? 0) - Number(guarderiaStats._sum.taxAmount ?? 0),
+      },
       hospedaje: {
         count: hospedajeStats._count,
         billedToClient: Number(hospedajeStats._sum.totalAmount ?? 0),
@@ -3115,9 +3163,13 @@ export async function getFinancialStats() {
       },
     },
     monthlyChart: monthlyData,
+    /** Tarifas vigentes, leídas de Admin > Comisiones (única fuente). */
+    currentPricing,
+    /** A dónde va la comisión acumulada según el plan de Admin > Comisiones > Distribución. */
+    commissionAllocation,
     /**
      * Estado de Resultados (Income Statement)
-     * Ingresos: comisiones cobradas (10% por servicio)
+     * Ingresos: comisiones cobradas (tarifas de Admin > Comisiones)
      * Egresos: devoluciones de comisiones + inversión marketing
      * Utilidad neta = comisiones − marketing (gift codes)
      * refundCommLost: informativo — comisiones potenciales perdidas por cancelaciones,
@@ -3126,7 +3178,7 @@ export async function getFinancialStats() {
     incomeStatement: {
       revenues: {
         commissionsEarned: gardenCommissions,
-        description: `GARDEN cobra una comisión sobre el precio del cuidador que varía por servicio y por cuidador/empresa (tarifa por defecto vigente: ${currentCommissionPct}% — configurable en Admin > Comisiones e impuestos). Los impuestos cobrados al cliente (Bs ${taxesCollected.toFixed(2)}) se tributan aparte y no son ingreso.`,
+        description: `GARDEN cobra una comisión sobre el precio del cuidador que varía por servicio y por cuidador/empresa (configurable solo en Admin > Comisiones). Los impuestos cobrados al cliente (Bs ${taxesCollected.toFixed(2)}) se tributan aparte y no son ingreso.`,
       },
       expenses: {
         refundedCommissions: refundCommLost,
@@ -3134,8 +3186,11 @@ export async function getFinancialStats() {
         total: totalGiftCodeMarketing,
       },
       netIncome: netGardenIncome,
-      companyFeeRate: currentCommissionPct / 100,
-      note: `Con la tarifa vigente (${currentCommissionPct}%): si cuidador cobra Bs 30 → cliente paga Bs ${(30 * (1 + currentCommissionPct / 100)).toFixed(2)} → GARDEN gana Bs ${(30 * currentCommissionPct / 100).toFixed(2)}`,
+      note: (() => {
+        const p = currentPricing.services.PASEO ?? pricingCfg.defaultCommissionPct;
+        const priced = Math.round(30 * (1 + p / 100));
+        return `Tarifas vigentes (Admin > Comisiones): Paseo ${currentPricing.services.PASEO}% · Guardería ${currentPricing.services.GUARDERIA}% · Hospedaje ${currentPricing.services.HOSPEDAJE}%. Ej. paseo: cuidador cobra Bs 30 → precio Bs ${priced} + impuestos ${currentPricing.taxRatePct}% → GARDEN gana Bs ${priced - 30}.`;
+      })(),
     },
     /**
      * Balance General

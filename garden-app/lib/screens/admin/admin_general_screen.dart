@@ -603,7 +603,9 @@ class _FinancialTabState extends State<_FinancialTab>
     final chart = (_data!['monthlyChart'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final breakdown = _data!['serviceBreakdown'] as Map<String, dynamic>;
 
-    // Modelo: cuidador cobra P → cliente paga P×1.10 → GARDEN gana P×0.10
+    // Modelo: cuidador cobra P → precio P×(1+comisión) → + impuestos. Las tarifas se
+    // configuran SOLO en Admin > Comisiones; aquí se leen (currentPricing) y se compara
+    // con el promedio real cobrado (avgCommissionPct, calculado por el backend).
     final grossBilled   = (s['grossBilled']           as num?)?.toDouble() ?? 0.0;
     final gardenEarns   = (s['gardenCommissions']     as num?)?.toDouble() ?? 0.0;
     final netIncome     = (s['netGardenIncome']       as num?)?.toDouble() ?? 0.0;
@@ -612,12 +614,18 @@ class _FinancialTabState extends State<_FinancialTab>
     final refundTotal   = (ref['totalReturnedToClients'] as num?)?.toDouble() ?? 0.0;
     final mktSpend      = (mkt['giftCodeSpend']       as num?)?.toDouble() ?? 0.0;
     final mktRedemptions = (mkt['giftCodeRedemptions'] as int?) ?? 0;
-    // % real efectivo de este período (no un valor fijo) — se calcula de los
-    // montos reales de arriba, nunca hardcodeado. "Comisión GARDEN" es
-    // configurable desde Admin > Técnico y cambia con el tiempo, así que un
-    // "10%" fijo en el texto quedaba desactualizado apenas el admin la
-    // cambiaba, mientras los montos de al lado ya reflejaban la real.
-    final effectiveCommissionPct = grossBilled > 0 ? (gardenEarns / grossBilled * 100) : 0.0;
+    final caregiverPayouts = (s['caregiverPayouts'] as num?)?.toDouble() ?? 0.0;
+    final effectiveCommissionPct = (s['avgCommissionPct'] as num?)?.toDouble() ??
+        (caregiverPayouts > 0 ? gardenEarns / caregiverPayouts * 100 : 0.0);
+    final pricing = _data!['currentPricing'] as Map<String, dynamic>?;
+    final pricingServices = (pricing?['services'] as Map?)?.cast<String, dynamic>() ?? const {};
+    String rate(String svc) {
+      final v = pricingServices[svc] as num?;
+      if (v == null) return '—';
+      return '${v == v.roundToDouble() ? v.toInt() : v}%';
+    }
+    final customOverrides = (pricing?['customOverrides'] as num?)?.toInt() ?? 0;
+    final allocation = (_data!['commissionAllocation'] as List?)?.cast<Map<String, dynamic>>();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -639,8 +647,10 @@ class _FinancialTabState extends State<_FinancialTab>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Modelo: cuidador fija Bs X → cliente paga Bs X + comisión → GARDEN gana ${effectiveCommissionPct.toStringAsFixed(1)}% '
-                    '(configurable en Admin > Técnico > Comisión GARDEN)',
+                    'Comisión vigente (Admin > Comisiones): Paseo ${rate('PASEO')} · Guardería ${rate('GUARDERIA')} · '
+                    'Hospedaje ${rate('HOSPEDAJE')}${customOverrides > 0 ? ' · $customOverrides personalizadas' : ''}, '
+                    'sobre el precio del cuidador. Promedio real cobrado hasta hoy: '
+                    '${effectiveCommissionPct.toStringAsFixed(1)}% (incluye reservas con tarifas anteriores).',
                     style: TextStyle(color: subtextColor, fontSize: 11),
                   ),
                 ),
@@ -655,7 +665,7 @@ class _FinancialTabState extends State<_FinancialTab>
                   'Bs ${_fmt(grossBilled)}', GardenColors.primary,
                   GIcon.recibo, surface, borderColor, textColor, subtextColor)),
               const SizedBox(width: 10),
-              Expanded(child: _kpiCard('Ganancia GARDEN (${effectiveCommissionPct.toStringAsFixed(1)}%)',
+              Expanded(child: _kpiCard('Ganancia GARDEN (prom. ${effectiveCommissionPct.toStringAsFixed(1)}%)',
                   'Bs ${_fmt(gardenEarns)}', GardenColors.success,
                   GIcon.trabajo, surface, borderColor, textColor, subtextColor)),
             ],
@@ -714,7 +724,52 @@ class _FinancialTabState extends State<_FinancialTab>
                   GardenColors.accent, surface, borderColor, textColor, subtextColor)),
             ],
           ),
+          if (breakdown['guarderia'] is Map<String, dynamic>) ...[
+            const SizedBox(height: 10),
+            _serviceBreakdownCard('Guardería',
+                breakdown['guarderia'] as Map<String, dynamic>,
+                GardenColors.success, surface, borderColor, textColor, subtextColor),
+          ],
           const SizedBox(height: 20),
+
+          if (allocation != null && allocation.isNotEmpty) ...[
+            Text('A dónde va la comisión',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Comisión acumulada repartida con el plan de Admin > Comisiones > Distribución.',
+                style: TextStyle(color: subtextColor, fontSize: 11)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: surface, borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(children: [
+                for (final b in allocation)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text('${b['label']} (${_fmtPct(b['pct'] as num)})',
+                            style: TextStyle(color: textColor, fontSize: 12)),
+                      ),
+                      Text('Bs ${_fmt((b['allocated'] as num).toDouble())}',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 12)),
+                      SizedBox(
+                        width: 104,
+                        child: Text('disp. Bs ${_fmt((b['available'] as num).toDouble())}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                color: (b['available'] as num) < 0 ? GardenColors.error : subtextColor,
+                                fontSize: 11)),
+                      ),
+                    ]),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Retiros de cuidadores
           Text('Retiros de cuidadores',
@@ -775,7 +830,7 @@ class _FinancialTabState extends State<_FinancialTab>
               border: Border.all(color: GardenColors.success.withValues(alpha: 0.2)),
             ),
             child: Text(
-              inc['note'] as String? ?? 'Ver la tarifa vigente en Admin > Técnico > Comisión GARDEN',
+              inc['note'] as String? ?? 'Ver las tarifas vigentes en Admin > Comisiones',
               style: TextStyle(color: subtextColor, fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ),
@@ -850,9 +905,8 @@ class _FinancialTabState extends State<_FinancialTab>
 
     final accComm     = (assets['accumulatedCommissions']  as num?)?.toDouble() ?? 0.0;
     final pendingFunds= (assets['pendingCaregiverFunds']   as num?)?.toDouble() ?? 0.0;
-    // % real efectivo (no fijo) — ver mismo comentario en _buildDashboardTab.
-    final bsGrossBilled = (s['grossBilled'] as num?)?.toDouble() ?? 0.0;
-    final bsCommissionPct = bsGrossBilled > 0 ? (accComm / bsGrossBilled * 100) : 0.0;
+    // Promedio real sobre el precio del cuidador (mismo criterio que Admin > Comisiones).
+    final bsCommissionPct = (s['avgCommissionPct'] as num?)?.toDouble() ?? 0.0;
     final totalAssets = (assets['total']                   as num?)?.toDouble() ?? 0.0;
     final pendingWd   = (liabilities['pendingWithdrawals'] as num?)?.toDouble() ?? 0.0;
     final procWd      = (liabilities['processingWithdrawals'] as num?)?.toDouble() ?? 0.0;
@@ -871,7 +925,7 @@ class _FinancialTabState extends State<_FinancialTab>
           const SizedBox(height: 16),
 
           _finSection('ACTIVOS', textColor, borderColor, surface, [
-            _finRow('Comisiones acumuladas GARDEN (${bsCommissionPct.toStringAsFixed(1)}%)', accComm, textColor, subtextColor),
+            _finRow('Comisiones acumuladas GARDEN (prom. ${bsCommissionPct.toStringAsFixed(1)}%)', accComm, textColor, subtextColor),
             _finRow('Fondos de cuidadores en plataforma', pendingFunds, textColor, subtextColor),
             _finRow('TOTAL ACTIVOS', totalAssets, textColor, subtextColor, isTotal: true, highlight: true),
           ]),
@@ -1148,8 +1202,9 @@ class _FinancialTabState extends State<_FinancialTab>
     final billed = (data['billedToClient'] as num?)?.toDouble() ?? 0.0;
     final gardenEarns = (data['gardenEarnings'] as num?)?.toDouble() ?? 0.0;
     final caregiverEarns = (data['caregiverEarnings'] as num?)?.toDouble() ?? 0.0;
-    // % real de este tipo de servicio (no fijo) — ver mismo comentario en _buildDashboardTab.
-    final servicePct = billed > 0 ? (gardenEarns / billed * 100) : 0.0;
+    // Comisión promedio real de este servicio, medida como se configura en Admin > Comisiones:
+    // % sobre el precio del cuidador (no sobre el total, que incluye impuestos).
+    final servicePct = caregiverEarns > 0 ? (gardenEarns / caregiverEarns * 100) : 0.0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1236,6 +1291,8 @@ class _FinancialTabState extends State<_FinancialTab>
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
     return v.toStringAsFixed(0);
   }
+
+  String _fmtPct(num v) => '${v == v.roundToDouble() ? v.toInt() : v}%';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

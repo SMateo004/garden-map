@@ -124,6 +124,12 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
   taxAmount` — usa `caregiverNetOf()` de `modules/pricing/pricing.service.ts`, nunca restes solo la
   comisión. Comisión y tasa se resuelven con `getCommissionRate(servicio, caregiverId)` /
   `getTaxRate()` (editables en Admin > Comisiones); la comisión nunca se muestra al cliente.
+  Admin > Comisiones es el **único** lugar donde se edita (Técnica ya no puede: `platformCommissionPct`
+  salió de `ALLOWED_SETTING_KEYS`); Finanzas solo la lee. Nada de `× 1.1` / `0.10` fijos.
+- **Distribución de la comisión** (Admin > Comisiones > Distribución,
+  `modules/pricing/commission-allocation.service.ts`): plan versionado de % por destino (sueldos,
+  mantenimiento, activos, fondo de garantía de Bs 2.000 por caso, otros, inversores) que suma 100,
+  más gastos reales por destino. Es contabilidad de gestión: no toca `User.balance`.
 - SIP (pago QR bancario boliviano) — código completo en `src/services/sip.service.ts`, gateado
   por `SIP_ENABLED`. Mientras estén vacías las credenciales del banco, el sistema cae a un QR
   placeholder local (solo en dev) o bloquea el pago con alerta a admins (en producción). No es un

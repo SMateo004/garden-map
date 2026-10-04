@@ -855,6 +855,40 @@ model CaregiverCommissionOverride {
   @@map("caregiver_commission_overrides")
 }
 
+/// Plan de distribución de la comisión de GARDEN (Admin > Comisiones > Distribución).
+/// Solo se agregan versiones, nunca se editan: cada reserva completada se reparte con el
+/// plan vigente cuando terminó el servicio, así cambiar los % no reescribe el pasado.
+model CommissionAllocationPlan {
+  id            String   @id @default(uuid())
+  effectiveFrom DateTime @default(now())
+  /// [{ key, pct }] con las claves de commission-allocation.service.ts; suma 100.
+  buckets       Json
+  note          String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  @@index([effectiveFrom])
+  @@map("commission_allocation_plans")
+}
+
+/// Uso real del dinero asignado a un destino: pago de sueldos, un reclamo del fondo de
+/// garantía, servidores, dividendos… Disponible del destino = asignado − movimientos.
+model CommissionBucketMovement {
+  id          String   @id @default(uuid())
+  bucket      String   @db.VarChar(24)
+  /// Positivo = salida (gasto). Negativo = devolución/ajuste a favor del destino.
+  amount      Decimal  @db.Decimal(12, 2)
+  description String
+  occurredAt  DateTime
+  /// Opcional: la reserva relacionada (ej. emergencia veterinaria cubierta por el fondo).
+  bookingId   String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([bucket, occurredAt])
+  @@map("commission_bucket_movements")
+}
+
 /// Snapshot de un servicio extra seleccionado en una reserva — conserva
 /// nombre/precio del momento de la reserva aunque el ExtraService original
 /// cambie o se desactive después.

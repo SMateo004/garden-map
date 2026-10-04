@@ -5,8 +5,11 @@ import 'package:http/http.dart' as http;
 import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'admin_commission_allocation_screen.dart';
 
-/// Admin > Comisiones e impuestos.
+/// Admin > Comisiones — ÚNICO lugar donde se configura la comisión de GARDEN.
+/// Pestaña "Tarifas" (esta) y pestaña "Distribución" (a dónde va la comisión,
+/// admin_commission_allocation_screen.dart). Técnica y Finanzas solo la leen.
 ///
 /// - Comisión de GARDEN por servicio (Paseo / Guardería / Hospedaje) y una por
 ///   defecto para los servicios sin comisión propia.
@@ -231,6 +234,27 @@ class _AdminPricingScreenState extends State<AdminPricingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final subtextColor = themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return DefaultTabController(
+      length: 2,
+      child: Column(children: [
+        TabBar(
+          labelColor: GardenColors.primary,
+          unselectedLabelColor: subtextColor,
+          indicatorColor: GardenColors.primary,
+          tabs: const [Tab(text: 'Tarifas'), Tab(text: 'Distribución')],
+        ),
+        Expanded(
+          child: TabBarView(children: [
+            _buildRates(context),
+            AdminCommissionAllocationScreen(adminToken: widget.adminToken),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildRates(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;

@@ -40,7 +40,6 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
   };
 
   static const Map<String, num> _numericDefaults = {
-    'platformCommissionPct':   10,
     'montoMinimoRetiro':       50,
     'qrValidityMinutes':       15,
     'autoReleasePaymentHoras': 24,
@@ -469,10 +468,6 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                     title: 'Pago con tarjeta', subtitle: 'Muestra la opción de tarjeta de crédito/débito como método de pago (aún sin pasarela real conectada)',
                     settingKey: 'cardPaymentEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
-                  _buildNumericTile(icon: GIcon.comision, iconColor: Colors.green,
-                    title: 'Comisión GARDEN por defecto', subtitle: 'Se usa en servicios sin comisión propia. Por servicio y por empresa: pestaña Comisiones',
-                    settingKey: 'platformCommissionPct', unit: '%', surface: surface,
-                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                   _buildNumericTile(icon: GIcon.abajo, iconColor: Colors.cyan,
                     title: 'Retiro mínimo', subtitle: 'Monto mínimo para solicitar retiro',
                     settingKey: 'montoMinimoRetiro', unit: 'Bs', surface: surface,

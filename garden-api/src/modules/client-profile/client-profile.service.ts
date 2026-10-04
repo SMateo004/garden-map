@@ -3,6 +3,7 @@ import prisma from '../../config/database.js';
 import { BadRequestError } from '../../shared/errors.js';
 import type { PatchClientProfileBody } from './client-profile.validation.js';
 import logger from '../../shared/logger.js';
+import { getPricingConfig, resolveCommissionPct } from '../pricing/pricing.service.js';
 
 /**
  * GET /api/client/my-profile - Perfil del cliente con sus mascotas (Pet[]).
@@ -122,6 +123,11 @@ export async function getFavorites(userId: string) {
     },
   });
 
+  // Mismo precio que el listado: comisión de Admin > Comisiones por servicio y cuidador.
+  const pricing = await getPricingConfig();
+  const priced = (price: number | null, service: 'PASEO' | 'HOSPEDAJE', caregiverId: string) =>
+    price ? Math.round(price * (1 + resolveCommissionPct(pricing, service, caregiverId) / 100)) : null;
+
   // Map to CaregiverListItem-like format
   return caregivers.map(c => ({
     id: c.id,
@@ -131,8 +137,8 @@ export async function getFavorites(userId: string) {
     zone: c.zone ?? '',
     rating: c.rating,
     reviewCount: c.reviewCount,
-    pricePerDay: c.pricePerDay ? Math.round(c.pricePerDay * 1.1) : null,
-    pricePerWalk30: c.pricePerWalk30 ? Math.round(c.pricePerWalk30 * 1.1) : null,
+    pricePerDay: priced(c.pricePerDay, 'HOSPEDAJE', c.id),
+    pricePerWalk30: priced(c.pricePerWalk30, 'PASEO', c.id),
     services: c.servicesOffered,
     verified: c.verified,
   }));
