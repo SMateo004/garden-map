@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:garden_app/design/brote.dart';
 import 'package:garden_app/design/garden_booking_hero_card.dart';
+import 'package:garden_app/design/garden_chain_proof.dart';
 import 'package:garden_app/design/garden_live_hero.dart';
 import 'package:garden_app/design/garden_story_progress.dart';
 import 'package:garden_app/design/garden_trust_seals.dart';
@@ -315,6 +316,47 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Andrea acepta'), findsOneWidget);
       expect(find.text('detalle'), findsOneWidget);
+    });
+
+    testWidgets('comprobante en blockchain: estados honestos y enlace solo con txHash real', (tester) async {
+      final recorded = ChainProof.fromJson({
+        'status': 'RECORDED',
+        'reason': null,
+        'recordsSince': '2026-10-04T04:00:00.000Z',
+        'network': {'chainId': 137, 'name': 'Polygon PoS', 'label': 'red principal de Polygon', 'testnet': false},
+        'records': [
+          {'kind': 'CREATE', 'label': 'Pago registrado', 'txHash': '0x${'ab' * 32}',
+           'explorerUrl': 'https://polygonscan.com/tx/0xab', 'confirmedAt': '2026-10-06T13:14:00.000Z'},
+        ],
+      });
+      String? opened;
+      await tester.pumpWidget(host(GardenChainProof(proof: recorded, onOpen: (u) => opened = u)));
+      expect(find.text('Registrada en blockchain'), findsOneWidget);
+      await tester.tap(find.text('Ver en Polygonscan'));
+      expect(opened, 'https://polygonscan.com/tx/0xab');
+
+      final testnet = ChainProof.fromJson({
+        'status': 'RECORDED', 'recordsSince': '2026-10-04T04:00:00.000Z',
+        'network': {'chainId': 80002, 'name': 'Polygon Amoy', 'label': 'red de pruebas', 'testnet': true},
+        'records': [],
+      });
+      await tester.pumpWidget(host(GardenChainProof(proof: testnet)));
+      expect(find.text('Registrada en la red de pruebas'), findsOneWidget);
+
+      await tester.pumpWidget(host(GardenChainProof(
+          proof: ChainProof.fromJson({'status': 'PENDING', 'recordsSince': '2026-10-04T04:00:00.000Z', 'records': []}))));
+      expect(find.text('Registro pendiente'), findsOneWidget);
+      expect(find.text('Ver en Polygonscan'), findsNothing);
+
+      await tester.pumpWidget(host(GardenChainProof(proof: ChainProof.fromJson(
+          {'status': 'NOT_APPLICABLE', 'reason': 'BEFORE_START', 'recordsSince': '2026-10-04T04:00:00.000Z', 'records': []}))));
+      expect(find.text('Sin registro en blockchain'), findsOneWidget);
+      expect(find.textContaining('4 de octubre de 2026'), findsOneWidget);
+
+      await tester.pumpWidget(host(GardenChainProof(proof: ChainProof.fromJson(
+          {'status': 'NOT_APPLICABLE', 'reason': 'NOT_PAID', 'recordsSince': '2026-10-04T04:00:00.000Z', 'records': []}))));
+      expect(find.byType(GardenIcon), findsNothing);
+      expect(find.textContaining('blockchain'), findsNothing);
     });
 
     testWidgets('Brote dibuja las seis poses y se queda quieto', (tester) async {
