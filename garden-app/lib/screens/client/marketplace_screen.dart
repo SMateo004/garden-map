@@ -1890,6 +1890,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_hasError && _caregivers.isEmpty) {
       return withHeader(GardenEmptyState(
         type: GardenEmptyType.generic,
+        brote: BrotePose.oops,
         title: 'No pudimos conectar',
         subtitle: 'Revisa tu conexión a internet e intenta de nuevo. Tus filtros quedaron guardados.',
         ctaLabel: 'Reintentar',

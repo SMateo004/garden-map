@@ -174,7 +174,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
                             ? const GardenEmptyState(
                                 type: GardenEmptyType.bookings,
                                 title: 'Sin clientes registrados',
-                                subtitle: 'Creá el primero con el botón de abajo, o dalo de alta durante un check-in.',
+                                subtitle: 'Crea el primero con el botón de abajo, o dalo de alta durante un check-in.',
                                 compact: true,
                               )
                             : RefreshIndicator(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -89,7 +90,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             backgroundColor: bg,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: textColor),
+              icon: GardenIcon(GIcon.atras, color: textColor, semanticLabel: 'Volver'),
               onPressed: () => context.pop(),
             ),
           ),
@@ -100,7 +101,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 12),
-                  const Text('🌿', style: TextStyle(fontSize: 40)),
+                  const GardenIcon(GIcon.seguridad, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
                   const SizedBox(height: 20),
                   Text(
                     'Recupera tu contraseña',
@@ -135,7 +136,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     decoration: InputDecoration(
                       hintText: 'tu@correo.com',
                       hintStyle: TextStyle(color: subtextColor),
-                      prefixIcon: Icon(Icons.email_outlined, color: subtextColor, size: 20),
+                      prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.correo, color: subtextColor)),
                       errorText: _emailError,
                       filled: true,
                       fillColor: surfaceEl,

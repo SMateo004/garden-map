@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 
 // ── Modelo ──────────────────────────────────────────────────────────────────
@@ -9,53 +13,56 @@ import '../../theme/garden_theme.dart';
 class _Step {
   final Color color;
   final Color accentColor;
-  final IconData icon;
-  final String emoji;
-  final IconData decorIcon1;
-  final IconData decorIcon2;
+  final GIcon icon;
+  /// Brote en el centro; si es null va el icono grande. La diapositiva de
+  /// pagos usa icono: Brote nunca acompaña temas de dinero.
+  final BrotePose? brote;
+  final GIcon decorIcon1;
+  final GIcon decorIcon2;
   final String title;
   final String subtitle;
   const _Step({
     required this.color, required this.accentColor,
-    required this.icon, required this.emoji,
+    required this.icon, this.brote,
     required this.decorIcon1, required this.decorIcon2,
     required this.title, required this.subtitle,
   });
 }
 
-const _kSteps = [
+// Colores de la paleta GARDEN (antes azul, morado y naranja sueltos).
+final _kSteps = [
   _Step(
-    color: Color(0xFF2D7D32), accentColor: Color(0xFF66BB6A),
-    icon: Icons.search_rounded, emoji: '🔍',
-    decorIcon1: Icons.location_on_rounded, decorIcon2: Icons.star_rounded,
+    color: GardenService.paseo.hero.last, accentColor: GardenService.paseo.hero.first,
+    icon: GIcon.buscar, brote: BrotePose.buscando,
+    decorIcon1: GIcon.ubicacion, decorIcon2: GIcon.estrella,
     title: 'Encuentra tu cuidador',
     subtitle: 'Explora cuidadores verificados cerca de ti en Santa Cruz, con fotos reales y reseñas de dueños como tú.',
   ),
   _Step(
-    color: Color(0xFF1565C0), accentColor: Color(0xFF42A5F5),
-    icon: Icons.pets_rounded, emoji: '🐾',
-    decorIcon1: Icons.favorite_rounded, decorIcon2: Icons.verified_rounded,
+    color: GardenColors.primaryDark, accentColor: GardenColors.primary,
+    icon: GIcon.verificado,
+    decorIcon1: GIcon.favorito, decorIcon2: GIcon.identidadVerificada,
     title: 'Perfiles de confianza',
     subtitle: 'Cada cuidador pasa por verificación de identidad. Revisa su experiencia, servicios y disponibilidad.',
   ),
   _Step(
-    color: Color(0xFF6A1B9A), accentColor: Color(0xFFAB47BC),
-    icon: Icons.calendar_today_rounded, emoji: '📅',
-    decorIcon1: Icons.access_time_rounded, decorIcon2: Icons.check_circle_rounded,
+    color: GardenService.guarderia.hero.last, accentColor: GardenService.guarderia.hero.first,
+    icon: GIcon.reservas,
+    decorIcon1: GIcon.reloj, decorIcon2: GIcon.confirmado,
     title: 'Reserva en segundos',
     subtitle: 'Elige el servicio, la fecha y el horario que más te convenga. Sin llamadas ni complicaciones.',
   ),
   _Step(
-    color: Color(0xFFE65100), accentColor: Color(0xFFFFA726),
-    icon: Icons.lock_rounded, emoji: '🔒',
-    decorIcon1: Icons.shield_rounded, decorIcon2: Icons.credit_card_rounded,
-    title: 'Pago 100% seguro',
-    subtitle: 'Tu dinero queda retenido en un contrato inteligente hasta que confirmes que el servicio fue completado.',
+    color: GardenService.hospedaje.hero.last, accentColor: GardenService.hospedaje.hero.first,
+    icon: GIcon.pagoProtegido,
+    decorIcon1: GIcon.seguridad, decorIcon2: GIcon.billetera,
+    title: 'Pago protegido',
+    subtitle: 'GARDEN guarda tu pago y se lo entrega al cuidador recién cuando termina el servicio.',
   ),
   _Step(
-    color: Color(0xFF00695C), accentColor: Color(0xFF26A69A),
-    icon: Icons.photo_camera_rounded, emoji: '📸',
-    decorIcon1: Icons.notifications_rounded, decorIcon2: Icons.star_rounded,
+    color: GardenColors.primaryDark, accentColor: GardenService.paseo.hero.first,
+    icon: GIcon.foto, brote: BrotePose.celebrando,
+    decorIcon1: GIcon.notificaciones, decorIcon2: GIcon.estrella,
     title: 'Tranquilidad total',
     subtitle: 'Recibe fotos y actualizaciones en tiempo real durante el servicio. Al final, califica la experiencia.',
   ),
@@ -279,12 +286,11 @@ class _StepIllustrationState extends State<_StepIllustration>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))
-      ..repeat(reverse: true);
-    _float = Tween<double>(begin: -10, end: 10)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-    _scale = Tween<double>(begin: 0.94, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _ctrl = AnimationController(vsync: this, duration: GardenMotion.celebrate)..forward();
+    _float = Tween<double>(begin: 14, end: 0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: GardenMotion.enter));
+    _scale = Tween<double>(begin: 0.9, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: GardenMotion.pop));
   }
 
   @override
@@ -329,7 +335,7 @@ class _StepIllustrationState extends State<_StepIllustration>
             left: 36,
             child: Opacity(
               opacity: 0.22,
-              child: Icon(s.decorIcon1, color: Colors.white, size: 34),
+              child: GardenIcon(s.decorIcon1, color: Colors.white, size: GIconSize.xl, state: GIconState.active),
             ),
           ),
           Positioned(
@@ -337,7 +343,7 @@ class _StepIllustrationState extends State<_StepIllustration>
             right: 44,
             child: Opacity(
               opacity: 0.22,
-              child: Icon(s.decorIcon2, color: Colors.white, size: 28),
+              child: GardenIcon(s.decorIcon2, color: Colors.white, size: GIconSize.lg, state: GIconState.active),
             ),
           ),
           Positioned(
@@ -345,7 +351,7 @@ class _StepIllustrationState extends State<_StepIllustration>
             left: 90,
             child: Opacity(
               opacity: 0.12,
-              child: Icon(s.icon, color: Colors.white, size: 22),
+              child: GardenIcon(s.icon, color: Colors.white, size: GIconSize.md, state: GIconState.active),
             ),
           ),
 
@@ -377,7 +383,13 @@ class _StepIllustrationState extends State<_StepIllustration>
                       ],
                     ),
                     child: Center(
-                      child: Text(s.emoji, style: const TextStyle(fontSize: 74)),
+                      child: s.brote != null
+                          ? Brote(pose: s.brote!, size: 128)
+                          : Transform.scale(
+                              scale: 1.6,
+                              child: GardenIcon(s.icon,
+                                  color: Colors.white, size: GIconSize.hero, state: GIconState.active),
+                            ),
                     ),
                   ),
                 ),
@@ -399,7 +411,7 @@ class _StepIllustrationState extends State<_StepIllustration>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(s.icon, color: Colors.white, size: 13),
+                  GardenIcon(s.icon, color: Colors.white, size: GIconSize.xs, state: GIconState.active),
                   const SizedBox(width: 6),
                   Text(
                     'Paso ${widget.stepIndex + 1} de ${_kSteps.length}',

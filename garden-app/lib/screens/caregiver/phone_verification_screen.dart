@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -214,7 +215,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text('📱', style: TextStyle(fontSize: 48)),
+              const GardenIcon(GIcon.telefono, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
               const SizedBox(height: 20),
               Text(
                 'Verifica tu teléfono',
@@ -233,7 +234,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                 const SizedBox(height: 6),
                 TextButton.icon(
                   onPressed: () => _showChangePhoneDialog(context, subtextColor),
-                  icon: const Icon(Icons.edit_outlined, size: 15, color: GardenColors.primary),
+                  icon: const GardenIcon(GIcon.editar, size: GIconSize.sm, color: GardenColors.primary),
                   label: const Text('Cambiar número',
                       style: TextStyle(color: GardenColors.primary, fontSize: 13)),
                 ),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../design/garden_icons.dart';
 import '../theme/garden_theme.dart';
 
 /// Notificación individual tal como la devuelve el backend.
@@ -161,7 +162,7 @@ class _NotificationBellState extends State<NotificationBell> {
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          icon: Icon(Icons.notifications_outlined, color: iconColor),
+          icon: GardenIcon(GIcon.notificaciones, color: iconColor, size: GIconSize.lg),
           tooltip: 'Notificaciones',
           onPressed: _openSheet,
         ),
@@ -301,7 +302,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
                     color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.inbox_outlined, color: GardenColors.primary, size: 20),
+                  child: const GardenIcon(GIcon.notificaciones, color: GardenColors.primary, state: GIconState.active),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -404,10 +405,10 @@ class _NotificationRow extends StatelessWidget {
                 color: _typeColor(notif.type).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
+              child: GardenIcon(
                 _typeIcon(notif.type),
                 color: _typeColor(notif.type),
-                size: 20,
+                state: GIconState.active,
               ),
             ),
             const SizedBox(width: 12),
@@ -469,24 +470,25 @@ class _NotificationRow extends StatelessWidget {
     );
   }
 
-  static IconData _typeIcon(String type) {
+  // Mismos iconos que el resto de la app para cada momento de la reserva.
+  static GIcon _typeIcon(String type) {
     switch (type) {
-      case 'NEW_BOOKING': return Icons.calendar_today_outlined;
-      case 'BOOKING_ACCEPTED': return Icons.check_circle_outline_rounded;
-      case 'BOOKING_REJECTED': return Icons.cancel_outlined;
-      case 'BOOKING_CANCELLED': return Icons.event_busy_outlined;
-      case 'PAYMENT_RECEIVED': return Icons.payments_outlined;
-      case 'REVIEW_RECEIVED': return Icons.star_outline_rounded;
-      case 'SERVICE_STARTED': return Icons.play_circle_outline_rounded;
-      case 'SERVICE_COMPLETED': return Icons.task_alt_rounded;
-      case 'CHAT_MESSAGE': return Icons.chat_bubble_outline_rounded;
-      case 'SYSTEM': return Icons.info_outline_rounded;
-      case 'PROFILE_APPROVED': return Icons.verified_outlined;
-      case 'PROFILE_REJECTED': return Icons.gpp_bad_outlined;
-      case 'WALLET_RECHARGE': return Icons.account_balance_wallet_outlined;
-      case 'DISPUTE': return Icons.gavel_rounded;
-      case 'CAREGIVER_WELCOME': return Icons.waving_hand_rounded;
-      default: return Icons.notifications_outlined;
+      case 'NEW_BOOKING': return GIcon.reservas;
+      case 'BOOKING_ACCEPTED': return GIcon.confirmado;
+      case 'BOOKING_REJECTED': return GIcon.cancelado;
+      case 'BOOKING_CANCELLED': return GIcon.cancelado;
+      case 'PAYMENT_RECEIVED': return GIcon.billetera;
+      case 'REVIEW_RECEIVED': return GIcon.estrella;
+      case 'SERVICE_STARTED': return GIcon.enVivo;
+      case 'SERVICE_COMPLETED': return GIcon.terminado;
+      case 'CHAT_MESSAGE': return GIcon.chat;
+      case 'SYSTEM': return GIcon.ayuda;
+      case 'PROFILE_APPROVED': return GIcon.verificado;
+      case 'PROFILE_REJECTED': return GIcon.conflicto;
+      case 'WALLET_RECHARGE': return GIcon.billetera;
+      case 'DISPUTE': return GIcon.enRevision;
+      case 'CAREGIVER_WELCOME': return GIcon.huella;
+      default: return GIcon.notificaciones;
     }
   }
 
@@ -570,7 +572,7 @@ class _NotificationDetailDialog extends StatelessWidget {
                       color: iconColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(iconData, color: iconColor, size: 26),
+                    child: GardenIcon(iconData, color: iconColor, size: GIconSize.lg, state: GIconState.active),
                   ),
                   const SizedBox(width: 14),
                   Expanded(

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
@@ -262,8 +264,8 @@ class _MobileServiceSelectorScreenState
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.pets_rounded,
-                                      color: GardenColors.primary, size: 14),
+                                  GardenIcon(GIcon.huella,
+                                      color: GardenColors.primary, size: GIconSize.sm, state: GIconState.active),
                                   SizedBox(width: 5),
                                   Text('GARDEN',
                                       style: TextStyle(
@@ -312,8 +314,8 @@ class _MobileServiceSelectorScreenState
                         const SizedBox(height: 20),
                         Text(
                           AuthState.hasSession
-                              ? (_userName != null ? '¡Hola, $_userName! 👋' : '¡Bienvenido! 👋')
-                              : 'Hola 👋\nQue gusto verte por aqui',
+                              ? (_userName != null ? '¡Hola, $_userName!' : '¡Te damos la bienvenida!')
+                              : 'Hola,\nqué gusto verte por aquí',
                           style: TextStyle(
                             color: textColor,
                             fontSize: 28,
@@ -345,14 +347,13 @@ class _MobileServiceSelectorScreenState
                     opacity: _card1Fade,
                     child: _ServiceCard(
                       service: 'paseo',
-                      emoji: '🦮',
                       title: 'Paseo',
                       description: 'Un cuidador lleva a tu perro a pasear. Disponible en bloques de 1 hora.',
                       features: const ['Seguimiento GPS', 'Fotos durante el paseo', 'Hasta 3 perros'],
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF2E7D32), Color(0xFF4CAF50)],
+                        colors: GardenService.paseo.hero,
                       ),
                       isTapping: _tapping == 'paseo',
                       surface: surface,
@@ -365,54 +366,52 @@ class _MobileServiceSelectorScreenState
 
                 const SizedBox(height: 16),
 
-                // ── Tarjeta HOSPEDAJE ──
+                // ── Tarjeta GUARDERÍA (de día) ──
                 SlideTransition(
                   position: _card2Slide,
                   child: FadeTransition(
                     opacity: _card2Fade,
                     child: _ServiceCard(
-                      service: 'hospedaje',
-                      emoji: '🏠',
-                      title: 'Hospedaje',
-                      description: 'Tu mascota se queda en casa del cuidador. Cuidado 24/7 por noches completas.',
-                      features: const ['Precio por noche', 'Actualizaciones diarias', 'Casa verificada'],
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
-                      ),
-                      isTapping: _tapping == 'hospedaje',
-                      surface: surface,
-                      textColor: textColor,
-                      subtextColor: subtextColor,
-                      onTap: () => _select('hospedaje'),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ── Tarjeta GUARDERÍA ──
-                SlideTransition(
-                  position: _card3Slide,
-                  child: FadeTransition(
-                    opacity: _card3Fade,
-                    child: _ServiceCard(
                       service: 'guarderia',
-                      emoji: '🏡',
                       title: 'Guardería',
                       description: 'Deja a tu mascota por horas con un cuidador. Ideal para jornadas laborales.',
                       features: const ['Por horas (3h a 10h)', 'Foto al inicio y al final', 'Precio por hora'],
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+                        colors: GardenService.guarderia.hero,
                       ),
                       isTapping: _tapping == 'guarderia',
                       surface: surface,
                       textColor: textColor,
                       subtextColor: subtextColor,
                       onTap: () => _select('guarderia'),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Tarjeta HOSPEDAJE (de noche) ──
+                SlideTransition(
+                  position: _card3Slide,
+                  child: FadeTransition(
+                    opacity: _card3Fade,
+                    child: _ServiceCard(
+                      service: 'hospedaje',
+                      title: 'Hospedaje',
+                      description: 'Tu mascota se queda en casa del cuidador. Cuidado 24/7 por noches completas.',
+                      features: const ['Precio por noche', 'Actualizaciones diarias', 'Casa verificada'],
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: GardenService.hospedaje.hero,
+                      ),
+                      isTapping: _tapping == 'hospedaje',
+                      surface: surface,
+                      textColor: textColor,
+                      subtextColor: subtextColor,
+                      onTap: () => _select('hospedaje'),
                     ),
                   ),
                 ),
@@ -446,7 +445,7 @@ class _MobileServiceSelectorScreenState
                         text: TextSpan(
                           style: TextStyle(color: subtextColor, fontSize: 13),
                           children: [
-                            const TextSpan(text: '¿Querés cuidar mascotas? '),
+                            const TextSpan(text: '¿Quieres cuidar mascotas? '),
                             TextSpan(
                               text: 'Conviértete en cuidador',
                               style: TextStyle(
@@ -473,7 +472,6 @@ class _MobileServiceSelectorScreenState
 
 class _ServiceCard extends StatelessWidget {
   final String service;
-  final String emoji;
   final String title;
   final String description;
   final List<String> features;
@@ -486,7 +484,6 @@ class _ServiceCard extends StatelessWidget {
 
   const _ServiceCard({
     required this.service,
-    required this.emoji,
     required this.title,
     required this.description,
     required this.features,
@@ -530,7 +527,12 @@ class _ServiceCard extends StatelessWidget {
                   border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                 ),
                 child: Center(
-                  child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                  child: GardenIcon(
+                    GIcon.forService(GardenService.fromApi(service) ?? GardenService.paseo),
+                    size: GIconSize.xl,
+                    color: Colors.white,
+                    state: GIconState.active,
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -587,8 +589,8 @@ class _ServiceCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.18),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.arrow_forward_rounded,
-                    color: Colors.white, size: 15),
+                child: const Center(child: GardenIcon(GIcon.siguiente,
+                    color: Colors.white, size: GIconSize.sm)),
               ),
             ],
           ),

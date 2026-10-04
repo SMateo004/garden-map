@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 
 class ClientWelcomeScreen extends StatefulWidget {
@@ -331,7 +332,7 @@ class _Page1Illustration extends StatelessWidget {
                 name: 'Carlos R.',
                 rating: '4.8',
                 price: 'Bs.70',
-                emoji: '🐾',
+                icon: GIcon.huella,
                 surface: surface,
                 border: border,
                 textColor: textColor,
@@ -347,7 +348,7 @@ class _Page1Illustration extends StatelessWidget {
               name: 'Ana García',
               rating: '4.9',
               price: 'Bs.80',
-              emoji: '🐕',
+              icon: GIcon.perro,
               verified: true,
               surface: surface,
               border: border,
@@ -379,7 +380,7 @@ class _MiniCaregiverCard extends StatelessWidget {
   final String name;
   final String rating;
   final String price;
-  final String emoji;
+  final GIcon icon;
   final bool verified;
   final Color surface;
   final Color border;
@@ -390,7 +391,7 @@ class _MiniCaregiverCard extends StatelessWidget {
     required this.name,
     required this.rating,
     required this.price,
-    required this.emoji,
+    required this.icon,
     this.verified = false,
     required this.surface,
     required this.border,
@@ -421,7 +422,7 @@ class _MiniCaregiverCard extends StatelessWidget {
                   color: GardenColors.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
+                child: Center(child: GardenIcon(icon, size: GIconSize.md, state: GIconState.active)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -813,7 +814,7 @@ class _Page3Illustration extends StatelessWidget {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        const Text('🐶', style: TextStyle(fontSize: 52)),
+                        const GardenIcon(GIcon.perro, size: GIconSize.hero, color: Colors.white, state: GIconState.active),
                         // Punto de grabación en vivo
                         Positioned(
                           top: 8, right: 8,
@@ -918,7 +919,7 @@ class _Page3Illustration extends StatelessWidget {
                       borderRadius: GardenRadius.sm_,
                     ),
                     child: const Center(
-                      child: Text('📸', style: TextStyle(fontSize: 14)),
+                      child: GardenIcon(GIcon.foto, size: GIconSize.sm, color: GardenColors.secondary, state: GIconState.active),
                     ),
                   ),
                   const SizedBox(width: 7),
@@ -956,7 +957,7 @@ class _Page3Illustration extends StatelessWidget {
                 border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
               ),
               child: const Center(
-                child: Text('❤️', style: TextStyle(fontSize: 14)),
+                child: GardenIcon(GIcon.favorito, size: GIconSize.sm, color: GardenColors.error, state: GIconState.active),
               ),
             ),
           ),

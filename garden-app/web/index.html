@@ -158,7 +158,7 @@ const IcoSearch=(p)=><Ico {...p} d="m20 20-4.3-4.3" extra={<circle cx="11" cy="1
 const SERVICES = [
   { id:'paseo', label:'Paseo', desc:'Salidas con seguimiento GPS', Icon:IcoWalk },
   { id:'hospedaje', label:'Hospedaje', desc:'En casa del cuidador', Icon:IcoHome },
-  { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajás', Icon:IcoSun },
+  { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajas', Icon:IcoSun },
 ];
 const WHENS = ['Hoy','Mañana','Este fin de semana','Elegir fechas'];
 const PETS = [
@@ -302,7 +302,7 @@ const SearchBar = ({ onSearch }) => {
     return ()=>document.removeEventListener('mousedown', h);
   },[]);
 
-  const svcLabel = service ? SERVICES.find(s=>s.id===service).label : 'Elegí un servicio';
+  const svcLabel = service ? SERVICES.find(s=>s.id===service).label : 'Elige un servicio';
   const canSearch = service || zone || when || pet;
 
   const Seg = ({ id, label, value, placeholder, first, onOpen }) => {
@@ -333,11 +333,11 @@ const SearchBar = ({ onSearch }) => {
         boxShadow:'0 18px 50px rgba(30,45,15,0.14)',
         padding:6,
       }}>
-        <Seg id="service" label="Servicio" value={service?svcLabel:null} placeholder="Elegí un servicio" first/>
+        <Seg id="service" label="Servicio" value={service?svcLabel:null} placeholder="Elige un servicio" first/>
         <Divider/>
         <Seg id="where" label="Dónde" value={selectedZoneLabel} placeholder={selectedCity ? `Zona en ${selectedCity.name}` : 'Ciudad y zona'}/>
         <Divider/>
-        <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
+        <Seg id="when" label="Cuándo" value={when} placeholder="Agrega una fecha"/>
         <Divider/>
         <Seg id="pet" label="Mascota" value={pet?PETS.find(p=>p.id===pet)?.label:null} placeholder="¿Quién va?" onOpen={()=>setPetStep('species')}/>
         <button className="search-btn" onClick={()=>onSearch({service,zone,when,pet})} style={{
@@ -441,7 +441,7 @@ const SearchBar = ({ onSearch }) => {
 
           {open==='when' && (
             <div>
-              <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>¿Cuándo lo necesitás?</div>
+              <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>¿Cuándo lo necesitas?</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
                 {WHENS.map(w=>{
                   const on = when===w;
@@ -467,7 +467,7 @@ const SearchBar = ({ onSearch }) => {
                   <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>🐶</span>
                   <div>
                     <div style={{ fontWeight:800, fontSize:15 }}>Perro</div>
-                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Elegí el tamaño →</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Elige el tamaño →</div>
                   </div>
                 </button>
                 <button onClick={()=>{setPet('gato');setOpen(null);}} style={{
@@ -579,7 +579,7 @@ const SearchReveal = ({ query, onClose }) => {
               Encontramos <span style={{ color:'var(--primary)' }}>{count} cuidadores</span> verificados cerca de {zone}.
             </div>
             <p style={{ fontSize:17, color:'var(--text-sec)', marginTop:16, lineHeight:1.5 }}>
-              Conocelos, leé sus reseñas y reservá con pago protegido — todo desde Garden.
+              Conócelos, lee sus reseñas y reserva con pago protegido — todo desde Garden.
             </p>
             <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:30 }}>
               {/* >>> Ver en el marketplace web */}
@@ -612,7 +612,7 @@ const Hero = ({ onSearch }) => (
 
     <div style={{ position:'relative', maxWidth:1000 }}>
       <h1 className="hero-h1" style={{ fontWeight:900, fontSize:'clamp(44px,7vw,96px)', letterSpacing:'-0.045em', lineHeight:0.98, textWrap:'balance' }}>
-        Cuidamos a quien<br/>vos más <span style={{ color:'var(--primary)', fontStyle:'italic' }}>querés</span>.
+        Cuidamos a quien<br/>tú más <span style={{ color:'var(--primary)', fontStyle:'italic' }}>quieres</span>.
       </h1>
       <p className="hero-sub" style={{ fontSize:'clamp(18px,2.2vw,24px)', color:'var(--text-sec)', maxWidth:640, margin:'24px auto 0', lineHeight:1.5, textWrap:'pretty' }}>
         Paseadores, cuidadores y hospedaje para tu mascota — <strong style={{ color:'var(--text)' }}>verificados</strong>, cerca de tu casa y con pago protegido.
@@ -673,17 +673,17 @@ const Services = () => (
 // ─── HOW IT WORKS ──────────────────────────────────────────
 const How = () => {
   const steps = [
-    { n:'01', t:'Buscá', d:'Elegí servicio, zona y fecha. Te mostramos solo cuidadores verificados cerca tuyo.', Icon:IcoSearch },
-    { n:'02', t:'Conocé', d:'Mirá perfiles, reseñas reales y respondé tus dudas por chat antes de reservar.', Icon:IcoPaw },
-    { n:'03', t:'Reservá', d:'Pagás por QR y el dinero queda protegido hasta confirmar que todo salió bien.', Icon:IcoShield },
-    { n:'04', t:'Relajate', d:'Recibí fotos y seguimiento en tiempo real. Tu mascota en las mejores manos.', Icon:IcoSun },
+    { n:'01', t:'Busca', d:'Elige servicio, zona y fecha. Te mostramos solo cuidadores verificados cerca de ti.', Icon:IcoSearch },
+    { n:'02', t:'Conoce', d:'Mira perfiles, reseñas reales y resuelve tus dudas por chat antes de reservar.', Icon:IcoPaw },
+    { n:'03', t:'Reserva', d:'Pagas por QR y el dinero queda protegido hasta confirmar que todo salió bien.', Icon:IcoShield },
+    { n:'04', t:'Relájate', d:'Recibe fotos y seguimiento en tiempo real. Tu mascota en las mejores manos.', Icon:IcoSun },
   ];
   return (
     <section id="como-funciona" className="sec-pad" style={{ padding:'120px 5vw', background:'var(--forest)', color:'var(--bg)', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:'-15%', left:'-10%', width:560, height:560, borderRadius:'50%', background:'radial-gradient(circle, rgba(119,140,67,0.18), transparent 70%)' }}/>
       <div style={{ maxWidth:1320, margin:'0 auto', position:'relative' }}>
         <Reveal><div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--accent)', fontWeight:600 }}>Cómo funciona</div></Reveal>
-        <Reveal delay={0.05}><h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,60px)', letterSpacing:'-0.035em', marginTop:14, maxWidth:820, lineHeight:1.04, color:'var(--bg)' }}>Cuatro pasos entre vos y la tranquilidad.</h2></Reveal>
+        <Reveal delay={0.05}><h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,60px)', letterSpacing:'-0.035em', marginTop:14, maxWidth:820, lineHeight:1.04, color:'var(--bg)' }}>Cuatro pasos entre tú y la tranquilidad.</h2></Reveal>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))', gap:20, marginTop:60 }}>
           {steps.map((s,i)=>(
@@ -714,7 +714,7 @@ const Trust = () => (
         <div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Confianza</div>
         <h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,58px)', letterSpacing:'-0.035em', marginTop:14, lineHeight:1.04 }}>No es buena onda.<br/>Es <span style={{ color:'var(--primary)', fontStyle:'italic' }}>verificación real</span>.</h2>
         <p style={{ fontSize:19, color:'var(--text-sec)', marginTop:20, lineHeight:1.55, maxWidth:520 }}>
-          Cada cuidador pasa por verificación de identidad con IA y queda registrado de forma permanente. Tu pago queda protegido hasta que confirmás que todo salió bien.
+          Cada cuidador pasa por verificación de identidad con IA y queda registrado de forma permanente. Tu pago queda protegido hasta que confirmas que todo salió bien.
         </p>
         <div style={{ display:'flex', flexDirection:'column', gap:16, marginTop:32 }}>
           {[
@@ -738,7 +738,7 @@ const Trust = () => (
             ['+500','mascotas cuidadas','var(--surface)','var(--text)'],
             ['100%','identidades verificadas','var(--primary)','var(--bg)'],
             ['4.9★','calificación promedio','var(--lime)','var(--text)'],
-            ['24h','soporte para vos','var(--forest)','var(--bg)'],
+            ['24h','soporte para ti','var(--forest)','var(--bg)'],
           ].map(([n,l,bg,col],i)=>(
             <div key={i} style={{ background:bg, color:col, borderRadius:24, padding:'36px 30px', minHeight:180, display:'flex', flexDirection:'column', justifyContent:'space-between', border: bg==='var(--surface)'?'1px solid var(--border)':'none', transform:i%2?'translateY(24px)':'none' }}>
               <div className="mono" style={{ fontSize:54, fontWeight:600, letterSpacing:'-0.03em', lineHeight:1 }}>{n}</div>
@@ -760,10 +760,10 @@ const Download = () => (
         <div style={{ position:'absolute', left:-40, top:-40, opacity:0.1 }}><PawLeaf size={200} color="#fff" accent="#fff"/></div>
         <div style={{ position:'relative' }}>
           <h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,62px)', letterSpacing:'-0.04em', color:'var(--bg)', lineHeight:1.02, textWrap:'balance' }}>
-            Llevá Garden en tu bolsillo.
+            Lleva Garden en tu bolsillo.
           </h2>
           <p style={{ fontSize:'clamp(17px,2vw,21px)', color:'rgba(245,242,236,0.85)', marginTop:18, maxWidth:560, margin:'18px auto 0', lineHeight:1.5 }}>
-            Buscá, reservá y seguí a tu mascota en tiempo real. Gratis en iOS y Android.
+            Busca, reserva y sigue a tu mascota en tiempo real. Gratis en iOS y Android.
           </p>
           <div style={{ display:'flex', gap:14, justifyContent:'center', marginTop:38, flexWrap:'wrap' }}>
             <a href={APP_STORE_URL}
@@ -796,7 +796,7 @@ const footerLinks = {
     ['Sobre Garden', '/'],
     ['Conviértete en cuidador', flutterUrl('/become-caregiver')],
     ['Contacto', 'mailto:hola@gardenbo.com'],
-    ['Trabajá con nosotros', flutterUrl('/become-caregiver')],
+    ['Trabaja con nosotros', flutterUrl('/become-caregiver')],
   ],
 };
 

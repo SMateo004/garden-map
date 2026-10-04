@@ -1,5 +1,8 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
+import '../design/brote.dart';
+import '../design/garden_icons.dart';
+import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
 
 // ── TIPOS DE ESTADO VACÍO ─────────────────────────────────────────────────
@@ -16,92 +19,44 @@ enum GardenEmptyType {
   generic,
 }
 
-// ── CONFIGURACIÓN POR TIPO ────────────────────────────────────────────────
+// ── QUÉ SE DIBUJA EN CADA TIPO ────────────────────────────────────────────
+// Brote solo donde la escena es de la familia (mascotas, chat, buscar
+// cuidador, reservas, notificaciones). Dinero, identidad y los listados de
+// admin llevan un icono sereno del sistema: Brote nunca va en pantallas de
+// dinero, pago, disputas ni verificación (plan de rediseño).
 class _EmptyConfig {
-  final String emoji;
-  final IconData icon;
-  final Color color;
-  final List<Color> gradientColors;
-
-  const _EmptyConfig({
-    required this.emoji,
-    required this.icon,
-    required this.color,
-    required this.gradientColors,
-  });
+  final BrotePose? brote;
+  final GIcon icon;
+  const _EmptyConfig({this.brote, required this.icon});
 }
 
 const _configs = <GardenEmptyType, _EmptyConfig>{
-  GardenEmptyType.notifications: _EmptyConfig(
-    emoji: '🔔',
-    icon: Icons.notifications_none_rounded,
-    color: GardenColors.primary,
-    gradientColors: [GardenColors.orange, GardenColors.orangeDark],
-  ),
-  GardenEmptyType.bookings: _EmptyConfig(
-    emoji: '📅',
-    icon: Icons.calendar_today_outlined,
-    color: GardenColors.secondary,
-    gradientColors: [GardenColors.info, GardenColors.infoDark],
-  ),
-  GardenEmptyType.reviews: _EmptyConfig(
-    emoji: '⭐',
-    icon: Icons.star_outline_rounded,
-    color: GardenColors.star,
-    gradientColors: [GardenColors.warning, Color(0xFFE09000)],
-  ),
-  GardenEmptyType.caregivers: _EmptyConfig(
-    emoji: '🐾',
-    icon: Icons.pets_rounded,
-    color: GardenColors.primary,
-    gradientColors: [GardenColors.orange, GardenColors.orangeDark],
-  ),
-  GardenEmptyType.identity: _EmptyConfig(
-    emoji: '🪪',
-    icon: Icons.verified_user_outlined,
-    color: GardenColors.success,
-    gradientColors: [GardenColors.accent, GardenColors.successDark],
-  ),
-  GardenEmptyType.payments: _EmptyConfig(
-    emoji: '💳',
-    icon: Icons.check_circle_outline_rounded,
-    color: GardenColors.success,
-    gradientColors: [GardenColors.accent, GardenColors.successDark],
-  ),
-  GardenEmptyType.withdrawals: _EmptyConfig(
-    emoji: '💰',
-    icon: Icons.account_balance_wallet_outlined,
-    color: GardenColors.secondary,
-    gradientColors: [GardenColors.info, GardenColors.infoDark],
-  ),
-  GardenEmptyType.chat: _EmptyConfig(
-    emoji: '💬',
-    icon: Icons.chat_bubble_outline_rounded,
-    color: GardenColors.secondary,
-    gradientColors: [GardenColors.info, GardenColors.infoDark],
-  ),
-  GardenEmptyType.pets: _EmptyConfig(
-    emoji: '🐶',
-    icon: Icons.pets_rounded,
-    color: GardenColors.primary,
-    gradientColors: [GardenColors.orange, GardenColors.orangeDark],
-  ),
-  GardenEmptyType.generic: _EmptyConfig(
-    emoji: '🌱',
-    icon: Icons.inbox_outlined,
-    color: GardenColors.primary,
-    gradientColors: [GardenColors.orange, GardenColors.orangeDark],
-  ),
+  GardenEmptyType.notifications: _EmptyConfig(brote: BrotePose.durmiendo, icon: GIcon.notificaciones),
+  GardenEmptyType.bookings: _EmptyConfig(brote: BrotePose.esperando, icon: GIcon.reservas),
+  GardenEmptyType.reviews: _EmptyConfig(icon: GIcon.estrella),
+  GardenEmptyType.caregivers: _EmptyConfig(brote: BrotePose.buscando, icon: GIcon.buscar),
+  GardenEmptyType.identity: _EmptyConfig(icon: GIcon.identidadVerificada),
+  GardenEmptyType.payments: _EmptyConfig(icon: GIcon.pagoProtegido),
+  GardenEmptyType.withdrawals: _EmptyConfig(icon: GIcon.retiro),
+  GardenEmptyType.chat: _EmptyConfig(brote: BrotePose.hola, icon: GIcon.chat),
+  GardenEmptyType.pets: _EmptyConfig(brote: BrotePose.hola, icon: GIcon.mascotas),
+  GardenEmptyType.generic: _EmptyConfig(icon: GIcon.huella),
 };
 
 // ── WIDGET PRINCIPAL ──────────────────────────────────────────────────────
-class GardenEmptyState extends StatefulWidget {
+// Estado vacío = invitación con una acción, nunca solo "No hay datos".
+// Entra una vez (fundido + pop corto) y queda quieto: sin bucles.
+class GardenEmptyState extends StatelessWidget {
   final GardenEmptyType type;
   final String title;
   final String subtitle;
   final String? ctaLabel;
   final VoidCallback? onCta;
   final bool compact;
+
+  /// Fuerza una pose de Brote (ej. [BrotePose.oops] para un error de
+  /// conexión). Si es null se usa la del tipo.
+  final BrotePose? brote;
 
   const GardenEmptyState({
     super.key,
@@ -111,221 +66,80 @@ class GardenEmptyState extends StatefulWidget {
     this.ctaLabel,
     this.onCta,
     this.compact = false,
+    this.brote,
   });
 
   @override
-  State<GardenEmptyState> createState() => _GardenEmptyStateState();
-}
-
-class _GardenEmptyStateState extends State<GardenEmptyState>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _float;
-  late Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat(reverse: true);
-
-    _float = Tween<double>(begin: 0, end: -10).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final cfg = _configs[widget.type]!;
-    final isDark = themeNotifier.isDark;
+    final cfg = _configs[type]!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final illustrationSize = widget.compact ? 80.0 : 110.0;
+    final size = compact ? 84.0 : 116.0;
+    final pose = brote ?? cfg.brote;
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return FadeTransition(
-          opacity: _fade,
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: GardenSpacing.xxxl,
-                vertical: widget.compact ? GardenSpacing.xl : GardenSpacing.huge,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ── ILUSTRACIÓN FLOTANTE ───────────────────────
-                  Transform.translate(
-                    offset: Offset(0, _float.value),
-                    child: _GardenIllustration(
-                      config: cfg,
-                      size: illustrationSize,
-                      isDark: isDark,
-                    ),
-                  ),
-
-                  SizedBox(height: widget.compact ? GardenSpacing.lg : GardenSpacing.xxl),
-
-                  // ── TÍTULO ─────────────────────────────────────
-                  Text(
-                    widget.title,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: widget.compact ? 16 : 20,
-                      fontWeight: FontWeight.w700,
-                      height: 1.3,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: GardenSpacing.sm),
-
-                  // ── SUBTÍTULO ──────────────────────────────────
-                  Text(
-                    widget.subtitle,
-                    style: TextStyle(
-                      color: subtextColor,
-                      fontSize: widget.compact ? 13 : 14,
-                      height: 1.6,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  // ── CTA BUTTON ─────────────────────────────────
-                  if (widget.ctaLabel != null && widget.onCta != null) ...[
-                    SizedBox(height: widget.compact ? GardenSpacing.lg : GardenSpacing.xxl),
-                    GardenButton(
-                      label: widget.ctaLabel!,
-                      color: cfg.color,
-                      height: 48,
-                      onPressed: widget.onCta,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ── ILUSTRACIÓN SVG-LIKE ──────────────────────────────────────────────────
-class _GardenIllustration extends StatelessWidget {
-  final _EmptyConfig config;
-  final double size;
-  final bool isDark;
-
-  const _GardenIllustration({
-    required this.config,
-    required this.size,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size + 40,
-      height: size + 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // ── Anillo exterior difuso ────────────────────────────
-          Container(
-            width: size + 40,
-            height: size + 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: config.color.withValues(alpha: isDark ? 0.06 : 0.08),
-            ),
-          ),
-
-          // ── Anillo medio ──────────────────────────────────────
-          Container(
-            width: size + 16,
-            height: size + 16,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: config.color.withValues(alpha: isDark ? 0.10 : 0.12),
-            ),
-          ),
-
-          // ── Círculo principal con gradiente ───────────────────
-          Container(
+    final Widget illustration = pose != null
+        ? Brote(pose: pose, size: size)
+        : Container(
             width: size,
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  config.gradientColors[0].withValues(alpha: isDark ? 0.22 : 0.18),
-                  config.gradientColors[1].withValues(alpha: isDark ? 0.14 : 0.10),
-                ],
-              ),
-              border: Border.all(
-                color: config.color.withValues(alpha: isDark ? 0.25 : 0.20),
-                width: 1.5,
-              ),
+              color: GardenColors.primary.withValues(alpha: isDark ? 0.14 : 0.10),
             ),
             child: Center(
-              child: Text(
-                config.emoji,
-                style: TextStyle(fontSize: size * 0.42),
+              child: GardenIcon(
+                cfg.icon,
+                size: compact ? GIconSize.xl : GIconSize.hero,
+                state: GIconState.active,
               ),
             ),
-          ),
+          );
 
-          // ── Puntos decorativos ────────────────────────────────
-          ..._buildDecorations(size, config.color, isDark),
-        ],
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: GardenMotion.resolve(context, GardenMotion.expressive),
+      curve: GardenMotion.enter,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 8 * (1 - t)), child: child),
       ),
-    );
-  }
-
-  List<Widget> _buildDecorations(double size, Color color, bool isDark) {
-    final radius = (size / 2) + 8;
-    final dots = [
-      (angle: -45.0, dotSize: 8.0, opacity: 0.5),
-      (angle: 135.0, dotSize: 6.0, opacity: 0.35),
-      (angle: 200.0, dotSize: 5.0, opacity: 0.25),
-    ];
-
-    return dots.map((d) {
-      final radians = d.angle * math.pi / 180;
-      final dx = math.cos(radians) * radius;
-      final dy = math.sin(radians) * radius;
-      return Transform.translate(
-        offset: Offset(dx, dy),
-        child: Container(
-          width: d.dotSize,
-          height: d.dotSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: isDark ? d.opacity : d.opacity * 0.8),
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: GardenSpacing.xxxl,
+            vertical: compact ? GardenSpacing.xl : GardenSpacing.huge,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              illustration,
+              SizedBox(height: compact ? GardenSpacing.lg : GardenSpacing.xxl),
+              Text(
+                title,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: compact ? 16 : 20,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: GardenSpacing.sm),
+              Text(
+                subtitle,
+                style: TextStyle(color: subtextColor, fontSize: compact ? 13 : 14, height: 1.6),
+                textAlign: TextAlign.center,
+              ),
+              if (ctaLabel != null && onCta != null) ...[
+                SizedBox(height: compact ? GardenSpacing.lg : GardenSpacing.xxl),
+                GardenButton(label: ctaLabel!, height: 48, onPressed: onCta),
+              ],
+            ],
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 }
