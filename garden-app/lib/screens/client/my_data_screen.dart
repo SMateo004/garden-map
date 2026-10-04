@@ -40,6 +40,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
   DateTime? _phoneChangeUntil;
   String _savedPhone = '';
   bool get _phoneLocked => _phoneVerified && !_phoneChangeAuthorized;
+  // Tras un intento de guardar con datos faltantes, los campos vacíos se marcan en rojo.
+  bool _showErrors = false;
 
   late TextEditingController _firstCtrl;
   late TextEditingController _lastCtrl;
@@ -256,59 +258,89 @@ class _MyDataScreenState extends State<MyDataScreen> {
     return parts.isEmpty ? _addressCtrl.text.trim() : parts.join(', ');
   }
 
-  /// Espejo en vivo de las validaciones de _save() (sin SnackBars), para
-  /// deshabilitar "Guardar cambios" hasta que el perfil esté realmente
-  /// completo — mismos campos que _isClientDataIncomplete en profile_screen.dart.
-  bool get _canSave {
-    final hasPhoto = _pendingPhotoBytes != null ||
-        (_userData?['profilePicture'] as String? ?? '').trim().isNotEmpty;
-    return _firstCtrl.text.trim().isNotEmpty &&
-        _lastCtrl.text.trim().isNotEmpty &&
-        RegExp(r'^[67][0-9]{7}$').hasMatch(_phoneCtrl.text.trim()) &&
-        _streetCtrl.text.trim().isNotEmpty &&
-        _dateOfBirth != null &&
-        hasPhoto;
+  bool get _hasPhoto =>
+      _pendingPhotoBytes != null || (_userData?['profilePicture'] as String? ?? '').trim().isNotEmpty;
+
+  static final _phoneRegex = RegExp(r'^[67][0-9]{7}$');
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  /// TODOS los datos son obligatorios: devuelve el nombre de cada campo que
+  /// falta (vacío si está completo). Los mismos campos que mira
+  /// _isClientDataIncomplete en profile_screen.dart para el aviso pulsante, más
+  /// NIT/Carnet y razón social, que solo viven acá. Departamento y condominio
+  /// solo se piden si marcó que vive en departamento.
+  List<String> _missingFields() {
+    final missing = <String>[];
+    if (_firstCtrl.text.trim().isEmpty) missing.add('Nombre');
+    if (_lastCtrl.text.trim().isEmpty) missing.add('Apellido');
+    // Con el correo ya verificado el campo no se edita (y siempre tiene valor).
+    if (_userData?['emailVerified'] != true && !_emailRegex.hasMatch(_emailCtrl.text.trim())) {
+      missing.add('Correo electrónico válido');
+    }
+    if (!_phoneRegex.hasMatch(_phoneCtrl.text.trim())) missing.add('Teléfono (8 dígitos, empieza con 6 o 7)');
+    if (_gardenCityId == null) missing.add('Ciudad');
+    if (_addressZone == null) missing.add('Zona');
+    if (_streetCtrl.text.trim().isEmpty) missing.add('Calle');
+    if (_numberCtrl.text.trim().isEmpty) missing.add('Número de la dirección');
+    if (_isApartment) {
+      if (_apartmentCtrl.text.trim().isEmpty) missing.add('Departamento');
+      if (_condominioCtrl.text.trim().isEmpty) missing.add('Condominio o edificio');
+    }
+    if (_referenceCtrl.text.trim().isEmpty) missing.add('Referencia de la dirección');
+    if (_addressLat == null || _addressLng == null) missing.add('Ubicación exacta en el mapa');
+    if (_dateOfBirth == null) missing.add('Fecha de nacimiento');
+    if (_bioCtrl.text.trim().isEmpty) missing.add('Descripción');
+    if (!_hasPhoto) missing.add('Foto de perfil');
+    if (_nitCtrl.text.trim().isEmpty) missing.add('NIT o Carnet');
+    if (_nitRazonSocialCtrl.text.trim().isEmpty) missing.add('Razón social');
+    return missing;
   }
 
-  Future<void> _save() async {
-    final fn = _firstCtrl.text.trim();
-    final ln = _lastCtrl.text.trim();
-    if (fn.isEmpty || ln.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nombre y apellido son requeridos')));
-      return;
+  Future<void> _showMissingDialog(List<String> missing) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Faltan datos por completar'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Para guardar, completa todos los campos:', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 10),
+              for (final m in missing)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('•  $m', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido'))],
+      ),
+    );
+  }
+
+  /// PATCH /auth/me con el número solo: deja guardado el teléfono corregido para
+  /// poder mandarle el código enseguida, sin esperar al resto del guardado.
+  Future<String?> _patchPhoneOnly(String phone) async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$_baseUrl/auth/me'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) return null;
+      return (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'No se pudo guardar el teléfono';
+    } catch (_) {
+      return 'Error de conexión, intenta de nuevo.';
     }
-    // Estos campos son EXACTAMENTE los que revisa _isClientDataIncomplete en
-    // profile_screen.dart para apagar el indicador de "perfil incompleto" —
-    // antes no se exigían aquí, así que el usuario podía guardar y seguir
-    // viendo el pulso encendido sin entender por qué.
-    final phone = _phoneCtrl.text.trim();
-    if (!RegExp(r'^[67][0-9]{7}$').hasMatch(phone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa un número de celular boliviano válido (ej: 71234567)')));
-      return;
-    }
-    if (_streetCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La dirección (calle) es requerida')));
-      return;
-    }
-    if (_dateOfBirth == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona tu fecha de nacimiento')));
-      return;
-    }
-    // Foto obligatoria para dueños de mascota — si el usuario ya tiene una
-    // (subida acá o heredada de su perfil de cuidador, si tiene doble rol),
-    // esto no bloquea nada; solo exige que exista alguna.
-    final hasPhoto = _pendingPhotoBytes != null ||
-        (_userData?['profilePicture'] as String? ?? '').trim().isNotEmpty;
-    if (!hasPhoto) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La foto de perfil es obligatoria')));
-      return;
-    }
-    setState(() => _saving = true);
+  }
+
+  /// Guarda los datos del perfil (PATCH /auth/me + NIT/Carnet). Nunca lanza:
+  /// devuelve el error, así _save puede correrlo en paralelo al código del teléfono.
+  Future<({String? error, bool billingOk})> _persistData() async {
     try {
       final emailVerified = _userData?['emailVerified'] == true;
       // 'city'/'country' ya no se piden en un dropdown propio — se derivan
@@ -321,10 +353,10 @@ class _MyDataScreenState extends State<MyDataScreen> {
         if (match != null) cityName = match.name;
       }
       final body = <String, dynamic>{
-        'firstName': fn,
-        'lastName': ln,
+        'firstName': _firstCtrl.text.trim(),
+        'lastName': _lastCtrl.text.trim(),
         // Verificado = no se manda: el servidor tampoco lo acepta por esta vía. El
-        // cambio autorizado va por PhoneChangeFlow más abajo.
+        // cambio autorizado va por PhoneChangeFlow.
         if (!_phoneVerified) 'phone': _phoneCtrl.text.trim(),
         'city': cityName,
         'country': 'Bolivia',
@@ -355,39 +387,88 @@ class _MyDataScreenState extends State<MyDataScreen> {
         body: jsonEncode(body),
       );
       final data = jsonDecode(res.body);
-      if (!mounted) return;
-      if (data['success'] == true) {
-        final billingOk = await _saveBillingInfo();
-        if (!mounted) return;
-        // Cambio de teléfono: la verificación del número nuevo es inmediata y
-        // obligatoria — si no se confirma, el número no cambia.
-        final phoneNow = _phoneCtrl.text.trim();
-        if (phoneNow != _savedPhone) {
-          if (_phoneVerified && _phoneChangeAuthorized) {
-            await PhoneChangeFlow.run(context, baseUrl: _baseUrl, token: _token, newPhone: phoneNow);
-          } else if (!_phoneVerified) {
-            await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (_) => PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: phoneNow),
-            );
-          }
-          if (!mounted) return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(billingOk ? 'Datos actualizados' : 'Datos actualizados (no se pudo guardar el NIT/Carnet, intenta de nuevo)'),
-          backgroundColor: billingOk ? GardenColors.success : GardenColors.warning,
-        ));
-        Navigator.pop(context, true); // true = reload profile
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al actualizar');
+      if (data['success'] != true) {
+        return (error: (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'Error al actualizar', billingOk: false);
       }
+      return (error: null, billingOk: await _saveBillingInfo());
     } catch (e) {
+      return (error: e.toString().replaceFirst('Exception: ', ''), billingOk: false);
+    }
+  }
+
+  Future<void> _save() async {
+    // 1) Todos los campos completos, ANTES de tocar la red. Se avisa cuáles faltan.
+    final missing = _missingFields();
+    if (missing.isNotEmpty) {
+      setState(() => _showErrors = true);
+      await _showMissingDialog(missing);
+      return;
+    }
+
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final phoneNow = _phoneCtrl.text.trim();
+    final phoneEdited = phoneNow != _savedPhone;
+
+    // 2) Cambio de teléfono: el código sale LO PRIMERO al tocar Guardar y el
+    //    resto de los datos se guarda en paralelo. La verificación es inmediata
+    //    y obligatoria: si no se confirma, el número no cambia.
+    Future<({String? error, bool billingOk})>? saved;
+    var phoneChangeIncomplete = false;
+    if (phoneEdited && _phoneVerified && _phoneChangeAuthorized) {
+      final codeSent = PhoneChangeFlow.start(messenger, baseUrl: _baseUrl, token: _token, newPhone: phoneNow);
+      saved = _persistData();
+      if (await codeSent && mounted) {
+        final confirmed = await PhoneChangeFlow.confirm(context, baseUrl: _baseUrl, token: _token, newPhone: phoneNow);
+        if (!confirmed) phoneChangeIncomplete = true;
+      } else {
+        phoneChangeIncomplete = true;
+      }
+    } else if (phoneEdited && !_phoneVerified) {
+      // Número sin verificar que se corrigió: primero queda guardado el número
+      // solo (una llamada corta) para poder mandarle el código al instante.
+      final phoneError = await _patchPhoneOnly(phoneNow);
+      if (phoneError != null) {
+        if (mounted) {
+          setState(() => _saving = false);
+          GardenErrorDialog.show(context, phoneError);
+        }
+        return;
+      }
+      saved = _persistData();
       if (mounted) {
-        setState(() => _saving = false);
-        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+        await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: phoneNow),
+        );
       }
     }
+
+    // 3) Resto de los datos (en los casos de arriba ya venían corriendo en paralelo).
+    final result = await (saved ?? _persistData());
+    if (!mounted) return;
+    if (result.error != null) {
+      setState(() => _saving = false);
+      GardenErrorDialog.show(context, result.error!);
+      return;
+    }
+    if (phoneChangeIncomplete) {
+      // Lo demás se guardó, pero el número NO cambió: se queda en la pantalla para
+      // que pueda corregir el número nuevo y reintentar mientras siga abierta la
+      // autorización de soporte (cancelar no la cierra).
+      setState(() => _saving = false);
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Tus demás datos se guardaron, pero tu teléfono no cambió. Corrige el número nuevo y vuelve a guardar.'),
+        backgroundColor: GardenColors.warning,
+      ));
+      return;
+    }
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.billingOk ? 'Datos actualizados' : 'Datos actualizados (no se pudo guardar el NIT/Carnet, intenta de nuevo)'),
+      backgroundColor: result.billingOk ? GardenColors.success : GardenColors.warning,
+    ));
+    Navigator.pop(context, true); // true = reload profile
   }
 
   @override
@@ -402,8 +483,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
         final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-        InputDecoration fieldDeco(String label, IconData icon) => InputDecoration(
+        InputDecoration fieldDeco(String label, IconData icon, {bool missing = false}) => InputDecoration(
           labelText: label,
+          errorText: (_showErrors && missing) ? 'Requerido' : null,
           labelStyle: TextStyle(color: subtextColor, fontSize: 13),
           prefixIcon: Icon(icon, color: subtextColor, size: 20),
           filled: true, fillColor: surfaceEl,
@@ -501,7 +583,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   controller: _emailCtrl,
                   style: TextStyle(color: textColor),
                   keyboardType: TextInputType.emailAddress,
-                  decoration: fieldDeco('Correo electrónico', Icons.email_outlined).copyWith(
+                  decoration: fieldDeco('Correo electrónico', Icons.email_outlined, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
                     suffixIcon: const Tooltip(
                       message: 'Correo no verificado',
                       child: Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
@@ -518,12 +600,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
               Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
                   onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Nombre *', Icons.person_outline))),
+                  decoration: fieldDeco('Nombre *', Icons.person_outline, missing: _firstCtrl.text.trim().isEmpty))),
               const SizedBox(width: 12),
               Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
                   onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Apellido *', Icons.person_outlined))),
+                  decoration: fieldDeco('Apellido *', Icons.person_outlined, missing: _lastCtrl.text.trim().isEmpty))),
             ]),
             const SizedBox(height: 16),
 
@@ -560,7 +642,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 keyboardType: TextInputType.phone,
                 readOnly: _phoneLocked,
                 onChanged: (_) => setState(() {}),
-                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined).copyWith(
+                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined, missing: !_phoneRegex.hasMatch(_phoneCtrl.text.trim())).copyWith(
                   suffixIcon: _phoneLocked ? Padding(padding: const EdgeInsets.all(14), child: GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor)) : null,
                 )),
             if (_phoneLocked) ...[
@@ -673,6 +755,11 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 ]),
               ),
             ),
+            if (_showErrors && _dateOfBirth == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 4, left: 4),
+                child: Text('Requerido', style: TextStyle(color: GardenColors.error, fontSize: 12)),
+              ),
             const SizedBox(height: 16),
 
             // Bio
@@ -682,7 +769,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
               controller: _bioCtrl,
               maxLines: 3, maxLength: 300,
               style: TextStyle(color: textColor, fontSize: 14),
-              decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined).copyWith(
+              decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined, missing: _bioCtrl.text.trim().isEmpty).copyWith(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
@@ -699,7 +786,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
             ]),
             const SizedBox(height: 4),
             Text(
-              'Opcional. Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
+              'Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
               style: TextStyle(color: subtextColor, fontSize: 11.5),
             ),
             const SizedBox(height: 10),
@@ -708,13 +795,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('NIT o Carnet', Icons.badge_outlined),
+              decoration: fieldDeco('NIT o Carnet', Icons.badge_outlined, missing: _nitCtrl.text.trim().isEmpty),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _nitRazonSocialCtrl,
               style: TextStyle(color: textColor),
-              decoration: fieldDeco('Razón social (opcional)', Icons.article_outlined),
+              decoration: fieldDeco('Razón social', Icons.article_outlined, missing: _nitRazonSocialCtrl.text.trim().isEmpty),
             ),
             const SizedBox(height: 16),
 
@@ -726,7 +813,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   child: GardenButton(
                     label: _saving ? 'Guardando...' : 'Guardar cambios',
                     loading: _saving,
-                    onPressed: (_saving || !_canSave) ? null : _save,
+                    onPressed: _saving ? null : _save,
                   ),
                 ),
               ])
@@ -736,7 +823,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 child: GardenButton(
                   label: _saving ? 'Guardando...' : 'Guardar cambios',
                   loading: _saving,
-                  onPressed: (_saving || !_canSave) ? null : _save,
+                  onPressed: _saving ? null : _save,
                 ),
               ),
             const SizedBox(height: 24),

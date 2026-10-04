@@ -213,14 +213,15 @@ class PhoneChangeFlow {
     return ok ? newPhone : null;
   }
 
-  /// true = el número se cambió y quedó verificado.
-  static Future<bool> run(
-    BuildContext context, {
+  /// Pide el código al número nuevo (POST phone-change/start). Es lo PRIMERO que
+  /// debe correr al tocar Guardar: el código sale al instante, sin esperar al
+  /// resto del guardado. true = código enviado; si falla muestra el motivo.
+  static Future<bool> start(
+    ScaffoldMessengerState messenger, {
     required String baseUrl,
     required String token,
     required String newPhone,
   }) async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/auth/phone-change/start'),
@@ -233,12 +234,23 @@ class PhoneChangeFlow {
         messenger.showSnackBar(SnackBar(content: Text(msg), backgroundColor: GardenColors.error));
         return false;
       }
+      return true;
     } catch (_) {
       messenger.showSnackBar(const SnackBar(content: Text('Error de conexión, intenta de nuevo.'), backgroundColor: GardenColors.error));
       return false;
     }
+  }
 
-    if (!context.mounted) return false;
+  /// Diálogo donde se escribe el código que ya llegó al número nuevo. true = el
+  /// número cambió y quedó verificado; si se cancela o falla se descarta el
+  /// pendiente y el número anterior sigue vigente.
+  static Future<bool> confirm(
+    BuildContext context, {
+    required String baseUrl,
+    required String token,
+    required String newPhone,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -268,5 +280,18 @@ class PhoneChangeFlow {
       backgroundColor: GardenColors.warning,
     ));
     return false;
+  }
+
+  /// start + confirm. true = el número se cambió y quedó verificado.
+  static Future<bool> run(
+    BuildContext context, {
+    required String baseUrl,
+    required String token,
+    required String newPhone,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await start(messenger, baseUrl: baseUrl, token: token, newPhone: newPhone)) return false;
+    if (!context.mounted) return false;
+    return confirm(context, baseUrl: baseUrl, token: token, newPhone: newPhone);
   }
 }

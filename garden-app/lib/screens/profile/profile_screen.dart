@@ -58,13 +58,23 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool get _isClientDataIncomplete {
     final u = _userData;
     if (u == null) return false;
-    final phone = (u['phone'] as String? ?? '').trim();
-    return (u['firstName'] as String? ?? '').trim().isEmpty ||
-        (u['lastName'] as String? ?? '').trim().isEmpty ||
-        !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
-        (u['addressStreet'] as String? ?? '').trim().isEmpty ||
-        (u['dateOfBirth'] == null) ||
-        (u['profilePicture'] as String? ?? '').trim().isEmpty ||
+    String str(String k) => (u[k] as String? ?? '').trim();
+    // Mismos campos que exige "Guardar cambios" en Mis Datos (_missingFields),
+    // salvo NIT/Carnet y razón social, que viven en el perfil y no llegan en
+    // /auth/me. Departamento/condominio solo aplican a quien marcó departamento.
+    return str('firstName').isEmpty ||
+        str('lastName').isEmpty ||
+        !RegExp(r'^[67][0-9]{7}$').hasMatch(str('phone')) ||
+        str('addressStreet').isEmpty ||
+        str('addressNumber').isEmpty ||
+        str('addressReference').isEmpty ||
+        str('addressZone').isEmpty ||
+        u['cityId'] == null ||
+        u['addressLat'] == null ||
+        u['addressLng'] == null ||
+        u['dateOfBirth'] == null ||
+        str('bio').isEmpty ||
+        str('profilePicture').isEmpty ||
         // Teléfono sin verificar: es el canal de contacto, el botón pulsa hasta
         // que se confirme con el código (ver my_data_screen.dart).
         u['phoneVerified'] != true;
