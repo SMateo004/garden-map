@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
 import '../service/meet_and_greet_screen.dart';
@@ -1325,6 +1326,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               ],
             ),
           ),
+          if (BookingHistoryDetail.appliesTo(status))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: BookingHistoryDetail(bookingId: booking['id'] as String, token: _clientToken, isDark: isDark),
+            ),
         ],
       ),
     ),

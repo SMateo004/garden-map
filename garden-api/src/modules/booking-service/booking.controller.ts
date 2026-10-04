@@ -18,6 +18,7 @@ import {
   reportBookingBodySchema,
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
+import { getBookingHistory } from './booking-history.service.js';
 
 /**
  * POST /api/bookings
@@ -251,6 +252,15 @@ export const getById = asyncHandler(async (req: Request, res: Response) => {
   const role = req.user!.role;
   const booking = await bookingService.getBookingById(bookingId, userId, role);
   res.json({ success: true, data: booking });
+});
+
+/**
+ * GET /api/bookings/:id/history
+ * Método de pago + línea de tiempo + movimientos de dinero de la reserva. Cliente titular, cuidador asignado o admin.
+ */
+export const getHistory = asyncHandler(async (req: Request, res: Response) => {
+  const history = await getBookingHistory(req.params.id!, req.user!.userId, req.user!.role);
+  res.json({ success: true, data: history });
 });
 
 /**

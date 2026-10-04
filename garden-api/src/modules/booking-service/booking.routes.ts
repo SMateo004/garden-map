@@ -55,6 +55,13 @@ router.get(
   bookingController.getConfirm
 );
 
+/** GET /api/bookings/:id/history — método de pago y línea de tiempo de la reserva. Cliente, cuidador o admin. */
+router.get(
+  '/:id/history',
+  authMiddleware,
+  bookingController.getHistory
+);
+
 /** GET /api/bookings/:id — obtener una reserva por ID. Cliente titular o Cuidador asignado. */
 router.get(
   '/:id',

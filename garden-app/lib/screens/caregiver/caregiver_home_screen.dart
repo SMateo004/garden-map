@@ -10,6 +10,7 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../narrative/booking_story.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/garden_tutorial.dart';
@@ -4477,6 +4478,12 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       ),
                     ),
                   ),
+                ),
+
+              if (BookingHistoryDetail.appliesTo(status))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: BookingHistoryDetail(bookingId: booking['id'] as String, token: widget.token, isDark: widget.isDark),
                 ),
             ],
           ],
