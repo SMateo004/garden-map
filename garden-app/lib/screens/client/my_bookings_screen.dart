@@ -5,6 +5,11 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_pet_avatar.dart';
+import '../../design/garden_service.dart';
+import '../../design/garden_status_pill.dart';
+import '../../narrative/booking_story.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
@@ -542,6 +547,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 
+  static String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
   Widget _buildBookingCard(Map<String, dynamic> booking, bool isDark) {
     final status = booking['status'] as String;
     final serviceType = booking['serviceType'] as String? ?? '';
@@ -553,62 +560,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isHighlighted = booking['id'] == _highlightBookingId;
 
-    Color statusColor;
-    String statusText;
-    IconData statusIcon;
-
-    switch (status) {
-      case 'PENDING_MG':
-        statusColor = const Color(0xFF6C63FF);
-        statusText = 'Meet & Greet pendiente';
-        statusIcon = Icons.handshake_outlined;
-        break;
-      case 'SLOT_CONFLICT':
-        statusColor = GardenColors.error;
-        statusText = '¡Elige nueva hora!';
-        statusIcon = Icons.warning_amber_rounded;
-        break;
-      case 'PENDING_PAYMENT':
-        statusColor = GardenColors.warning;
-        statusText = 'Pendiente de pago';
-        statusIcon = Icons.payment_rounded;
-        break;
-      case 'PAYMENT_PENDING_APPROVAL':
-        statusColor = GardenColors.warning;
-        statusText = 'Pago en revisión';
-        statusIcon = Icons.schedule_rounded;
-        break;
-      case 'WAITING_CAREGIVER_APPROVAL':
-        statusColor = GardenColors.primary;
-        statusText = 'Esperando cuidador';
-        statusIcon = Icons.hourglass_top_rounded;
-        break;
-      case 'CONFIRMED':
-        statusColor = GardenColors.success;
-        statusText = 'Confirmada';
-        statusIcon = Icons.check_circle_outline_rounded;
-        break;
-      case 'IN_PROGRESS':
-        statusColor = GardenColors.accent;
-        statusText = 'En curso';
-        statusIcon = Icons.play_circle_fill_rounded;
-        break;
-      case 'COMPLETED':
-        statusColor = GardenColors.primary;
-        statusText = 'Completada';
-        statusIcon = Icons.done_all_rounded;
-        break;
-      case 'CANCELLED':
-      case 'REJECTED_BY_CAREGIVER':
-        statusColor = GardenColors.error;
-        statusText = status == 'CANCELLED' ? 'Cancelada' : 'Rechazada';
-        statusIcon = Icons.cancel_outlined;
-        break;
-      default:
-        statusColor = subtextColor;
-        statusText = status;
-        statusIcon = Icons.info_outline_rounded;
-    }
+    // Texto, color e icono del estado salen de BookingStory: la misma reserva
+    // se cuenta igual acá, en el inicio, en el chat y en las notificaciones.
+    final storyCtx = BookingStoryContext.fromBooking(booking);
+    final story = BookingStory.of(status, storyCtx);
+    final svc = storyCtx.service;
+    final statusColor = StoryColors.of(story.tone, isDark: isDark, service: svc).ink;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 600),
@@ -641,40 +598,27 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  GardenAvatar(
-                    imageUrl: booking['caregiverPhoto'],
-                    size: 52,
-                    initials: (booking['caregiverName'] as String?)?.isNotEmpty == true
-                        ? (booking['caregiverName'] as String)[0]
-                        : 'C',
+                  GardenPetAvatar(
+                    name: storyCtx.pet,
+                    size: 48,
+                    tone: story.tone,
+                    service: svc,
+                    caregiverImageUrl: booking['caregiverPhoto'] as String?,
+                    caregiverName: booking['caregiverName'] as String?,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          booking['caregiverName'] ?? 'Cuidador',
-                          style: GardenText.h4.copyWith(color: textColor, fontSize: 15),
-                        ),
+                        GardenStatusPill(story, service: svc, dense: true),
                         const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(GardenRadius.full),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(statusIcon, color: statusColor, size: 10),
-                              const SizedBox(width: 4),
-                              Text(
-                                statusText,
-                                style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w700),
-                              ),
-                            ],
-                          ),
+                        Text(
+                          story.ownerHeadline,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GardenText.bodyMedium.copyWith(
+                              color: textColor, fontWeight: FontWeight.w700, height: 1.3),
                         ),
                       ],
                     ),
@@ -800,16 +744,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.08),
+                          color: (svc ?? GardenService.paseo).soft(isDark),
                           borderRadius: BorderRadius.circular(GardenRadius.md),
                         ),
-                        child: Icon(
-                          isPaseo ? Icons.directions_walk_rounded
-                              : isGuarderia ? Icons.cottage_outlined
-                              : Icons.home_rounded,
-                          color: GardenColors.primary, size: 18),
+                        child: GardenIcon(GIcon.forService(svc ?? GardenService.paseo),
+                            size: GIconSize.lg, state: GIconState.active),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -835,9 +776,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              (isPaseo || isGuarderia)
-                                  ? (booking['walkDate'] ?? '').toString().split('T')[0]
-                                  : (booking['startDate'] ?? '').toString().split('T')[0],
+                              storyCtx.start != null
+                                  ? _capitalize(BookingStory.whenLabel(storyCtx.start!, now: DateTime.now())
+                                      .replaceFirst(RegExp(r' a las? \d+:\d+$'), ''))
+                                  : (isPaseo || isGuarderia)
+                                      ? (booking['walkDate'] ?? '').toString().split('T')[0]
+                                      : (booking['startDate'] ?? '').toString().split('T')[0],
                               style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -957,18 +901,20 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6C63FF).withValues(alpha: 0.07),
+                            color: StoryColors.of(StoryTone.info, isDark: isDark).ink.withValues(alpha: 0.07),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.25)),
+                            border: Border.all(color: StoryColors.of(StoryTone.info, isDark: isDark).ink.withValues(alpha: 0.25)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
-                                const Text('🤝', style: TextStyle(fontSize: 15)),
+                                GardenIcon(GIcon.meetGreet, size: GIconSize.sm, state: GIconState.active,
+                                    color: StoryColors.of(StoryTone.info, isDark: isDark).ink),
                                 const SizedBox(width: 8),
                                 Text('Meet & Greet programado',
-                                    style: TextStyle(color: const Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
+                                    style: TextStyle(color: StoryColors.of(StoryTone.info, isDark: isDark).ink,
+                                        fontSize: 13, fontWeight: FontWeight.w700)),
                               ]),
                               const SizedBox(height: 6),
                               Row(children: [
@@ -1429,8 +1375,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         child: Row(
                           children: [
                             _filterPill('Todas', 'todas', isDark),
-                            _filterPill('Activas', 'activas', isDark),
-                            _filterPill('Completadas', 'completadas', isDark),
+                            _filterPill('Ahora', 'activas', isDark),
+                            _filterPill('Recuerdos', 'completadas', isDark),
                             _filterPill('Canceladas', 'canceladas', isDark),
                           ],
                         ),

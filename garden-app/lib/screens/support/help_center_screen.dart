@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
 import '../../services/auth_state.dart';
@@ -45,7 +46,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          icon: const GardenIcon(GIcon.soporte, color: GardenColors.primary, size: GIconSize.hero, state: GIconState.active),
           title: const Text('Iniciá sesión para chatear'),
           content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión o crear una cuenta.'),
           actions: [
@@ -81,7 +82,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: text, size: 20),
+          icon: GardenIcon(GIcon.atras, color: text, semanticLabel: 'Volver'),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text('Centro de ayuda', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w700)),
@@ -104,10 +105,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               decoration: InputDecoration(
                 hintText: '¿En qué podemos ayudarte?',
                 hintStyle: TextStyle(color: subtext, fontSize: 14),
-                prefixIcon: Icon(Icons.search_rounded, color: subtext),
+                prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.buscar, color: subtext)),
                 suffixIcon: searching
                     ? IconButton(
-                        icon: Icon(Icons.close_rounded, color: subtext, size: 20),
+                        icon: GardenIcon(GIcon.cerrar, color: subtext, semanticLabel: 'Borrar búsqueda'),
                         onPressed: () => setState(() {
                           _searchCtrl.clear();
                           _query = '';
@@ -163,7 +164,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                               ],
                             ),
                           ),
-                          Icon(Icons.chevron_right_rounded, color: subtext, size: 18),
+                          GardenIcon(GIcon.siguiente, color: subtext, size: GIconSize.sm),
                         ],
                       ),
                     ),
@@ -216,7 +217,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Icon(Icons.chevron_right_rounded, color: subtext, size: 20),
+                          GardenIcon(GIcon.siguiente, color: subtext),
                         ],
                       ),
                     ),
@@ -242,7 +243,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 22),
+                    const GardenIcon(GIcon.soporte, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
@@ -466,7 +467,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           ),
                           child: const Row(
                             children: [
-                              Text('🎁', style: TextStyle(fontSize: 18)),
+                              GardenIcon(GIcon.regalo, color: GardenColors.primary, state: GIconState.active),
                               SizedBox(width: 12),
                               Text('¿Tienes un código de regalo?',
                                 style: TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w700)),
@@ -1690,54 +1691,21 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         || type == 'DEBT_RECOVERY';   // cliente: se zerifica deuda anterior
     final isPending = t['status'] == 'PENDING';
 
-    IconData icon;
-    Color color;
-    switch (type) {
-      case 'EARNING':
-        icon = Icons.monetization_on_rounded;
-        color = GardenColors.success;
-        break;
-      case 'PAYMENT':
-      case 'WALLET_PAYMENT': // legacy label
-        icon = Icons.account_balance_wallet_rounded;
-        color = GardenColors.error;
-        break;
-      case 'WITHDRAWAL':
-        icon = Icons.account_balance_rounded;
-        color = isPending ? GardenColors.warning : GardenColors.info;
-        break;
-      case 'REFUND':
-        icon = Icons.keyboard_return_rounded;
-        color = GardenColors.successDark;
-        break;
-      case 'COMMISSION':
-        icon = Icons.percent_rounded;
-        color = subtextColor;
-        break;
-      case 'FINE':
-        icon = Icons.gavel_rounded;
-        color = GardenColors.error;
-        break;
-      case 'GIFT':
-        icon = Icons.card_giftcard_rounded;
-        color = GardenColors.accent;
-        break;
-      case 'OVERTIME_FEE':
-        icon = Icons.timer_off_rounded;
-        color = GardenColors.orange;
-        break;
-      case 'OVERTIME_EARNING':
-        icon = Icons.timer_rounded;
-        color = GardenColors.success;
-        break;
-      case 'DEBT_RECOVERY':
-        icon = Icons.healing_rounded;
-        color = GardenColors.info;
-        break;
-      default:
-        icon = Icons.swap_horiz_rounded;
-        color = subtextColor;
-    }
+    // Un icono por tipo de movimiento; el texto ya viene en lenguaje humano
+    // desde el backend (description). Tono sereno: color solo para entra/sale.
+    final (GIcon icon, Color color) = switch (type) {
+      'EARNING' => (GIcon.billetera, GardenColors.successDark),
+      'PAYMENT' || 'WALLET_PAYMENT' => (GIcon.pagarQr, GardenColors.error),
+      'WITHDRAWAL' => (GIcon.retiro, isPending ? GardenColors.warning : GardenColors.info),
+      'REFUND' => (GIcon.reembolso, GardenColors.successDark),
+      'COMMISSION' => (GIcon.comision, subtextColor),
+      'FINE' => (GIcon.multa, GardenColors.error),
+      'GIFT' => (GIcon.regalo, GardenColors.successDark),
+      'OVERTIME_FEE' => (GIcon.cronometro, GardenColors.warning),
+      'OVERTIME_EARNING' => (GIcon.cronometro, GardenColors.successDark),
+      'DEBT_RECOVERY' => (GIcon.confirmado, GardenColors.info),
+      _ => (GIcon.repetir, subtextColor),
+    };
 
     final date = DateTime.tryParse(t['createdAt'] as String? ?? '');
     final dateStr = date != null ? '${date.day}/${date.month}/${date.year}' : '';
@@ -1760,7 +1728,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Center(child: GardenIcon(icon, color: color, state: GIconState.active)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1793,8 +1761,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isPositive ? '+' : '-'} Bs ${amount.toStringAsFixed(2)}',
-                style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14),
+                '${isPositive ? '+' : '−'} Bs ${amount.toStringAsFixed(2)}',
+                style: GardenText.metadata.copyWith(color: color, fontSize: 14),
               ),
               Text('Bs ${((t['balance'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
                 style: TextStyle(color: subtextColor, fontSize: 10)),
@@ -1846,7 +1814,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
 
           return GardenGlassDialog(
-            title: const Text('🎁  Código de regalo'),
+            title: const Row(children: [
+              GardenIcon(GIcon.regalo, color: GardenColors.primary, state: GIconState.active),
+              SizedBox(width: 8),
+              Text('Código de regalo'),
+            ]),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1906,7 +1878,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           SnackBar(
                             content: Row(
                               children: [
-                                const Text('🎉', style: TextStyle(fontSize: 20)),
+                                const GardenIcon(GIcon.confirmado, color: Colors.white, state: GIconState.active),
                                 const SizedBox(width: 12),
                                 Expanded(child: Text(data['data']['message'])),
                               ],

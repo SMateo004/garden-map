@@ -95,6 +95,9 @@ enum GIcon {
   retiro(Ph.bank),
   reembolso(Ph.arrowUUpLeft),
   regalo(Ph.gift),
+  donar(Ph.handHeart),
+  comision(Ph.percent),
+  multa(Ph.gavel),
 
   // ── Comunicación ──
   chat(Ph.chatCircleDots),
@@ -126,6 +129,9 @@ enum GIcon {
   repetir(Ph.arrowsClockwise),
   celebrar(Ph.confetti),
   equipo(Ph.users),
+  capacitacion(Ph.graduationCap),
+  legal(Ph.scroll),
+  dispositivo(Ph.deviceMobile),
   modoClaro(Ph.sun),
   modoOscuro(Ph.moon),
   tarde(Ph.sunHorizon),

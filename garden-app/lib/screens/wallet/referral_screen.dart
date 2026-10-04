@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, Clipboard, ClipboardData;
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -80,7 +81,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         if (mounted) {
           setState(() => _canApplyCode = false);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✓ Código aplicado — cuando completes tu primer servicio, ambos ganan el bono'),
+            content: Text('Código aplicado. Cuando completes tu primer servicio, los dos ganan el bono.'),
             backgroundColor: GardenColors.success,
             duration: Duration(seconds: 4),
           ));
@@ -134,7 +135,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('🎁', style: TextStyle(fontSize: 32)),
+                            const GardenIcon(GIcon.regalo, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
                             const SizedBox(height: 10),
                             Text('Invitá a un amigo y los dos ganan Bs ${_rewardBS.toStringAsFixed(0)}',
                                 style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, height: 1.25)),
@@ -161,12 +162,12 @@ class _ReferralScreenState extends State<ReferralScreen> {
                                   style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 4)),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: GardenColors.primary),
+                              icon: const GardenIcon(GIcon.copiar, color: GardenColors.primary, semanticLabel: 'Copiar código'),
                               onPressed: _code == null ? null : () async {
                                 await Clipboard.setData(ClipboardData(text: _code!));
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                    content: Text('✓ Código copiado'), backgroundColor: GardenColors.success,
+                                    content: Text('Código copiado'), backgroundColor: GardenColors.success,
                                     duration: Duration(seconds: 2),
                                   ));
                                 }
@@ -181,7 +182,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                         icon: Icons.chat_rounded,
                         onPressed: _code == null ? null : () async {
                           final text = Uri.encodeComponent(
-                              'Te invito a Garden 🐾 — encontrá cuidadores de mascotas verificados en Santa Cruz. Usá mi código $_code al registrarte y los dos ganamos Bs ${_rewardBS.toStringAsFixed(0)}.');
+                              'Te invito a Garden: encuentra cuidadores de mascotas verificados en Santa Cruz. Usa mi código $_code al registrarte y los dos ganamos Bs ${_rewardBS.toStringAsFixed(0)}.');
                           await launchUrl(Uri.parse('https://wa.me/?text=$text'), mode: LaunchMode.externalApplication);
                         },
                       ),

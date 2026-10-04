@@ -115,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
+    )..forward(); // una vez y queda resaltado: sin bucles (GardenMotion)
     _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
     _loadInitialData();
   }
@@ -323,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           nav.pop();
                           scaffoldMsg.showSnackBar(
                             const SnackBar(
-                              content: Text('✅ Correo verificado correctamente'),
+                              content: Text('Correo verificado'),
                               backgroundColor: GardenColors.success,
                             ),
                           );
@@ -477,7 +477,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
 
   Widget _profileTile({
-    required IconData icon,
+    required GIcon icon,
     required String title,
     required VoidCallback? onTap,
     bool highlight = false,
@@ -525,7 +525,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         color: GardenColors.warning.withValues(alpha: 0.12 + 0.06 * t),
                         borderRadius: BorderRadius.circular(GardenRadius.sm),
                       ),
-                      child: Icon(icon, color: GardenColors.warning, size: 17),
+                      child: GardenIcon(icon, color: GardenColors.warning, size: GIconSize.md, state: GIconState.active),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -580,7 +580,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     color: GardenColors.primary.withValues(alpha: 0.09),
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
-                  child: Icon(icon, color: GardenColors.primary, size: 17),
+                  child: GardenIcon(icon, color: GardenColors.primary, size: GIconSize.md, state: GIconState.active),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -590,7 +590,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           fontWeight: FontWeight.w600,
                           fontSize: 14)),
                 ),
-                trailing ?? Icon(Icons.chevron_right_rounded, color: hintColor, size: 18),
+                trailing ?? GardenIcon(GIcon.siguiente, color: hintColor, size: GIconSize.sm),
               ],
             ),
           ),
@@ -625,24 +625,24 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: Column(
         children: [
-          _infoRow(Icons.calendar_today_outlined, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
+          _infoRow(GIcon.calendario, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
           if (walletAddress.isNotEmpty) ...[
             Divider(height: 1, color: borderColor),
-            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', walletAddress.length >= 10 ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}' : walletAddress, textColor, subtextColor),
+            _infoRow(GIcon.billetera, 'Wallet blockchain', walletAddress.length >= 10 ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}' : walletAddress, textColor, subtextColor),
           ],
           Divider(height: 1, color: borderColor),
-          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', textColor, subtextColor),
+          _infoRow(GIcon.huellaDigital, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', textColor, subtextColor),
         ],
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
+  Widget _infoRow(GIcon icon, String label, String value, Color textColor, Color subtextColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: GardenColors.primary),
+          GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary, state: GIconState.active),
           const SizedBox(width: 12),
           Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
           const Spacer(),
@@ -908,16 +908,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ]),
                           ),
                           Divider(height: 1, color: borderColor),
-                          _infoRow(Icons.calendar_today_outlined, 'Miembro desde',
+                          _infoRow(GIcon.calendario, 'Miembro desde',
                               createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
                           if (walletAddress.isNotEmpty) ...[
                             Divider(height: 1, color: borderColor),
-                            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain',
+                            _infoRow(GIcon.billetera, 'Wallet blockchain',
                                 '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}',
                                 textColor, subtextColor),
                           ],
                           Divider(height: 1, color: borderColor),
-                          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta',
+                          _infoRow(GIcon.huellaDigital, 'ID de cuenta',
                               userId.isNotEmpty ? '${userId.substring(0, 8)}...' : 'N/A',
                               textColor, subtextColor),
                         ],
@@ -950,15 +950,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                             child: Row(
                               children: [
-                                _ThemeOptionBtn(icon: Icons.phone_android_rounded, label: 'Sistema',
+                                _ThemeOptionBtn(icon: GIcon.dispositivo, label: 'Sistema',
                                     selected: themeNotifier.mode == GardenThemeMode.system, isDark: isDark,
                                     onTap: () => themeNotifier.setMode(GardenThemeMode.system)),
                                 _ThemeOptionDivider(isDark: isDark),
-                                _ThemeOptionBtn(icon: Icons.light_mode_rounded, label: 'Claro',
+                                _ThemeOptionBtn(icon: GIcon.modoClaro, label: 'Claro',
                                     selected: themeNotifier.mode == GardenThemeMode.light, isDark: isDark,
                                     onTap: () => themeNotifier.setMode(GardenThemeMode.light)),
                                 _ThemeOptionDivider(isDark: isDark),
-                                _ThemeOptionBtn(icon: Icons.dark_mode_rounded, label: 'Oscuro',
+                                _ThemeOptionBtn(icon: GIcon.modoOscuro, label: 'Oscuro',
                                     selected: themeNotifier.mode == GardenThemeMode.dark, isDark: isDark,
                                     onTap: () => themeNotifier.setMode(GardenThemeMode.dark)),
                               ],
@@ -967,10 +967,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                           const SizedBox(height: 6),
                           Text(
                             themeNotifier.mode == GardenThemeMode.system
-                                ? '📱 Siguiendo la configuración de tu teléfono'
+                                ? 'Sigue la configuración de tu teléfono'
                                 : themeNotifier.mode == GardenThemeMode.dark
-                                    ? '🌙 Modo oscuro activado'
-                                    : '☀️ Modo claro activado',
+                                    ? 'Modo oscuro activado'
+                                    : 'Modo claro activado',
                             style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],
@@ -993,31 +993,31 @@ class _ProfileScreenState extends State<ProfileScreen>
                       const SizedBox(height: 14),
                     ],
                     if (_effectiveRole == 'CLIENT') ...[
-                      _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
+                      _profileTile(icon: GIcon.perfil, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
                         final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
                         if (result == true && mounted) _loadProfile();
                       }),
-                      _profileTile(icon: Icons.pets, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
-                      _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
-                      _profileTile(icon: Icons.favorite_border, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
-                      _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
+                      _profileTile(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
+                      _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
+                      _profileTile(icon: GIcon.favorito, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
+                      _profileTile(icon: GIcon.estrella, title: 'Mis calificaciones',
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
-                      _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
-                      _profileTile(icon: Icons.local_hospital_outlined, title: 'Veterinarias cercanas',
+                      _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+                      _profileTile(icon: GIcon.veterinaria, title: 'Veterinarias cercanas',
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
                       if (_role == 'CLIENT')
-                        _profileTile(icon: Icons.volunteer_activism_outlined, title: 'Conviérteme en cuidador',
+                        _profileTile(icon: GIcon.donar, title: 'Conviérteme en cuidador',
                             onTap: () => context.push('/become-caregiver')),
                       if (_role == 'CLIENT') _joinTeamTile(),
                     ],
                     if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
                       // Empleado de una empresa — solo operativo, nada de
                       // billetera/precios/config del negocio (eso es del dueño).
-                      _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas',
+                      _profileTile(icon: GIcon.calendario, title: 'Mis reservas',
                           onTap: () => context.push('/caregiver-staff/home')),
                     ],
                     if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
-                      _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
+                      _profileTile(icon: GIcon.antecedentes, title: 'Datos del cuidador',
                           highlight: _isCaregiverDataIncomplete,
                           onTap: () async {
                             await _offerPhoneVerification();
@@ -1025,61 +1025,61 @@ class _ProfileScreenState extends State<ProfileScreen>
                             await context.push('/caregiver/profile-data');
                             await _refreshCaregiverProfile();
                           }),
-                      _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil',
+                      _profileTile(icon: GIcon.editar, title: 'Editar perfil',
                           onTap: () => context.push('/caregiver/edit-profile')),
-                      _profileTile(icon: Icons.home_outlined, title: 'Mi panel',
+                      _profileTile(icon: GIcon.inicio, title: 'Mi panel',
                           onTap: () => context.push('/caregiver/home')),
-                      _profileTile(icon: Icons.pets_outlined, title: 'Mascotas',
+                      _profileTile(icon: GIcon.mascotas, title: 'Mascotas',
                           onTap: () => context.push('/caregiver/pets')),
                       if (_caregiverProfile?['isCompany'] == true) ...[
-                        _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo',
+                        _profileTile(icon: GIcon.equipo, title: 'Mi equipo',
                             onTap: () => context.push('/caregiver/staff')),
-                        _profileTile(icon: Icons.meeting_room_outlined, title: 'Recepción',
+                        _profileTile(icon: GIcon.inicio, title: 'Recepción',
                             onTap: () => context.push('/caregiver/reception')),
                       ],
                       if (_caregiverProfile?['verified'] != true &&
                           _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
                           _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
-                        _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA',
+                        _profileTile(icon: GIcon.verificado, title: 'Verificación IA',
                             onTap: () => context.push('/caregiver/verification')),
-                      _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad',
+                      _profileTile(icon: GIcon.disponibilidad, title: 'Mi disponibilidad',
                           onTap: () => context.push('/caregiver/home')),
-                      _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones',
+                      _profileTile(icon: GIcon.capacitacion, title: 'Capacitaciones',
                           highlight: _hasPendingTraining,
                           onTap: () => context.push('/caregiver/trainings')),
-                      _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera',
+                      _profileTile(icon: GIcon.billetera, title: 'Mi billetera',
                           onTap: () => context.push('/wallet')),
                     ],
                     if (_effectiveRole == 'ADMIN') ...[
-                      _profileTile(icon: Icons.admin_panel_settings, title: 'Panel admin',
+                      _profileTile(icon: GIcon.ajustes, title: 'Panel admin',
                           onTap: () => context.push('/admin')),
                     ],
                     const SizedBox(height: 16),
                     Text('Soporte', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     _profileTile(
-                      icon: Icons.help_outline_rounded,
+                      icon: GIcon.ayuda,
                       title: 'Centro de ayuda',
                       onTap: () => context.push('/help-center'),
                     ),
                     const SizedBox(height: 16),
                     Text('Legal', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
-                    _profileTile(icon: Icons.gavel_outlined, title: 'Términos y Condiciones',
+                    _profileTile(icon: GIcon.legal, title: 'Términos y Condiciones',
                         onTap: () => context.push('/terms')),
-                    _profileTile(icon: Icons.privacy_tip_outlined, title: 'Política de Privacidad',
+                    _profileTile(icon: GIcon.seguridad, title: 'Política de Privacidad',
                         onTap: () => context.push('/privacy')),
                     const SizedBox(height: 16),
                     Text('Privacidad y seguridad', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
-                    _profileTile(icon: Icons.lock_outline_rounded, title: 'Cambiar PIN',
+                    _profileTile(icon: GIcon.seguridad, title: 'Cambiar PIN',
                         onTap: () => showChangePinDialog(context)),
-                    _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
+                    _profileTile(icon: GIcon.bloqueado, title: 'Usuarios bloqueados',
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
                     const SizedBox(height: 16),
                     Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
-                    _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
+                    _profileTile(icon: GIcon.notificaciones, title: 'Notificaciones',
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()))),
                     const SizedBox(height: 8),
                     // Logout button as a tile
@@ -1259,22 +1259,22 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
         
         if (_effectiveRole == 'CLIENT') ...[
-          _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
+          _profileTile(icon: GIcon.perfil, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
             if (result == true && mounted) _loadProfile();
           }),
-          _profileTile(icon: Icons.pets, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
-          _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
-          _profileTile(icon: Icons.favorite_border, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
-          _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
+          _profileTile(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
+          _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
+          _profileTile(icon: GIcon.favorito, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
+          _profileTile(icon: GIcon.estrella, title: 'Mis calificaciones',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
-          _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
-          _profileTile(icon: Icons.local_hospital_outlined, title: 'Veterinarias cercanas',
+          _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+          _profileTile(icon: GIcon.veterinaria, title: 'Veterinarias cercanas',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
           // Solo para CLIENT permanente (no para CAREGIVER actuando como CLIENT)
           if (_role == 'CLIENT')
             _profileTile(
-              icon: Icons.volunteer_activism_outlined,
+              icon: GIcon.donar,
               title: 'Conviérteme en cuidador',
               onTap: () => context.push('/become-caregiver'),
             ),
@@ -1282,12 +1282,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
 
         if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
-          _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
+          _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
         ],
 
         if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
           _profileTile(
-            icon: Icons.assignment_outlined,
+            icon: GIcon.antecedentes,
             title: 'Datos del cuidador',
             highlight: _isCaregiverDataIncomplete,
             onTap: () async {
@@ -1295,25 +1295,25 @@ class _ProfileScreenState extends State<ProfileScreen>
               await _refreshCaregiverProfile();
             },
           ),
-          _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
-          _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
-          _profileTile(icon: Icons.pets_outlined, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
+          _profileTile(icon: GIcon.editar, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
+          _profileTile(icon: GIcon.inicio, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
+          _profileTile(icon: GIcon.mascotas, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
           if (_caregiverProfile?['isCompany'] == true) ...[
-            _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
-            _profileTile(icon: Icons.meeting_room_outlined, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
+            _profileTile(icon: GIcon.equipo, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
+            _profileTile(icon: GIcon.inicio, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
           ],
           if (_caregiverProfile?['verified'] != true &&
               _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
-            _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
-          _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
-          _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones',
+            _profileTile(icon: GIcon.verificado, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
+          _profileTile(icon: GIcon.disponibilidad, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
+          _profileTile(icon: GIcon.capacitacion, title: 'Capacitaciones',
               highlight: _hasPendingTraining, onTap: () => context.push('/caregiver/trainings')),
-          _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+          _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
 
         if (_effectiveRole == 'ADMIN') ...[
-          _profileTile(icon: Icons.admin_panel_settings, title: 'Panel admin', onTap: () => context.push('/admin')),
+          _profileTile(icon: GIcon.ajustes, title: 'Panel admin', onTap: () => context.push('/admin')),
         ],
 
         const SizedBox(height: 24),
@@ -1359,7 +1359,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: Row(
                     children: [
                       _ThemeOptionBtn(
-                        icon: Icons.phone_android_rounded,
+                        icon: GIcon.dispositivo,
                         label: 'Sistema',
                         selected: themeNotifier.mode == GardenThemeMode.system,
                         isDark: isDark,
@@ -1367,7 +1367,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                       _ThemeOptionDivider(isDark: isDark),
                       _ThemeOptionBtn(
-                        icon: Icons.light_mode_rounded,
+                        icon: GIcon.modoClaro,
                         label: 'Claro',
                         selected: themeNotifier.mode == GardenThemeMode.light,
                         isDark: isDark,
@@ -1375,7 +1375,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                       _ThemeOptionDivider(isDark: isDark),
                       _ThemeOptionBtn(
-                        icon: Icons.dark_mode_rounded,
+                        icon: GIcon.modoOscuro,
                         label: 'Oscuro',
                         selected: themeNotifier.mode == GardenThemeMode.dark,
                         isDark: isDark,
@@ -1387,10 +1387,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                 const SizedBox(height: 6),
                 Text(
                   themeNotifier.mode == GardenThemeMode.system
-                      ? '📱 Siguiendo la configuración de tu teléfono'
+                      ? 'Sigue la configuración de tu teléfono'
                       : themeNotifier.mode == GardenThemeMode.dark
-                          ? '🌙 Modo oscuro activado'
-                          : '☀️ Modo claro activado',
+                          ? 'Modo oscuro activado'
+                          : 'Modo claro activado',
                   style: TextStyle(
                     color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
                     fontSize: 11,
@@ -1401,14 +1401,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ),
 
-        _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
+        _profileTile(icon: GIcon.notificaciones, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
 
         const SizedBox(height: 24),
         _sectionLabel('Soporte', textColor),
         const SizedBox(height: 10),
         _profileTile(
-          icon: Icons.help_outline_rounded,
+          icon: GIcon.ayuda,
           title: 'Centro de ayuda',
           onTap: () => context.push('/help-center'),
         ),
@@ -1417,13 +1417,13 @@ class _ProfileScreenState extends State<ProfileScreen>
         _sectionLabel('Legal', textColor),
         const SizedBox(height: 10),
         _profileTile(
-          icon: Icons.gavel_outlined,
+          icon: GIcon.legal,
           title: 'Términos y Condiciones',
           onTap: () => context.push('/terms'),
         ),
         const SizedBox(height: 8),
         _profileTile(
-          icon: Icons.privacy_tip_outlined,
+          icon: GIcon.seguridad,
           title: 'Política de Privacidad',
           onTap: () => context.push('/privacy'),
         ),
@@ -1431,10 +1431,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: 24),
         _sectionLabel('Privacidad y seguridad', textColor),
         const SizedBox(height: 10),
-        _profileTile(icon: Icons.lock_outline_rounded, title: 'Cambiar PIN',
+        _profileTile(icon: GIcon.seguridad, title: 'Cambiar PIN',
             onTap: () => showChangePinDialog(context)),
         const SizedBox(height: 8),
-        _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
+        _profileTile(icon: GIcon.bloqueado, title: 'Usuarios bloqueados',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
 
         const SizedBox(height: 24),
@@ -1479,7 +1479,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Esta fila es solo para quien aún no tiene otra identidad (dueño de mascota).
 
   Widget _joinTeamTile() => _profileTile(
-        icon: GIcon.equipo.glyph!.regular,
+        icon: GIcon.equipo,
         title: 'Unirme a un equipo',
         onTap: () => context.push('/caregiver-staff/join'),
       );
@@ -1674,7 +1674,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 // ── Widgets privados para el selector de tema ─────────────────────────────────
 
 class _ThemeOptionBtn extends StatelessWidget {
-  final IconData icon;
+  final GIcon icon;
   final String label;
   final bool selected;
   final bool isDark;
@@ -1710,9 +1710,10 @@ class _ThemeOptionBtn extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
+              GardenIcon(
                 icon,
-                size: 14,
+                size: GIconSize.sm,
+                state: selected ? GIconState.active : GIconState.idle,
                 color: selected ? Colors.white : unselectedColor,
               ),
               const SizedBox(width: 5),

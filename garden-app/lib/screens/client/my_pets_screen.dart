@@ -6,9 +6,11 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../design/brote.dart';
+import '../../design/garden_icons.dart';
+import '../../design/garden_pet_avatar.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/web_file_picker.dart';
-import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
@@ -128,10 +130,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
-                  child: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 18),
+                  child: const GardenIcon(GIcon.mascotas, state: GIconState.active, size: GIconSize.md),
                 ),
                 const SizedBox(width: 10),
-                Text('Mis Mascotas', style: GardenText.h4.copyWith(color: textColor)),
+                Text('Mis mascotas', style: GardenText.h4.copyWith(color: textColor)),
               ],
             ),
             centerTitle: true,
@@ -151,7 +153,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       borderRadius: BorderRadius.circular(GardenRadius.full),
                       boxShadow: GardenShadows.primary,
                     ),
-                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                    child: const Center(
+                        child: GardenIcon(GIcon.agregar, color: Colors.white, semanticLabel: 'Agregar mascota')),
                   ),
                 ),
               ),
@@ -190,8 +193,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                               ),
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 20),
-                              child: const Icon(Icons.delete_outline_rounded,
-                                color: GardenColors.error, size: 28),
+                              child: const GardenIcon(GIcon.eliminar,
+                                  color: GardenColors.error, size: GIconSize.xl),
                             ),
                             child: _PetCard(
                               pet: pet,
@@ -214,12 +217,27 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   }
 
   Widget _buildEmpty(Color textColor, Color subtextColor) {
-    return GardenEmptyState(
-      type: GardenEmptyType.pets,
-      title: 'Aún no tienes mascotas',
-      subtitle: 'Agrega a tus peludos y gestiona su información aquí.',
-      ctaLabel: 'Agregar mascota',
-      onCta: () => _showPetForm(),
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Brote(pose: BrotePose.hola, size: 120),
+            const SizedBox(height: 16),
+            Text('Todavía no conocemos a tu mascota',
+                textAlign: TextAlign.center, style: GardenText.h4.copyWith(color: textColor)),
+            const SizedBox(height: 8),
+            Text(
+              'Cuéntanos su nombre, cómo es y qué necesita. Así su cuidador llega preparado.',
+              textAlign: TextAlign.center,
+              style: GardenText.bodyMedium.copyWith(color: subtextColor),
+            ),
+            const SizedBox(height: 20),
+            GardenButton(label: 'Presentar a mi mascota', onPressed: () => _showPetForm()),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -276,23 +294,12 @@ class _PetCard extends StatelessWidget {
             // Photo
             Stack(
               children: [
-                Container(
-                  width: 68, height: 68,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: ClipOval(
-                    child: photoUrl != null && photoUrl.isNotEmpty
-                        ? Image.network(fixImageUrl(photoUrl),
-                            width: 68, height: 68, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _iconFallback())
-                        : _iconFallback(),
-                  ),
+                GardenPetAvatar(
+                  name: name,
+                  imageUrl: photoUrl,
+                  species: animalType,
+                  size: 68,
+                  heroTag: 'pet-${pet['id']}',
                 ),
                 if (sterilized == true)
                   Positioned(
@@ -304,7 +311,9 @@ class _PetCard extends StatelessWidget {
                         shape: BoxShape.circle,
                         border: Border.all(color: surface, width: 1.5),
                       ),
-                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 11),
+                      child: const Center(
+                          child: GardenIcon(GIcon.enviado, color: Colors.white, size: GIconSize.xs,
+                              semanticLabel: 'Esterilizado')),
                     ),
                   ),
               ],
@@ -319,18 +328,18 @@ class _PetCard extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 4, children: [
-                if (animalType == 'DOGS') _pill('🐕 Perro', GardenColors.info),
-                if (animalType == 'CATS') _pill('🐈 Gato', GardenColors.accent),
+                if (animalType == 'DOGS') _pill('Perro', GardenColors.primary, GIcon.perro),
+                if (animalType == 'CATS') _pill('Gato', GardenColors.primary, GIcon.gato),
                 if (age != null) _pill('$age años', GardenColors.primary),
                 if (size != null && sizeLabels.containsKey(size))
-                  _pill(sizeLabels[size]!, GardenColors.primaryLight),
-                if (isAggressive) _pill('⚡ Agresiva', GardenColors.error),
-                if (gender == 'MALE') _pill('♂ Macho', GardenColors.info),
-                if (gender == 'FEMALE') _pill('♀ Hembra', GardenColors.accent),
-                if (weight != null) _pill('${weight}kg', GardenColors.textSecondary),
+                  _pill(sizeLabels[size]!, GardenColors.primary, GIcon.huella),
+                if (isAggressive) _pill('Agresiva', GardenColors.error, GIcon.conflicto),
+                if (gender == 'MALE') _pill('Macho', GardenColors.textSecondary),
+                if (gender == 'FEMALE') _pill('Hembra', GardenColors.textSecondary),
+                if (weight != null) _pill('$weight kg', GardenColors.textSecondary),
                 if (specialNeeds != null && specialNeeds.isNotEmpty)
-                  _pill('⚠ Especial', GardenColors.warning),
-                if (extraPhotos.isNotEmpty) _pill('📷 ${extraPhotos.length}', GardenColors.primary),
+                  _pill('Necesidades especiales', GardenColors.warning, GIcon.salud),
+                if (extraPhotos.isNotEmpty) _pill('${extraPhotos.length}', GardenColors.primary, GIcon.galeria),
               ]),
             ])),
             Container(
@@ -339,7 +348,8 @@ class _PetCard extends StatelessWidget {
                 color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(GardenRadius.sm),
               ),
-              child: const Icon(Icons.edit_outlined, color: GardenColors.primary, size: 16),
+              child: const GardenIcon(GIcon.editar, color: GardenColors.primary, size: GIconSize.sm,
+                  semanticLabel: 'Editar'),
             ),
           ]),
         ),
@@ -347,16 +357,19 @@ class _PetCard extends StatelessWidget {
     );
   }
 
-  Widget _iconFallback() => const Center(
-    child: Icon(Icons.pets_rounded, color: GardenColors.primary, size: 28));
-
-  Widget _pill(String label, Color color) => Container(
+  Widget _pill(String label, Color color, [GIcon? icon]) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(8),
     ),
-    child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      if (icon != null) ...[
+        GardenIcon(icon, color: color, size: GIconSize.xs, state: GIconState.active),
+        const SizedBox(width: 3),
+      ],
+      Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    ]),
   );
 }
 
@@ -621,10 +634,10 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       prefixIcon: icon != null ? Icon(icon, color: GardenColors.primary, size: 18) : null,
     );
 
-    Widget sectionHeader(String emoji, String title) => Padding(
+    Widget sectionHeader(GIcon icon, String title) => Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 12),
       child: Row(children: [
-        Text(emoji, style: const TextStyle(fontSize: 16)),
+        GardenIcon(icon, size: GIconSize.md, state: GIconState.active),
         const SizedBox(width: 8),
         Text(title, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(width: 8),
@@ -748,7 +761,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             const SizedBox(height: 20),
 
             // ── Información básica ──────────────────────────────────────
-            sectionHeader('🐾', 'Información básica'),
+            sectionHeader(GIcon.huella, 'Información básica'),
             TextFormField(
               controller: _nameCtrl,
               style: TextStyle(color: textColor),
@@ -762,14 +775,14 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             const SizedBox(height: 8),
             Row(children: [
               Expanded(child: _GenderChip(
-                value: 'DOGS', label: '🐕 Perro',
+                value: 'DOGS', label: 'Perro',
                 selected: _animalType == 'DOGS',
                 isDark: isDark, borderColor: borderColor,
                 onTap: () => setState(() => _animalType = _animalType == 'DOGS' ? null : 'DOGS'),
               )),
               const SizedBox(width: 10),
               Expanded(child: _GenderChip(
-                value: 'CATS', label: '🐈 Gato',
+                value: 'CATS', label: 'Gato',
                 selected: _animalType == 'CATS',
                 isDark: isDark, borderColor: borderColor,
                 onTap: () => setState(() => _animalType = _animalType == 'CATS' ? null : 'CATS'),
@@ -821,19 +834,19 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             ),
 
             // ── Salud ───────────────────────────────────────────────────
-            sectionHeader('💉', 'Salud e identificación'),
+            sectionHeader(GIcon.vacuna, 'Salud e identificación'),
             Text('Género', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(child: _GenderChip(
-                value: 'MALE', label: '♂ Macho',
+                value: 'MALE', label: 'Macho',
                 selected: _gender == 'MALE',
                 isDark: isDark, borderColor: borderColor,
                 onTap: () => setState(() => _gender = _gender == 'MALE' ? null : 'MALE'),
               )),
               const SizedBox(width: 10),
               Expanded(child: _GenderChip(
-                value: 'FEMALE', label: '♀ Hembra',
+                value: 'FEMALE', label: 'Hembra',
                 selected: _gender == 'FEMALE',
                 isDark: isDark, borderColor: borderColor,
                 onTap: () => setState(() => _gender = _gender == 'FEMALE' ? null : 'FEMALE'),
@@ -918,7 +931,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             ),
 
             // ── Fotos adicionales ──────────────────────────────────────
-            sectionHeader('📷', 'Fotos adicionales'),
+            sectionHeader(GIcon.galeria, 'Fotos adicionales'),
             Text('Para que el cuidador conozca mejor a tu mascota. Máx. 4 fotos.',
               style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 10),
@@ -928,7 +941,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             ),
 
             // ── Fotos de vacunas ───────────────────────────────────────
-            sectionHeader('🔬', 'Fotos de vacunas (opcional)'),
+            sectionHeader(GIcon.veterinaria, 'Fotos de vacunas (opcional)'),
             Text('Sube fotos del carnet de vacunación.',
               style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 10),
@@ -938,7 +951,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             ),
 
             // ── Documentos ────────────────────────────────────────────
-            sectionHeader('📋', 'Documentos (opcional)'),
+            sectionHeader(GIcon.nota, 'Documentos (opcional)'),
             Text('Pedigree, registros veterinarios u otros documentos relevantes.',
               style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 10),

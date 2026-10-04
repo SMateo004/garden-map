@@ -38,13 +38,17 @@ class Ph {
   static const clock = PhGlyph(IconData(0xe19a, fontFamily: _reg), IconData(0xe19b, fontFamily: _duo), IconData(0xe19a, fontFamily: _duo));
   static const confetti = PhGlyph(IconData(0xe81a, fontFamily: _reg), IconData(0xe81b, fontFamily: _duo), IconData(0xe81a, fontFamily: _duo));
   static const copy = PhGlyph(IconData(0xe1ca, fontFamily: _reg), IconData(0xe1cb, fontFamily: _duo), IconData(0xe1ca, fontFamily: _duo));
+  static const deviceMobile = PhGlyph(IconData(0xe1e0, fontFamily: _reg), IconData(0xe1e1, fontFamily: _duo), IconData(0xe1e0, fontFamily: _duo));
   static const dog = PhGlyph(IconData(0xe74a, fontFamily: _reg), IconData(0xe74b, fontFamily: _duo), IconData(0xe74a, fontFamily: _duo));
   static const dotsThreeVertical = PhGlyph(IconData(0xe208, fontFamily: _reg), IconData(0xe209, fontFamily: _duo), IconData(0xe208, fontFamily: _duo));
   static const drop = PhGlyph(IconData(0xe210, fontFamily: _reg), IconData(0xe211, fontFamily: _duo), IconData(0xe210, fontFamily: _duo));
   static const envelope = PhGlyph(IconData(0xe214, fontFamily: _reg), IconData(0xe215, fontFamily: _duo), IconData(0xe214, fontFamily: _duo));
   static const fingerprint = PhGlyph(IconData(0xe23e, fontFamily: _reg), IconData(0xe23f, fontFamily: _duo), IconData(0xe23e, fontFamily: _duo));
+  static const gavel = PhGlyph(IconData(0xea32, fontFamily: _reg), IconData(0xea33, fontFamily: _duo), IconData(0xea32, fontFamily: _duo));
   static const gear = PhGlyph(IconData(0xe270, fontFamily: _reg), IconData(0xe271, fontFamily: _duo), IconData(0xe270, fontFamily: _duo));
   static const gift = PhGlyph(IconData(0xe276, fontFamily: _reg), IconData(0xe277, fontFamily: _duo), IconData(0xe276, fontFamily: _duo));
+  static const graduationCap = PhGlyph(IconData(0xe62c, fontFamily: _reg), IconData(0xe62d, fontFamily: _duo), IconData(0xe62c, fontFamily: _duo));
+  static const handHeart = PhGlyph(IconData(0xe810, fontFamily: _reg), IconData(0xe811, fontFamily: _duo), IconData(0xe810, fontFamily: _duo));
   static const handshake = PhGlyph(IconData(0xe582, fontFamily: _reg), IconData(0xe583, fontFamily: _duo), IconData(0xe582, fontFamily: _duo));
   static const headset = PhGlyph(IconData(0xe584, fontFamily: _reg), IconData(0xe585, fontFamily: _duo), IconData(0xe584, fontFamily: _duo));
   static const heart = PhGlyph(IconData(0xe2a8, fontFamily: _reg), IconData(0xe2a9, fontFamily: _duo), IconData(0xe2a8, fontFamily: _duo));
@@ -64,6 +68,7 @@ class Ph {
   static const path = PhGlyph(IconData(0xe39c, fontFamily: _reg), IconData(0xe39d, fontFamily: _duo), IconData(0xe39c, fontFamily: _duo));
   static const pawPrint = PhGlyph(IconData(0xe648, fontFamily: _reg), IconData(0xe649, fontFamily: _duo), IconData(0xe648, fontFamily: _duo));
   static const pencilSimple = PhGlyph(IconData(0xe3b4, fontFamily: _reg), IconData(0xe3b5, fontFamily: _duo), IconData(0xe3b4, fontFamily: _duo));
+  static const percent = PhGlyph(IconData(0xe3b6, fontFamily: _reg), IconData(0xe3b7, fontFamily: _duo), IconData(0xe3b6, fontFamily: _duo));
   static const phone = PhGlyph(IconData(0xe3b8, fontFamily: _reg), IconData(0xe3b9, fontFamily: _duo), IconData(0xe3b8, fontFamily: _duo));
   static const pill = PhGlyph(IconData(0xe700, fontFamily: _reg), IconData(0xe701, fontFamily: _duo), IconData(0xe700, fontFamily: _duo));
   static const plus = PhGlyph(IconData(0xe3d4, fontFamily: _reg), IconData(0xe3d5, fontFamily: _duo), IconData(0xe3d4, fontFamily: _duo));
@@ -71,6 +76,7 @@ class Ph {
   static const qrCode = PhGlyph(IconData(0xe3e6, fontFamily: _reg), IconData(0xe3e7, fontFamily: _duo), IconData(0xe3e6, fontFamily: _duo));
   static const question = PhGlyph(IconData(0xe3e8, fontFamily: _reg), IconData(0xe3eb, fontFamily: _duo), IconData(0xe3e8, fontFamily: _duo));
   static const scales = PhGlyph(IconData(0xe750, fontFamily: _reg), IconData(0xe751, fontFamily: _duo), IconData(0xe750, fontFamily: _duo));
+  static const scroll = PhGlyph(IconData(0xeb7a, fontFamily: _reg), IconData(0xeb7b, fontFamily: _duo), IconData(0xeb7a, fontFamily: _duo));
   static const sealCheck = PhGlyph(IconData(0xe606, fontFamily: _reg), IconData(0xe607, fontFamily: _duo), IconData(0xe606, fontFamily: _duo));
   static const shareNetwork = PhGlyph(IconData(0xe408, fontFamily: _reg), IconData(0xe40b, fontFamily: _duo), IconData(0xe408, fontFamily: _duo));
   static const shieldCheck = PhGlyph(IconData(0xe40c, fontFamily: _reg), IconData(0xe40f, fontFamily: _duo), IconData(0xe40c, fontFamily: _duo));
