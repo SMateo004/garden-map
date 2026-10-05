@@ -226,6 +226,12 @@ export async function getMyProfile(userId: string) {
 }
 
 /** PATCH profile: actualización parcial. 403 si status APPROVED. Si DRAFT o NEEDS_REVISION → mantiene o fija DRAFT. */
+// Texto opcional de dirección: vacío o null = borrar (antes '' quedaba
+// guardado como texto vacío y null no se podía mandar).
+function cleanOptionalText(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
+
 export async function patchProfile(userId: string, body: PatchCaregiverProfileBody) {
   const profile = await prisma.caregiverProfile.findUnique({ where: { userId } }) as any;
   if (!profile) {
@@ -270,11 +276,11 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.address !== undefined) updateData.address = body.address;
   if ((body as any).addressLat !== undefined) updateData.addressLat = (body as any).addressLat;
   if ((body as any).addressLng !== undefined) updateData.addressLng = (body as any).addressLng;
-  if ((body as any).addressStreet !== undefined) updateData.addressStreet = (body as any).addressStreet;
-  if ((body as any).addressNumber !== undefined) updateData.addressNumber = (body as any).addressNumber;
-  if ((body as any).addressApartment !== undefined) updateData.addressApartment = (body as any).addressApartment;
-  if ((body as any).addressCondominio !== undefined) updateData.addressCondominio = (body as any).addressCondominio;
-  if ((body as any).addressReference !== undefined) updateData.addressReference = (body as any).addressReference;
+  if ((body as any).addressStreet !== undefined) updateData.addressStreet = cleanOptionalText((body as any).addressStreet);
+  if ((body as any).addressNumber !== undefined) updateData.addressNumber = cleanOptionalText((body as any).addressNumber);
+  if ((body as any).addressApartment !== undefined) updateData.addressApartment = cleanOptionalText((body as any).addressApartment);
+  if ((body as any).addressCondominio !== undefined) updateData.addressCondominio = cleanOptionalText((body as any).addressCondominio);
+  if ((body as any).addressReference !== undefined) updateData.addressReference = cleanOptionalText((body as any).addressReference);
   // zoneId/addressZone: nunca se toman directo del body — solo se recalculan
   // cuando el cuidador re-marca su ubicación exacta (addressLat+addressLng
   // nuevos), por coordenadas server-side (misma lógica que en registro y en

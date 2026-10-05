@@ -366,11 +366,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
         if (!emailVerified && _emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
         if (_addressLat != null) 'addressLat': _addressLat,
         if (_addressLng != null) 'addressLng': _addressLng,
-        if (_streetCtrl.text.trim().isNotEmpty) 'addressStreet': _streetCtrl.text.trim(),
-        if (_numberCtrl.text.trim().isNotEmpty) 'addressNumber': _numberCtrl.text.trim(),
-        if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'addressApartment': _apartmentCtrl.text.trim(),
-        if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
-        if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
+        // Siempre se mandan (vacíos incluidos): el servidor guarda '' como
+        // borrado. Si se omitían, borrar la referencia no se guardaba nunca.
+        'addressStreet': _streetCtrl.text.trim(),
+        'addressNumber': _numberCtrl.text.trim(),
+        'addressApartment': _isApartment ? _apartmentCtrl.text.trim() : '',
+        'addressCondominio': _isApartment ? _condominioCtrl.text.trim() : '',
+        'addressReference': _referenceCtrl.text.trim(),
         if (_addressZone != null) 'addressZone': _addressZone,
         if (_gardenCityId != null) 'cityId': _gardenCityId,
       };

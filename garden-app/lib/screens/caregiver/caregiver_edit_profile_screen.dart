@@ -292,6 +292,16 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
       GardenErrorDialog.show(context, 'El teléfono es obligatorio');
       return;
     }
+    // Los datos de cobro se revisan ANTES de guardar nada: antes el perfil se
+    // guardaba y recién después fallaba el banco, dejando el guardado a medias.
+    if (_selectedBankName.isNotEmpty && _bankSnapshot != _savedBankSnapshot) {
+      final bankError = GardenBanks.validateAccount(_selectedBankType, _bankAccountController.text) ??
+          GardenBanks.validateHolder(_bankHolderController.text);
+      if (bankError != null) {
+        GardenErrorDialog.show(context, bankError);
+        return;
+      }
+    }
 
     setState(() => _isSaving = true);
     try {
@@ -306,11 +316,13 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         'address': [_streetCtrl.text.trim(), _numberCtrl.text.trim()].where((s) => s.isNotEmpty).join(', '),
         if (_addressLat != null) 'addressLat': _addressLat,
         if (_addressLng != null) 'addressLng': _addressLng,
-        if (_streetCtrl.text.trim().isNotEmpty) 'addressStreet': _streetCtrl.text.trim(),
-        if (_numberCtrl.text.trim().isNotEmpty) 'addressNumber': _numberCtrl.text.trim(),
-        if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'addressApartment': _apartmentCtrl.text.trim(),
-        if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
-        if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
+        // Siempre se mandan (vacíos incluidos): si se omitían, borrar la
+        // referencia o dejar de vivir en un depto no se guardaba nunca.
+        'addressStreet': _streetCtrl.text.trim(),
+        'addressNumber': _numberCtrl.text.trim(),
+        'addressApartment': _isApartment ? _apartmentCtrl.text.trim() : '',
+        'addressCondominio': _isApartment ? _condominioCtrl.text.trim() : '',
+        'addressReference': _referenceCtrl.text.trim(),
         if (_addressZone != null) 'addressZone': _addressZone,
         if (_gardenCityId != null) 'cityId': _gardenCityId,
       };
@@ -329,28 +341,28 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         body: jsonEncode(addressBody),
       );
 
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudo guardar tu perfil. Intenta de nuevo.');
+      }
       // Guardar también la info personal y datos de cobro
       await _saveUserInfo();
       await _saveBankInfo();
-
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Perfil actualizado correctamente'),
-            backgroundColor: GardenColors.success,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        setState(() => _isEditing = false);
-        if (!mounted) return;
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al guardar');
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Perfil actualizado correctamente'),
+          backgroundColor: GardenColors.success,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      setState(() => _isEditing = false);
     } catch (e) {
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString());
+      GardenErrorDialog.show(
+        context,
+        e is Exception && e is! FormatException ? e.toString().replaceFirst('Exception: ', '') : 'Error de conexión. Intenta de nuevo.',
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -372,7 +384,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         headers: headers,
         body: jsonEncode({
           'bankName': _selectedBankName,
-          'bankAccount': _bankAccountController.text.trim(),
+          'bankAccount': GardenBanks.normalizeAccount(_selectedBankType, _bankAccountController.text),
           'bankHolder': _bankHolderController.text.trim(),
           'bankType': _selectedBankType,
         }),

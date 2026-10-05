@@ -1452,6 +1452,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     bankAccountController,
                     isWallet ? 'Ej: 70012345' : 'Número de cuenta bancaria',
                     textColor, subtextColor, surfaceEl, borderColor,
+                    keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 12),
                   _withdrawField('Titular', bankHolderController, 'Nombre completo del titular', textColor, subtextColor, surfaceEl, borderColor),
@@ -1464,12 +1465,10 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         GardenErrorDialog.show(context, 'Selecciona un banco o billetera');
                         return;
                       }
-                      if (bankAccountController.text.trim().isEmpty) {
-                        GardenErrorDialog.show(context, isWallet ? 'Ingresa tu número de teléfono' : 'Ingresa tu número de cuenta');
-                        return;
-                      }
-                      if (bankHolderController.text.trim().isEmpty) {
-                        GardenErrorDialog.show(context, 'Ingresa el nombre del titular de la cuenta');
+                      final bankError = GardenBanks.validateAccount(selectedBankType, bankAccountController.text) ??
+                          GardenBanks.validateHolder(bankHolderController.text);
+                      if (bankError != null) {
+                        GardenErrorDialog.show(context, bankError);
                         return;
                       }
                       final pinHeaders = await pinTokenHeaders(context,
@@ -1482,7 +1481,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           headers: pinHeaders,
                           body: jsonEncode({
                             'bankName': selectedBankName,
-                            'bankAccount': bankAccountController.text.trim(),
+                            'bankAccount': GardenBanks.normalizeAccount(selectedBankType, bankAccountController.text),
                             'bankHolder': bankHolderController.text.trim(),
                             'bankType': selectedBankType,
                           }),
@@ -1667,9 +1666,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _withdrawField(String label, TextEditingController ctrl, String hint, Color textColor, Color subtextColor, Color surfaceEl, Color borderColor) {
+  Widget _withdrawField(String label, TextEditingController ctrl, String hint, Color textColor, Color subtextColor, Color surfaceEl, Color borderColor,
+      {TextInputType? keyboardType}) {
     return TextField(
       controller: ctrl,
+      keyboardType: keyboardType,
       style: TextStyle(color: textColor),
       decoration: InputDecoration(
         labelText: label,

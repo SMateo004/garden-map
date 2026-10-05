@@ -49,4 +49,41 @@ class GardenBanks {
     final bank = all.where((b) => b['name'] == bankName).firstOrNull;
     return bank?['type'] ?? 'CUENTA_AHORRO';
   }
+
+  /// Quita espacios, guiones y puntos; en billeteras también el prefijo +591.
+  /// Es lo que se guarda: así el admin ve siempre el mismo formato al pagar.
+  static String normalizeAccount(String bankType, String raw) {
+    var v = raw.replaceAll(RegExp(r'[\s.\-]'), '');
+    if (isPhoneBasedType(bankType)) {
+      v = v.replaceFirst(RegExp(r'^\+?591'), '');
+    }
+    return v;
+  }
+
+  /// Mismas reglas que `validateBankInfo` en el backend (bank-info.util.ts).
+  static String? validateAccount(String bankType, String raw) {
+    final v = normalizeAccount(bankType, raw);
+    if (isPhoneBasedType(bankType)) {
+      if (v.isEmpty) return 'Escribe el número de teléfono de tu billetera';
+      if (!RegExp(r'^[67]\d{7}$').hasMatch(v)) {
+        return 'Revisa el número: son 8 dígitos y empieza con 6 o 7';
+      }
+      return null;
+    }
+    if (v.isEmpty) return 'Escribe tu número de cuenta';
+    if (!RegExp(r'^\d+$').hasMatch(v)) return 'El número de cuenta solo lleva números';
+    if (v.length < 6 || v.length > 20) return 'Revisa el número de cuenta: entre 6 y 20 dígitos';
+    return null;
+  }
+
+  static String? validateHolder(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return 'Escribe el nombre del titular de la cuenta';
+    if (v.length < 3 || !RegExp(r'[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]').hasMatch(v)) {
+      return 'Escribe el nombre completo del titular, como figura en el banco';
+    }
+    if (v.length > 100) return 'El nombre del titular es demasiado largo';
+    return null;
+  }
 }
+

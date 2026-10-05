@@ -41,22 +41,50 @@ export interface BankInfoValidationError {
 }
 
 /**
+ * Quita espacios, guiones y puntos; en billeteras también el prefijo +591.
+ * Es lo que se guarda, así el admin ve siempre el mismo formato al pagar.
+ * Mismas reglas que GardenBanks en la app (garden_banks.dart).
+ */
+export function normalizeBankAccount(bankType: string | null | undefined, raw: string): string {
+  let v = String(raw ?? '').replace(/[\s.\-]/g, '');
+  if (isPhoneBasedBankType(bankType)) v = v.replace(/^\+?591/, '');
+  return v;
+}
+
+/**
  * Valida el payload de datos bancarios. Devuelve un error legible si algo no
  * cuadra, o null si es válido. No lanza — el caller decide el código HTTP.
  */
 export function validateBankInfo(input: Partial<BankInfoInput>): BankInfoValidationError | null {
   const { bankName, bankAccount, bankHolder, bankType } = input;
-
-  if (!bankName || !bankAccount || !bankHolder) {
-    return { message: 'bankName, bankAccount y bankHolder son obligatorios' };
+  // /wallet/bank no pasa por Zod: un número u objeto no debe romper con 500.
+  if ([bankName, bankAccount, bankHolder].some((v) => v != null && typeof v !== 'string')) {
+    return { message: 'Datos de cobro inválidos' };
   }
 
+  if (!bankName?.trim()) return { message: 'Elige tu banco o billetera' };
   if (bankType && !(BANK_ACCOUNT_TYPES as string[]).includes(bankType)) {
-    return { message: `bankType inválido. Debe ser uno de: ${BANK_ACCOUNT_TYPES.join(', ')}` };
+    return { message: 'Elige un tipo de cuenta válido' };
   }
 
-  if (isPhoneBasedBankType(bankType) && !/^\d{6,15}$/.test(bankAccount)) {
-    return { message: 'Número de teléfono inválido' };
+  const account = normalizeBankAccount(bankType, bankAccount ?? '');
+  if (isPhoneBasedBankType(bankType)) {
+    if (!account) return { message: 'Escribe el número de teléfono de tu billetera' };
+    if (!/^[67]\d{7}$/.test(account)) {
+      return { message: 'Revisa el número: son 8 dígitos y empieza con 6 o 7' };
+    }
+  } else {
+    if (!account) return { message: 'Escribe tu número de cuenta' };
+    if (!/^\d+$/.test(account)) return { message: 'El número de cuenta solo lleva números' };
+    if (account.length < 6 || account.length > 20) {
+      return { message: 'Revisa el número de cuenta: entre 6 y 20 dígitos' };
+    }
+  }
+
+  const holder = bankHolder?.trim() ?? '';
+  if (!holder) return { message: 'Escribe el nombre del titular de la cuenta' };
+  if (holder.length < 3 || !/\p{L}/u.test(holder)) {
+    return { message: 'Escribe el nombre completo del titular, como figura en el banco' };
   }
 
   return null;
@@ -74,26 +102,22 @@ export async function persistBankInfo(
   data: BankInfoInput
 ): Promise<void> {
   const bankType = (data.bankType as BankAccountType | undefined) ?? 'CUENTA_AHORRO';
+  const clean = {
+    bankName: data.bankName.trim(),
+    bankAccount: normalizeBankAccount(bankType, data.bankAccount),
+    bankHolder: data.bankHolder.trim(),
+    bankType,
+  };
 
   await prisma.user.update({
     where: { id: userId },
-    data: {
-      bankName: data.bankName,
-      bankAccount: data.bankAccount,
-      bankHolder: data.bankHolder,
-      bankType,
-    },
+    data: clean,
   });
 
   if (role === 'CAREGIVER') {
     await prisma.caregiverProfile.updateMany({
       where: { userId },
-      data: {
-        bankName: data.bankName,
-        bankAccount: data.bankAccount,
-        bankHolder: data.bankHolder,
-        bankType,
-      },
+      data: clean,
     });
   }
 }

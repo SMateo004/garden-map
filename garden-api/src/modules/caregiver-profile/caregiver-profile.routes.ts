@@ -24,9 +24,10 @@ import { requirePinToken } from '../../middleware/require-pin.middleware.js';
 
 
 const bankInfoSchema = z.object({
-  bankName: z.string().min(2, 'Nombre del banco requerido').max(100),
-  bankAccount: z.string().min(4, 'Número de cuenta o teléfono requerido').max(50).regex(/^[a-zA-Z0-9\-]+$/, 'Cuenta inválida'),
-  bankHolder: z.string().min(2, 'Nombre del titular requerido').max(100),
+  bankName: z.string().max(100),
+  // Formato fino (dígitos, largo, billeteras) en validateBankInfo, igual que /wallet/bank.
+  bankAccount: z.string().max(50),
+  bankHolder: z.string().max(100, 'El nombre del titular es demasiado largo'),
   bankType: z.enum(BANK_ACCOUNT_TYPES as [string, ...string[]], { errorMap: () => ({ message: 'Tipo de cuenta inválido' }) }),
 });
 
