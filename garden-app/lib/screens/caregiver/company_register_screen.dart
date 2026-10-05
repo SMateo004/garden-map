@@ -43,6 +43,8 @@ import 'verification_screen.dart';
 import 'email_verification_screen.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
+import '../../utils/person_validators.dart';
+import '../../widgets/password_rules.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
   /// When true, the screen queries the backend on load to jump straight to
@@ -427,7 +429,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           'businessType': _inferredBusinessType,
           'email': _emailCtrl.text.trim(),
           'password': _passwordCtrl.text,
-          'phone': _phoneCtrl.text.trim(),
+          'phone': PersonValidators.normalizeBoPhone(_phoneCtrl.text),
           'bio': _bioCtrl.text.trim(),
           'zone': _zone,
           if (_gardenCityId != null) 'cityId': _gardenCityId,
@@ -454,26 +456,53 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         if (refreshToken != null) await prefs.setString('refresh_token', refreshToken);
         return true;
       } else {
-        _showError(data['error']?['message'] ?? 'Error al registrar empresa');
+        _showError(_serverMessage(data) ?? 'No pudimos crear la cuenta de la empresa. Intenta de nuevo.');
         return false;
       }
     } catch (e) {
-      _showError('Error: ${e.toString().replaceFirst('Exception: ', '')}');
+      _showError('No pudimos crear la cuenta. Revisa tu conexión e intenta de nuevo.');
       return false;
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _patchProfile(Map<String, dynamic> data) async {
-    if (_authToken.isEmpty) return;
+  /// Devuelve false (y muestra el motivo) si el paso no se guardó: antes
+  /// tragaba el error y el registro avanzaba igual, perdiendo lo cargado.
+  Future<bool> _patchProfile(Map<String, dynamic> data) async {
+    if (_authToken.isEmpty) return true;
     try {
-      await http.patch(
+      final res = await http.patch(
         Uri.parse('$_baseUrl/caregiver/profile'),
         headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-    } catch (_) {}
+      Map<String, dynamic> body = {};
+      try {
+        body = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {}
+      if (res.statusCode >= 200 && res.statusCode < 300 && body['success'] != false) return true;
+      _showError(_serverMessage(body) ?? 'No pudimos guardar este paso. Intenta de nuevo.');
+    } catch (_) {
+      _showError('Sin conexión: no pudimos guardar este paso. Revisa tu internet e intenta de nuevo.');
+    }
+    return false;
+  }
+
+  /// Solo los textos de los errores del servidor, sin rutas técnicas.
+  static String? _serverMessage(dynamic body) {
+    if (body is! Map) return null;
+    final errors = body['errors'];
+    if (errors is List && errors.isNotEmpty) {
+      return errors
+          .map((e) => e is Map ? e['message']?.toString() : null)
+          .whereType<String>()
+          .toSet()
+          .join('\n');
+    }
+    final err = body['error'];
+    if (err is Map && err['message'] != null) return err['message'].toString();
+    return body['message']?.toString();
   }
 
   // ── Next step logic ────────────────────────────────────────────────────────
@@ -493,7 +522,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
 
       // Step 4: patch availability
       if (_currentStep == 4) {
-        await _patchProfile({
+        if (!await _patchProfile({
           'serviceDetails': {
             'availability': {
               'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
@@ -503,13 +532,15 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           'defaultAvailabilitySchedule': {
             'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
           },
-        });
+        })) return;
       }
 
       // Step 5: upload pending photos
       if (_currentStep == 5) {
-        await _uploadPendingCaregiverPhotos();
-        await _uploadPendingPlacePhotos();
+        // Si una foto no subió, no se avanza: antes se mostraba el error pero
+        // el registro seguía sin esas fotos.
+        if (!await _uploadPendingCaregiverPhotos()) return;
+        if (!await _uploadPendingPlacePhotos()) return;
       }
 
       // Step 6: patch prices
@@ -525,12 +556,12 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         if (_services.contains('GUARDERIA')) {
           body['pricePerGuarderia'] = _precioGuarderia.toInt();
         }
-        await _patchProfile(body);
+        if (!await _patchProfile(body)) return;
       }
 
       // Step 7: upload logo
       if (_currentStep == 7) {
-        await _uploadLogo();
+        if (!await _uploadLogo()) return;
       }
 
       setState(() => _currentStep++);
@@ -550,7 +581,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
       case 1:
         return _companyNameCtrl.text.trim().isNotEmpty &&
             _emailCtrl.text.trim().isNotEmpty &&
-            _passwordCtrl.text.length >= 6 &&
+            _passwordCtrl.text.isNotEmpty &&
             _phoneCtrl.text.trim().isNotEmpty &&
             _bioCtrl.text.trim().length >= 20;
       case 2:
@@ -601,11 +632,17 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         if (!_codeValid) { _showError('Valida el código primero'); return false; }
         return true;
       case 1:
-        if (_companyNameCtrl.text.trim().isEmpty) { _showError('Ingresa el nombre de la empresa'); return false; }
-        if (_emailCtrl.text.trim().isEmpty) { _showError('Ingresa el correo de la empresa'); return false; }
-        if (_passwordCtrl.text.length < 6) { _showError('La contraseña debe tener al menos 6 caracteres'); return false; }
-        if (_phoneCtrl.text.trim().isEmpty) { _showError('Ingresa el teléfono de la empresa'); return false; }
-        if (_bioCtrl.text.trim().length < 20) { _showError('La descripción debe tener al menos 20 caracteres'); return false; }
+        // Antes pedía 6 caracteres de contraseña, pero el servidor exige 8 con
+        // mayúscula, número y símbolo: la cuenta fallaba recién en el paso 3
+        // con un "Datos inválidos" sin explicación.
+        final name = _companyNameCtrl.text.trim();
+        final bio = _bioCtrl.text.trim();
+        final error = (name.length < 2 ? 'Escribe el nombre de la empresa' : null) ??
+            PersonValidators.email(_emailCtrl.text) ??
+            PersonValidators.password(_passwordCtrl.text) ??
+            PersonValidators.boPhone(_phoneCtrl.text) ??
+            (bio.length < 20 ? 'Cuéntales un poco más del negocio: mínimo 20 caracteres (llevas ${bio.length})' : null);
+        if (error != null) { _showError(error); return false; }
         return true;
       case 2:
         if (_zone == null) { _showError('Selecciona la zona de la empresa'); return false; }
@@ -658,8 +695,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     setState(() => _localCaregiverPhotos.add((bytes: bytes, name: picked.name, mimeType: 'image/jpeg')));
   }
 
-  Future<void> _uploadPendingCaregiverPhotos() async {
-    if (_localCaregiverPhotos.isEmpty) return;
+  Future<bool> _uploadPendingCaregiverPhotos() async {
+    if (_localCaregiverPhotos.isEmpty) return true;
     setState(() => _uploadingCaregiverPhoto = true);
     try {
       for (final photo in List.from(_localCaregiverPhotos)) {
@@ -671,7 +708,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         final resp = await req.send();
         final data = jsonDecode(await resp.stream.bytesToString());
         if (data['success'] == true) {
-          if (!mounted) return;
+          if (!mounted) return false;
           setState(() { _caregiverPhotoUrls.add(data['data']['photoUrl'] as String); _localCaregiverPhotos.removeAt(0); });
         } else {
           throw Exception(data['error']?['message'] ?? 'Error al subir foto');
@@ -681,11 +718,17 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
       // Antes este catch quedaba vacío: si la subida fallaba, el usuario no
       // se enteraba y quedaba atascado tocando "Continuar" sin saber por qué
       // seguía faltando la foto que "ya había subido".
-      if (mounted) _showError('Error subiendo foto: ${e.toString().replaceFirst('Exception: ', '')}');
+      if (mounted) _showError(_uploadErrorText(e));
+      return false;
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhoto = false);
     }
+    return true;
   }
+
+  static String _uploadErrorText(Object e) => e is Exception && e is! FormatException
+      ? e.toString().replaceFirst('Exception: ', '')
+      : 'No pudimos subir las fotos. Revisa tu conexión e intenta de nuevo.';
 
   Future<void> _pickPlacePhoto(String section) async {
     final total = (_placePhotoUrls[section]?.length ?? 0) + (_localPlacePhotos[section]?.length ?? 0);
@@ -700,8 +743,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     });
   }
 
-  Future<void> _uploadPendingPlacePhotos() async {
-    if (_localPlacePhotos.isEmpty) return;
+  Future<bool> _uploadPendingPlacePhotos() async {
+    if (_localPlacePhotos.values.every((l) => l.isEmpty)) return true;
     setState(() => _uploadingPlacePhoto = true);
     try {
       for (final section in _localPlacePhotos.keys.toList()) {
@@ -716,7 +759,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           final resp = await req.send();
           final data = jsonDecode(await resp.stream.bytesToString());
           if (data['success'] == true) {
-            if (!mounted) return;
+            if (!mounted) return false;
             setState(() {
               _placePhotoUrls[section] = [...(_placePhotoUrls[section] ?? []), data['data']['photoUrl'] as String];
               _localPlacePhotos[section] = (_localPlacePhotos[section] ?? []).skip(1).toList();
@@ -727,14 +770,16 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         }
       }
     } catch (e) {
-      if (mounted) _showError('Error subiendo foto: ${e.toString().replaceFirst('Exception: ', '')}');
+      if (mounted) _showError(_uploadErrorText(e));
+      return false;
     } finally {
       if (mounted) setState(() => _uploadingPlacePhoto = false);
     }
+    return true;
   }
 
-  Future<void> _uploadLogo() async {
-    if (_localLogo == null) return;
+  Future<bool> _uploadLogo() async {
+    if (_localLogo == null) return true;
     setState(() => _isLoading = true);
     try {
       final req = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/photo'));
@@ -747,10 +792,16 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
       if (data['success'] == true) {
         _logoUrl = data['data']['profilePhoto'] as String? ?? data['data']['profilePicture'] as String?;
         setState(() => _localLogo = null);
+        return true;
       }
-    } catch (_) {} finally {
+      // Antes un fallo acá se ignoraba y el registro terminaba sin logo.
+      _showError(_serverMessage(data) ?? 'No pudimos subir el logo. Prueba con otra imagen.');
+    } catch (e) {
+      _showError('No pudimos subir el logo. Revisa tu conexión e intenta de nuevo.');
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+    return false;
   }
 
   /// Paso 8 → siguiente: solo avanza si el servidor ya marcó la identidad del dueño como VERIFIED.
@@ -845,7 +896,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a registrar tu empresa',
-        subtitle: 'Son 6 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son ${_phases.length} fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -1072,8 +1123,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
+        const SizedBox(height: 10),
+        PasswordRules(controller: _passwordCtrl),
         const SizedBox(height: 12),
-        GardenInput(hint: 'Teléfono de contacto *', controller: _phoneCtrl, keyboardType: TextInputType.phone),
+        GardenInput(hint: 'Celular de contacto * (ej: 76543210)', controller: _phoneCtrl, keyboardType: TextInputType.phone),
         const SizedBox(height: 12),
         GardenInput(
           hint: 'Descripción del negocio * (mín. 20 caracteres)',

@@ -27,6 +27,8 @@ import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
+import '../../utils/person_validators.dart';
+import '../../widgets/password_rules.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -55,6 +57,7 @@ class OnboardingWizardScreen extends StatefulWidget {
 class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
+  bool _showPassword = false;
 
   // Pantalla de bienvenida con el mapa de fases — se salta en modo resume
   // (ya viene con progreso) o conversión desde cliente (ya tiene cuenta).
@@ -97,7 +100,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final List<TextEditingController> _emergencyPhoneControllers =
       List.generate(3, (_) => TextEditingController());
 
-  bool _isValidBoPhone(String phone) => RegExp(r'^[67][0-9]{7}$').hasMatch(phone.trim());
+  bool _isValidBoPhone(String phone) => PersonValidators.boPhone(phone) == null;
 
   // Paso 10 (nuevo, final real): Contrato de cuidador — el botón de aceptar
   // solo se habilita después de scrollear el contrato hasta el final.
@@ -679,37 +682,28 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
-        if (_firstNameController.text.trim().isEmpty) {
-          _showStepError('Falta: Nombre', scrollTo: _keyStep0Name);
-          return false;
-        }
-        if (_lastNameController.text.trim().isEmpty) {
-          _showStepError('Falta: Apellido', scrollTo: _keyStep0Name);
-          return false;
-        }
-        if (_emailController.text.trim().isEmpty) {
-          _showStepError('Falta: Correo electrónico', scrollTo: _keyStep0Email);
-          return false;
-        }
-        if (_passwordController.text.isEmpty) {
-          _showStepError('Falta: Contraseña', scrollTo: _keyStep0Password);
-          return false;
-        }
-        if (_phoneController.text.trim().isEmpty) {
-          _showStepError('Falta: Número de teléfono', scrollTo: _keyStep0Phone);
-          return false;
-        }
-        if (_addressStreetController.text.trim().isEmpty) {
-          _showStepError('Falta: Calle de tu dirección', scrollTo: _keyStep0Address);
-          return false;
-        }
-        if (_addressZone == null) {
-          _showStepError('Selecciona tu zona / barrio', scrollTo: _keyStep0Address);
-          return false;
-        }
-        if (_dateOfBirth == null) {
-          _showStepError('Falta: Fecha de nacimiento', scrollTo: _keyStep0Dob);
-          return false;
+        // Antes solo se revisaba que no estuvieran vacíos: un correo o una
+        // contraseña inválidos recién fallaban en el servidor, con un texto
+        // técnico tipo "user.password: Debe incluir...".
+        final checks = <(String?, GlobalKey)>[
+          (PersonValidators.name(_firstNameController.text), _keyStep0Name),
+          (PersonValidators.name(_lastNameController.text, label: 'apellido'), _keyStep0Name),
+          // Quien ya es dueño (clientConversionMode) ya tiene cuenta: su correo
+          // y contraseña no se tocan acá.
+          if (!widget.clientConversionMode) ...[
+            (PersonValidators.email(_emailController.text), _keyStep0Email),
+            (PersonValidators.password(_passwordController.text), _keyStep0Password),
+          ],
+          (_phoneVerifiedLocked ? null : PersonValidators.boPhone(_phoneController.text), _keyStep0Phone),
+          (_addressStreetController.text.trim().isEmpty ? 'Escribe la calle de tu dirección' : null, _keyStep0Address),
+          (_addressZone == null ? 'Selecciona tu zona / barrio' : null, _keyStep0Address),
+          (PersonValidators.adultBirthDate(_dateOfBirth), _keyStep0Dob),
+        ];
+        for (final (error, key) in checks) {
+          if (error != null) {
+            _showStepError(error, scrollTo: key);
+            return false;
+          }
         }
         return true;
       case 1: // Foto de perfil
@@ -790,7 +784,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             return false;
           }
           if (!_isValidBoPhone(phone)) {
-            _showStepError('Teléfono inválido para el contacto de emergencia #${i + 1} (8 dígitos, empieza con 6 o 7)');
+            _showStepError('Revisa el teléfono del contacto #${i + 1}: son 8 dígitos y empieza con 6 o 7');
             return false;
           }
         }
@@ -814,8 +808,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       case 0:
         return _firstNameController.text.trim().isNotEmpty &&
             _lastNameController.text.trim().isNotEmpty &&
-            _emailController.text.trim().isNotEmpty &&
-            _passwordController.text.isNotEmpty &&
+            (widget.clientConversionMode ||
+                (_emailController.text.trim().isNotEmpty && _passwordController.text.isNotEmpty)) &&
             _phoneController.text.trim().isNotEmpty &&
             _addressStreetController.text.trim().isNotEmpty &&
             _addressZone != null &&
@@ -885,7 +879,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         final zones = await CitiesService.getZones(_gardenCityId!);
         zoneId = zones.where((z) => z.key == _addressZone).firstOrNull?.id;
       }
-      await _patchProfile({
+      if (!await _patchProfile({
         'address': _buildFullAddress(),
         if (_addressLat != null) 'addressLat': _addressLat,
         if (_addressLng != null) 'addressLng': _addressLng,
@@ -902,7 +896,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         if (_addressZone != null) 'addressZone': _addressZone,
         if (_gardenCityId != null) 'cityId': _gardenCityId,
         if (zoneId != null) 'zoneId': zoneId,
-      });
+      })) return;
       if (mounted) setState(() { _isLoading = false; _currentStep = 1; });
       return;
     }
@@ -939,19 +933,24 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if (response.statusCode == 200 && data['success'] == true) {
             _profilePhotoUrl = data['data']['url'].toString();
           } else {
-            throw Exception('Error subiendo foto de perfil');
+            throw Exception(_serverMessage(data is Map<String, dynamic> ? data : {}) ?? 'No pudimos subir tu foto');
           }
         } catch (e) {
           setState(() => _isLoading = false);
           if (mounted) {
-            GardenErrorDialog.show(context, 'Error foto perfil: $e');
+            GardenErrorDialog.show(
+              context,
+              e is Exception && e is! FormatException
+                  ? e.toString().replaceFirst('Exception: ', '')
+                  : 'No pudimos subir tu foto. Revisa tu conexión o prueba con otra imagen.',
+            );
           }
           return;
         }
       }
-      await _patchProfile({
+      if (!await _patchProfile({
         if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
-      });
+      })) return;
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
@@ -969,12 +968,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         final cities = await CitiesService.getCities();
         isSantaCruz = cities.where((c) => c.id == _gardenCityId).firstOrNull?.slug == 'santa-cruz';
       }
-      await _patchProfile({
+      if (!await _patchProfile({
         if (isSantaCruz) 'zone': _addressZone ?? _selectedZone,
         'servicesOffered': _servicesOffered,
         if (_homeType != null) 'homeType': _homeType,
         'hasYard': _hasYard,
-      });
+      })) return;
       // Actualizar price stats con la zona real antes de mostrar el paso de precio
       _loadPriceStats();
       setState(() { _isLoading = false; _currentStep++; });
@@ -985,12 +984,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (_currentStep == 3) {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
-      await _patchProfile({
+      if (!await _patchProfile({
         if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
         if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
         if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
         if (_servicesOffered.contains('GUARDERIA')) 'guarderiaIncludeWalk': _guarderiaIncludeWalk,
-      });
+      })) return;
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
@@ -1009,7 +1008,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'lastMinute': false,
         };
       }
-      await _patchProfile({
+      if (!await _patchProfile({
         'serviceAvailability': svcAvail,
         'serviceDetails': {
           'availability': {
@@ -1023,7 +1022,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             },
           },
         },
-      });
+      })) return;
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
@@ -1035,10 +1034,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       try {
         if (_localCaregiverPhotos.isNotEmpty) await _uploadPendingCaregiverPhotos();
         if (_localPlacePhotos.values.any((l) => l.isNotEmpty)) await _uploadPendingPlacePhotos();
-        await _patchProfile({
+        if (!await _patchProfile({
           'caregiverPhotos': _caregiverPhotoUrls,
           if (_placePhotoUrls.isNotEmpty) 'placePhotos': _placePhotoUrls,
-        });
+        })) return;
       } catch (_) {
         setState(() => _isLoading = false);
         return;
@@ -1131,7 +1130,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             'password': _passwordController.text,
             'firstName': _firstNameController.text.trim(),
             'lastName': _lastNameController.text.trim(),
-            'phone': _phoneController.text.trim(),
+            'phone': PersonValidators.normalizeBoPhone(_phoneController.text),
             'dateOfBirth': _dateOfBirth!.toIso8601String(),
             'country': 'Bolivia',
             'city': cityName,
@@ -1174,15 +1173,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _currentStep = 1;
         });
       } else {
-        if (data['errors'] != null) {
-          final errors = (data['errors'] as List)
-              .map((e) => '${e['field']}: ${e['message']}')
-              .join('\n');
-          throw Exception(errors);
-        }
-        throw Exception(
-          data['error']?['message'] ?? data['message'] ?? 'Error al crear la cuenta',
-        );
+        throw Exception(_serverMessage(data) ?? 'No pudimos crear tu cuenta. Intenta de nuevo.');
       }
     } catch (e) {
       if (!mounted) return;
@@ -1211,10 +1202,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// PATCH /caregiver/profile with partial data (silent on error — non-blocking).
-  Future<void> _patchProfile(Map<String, dynamic> data) async {
+  /// PATCH /caregiver/profile con lo del paso actual. Devuelve false (y
+  /// muestra el motivo) si no se guardó: antes tragaba el error y el paso
+  /// avanzaba igual, y lo cargado se perdía sin aviso hasta el envío final.
+  Future<bool> _patchProfile(Map<String, dynamic> data) async {
+    String? error;
     try {
-      await http.patch(
+      final res = await http.patch(
         Uri.parse('$_baseUrl/caregiver/profile'),
         headers: {
           'Authorization': 'Bearer $_authToken',
@@ -1222,7 +1216,36 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         },
         body: jsonEncode(data),
       );
-    } catch (_) {}
+      Map<String, dynamic> body = {};
+      try {
+        body = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {}
+      if (res.statusCode >= 200 && res.statusCode < 300 && body['success'] != false) return true;
+      error = _serverMessage(body) ?? 'No pudimos guardar este paso. Intenta de nuevo.';
+    } catch (_) {
+      error = 'Sin conexión: no pudimos guardar este paso. Revisa tu internet e intenta de nuevo.';
+    }
+    if (mounted) {
+      setState(() => _isLoading = false);
+      GardenErrorDialog.show(context, error);
+    }
+    return false;
+  }
+
+  /// Mensaje legible de una respuesta de error del servidor: solo los
+  /// textos, sin rutas técnicas como "user.email:".
+  static String? _serverMessage(Map<String, dynamic> body) {
+    final errors = body['errors'];
+    if (errors is List && errors.isNotEmpty) {
+      return errors
+          .map((e) => e is Map ? e['message']?.toString() : e.toString())
+          .whereType<String>()
+          .toSet()
+          .join('\n');
+    }
+    final err = body['error'];
+    if (err is Map && err['message'] != null) return err['message'].toString();
+    return body['message']?.toString();
   }
 
   /// Step 6 → next: verify bio was saved, then auto-skip steps 7/8/9 if already done.
@@ -1325,9 +1348,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _isLoading = true);
     final contacts = List.generate(3, (i) => {
       'name': _emergencyNameControllers[i].text.trim(),
-      'phone': _emergencyPhoneControllers[i].text.trim(),
+      'phone': PersonValidators.normalizeBoPhone(_emergencyPhoneControllers[i].text),
     });
-    await _patchProfile({'emergencyContacts': contacts});
+    if (!await _patchProfile({'emergencyContacts': contacts})) return;
     if (!mounted) return;
     setState(() { _isLoading = false; _currentStep = 10; });
   }
@@ -1359,9 +1382,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Future<void> _uploadPendingCaregiverPhotos() async {
     setState(() => _uploadingCaregiverPhotos = true);
     final token = AuthState.token;
-    final newUrls = <String>[];
     try {
-      for (final photo in List.from(_localCaregiverPhotos)) {
+      for (final photo in List.of(_localCaregiverPhotos)) {
         final request = http.MultipartRequest('POST', Uri.parse('$_apiUrl/caregiver/profile/caregiver-photo'));
         request.headers['Authorization'] = 'Bearer $token';
         String mime = photo.mimeType;
@@ -1370,14 +1392,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         final res = await http.Response.fromStream(await request.send());
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         if (data['success'] == true) {
-          newUrls.add(data['data']['photoUrl'] as String);
+          // Una por una: si falla la tercera, las dos primeras ya quedan
+          // guardadas y no se vuelven a subir duplicadas al reintentar.
+          if (mounted) {
+            setState(() {
+              _caregiverPhotoUrls.add(data['data']['photoUrl'] as String);
+              _localCaregiverPhotos.remove(photo);
+            });
+          }
         } else {
-          throw Exception(data['error']?['message'] ?? 'Error al subir foto');
+          throw Exception(data['error']?['message'] ?? 'No pudimos subir una de tus fotos');
         }
       }
-      if (mounted) setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
     } catch (e) {
-      GardenErrorDialog.show(context, 'Error subiendo foto: $e');
+      if (mounted) {
+        GardenErrorDialog.show(
+          context,
+          e is Exception && e is! FormatException
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'No pudimos subir tus fotos. Revisa tu conexión e intenta de nuevo.',
+        );
+      }
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhotos = false);
@@ -1422,7 +1457,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if (data['success'] == true) {
             newUrls.add(data['data']['photoUrl'] as String);
           } else {
-            throw Exception(data['error']?['message'] ?? 'Error al subir foto de sección');
+            throw Exception(data['error']?['message'] ?? 'No pudimos subir una foto de tu espacio');
           }
         }
         if (!mounted) return;
@@ -1432,7 +1467,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         });
       }
     } catch (e) {
-      GardenErrorDialog.show(context, 'Error subiendo foto: $e');
+      if (mounted) {
+        GardenErrorDialog.show(
+          context,
+          e is Exception && e is! FormatException
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'No pudimos subir las fotos de tu espacio. Revisa tu conexión e intenta de nuevo.',
+        );
+      }
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingPlacePhotos = false);
@@ -1480,13 +1522,28 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
           SizedBox(key: _keyStep0Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
-              style: TextStyle(color: textColor), decoration: _field('Correo electrónico', GIcon.correo)),
+              // Quien ya es dueño entra con su cuenta: el correo se muestra, no se cambia acá.
+              readOnly: widget.clientConversionMode,
+              autocorrect: false,
+              style: TextStyle(color: widget.clientConversionMode ? subtextColor : textColor),
+              decoration: _field('Correo electrónico', GIcon.correo)),
           const SizedBox(height: 16),
 
-          SizedBox(key: _keyStep0Password, height: 0),
-          TextFormField(controller: _passwordController, obscureText: true,
-              style: TextStyle(color: textColor), decoration: _field('Contraseña (mínimo 8 caracteres)', GIcon.seguridad)),
-          const SizedBox(height: 16),
+          if (!widget.clientConversionMode) ...[
+            SizedBox(key: _keyStep0Password, height: 0),
+            TextFormField(controller: _passwordController, obscureText: !_showPassword,
+                style: TextStyle(color: textColor),
+                decoration: _field('Contraseña', GIcon.seguridad).copyWith(
+                  suffixIcon: IconButton(
+                    tooltip: _showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña',
+                    onPressed: () => setState(() => _showPassword = !_showPassword),
+                    icon: GardenIcon(_showPassword ? GIcon.ocultar : GIcon.ver, size: GIconSize.md, color: subtextColor),
+                  ),
+                )),
+            const SizedBox(height: 10),
+            PasswordRules(controller: _passwordController),
+            const SizedBox(height: 16),
+          ],
 
           SizedBox(key: _keyStep0Phone, height: 0),
           TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
@@ -2880,7 +2937,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a armar tu perfil',
-        subtitle: 'Son 4 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son ${_phases.length} fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -3095,11 +3152,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                   ),
                                 if (_currentStep > 0) const SizedBox(width: 8),
-                                Text(
-                                  'Crear perfil de cuidador',
-                                  style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
+                                // En celular (web) no entraban título, fase y paso
+                                // en una fila: el título se acorta y el paso se
+                                // omite (ya lo dice la línea de abajo).
+                                Expanded(
+                                  child: Text(
+                                    'Crear perfil de cuidador',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
+                                  ),
                                 ),
-                                const Spacer(),
                                 AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 220),
                                   child: Text(
@@ -3108,8 +3171,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                     style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.3),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                AnimatedSwitcher(
+                                if (MediaQuery.sizeOf(context).width >= 560) const SizedBox(width: 10),
+                                if (MediaQuery.sizeOf(context).width >= 560) AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 260),
                                   transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
                                   child: Container(

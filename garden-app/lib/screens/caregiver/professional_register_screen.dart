@@ -37,6 +37,8 @@ import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
+import '../../utils/person_validators.dart';
+import '../../widgets/password_rules.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -48,6 +50,7 @@ class ProfessionalRegisterScreen extends StatefulWidget {
 class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
+  bool _showPassword = false;
   String _authToken = '';
   bool _showIntro = true;
 
@@ -200,29 +203,28 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         }
         return true;
       case 1:
-        if (_firstNameController.text.trim().isEmpty) {
-          _showStepError('Falta: Nombre', scrollTo: _keyStep1Name);
-          return false;
-        }
-        if (_lastNameController.text.trim().isEmpty) {
-          _showStepError('Falta: Apellido', scrollTo: _keyStep1Name);
-          return false;
-        }
-        if (_emailController.text.trim().isEmpty) {
-          _showStepError('Falta: Correo electrónico', scrollTo: _keyStep1Email);
-          return false;
-        }
-        if (_passwordController.text.isEmpty) {
-          _showStepError('Falta: Contraseña', scrollTo: _keyStep1Password);
-          return false;
-        }
-        if (_phoneController.text.trim().isEmpty) {
-          _showStepError('Falta: Número de teléfono', scrollTo: _keyStep1Phone);
-          return false;
-        }
-        if (_bioController.text.trim().length < 50) {
-          _showStepError('La descripción debe tener al menos 50 caracteres');
-          return false;
+        // La cuenta recién se crea en el paso 6: sin revisar el formato acá,
+        // un correo o una contraseña inválidos aparecían después de subir
+        // todas las fotos, como texto técnico del servidor.
+        final bio = _bioController.text.trim();
+        final checks = <(String?, GlobalKey?)>[
+          (PersonValidators.name(_firstNameController.text), _keyStep1Name),
+          (PersonValidators.name(_lastNameController.text, label: 'apellido'), _keyStep1Name),
+          (PersonValidators.email(_emailController.text), _keyStep1Email),
+          (PersonValidators.password(_passwordController.text), _keyStep1Password),
+          (PersonValidators.boPhone(_phoneController.text), _keyStep1Phone),
+          (bio.length < 50
+              ? 'Cuéntales un poco más sobre ti: mínimo 50 caracteres (llevas ${bio.length})'
+              : bio.length > 500
+                  ? 'Tu descripción es muy larga: máximo 500 caracteres (llevas ${bio.length})'
+                  : null,
+              null),
+        ];
+        for (final (error, key) in checks) {
+          if (error != null) {
+            _showStepError(error, scrollTo: key);
+            return false;
+          }
         }
         return true;
       case 2:
@@ -391,7 +393,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error: ${e.toString().replaceFirst('Exception: ', '')}');
+        GardenErrorDialog.show(context, e is Exception && e is! FormatException
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'No pudimos subir tus fotos. Revisa tu conexión e intenta de nuevo.');
       }
       rethrow;
     } finally {
@@ -424,7 +428,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           'password': _passwordController.text,
           'firstName': _firstNameController.text.trim(),
           'lastName': _lastNameController.text.trim(),
-          'phone': _phoneController.text.trim(),
+          'phone': PersonValidators.normalizeBoPhone(_phoneController.text),
           'bio': _bioController.text.trim(),
           if (_addressController.text.trim().isNotEmpty) 'address': _addressController.text.trim(),
           if (_selectedZone != null && isSantaCruz) 'zone': _selectedZone,
@@ -461,7 +465,11 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         setState(() => _authToken = data['data']['accessToken'] as String? ?? '');
         return true;
       } else {
-        final msg = data['error']?['message'] ?? data['message'] ?? 'Error al crear la cuenta';
+        // Solo los textos de cada error, sin rutas técnicas ("password: ...").
+        final errors = data['errors'];
+        final msg = errors is List && errors.isNotEmpty
+            ? errors.map((e) => e is Map ? e['message']?.toString() : null).whereType<String>().toSet().join('\n')
+            : data['error']?['message'] ?? data['message'] ?? 'No pudimos crear tu cuenta. Intenta de nuevo.';
         throw Exception(msg);
       }
     } catch (e) {
@@ -573,12 +581,17 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           if (response.statusCode == 200 && data['success'] == true) {
             _profilePhotoUrl = data['data']['url'].toString();
           } else {
-            throw Exception('Error subiendo foto de perfil');
+            throw Exception('No pudimos subir tu foto. Prueba con otra imagen.');
           }
         } catch (e) {
           setState(() => _isLoading = false);
           if (mounted) {
-            GardenErrorDialog.show(context, 'Error foto perfil: $e');
+            GardenErrorDialog.show(
+              context,
+              e is Exception && e is! FormatException
+                  ? e.toString().replaceFirst('Exception: ', '')
+                  : 'No pudimos subir tu foto. Revisa tu conexión e intenta de nuevo.',
+            );
           }
           return;
         }
@@ -625,7 +638,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       setState(() { _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType)); });
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
+        GardenErrorDialog.show(context, 'No pudimos abrir esa imagen. Prueba con otra.');
       }
     }
   }
@@ -747,7 +760,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       setState(() { _profilePhotoUrl = null; _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType); });
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
+        GardenErrorDialog.show(context, 'No pudimos abrir esa imagen. Prueba con otra.');
       }
     }
   }
@@ -855,12 +868,22 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
 
           SizedBox(key: _keyStep1Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
               style: TextStyle(color: textColor), decoration: field('Correo electrónico', GIcon.correo)),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep1Password, height: 0),
-          TextFormField(controller: _passwordController, obscureText: true,
-              style: TextStyle(color: textColor), decoration: field('Contraseña (mínimo 8 caracteres)', GIcon.seguridad)),
+          TextFormField(controller: _passwordController, obscureText: !_showPassword,
+              style: TextStyle(color: textColor),
+              decoration: field('Contraseña', GIcon.seguridad).copyWith(
+                suffixIcon: IconButton(
+                  tooltip: _showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña',
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                  icon: GardenIcon(_showPassword ? GIcon.ocultar : GIcon.ver, size: GIconSize.md, color: subtextColor),
+                ),
+              )),
+          const SizedBox(height: 10),
+          PasswordRules(controller: _passwordController),
           const SizedBox(height: 16),
 
           SizedBox(key: _keyStep1Phone, height: 0),
@@ -1370,7 +1393,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a armar tu perfil',
-        subtitle: 'Son 4 fases cortas — puedes guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son ${_phases.length} fases cortas — puedes guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -1544,8 +1567,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                               else
                                 const SizedBox(width: 26),
                               const SizedBox(width: 8),
-                              Text('Registro Profesional', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
-                              const Spacer(),
+                              Expanded(
+                                child: Text('Registro Profesional', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                              ),
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 220),
                                 child: Text(
@@ -1554,8 +1579,8 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                                   style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.3),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Container(
+                              if (MediaQuery.sizeOf(context).width >= 560) const SizedBox(width: 8),
+                              if (MediaQuery.sizeOf(context).width >= 560) Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
                                 child: Text(stepTitles[_currentStep], style: const TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),

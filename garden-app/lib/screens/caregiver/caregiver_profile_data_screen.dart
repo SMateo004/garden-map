@@ -869,7 +869,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'No se pudo guardar: ${e.toString()}');
+        GardenErrorDialog.show(context, e is Exception && e is! FormatException
+            ? 'No se pudo guardar: ${e.toString().replaceFirst('Exception: ', '')}'
+            : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -920,7 +922,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      GardenErrorDialog.show(context, 'Error al subir: $e');
+      GardenErrorDialog.show(context, 'No pudimos subir la foto. Revisa tu conexión e intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -957,7 +959,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
-      GardenErrorDialog.show(context, 'Error: $e');
+      GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhoto = false);
     }
@@ -1032,7 +1034,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error: $e');
+        GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _uploadingAntecedentes = false);
@@ -1100,7 +1102,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error: $e');
+        GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _uploadingNit = false);
@@ -1385,7 +1387,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
-      GardenErrorDialog.show(context, 'Error: $e');
+      GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _uploadingPlacePhoto = false);
     }
