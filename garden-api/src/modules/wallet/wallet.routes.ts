@@ -220,6 +220,11 @@ router.post(
       return res.status(400).json({ success: false, error: { message: 'Monto inválido' } });
     }
 
+    // Bs con centavos: 50,123 no es un monto que se pueda transferir.
+    if (Math.abs(parsedAmount * 100 - Math.round(parsedAmount * 100)) > 1e-6) {
+      return res.status(400).json({ success: false, error: { message: 'El monto puede tener hasta 2 decimales' } });
+    }
+
     const montoMinimo = await getNumericSetting('montoMinimoRetiro', 50);
     if (parsedAmount < montoMinimo) {
       return res.status(400).json({
@@ -285,7 +290,7 @@ router.post(
         const availableBalance = Math.max(0, currentBalance - pendingAmount);
 
         if (parsedAmount > availableBalance) {
-          throw Object.assign(new Error('INSUFFICIENT_BALANCE'), { code: 'INSUFFICIENT_BALANCE' });
+          throw Object.assign(new Error('INSUFFICIENT_BALANCE'), { code: 'INSUFFICIENT_BALANCE', available: availableBalance });
         }
 
         const existing = await tx.walletTransaction.findFirst({
@@ -322,12 +327,15 @@ router.post(
         });
       }
       if (err.code === 'INSUFFICIENT_BALANCE') {
-        return res.status(400).json({ success: false, error: { message: 'Saldo insuficiente' } });
+        return res.status(400).json({
+          success: false,
+          error: { message: `Saldo insuficiente: puedes retirar hasta Bs ${Number(err.available ?? 0).toFixed(2)}` },
+        });
       }
       if (err.code === 'ALREADY_PENDING') {
         return res.status(400).json({
           success: false,
-          error: { message: 'Ya tienes una solicitud de retiro pendiente' },
+          error: { message: 'Ya tienes un retiro en camino. Podrás pedir otro cuando se complete.' },
         });
       }
       throw err;

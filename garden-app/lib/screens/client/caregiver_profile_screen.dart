@@ -461,7 +461,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               if (offersPaseo) ...[
                 _ServiceOption(icon: GIcon.paseo, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
                 const SizedBox(height: 12),
-                _ServiceOption(icon: GIcon.repetir, label: 'Paseo recurrente', sublabel: 'Se repite solo cada semana', onTap: () { Navigator.pop(sheetCtx); context.push('/recurring-booking/${widget.caregiverId}', extra: {'caregiver': _caregiver, 'pets': _clientPets}); }),
+                // Con Meet & Greet obligatorio la serie no se puede crear (cada
+                // paseo se generaría sin conocerse): se explica en vez de abrir
+                // un formulario que el servidor va a rechazar.
+                if (_caregiver?['requireMeetAndGreet'] == true)
+                  _ServiceOption(icon: GIcon.repetir, label: 'Paseo recurrente', sublabel: 'Primero conócelo con una reserva normal', onTap: () {
+                    Navigator.pop(sheetCtx);
+                    GardenErrorDialog.show(context, 'Este cuidador pide conocerse primero (Meet & Greet). Haz una reserva normal de paseo con él y después programa los paseos recurrentes.');
+                  })
+                else
+                  _ServiceOption(icon: GIcon.repetir, label: 'Paseo recurrente', sublabel: 'Se repite solo cada semana', onTap: () { Navigator.pop(sheetCtx); context.push('/recurring-booking/${widget.caregiverId}', extra: {'caregiver': _caregiver, 'pets': _clientPets}); }),
                 const SizedBox(height: 12),
               ],
               if (offersGuarderia)

@@ -120,6 +120,113 @@ async function getBookingSettings() {
  */
 const PET_SIZE_LABEL: Record<string, string> = { SMALL: 'pequeño', MEDIUM: 'mediano', LARGE: 'grande', GIANT: 'gigante' };
 
+/** Lo que el cuidador acepta, para comparar con las mascotas de una reserva. */
+export interface CaregiverPetPolicy {
+  sizesAccepted?: string[] | null;
+  animalTypes?: string[] | null;
+  acceptAggressive?: boolean | null;
+  acceptPuppies?: boolean | null;
+  acceptSeniors?: boolean | null;
+}
+
+export interface PetFitInfo {
+  name: string;
+  size: string | null;
+  animalType: string | null;
+  isAggressive: boolean | null;
+  age: number | null;
+}
+
+/**
+ * Lanza BadRequestError si alguna mascota no se puede reservar con este
+ * cuidador (sin especie/tamaño, tamaño o especie no aceptados, agresiva,
+ * cachorro o mayor). Compartida por createBooking y por la creación de
+ * series recurrentes, que antes no lo revisaban y luego fallaban cada semana.
+ */
+export function assertPetsFitCaregiver(orderedPets: PetFitInfo[], caregiver: CaregiverPetPolicy): void {
+  // Sin especie o tamaño no se puede saber si el cuidador acepta a la
+  // mascota (los filtros de abajo la dejaban pasar). Desde octubre 2026 la
+  // app los pide al registrarla; las mascotas viejas se completan en
+  // Mis mascotas.
+  const incompletePet = orderedPets.find((p) => !p.animalType || !p.size);
+  if (incompletePet) {
+    throw new BadRequestError(
+      `Completa si ${incompletePet.name} es perro o gato y su tamaño en Mis mascotas para poder reservar.`,
+      'PET_INCOMPLETE',
+      'petIds'
+    );
+  }
+
+  // Validar que el cuidador acepte el TAMAÑO de cada mascota seleccionada —
+  // antes no se validaba ninguna, así que se podía reservar una mascota
+  // GIANT con un cuidador que solo aceptaba SMALL/MEDIUM, y este se
+  // enteraba recién al ver la reserva ya confirmada. Solo se aplica si el
+  // cuidador configuró sizesAccepted (evita romper perfiles antiguos que
+  // nunca llenaron ese campo).
+  const sizesAccepted = Array.isArray(caregiver.sizesAccepted) ? caregiver.sizesAccepted : [];
+  if (sizesAccepted.length > 0) {
+    const incompatiblePet = orderedPets.find((p) => p.size && !sizesAccepted.includes(p.size));
+    if (incompatiblePet) {
+      throw new BadRequestError(
+        `Este cuidador no acepta mascotas de tamaño ${PET_SIZE_LABEL[incompatiblePet.size!] ?? incompatiblePet.size} (${incompatiblePet.name}). Elige otro cuidador o revisa el tamaño registrado de tu mascota.`,
+        'PET_SIZE_NOT_ACCEPTED',
+        'petIds'
+      );
+    }
+  }
+
+  // Validar ESPECIE (perro/gato) contra CaregiverProfile.animalTypes — solo
+  // si el cuidador configuró tipos aceptados y la mascota tiene especie
+  // registrada (evita romper mascotas antiguas que nunca la llenaron).
+  const animalTypesAccepted = Array.isArray(caregiver.animalTypes) ? caregiver.animalTypes : [];
+  if (animalTypesAccepted.length > 0) {
+    const wrongSpeciesPet = orderedPets.find((p) => p.animalType && !animalTypesAccepted.includes(p.animalType));
+    if (wrongSpeciesPet) {
+      const speciesLabel = wrongSpeciesPet.animalType === 'DOGS' ? 'perros' : 'gatos';
+      throw new BadRequestError(
+        `Este cuidador no acepta ${speciesLabel} (${wrongSpeciesPet.name}). Elige otro cuidador para esta mascota.`,
+        'PET_TYPE_NOT_ACCEPTED',
+        'petIds'
+      );
+    }
+  }
+
+  // Validar políticas especiales: mascota agresiva, cachorro (< 1 año) o
+  // mayor (>= 8 años) contra lo que el cuidador acepta. Antes ninguna de
+  // estas políticas se verificaba al crear la reserva — el cuidador solo
+  // se enteraba de la incompatibilidad al ver la reserva ya confirmada.
+  if (caregiver.acceptAggressive === false) {
+    const aggressivePet = orderedPets.find((p) => p.isAggressive);
+    if (aggressivePet) {
+      throw new BadRequestError(
+        `Este cuidador no acepta mascotas agresivas (${aggressivePet.name}). Elige otro cuidador.`,
+        'PET_AGGRESSIVE_NOT_ACCEPTED',
+        'petIds'
+      );
+    }
+  }
+  if (caregiver.acceptPuppies === false) {
+    const puppyPet = orderedPets.find((p) => p.age != null && p.age < 1);
+    if (puppyPet) {
+      throw new BadRequestError(
+        `Este cuidador no acepta cachorros (${puppyPet.name}, menos de 1 año). Elige otro cuidador.`,
+        'PET_PUPPY_NOT_ACCEPTED',
+        'petIds'
+      );
+    }
+  }
+  if (caregiver.acceptSeniors === false) {
+    const seniorPet = orderedPets.find((p) => p.age != null && p.age >= 8);
+    if (seniorPet) {
+      throw new BadRequestError(
+        `Este cuidador no acepta mascotas mayores (${seniorPet.name}, 8+ años). Elige otro cuidador.`,
+        'PET_SENIOR_NOT_ACCEPTED',
+        'petIds'
+      );
+    }
+  }
+}
+
 export async function createBooking(
   clientId: string,
   body: CreateBookingBody,
@@ -285,87 +392,7 @@ export async function createBooking(
       );
     }
 
-    // Sin especie o tamaño no se puede saber si el cuidador acepta a la
-    // mascota (los filtros de abajo la dejaban pasar). Desde octubre 2026 la
-    // app los pide al registrarla; las mascotas viejas se completan en
-    // Mis mascotas.
-    const incompletePet = orderedPets.find((p) => !p.animalType || !p.size);
-    if (incompletePet) {
-      throw new BadRequestError(
-        `Completa si ${incompletePet.name} es perro o gato y su tamaño en Mis mascotas para poder reservar.`,
-        'PET_INCOMPLETE',
-        'petIds'
-      );
-    }
-
-    // Validar que el cuidador acepte el TAMAÑO de cada mascota seleccionada —
-    // antes no se validaba ninguna, así que se podía reservar una mascota
-    // GIANT con un cuidador que solo aceptaba SMALL/MEDIUM, y este se
-    // enteraba recién al ver la reserva ya confirmada. Solo se aplica si el
-    // cuidador configuró sizesAccepted (evita romper perfiles antiguos que
-    // nunca llenaron ese campo).
-    const sizesAccepted = Array.isArray(caregiver.sizesAccepted) ? caregiver.sizesAccepted : [];
-    if (sizesAccepted.length > 0) {
-      const incompatiblePet = orderedPets.find((p) => p.size && !sizesAccepted.includes(p.size));
-      if (incompatiblePet) {
-        throw new BadRequestError(
-          `Este cuidador no acepta mascotas de tamaño ${PET_SIZE_LABEL[incompatiblePet.size!] ?? incompatiblePet.size} (${incompatiblePet.name}). Elige otro cuidador o revisa el tamaño registrado de tu mascota.`,
-          'PET_SIZE_NOT_ACCEPTED',
-          'petIds'
-        );
-      }
-    }
-
-    // Validar ESPECIE (perro/gato) contra CaregiverProfile.animalTypes — solo
-    // si el cuidador configuró tipos aceptados y la mascota tiene especie
-    // registrada (evita romper mascotas antiguas que nunca la llenaron).
-    const animalTypesAccepted = Array.isArray(caregiver.animalTypes) ? caregiver.animalTypes : [];
-    if (animalTypesAccepted.length > 0) {
-      const wrongSpeciesPet = orderedPets.find((p) => p.animalType && !animalTypesAccepted.includes(p.animalType));
-      if (wrongSpeciesPet) {
-        const speciesLabel = wrongSpeciesPet.animalType === 'DOGS' ? 'perros' : 'gatos';
-        throw new BadRequestError(
-          `Este cuidador no acepta ${speciesLabel} (${wrongSpeciesPet.name}). Elige otro cuidador para esta mascota.`,
-          'PET_TYPE_NOT_ACCEPTED',
-          'petIds'
-        );
-      }
-    }
-
-    // Validar políticas especiales: mascota agresiva, cachorro (< 1 año) o
-    // mayor (>= 8 años) contra lo que el cuidador acepta. Antes ninguna de
-    // estas políticas se verificaba al crear la reserva — el cuidador solo
-    // se enteraba de la incompatibilidad al ver la reserva ya confirmada.
-    if (caregiver.acceptAggressive === false) {
-      const aggressivePet = orderedPets.find((p) => p.isAggressive);
-      if (aggressivePet) {
-        throw new BadRequestError(
-          `Este cuidador no acepta mascotas agresivas (${aggressivePet.name}). Elige otro cuidador.`,
-          'PET_AGGRESSIVE_NOT_ACCEPTED',
-          'petIds'
-        );
-      }
-    }
-    if (caregiver.acceptPuppies === false) {
-      const puppyPet = orderedPets.find((p) => p.age != null && p.age < 1);
-      if (puppyPet) {
-        throw new BadRequestError(
-          `Este cuidador no acepta cachorros (${puppyPet.name}, menos de 1 año). Elige otro cuidador.`,
-          'PET_PUPPY_NOT_ACCEPTED',
-          'petIds'
-        );
-      }
-    }
-    if (caregiver.acceptSeniors === false) {
-      const seniorPet = orderedPets.find((p) => p.age != null && p.age >= 8);
-      if (seniorPet) {
-        throw new BadRequestError(
-          `Este cuidador no acepta mascotas mayores (${seniorPet.name}, 8+ años). Elige otro cuidador.`,
-          'PET_SENIOR_NOT_ACCEPTED',
-          'petIds'
-        );
-      }
-    }
+    assertPetsFitCaregiver(orderedPets, caregiver);
 
     // Meet & Greet obligatorio: si el cuidador lo exige, la reserva debe
     // incluir mgData (propuesta de M&G) — no se puede crear una reserva

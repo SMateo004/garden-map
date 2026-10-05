@@ -402,6 +402,13 @@ router.post('/:bookingId/appeal', authMiddleware,
         error: { message: 'Explica tu apelación con al menos 10 caracteres.' },
       });
     }
+    // Mismo tope que la app: va a la revisión humana y a las notificaciones.
+    if (reason.length > 2000 || (newEvidence != null && (typeof newEvidence !== 'string' || newEvidence.length > 2000))) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Tu apelación es muy larga: máximo 2000 caracteres por campo.' },
+      });
+    }
 
     const booking = await prisma.booking.findFirst({
       where: { id: bookingId },

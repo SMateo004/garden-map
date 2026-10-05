@@ -1073,6 +1073,21 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   void _showWithdrawSheet() {
     final amountController = TextEditingController();
     bool isSubmitting = false;
+    final available = ((_walletData?['availableBalance'] ?? _walletData?['balance'] ?? 0) as num).toDouble();
+    final pending = ((_walletData?['pendingWithdrawals'] ?? 0) as num).toDouble();
+
+    // Se avisa ANTES de abrir la hoja: antes se completaba todo (monto,
+    // confirmación, PIN) y recién el servidor decía que no se podía.
+    if (pending > 0) {
+      GardenErrorDialog.show(context,
+          'Ya tienes un retiro en camino de Bs ${pending.toStringAsFixed(2)}. Podrás pedir otro cuando se complete.');
+      return;
+    }
+    if (available < _montoMinimoRetiro) {
+      GardenErrorDialog.show(context,
+          'Necesitas al menos Bs ${_montoMinimoRetiro.toStringAsFixed(0)} para retirar. Hoy tienes Bs ${available.toStringAsFixed(2)} disponibles.');
+      return;
+    }
 
     // Verificar si tiene configurada la modalidad de retiro elegida antes de abrir
     if (_withdrawalMethod == 'QR_TRANSFER') {
@@ -1163,7 +1178,27 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   const SizedBox(height: 4),
                   // FIX (auditoría 2026-10-01, F3): antes el mínimo no se
                   // mostraba en ningún lado de esta hoja.
-                  Text('Mínimo: Bs ${_montoMinimoRetiro.toStringAsFixed(0)}', style: TextStyle(color: subtextColor.withValues(alpha: 0.7), fontSize: 11)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Disponible: Bs ${available.toStringAsFixed(2)} · Mínimo: Bs ${_montoMinimoRetiro.toStringAsFixed(0)}',
+                          style: TextStyle(color: subtextColor.withValues(alpha: 0.8), fontSize: 11),
+                        ),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 32),
+                          foregroundColor: GardenColors.primary,
+                        ),
+                        // Hacia abajo: redondear 10,005 a 10,01 pediría más de lo que hay.
+                        onPressed: () => setSheet(() =>
+                            amountController.text = ((available * 100).floor() / 100).toStringAsFixed(2)),
+                        child: const Text('Retirar todo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   // Monto
                   TextField(
@@ -1207,7 +1242,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       if (isSubmitting) return;
                       final amount = parseDecimal(amountController.text) ?? 0;
                       if (amount <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido')));
+                        GardenErrorDialog.show(context, 'Escribe cuánto quieres retirar');
+                        return;
+                      }
+                      if ((amount * 100 - (amount * 100).round()).abs() > 1e-6) {
+                        GardenErrorDialog.show(context, 'El monto puede tener hasta 2 decimales');
                         return;
                       }
                       // FIX (auditoría 2026-10-01, F3): antes esto solo lo
@@ -1221,8 +1260,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       // contra el balance bruto dejaba pasar la validación del cliente
                       // cuando ya había un retiro pendiente (el backend lo bloqueaba
                       // igual, pero con un mensaje genérico en vez de este).
-                      if (amount > (_walletData?['availableBalance'] ?? _walletData?['balance'] ?? 0)) {
-                        GardenErrorDialog.show(context, 'Fondos insuficientes');
+                      if (amount > available + 1e-9) {
+                        GardenErrorDialog.show(context, 'Puedes retirar hasta Bs ${available.toStringAsFixed(2)}');
                         return;
                       }
 

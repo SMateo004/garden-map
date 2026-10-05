@@ -189,6 +189,59 @@ class _DisputeScreenState extends State<DisputeScreen> {
     return !DateTime.now().isAfter(deadline);
   }
 
+  /// Lo que se muestra cuando algo falla: el mensaje del servidor si lo hay,
+  /// nunca "Exception: ..." ni el detalle técnico de un JSON roto.
+  static String _errorText(Object e) => e is Exception && e is! FormatException
+      ? e.toString().replaceFirst('Exception: ', '')
+      : 'No pudimos enviar tu respuesta. Revisa tu conexión e intenta de nuevo.';
+
+  /// Enviar abre la resolución (con dinero de por medio) y no se puede
+  /// cambiar después: se confirma lo elegido antes de mandarlo.
+  Future<bool> _confirmReasons(List<Map<String, dynamic>> options) async {
+    final labels = _selectedReasons
+        .map((id) => options.firstWhere((o) => o['id'] == id, orElse: () => {'label': id})['label'] as String)
+        .toList();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => GardenGlassDialog(
+        title: const Text('¿Enviar tu respuesta?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final l in labels)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.primary),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(l)),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+            const Text('Después de enviarla no se puede cambiar. Si no estás de acuerdo con la decisión, podrás apelar.',
+                style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Revisar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+    return ok == true && mounted;
+  }
+
   Future<void> _submitAppeal() async {
     final reason = _appealReasonCtrl.text.trim();
     if (reason.length < 10) {
@@ -215,7 +268,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      GardenErrorDialog.show(context, _errorText(e));
     } finally {
       if (mounted) setState(() => _submittingAppeal = false);
     }
@@ -223,6 +276,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Future<void> _submitClientReport() async {
     if (_selectedReasons.isEmpty) return;
+    if (!await _confirmReasons(_clientOptions)) return;
     setState(() { _step = 1; _isInitiatingAction = true; });
     try {
       final response = await http.post(
@@ -234,17 +288,18 @@ class _DisputeScreenState extends State<DisputeScreen> {
       if (data['success'] == true) {
         setState(() { _step = 2; });
       } else {
-        throw Exception(data['error']?['message'] ?? 'Error');
+        throw Exception(data['error']?['message'] ?? 'No pudimos enviar tu respuesta. Intenta de nuevo.');
       }
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString());
+      GardenErrorDialog.show(context, _errorText(e));
     }
   }
 
   Future<void> _submitCaregiverResponse() async {
     if (_selectedReasons.isEmpty) return;
+    if (!await _confirmReasons(_caregiverOptions)) return;
     setState(() { _step = 1; _isInitiatingAction = false; });
     try {
       final response = await http.post(
@@ -262,12 +317,12 @@ class _DisputeScreenState extends State<DisputeScreen> {
         // ventana de apelación se calcule sobre la fecha real de resolución.
         await _checkDisputeStatus();
       } else {
-        throw Exception(data['error']?['message'] ?? 'Error');
+        throw Exception(data['error']?['message'] ?? 'No pudimos enviar tu respuesta. Intenta de nuevo.');
       }
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString());
+      GardenErrorDialog.show(context, _errorText(e));
     }
   }
 
@@ -275,6 +330,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   /// de _submitClientReport). Solo alcanzable cuando aún no existe disputa.
   Future<void> _submitCaregiverReport() async {
     if (_selectedReasons.isEmpty) return;
+    if (!await _confirmReasons(_caregiverReportOptions)) return;
     setState(() { _step = 1; _isInitiatingAction = true; });
     try {
       final response = await http.post(
@@ -289,12 +345,12 @@ class _DisputeScreenState extends State<DisputeScreen> {
           _step = 2;
         });
       } else {
-        throw Exception(data['error']?['message'] ?? 'Error');
+        throw Exception(data['error']?['message'] ?? 'No pudimos enviar tu respuesta. Intenta de nuevo.');
       }
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      GardenErrorDialog.show(context, _errorText(e));
     }
   }
 
@@ -303,6 +359,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   /// que _submitCaregiverResponse.
   Future<void> _submitClientResponse() async {
     if (_selectedReasons.isEmpty) return;
+    if (!await _confirmReasons(_clientResponseOptions)) return;
     setState(() { _step = 1; _isInitiatingAction = false; });
     try {
       final response = await http.post(
@@ -318,12 +375,12 @@ class _DisputeScreenState extends State<DisputeScreen> {
         });
         await _checkDisputeStatus();
       } else {
-        throw Exception(data['error']?['message'] ?? 'Error');
+        throw Exception(data['error']?['message'] ?? 'No pudimos enviar tu respuesta. Intenta de nuevo.');
       }
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      GardenErrorDialog.show(context, _errorText(e));
     }
   }
 
@@ -1287,11 +1344,16 @@ class _DisputeScreenState extends State<DisputeScreen> {
             child: TextField(
               controller: _appealReasonCtrl,
               maxLines: 5,
+              maxLength: 2000,
+              onChanged: (_) => setState(() {}),
               style: TextStyle(color: textColor, fontSize: 14),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Explica por qué crees que el veredicto no fue justo...',
-                contentPadding: EdgeInsets.all(14),
+                contentPadding: const EdgeInsets.all(14),
                 border: InputBorder.none,
+                counterText: _appealReasonCtrl.text.trim().length < 10
+                    ? 'Mínimo 10 caracteres · llevas ${_appealReasonCtrl.text.trim().length}'
+                    : null,
               ),
             ),
           ),
@@ -1308,6 +1370,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
             child: TextField(
               controller: _appealEvidenceCtrl,
               maxLines: 4,
+              maxLength: 2000,
               style: TextStyle(color: textColor, fontSize: 14),
               decoration: const InputDecoration(
                 hintText: 'Describe fotos, mensajes u otra evidencia nueva que quieras que se considere...',
@@ -1323,7 +1386,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
             gIcon: GIcon.enviar,
             color: GardenColors.warning,
             loading: _submittingAppeal,
-            onPressed: _submittingAppeal ? null : _submitAppeal),
+            onPressed: _submittingAppeal || _appealReasonCtrl.text.trim().length < 10 ? null : _submitAppeal),
           const SizedBox(height: 12),
           GardenButton(
             label: 'Cancelar',

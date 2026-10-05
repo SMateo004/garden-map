@@ -66,20 +66,50 @@ export async function createSeries(clientId: string, body: CreateRecurringSeries
   // — no se duplica esa lógica acá.
   const caregiver = await prisma.caregiverProfile.findFirst({
     where: { id: body.caregiverId, status: CaregiverStatus.APPROVED, suspended: false },
-    select: { id: true, servicesOffered: true },
+    select: {
+      id: true, userId: true, servicesOffered: true, requireMeetAndGreet: true,
+      maxPets: true, maxPetsPaseo: true,
+      sizesAccepted: true, animalTypes: true, acceptAggressive: true, acceptPuppies: true, acceptSeniors: true,
+    },
   });
   if (!caregiver) throw new NotFoundError('Cuidador no encontrado o no disponible');
   if (!caregiver.servicesOffered.includes(ServiceType.PASEO)) {
     throw new BadRequestError('Este cuidador no ofrece paseos', 'SERVICE_NOT_OFFERED');
   }
+  if (caregiver.userId === clientId) {
+    throw new BadRequestError('No puedes reservar tus propios servicios.', 'SELF_BOOKING_FORBIDDEN');
+  }
+  // Cada paseo de la serie se crea sin Meet & Greet: con un cuidador que lo
+  // exige, TODAS las fechas se saltaban sin que el dueño entendiera por qué.
+  if (caregiver.requireMeetAndGreet) {
+    throw new BadRequestError(
+      'Este cuidador pide conocerse primero (Meet & Greet). Haz una reserva normal con él y después programa los paseos recurrentes.',
+      'MEET_AND_GREET_REQUIRED'
+    );
+  }
 
+  const uniquePetIds = [...new Set(body.petIds)];
   const pets = await prisma.pet.findMany({
-    where: { id: { in: body.petIds }, clientProfile: { userId: clientId } },
-    select: { id: true },
+    where: { id: { in: uniquePetIds }, clientProfile: { userId: clientId } },
+    select: { id: true, name: true, size: true, animalType: true, isAggressive: true, age: true },
   });
-  if (pets.length !== body.petIds.length) {
+  if (pets.length !== uniquePetIds.length) {
     throw new BadRequestError('Una o más mascotas no te pertenecen', 'PET_NOT_OWNED', 'petIds');
   }
+  const maxPets = caregiver.maxPetsPaseo ?? caregiver.maxPets ?? 1;
+  if (uniquePetIds.length > maxPets) {
+    throw new BadRequestError(
+      `Este cuidador pasea como máximo ${maxPets} mascota${maxPets > 1 ? 's' : ''} a la vez.`,
+      'MAX_PETS_EXCEEDED',
+      'petIds'
+    );
+  }
+  // Mismas reglas que una reserva normal, revisadas AHORA y no recién al
+  // generar cada paseo (que se saltaba semana tras semana).
+  bookingService.assertPetsFitCaregiver(
+    uniquePetIds.map((id) => pets.find((p) => p.id === id)!),
+    caregiver
+  );
 
   const nextRunDate = computeInitialRunDate(body.daysOfWeek, DEFAULT_GENERATE_DAYS_AHEAD);
 

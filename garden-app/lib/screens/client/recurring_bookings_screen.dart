@@ -88,7 +88,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error de conexión: $e');
+        GardenErrorDialog.show(context, 'Sin conexión. Revisa tu internet e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _actingOn.remove(seriesId));
@@ -132,12 +132,12 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           context.pop();
         }
       } else if (mounted) {
-        final errors = (data['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
+        final errors = (data['errors'] as List?)?.map((e) => e['message'] as String).toSet().join('\n');
         GardenErrorDialog.show(context, errors ?? data['error']?['message'] ?? 'No se pudo crear la serie');
       }
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'Error de conexión: $e');
+        GardenErrorDialog.show(context, 'Sin conexión. Revisa tu internet e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -271,6 +271,21 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           const SizedBox(height: 20),
           Text('Mascotas', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
+          // Sin mascotas no hay nada que elegir: antes la sección quedaba vacía
+          // y el botón solo decía "Elige al menos una mascota".
+          if ((widget.pets ?? []).isEmpty)
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Primero agrega a tu mascota en Mis mascotas.',
+                      style: TextStyle(color: subtextColor, fontSize: 13)),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/my-pets'),
+                  child: const Text('Agregar mascota'),
+                ),
+              ],
+            ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
