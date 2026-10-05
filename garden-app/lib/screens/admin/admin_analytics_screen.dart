@@ -35,6 +35,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _d;
+  /// Impacto del rediseño (GET /admin/analytics/impact). No depende del rango.
+  Map<String, dynamic>? _impact;
 
   String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -47,13 +49,22 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final r = await http.get(
-        Uri.parse('$_base/admin/analytics/summary?range=$_range'),
-        headers: {'Authorization': 'Bearer ${widget.adminToken}'},
-      ).timeout(const Duration(seconds: 40));
+      final headers = {'Authorization': 'Bearer ${widget.adminToken}'};
+      final responses = await Future.wait([
+        http.get(Uri.parse('$_base/admin/analytics/summary?range=$_range'), headers: headers),
+        // Si el impacto falla, el resto del panel se muestra igual.
+        http.get(Uri.parse('$_base/admin/analytics/impact'), headers: headers)
+            .catchError((_) => http.Response('{}', 500)),
+      ]).timeout(const Duration(seconds: 40));
+      final r = responses[0];
       final body = jsonDecode(r.body);
       if (r.statusCode != 200 || body['success'] != true) throw Exception('Error ${r.statusCode}');
-      if (mounted) setState(() { _d = body['data'] as Map<String, dynamic>; _loading = false; });
+      Map<String, dynamic>? impact;
+      try {
+        final ib = jsonDecode(responses[1].body);
+        if (responses[1].statusCode == 200 && ib['success'] == true) impact = ib['data'] as Map<String, dynamic>;
+      } catch (_) {}
+      if (mounted) setState(() { _d = body['data'] as Map<String, dynamic>; _impact = impact; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = 'No se pudo cargar la analítica ($e)'; _loading = false; });
     }
@@ -120,6 +131,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     final bucket = d['bucket'] as String;
 
     return [
+      if (_impact != null) ...[
+        _title('Impacto del rediseño', text),
+        _impactSection(_impact!, card, text, sub),
+      ],
       _title('Negocio', text),
       _kpis(card, text, sub, [
         ('Reservas creadas', _fmt(_n(bz['bookingsCreated'])), null),
@@ -311,6 +326,103 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
       ]),
     );
   }
+
+  // ── Impacto del rediseño ──────────────────────────────────────────────
+  String _day(String iso) {
+    final d = DateTime.tryParse(iso)?.toLocal();
+    return d == null ? '—' : '${d.day}/${d.month}/${d.year}';
+  }
+
+  String _val(dynamic v, String unit) {
+    if (v == null) return '—';
+    final n = _n(v);
+    final s = n % 1 == 0 ? '${n.toInt()}' : n.toStringAsFixed(1);
+    return switch (unit) { '%' => '$s %', 'h' => '$s h', '/100' => s, _ => s };
+  }
+
+  Widget _impactSection(Map<String, dynamic> d, Color card, Color text, Color sub) {
+    final minSample = _n(d['minSample']).toInt();
+    final before = d['before'] as Map<String, dynamic>;
+    final after = d['after'] as Map<String, dynamic>;
+    final metrics = _list(d['metrics']);
+    final drafts = _list(d['draftSteps']);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          'Antes: hasta el ${_day(before['to'] as String)} · Después: desde el ${_day(after['from'] as String)}. '
+          'Sin cuentas de prueba (reviewer.*). Con menos de $minSample casos en una ventana, la diferencia todavía no dice nada.',
+          style: TextStyle(fontSize: 12, color: sub, height: 1.4),
+        ),
+      ),
+      for (final m in metrics) _impactRow(m, minSample, card, text, sub),
+      if (drafts.isNotEmpty)
+        _rank('Dónde quedan los registros de cuidador sin enviar (paso)', [
+          for (final r in drafts) {'key': 'Paso ${r['step']}', 'n': r['n']}
+        ], card, text, sub),
+    ]);
+  }
+
+  Widget _impactRow(Map<String, dynamic> m, int minSample, Color card, Color text, Color sub) {
+    final unit = m['unit'] as String? ?? '';
+    final before = m['before'];
+    final after = m['after'];
+    final nb = _n(m['nBefore']).toInt();
+    final na = _n(m['nAfter']).toInt();
+    final small = nb < minSample || na < minSample;
+    final better = m['better'] as String? ?? 'none';
+
+    // Color de la tendencia solo si hay dos valores y la muestra alcanza.
+    Color trend = sub;
+    String arrow = '→';
+    if (before != null && after != null) {
+      final diff = _n(after) - _n(before);
+      arrow = diff > 0 ? '↑' : (diff < 0 ? '↓' : '→');
+      if (!small && diff != 0 && better != 'none') {
+        final good = (better == 'up') == (diff > 0);
+        trend = good ? GardenColors.success : GardenColors.error;
+      }
+    }
+
+    return _box(
+      card,
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Text('${m['label']}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: text))),
+          if (small)
+            Container(
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+              child: const Text('muestra chica', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: GardenColors.warning)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          _impactValue('Antes', _val(before, unit), nb, text, sub),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: Text(arrow, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: trend)),
+          ),
+          _impactValue('Después', _val(after, unit), na, trend == sub ? text : trend, sub),
+        ]),
+        if (m['note'] != null) ...[
+          const SizedBox(height: 6),
+          Text('${m['note']}', style: TextStyle(fontSize: 11.5, color: sub, height: 1.35)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _impactValue(String label, String value, int n, Color valueColor, Color sub) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: sub)),
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: valueColor,
+              fontFeatures: const [FontFeature.tabularFigures()])),
+          Text('n = $n', style: TextStyle(fontSize: 11, color: sub)),
+        ],
+      );
 
   Widget _retention(List<Map<String, dynamic>> rows, Color card, Color text, Color sub) => _box(
         card,

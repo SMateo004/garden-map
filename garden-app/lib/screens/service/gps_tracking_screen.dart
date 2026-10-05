@@ -15,6 +15,7 @@ import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/analytics_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
 class GpsTrackingScreen extends StatefulWidget {
@@ -64,6 +65,10 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    // Métrica del plan: "veces que el dueño abre el mapa por paseo". La
+    // pantalla se abre con Navigator.push, así que el observer de rutas no
+    // la ve: se registra acá.
+    Analytics.instance.track('map_open', props: {'role': widget.role});
     _loadTrackHistory();
     if (_isCaregiver) {
       _startGpsFromSession();

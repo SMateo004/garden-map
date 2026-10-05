@@ -8,7 +8,7 @@ import * as supportChatController from '../support-chat/support-chat.controller.
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
-import { getAdminSummary } from '../analytics/analytics.service.js';
+import { getAdminSummary, getRedesignImpact } from '../analytics/analytics.service.js';
 import pricingAdminRouter from '../pricing/pricing.admin.js';
 
 const router = Router();
@@ -19,6 +19,12 @@ router.use(requireRole('ADMIN'));
 /** Analítica de producto: uso de la app, embudo, preferencias y negocio. ?range=7d|30d|90d|365d */
 router.get('/analytics/summary', asyncHandler(async (req, res) => {
   const data = await getAdminSummary(String(req.query.range ?? '30d'));
+  res.json({ success: true, data });
+}));
+
+/** Impacto del rediseño: métricas del plan antes y después del 2 de octubre de 2026. */
+router.get('/analytics/impact', asyncHandler(async (_req, res) => {
+  const data = await getRedesignImpact();
   res.json({ success: true, data });
 }));
 

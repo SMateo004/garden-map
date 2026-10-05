@@ -402,3 +402,171 @@ export async function getAdminSummary(rangeKey: string) {
     },
   };
 }
+
+// ─────────────────────────────── Impacto del rediseño ───────────────────────────────
+
+/**
+ * Inicio del rediseño de la app (fase 0 en producción): 2 de octubre de 2026,
+ * 00:00 en Bolivia. Ver el plan en la sección "Cómo medimos".
+ */
+export const REDESIGN_LAUNCH = new Date('2026-10-02T04:00:00Z');
+/** "Antes" = todo el historial previo al lanzamiento (hay poco uso real todavía). */
+const HISTORY_START = new Date('2026-01-01T04:00:00Z');
+/** Debajo de esto la comparación es ruido; la app lo marca como muestra chica. */
+export const IMPACT_MIN_SAMPLE = 20;
+
+/** Cuentas de prueba (reviewer.*@gardenbo.com): fuera de todas las métricas. */
+const TEST_USERS = Prisma.sql`(SELECT id FROM users WHERE email LIKE 'reviewer.%@gardenbo.com')`;
+
+type Window = { from: Date; to: Date };
+
+/** Una métrica del plan medida antes y después del lanzamiento. */
+export interface ImpactMetric {
+  key: string;
+  label: string;
+  /** '%' | 'h' | 'x' (promedio) | '/100' */
+  unit: string;
+  /** Qué dirección es buena; 'none' cuando más no siempre es mejor. */
+  better: 'up' | 'down' | 'none';
+  before: number | null;
+  after: number | null;
+  /** Tamaño de la muestra de cada ventana (reservas, usuarios, cuidadores…). */
+  nBefore: number;
+  nAfter: number;
+  note?: string;
+}
+
+const pct = (part: unknown, total: unknown) => (num(total) ? round((num(part) / num(total)) * 100) : null);
+
+async function impactWindow(w: Window) {
+  const { from, to } = w;
+  const [conv, signup, msgs, mapOpens, support, rated, repeat, cgReg] = await Promise.all([
+    // 1. De reserva creada a reserva pagada
+    q(Prisma.sql`SELECT count(*)::int AS created, count(*) FILTER (WHERE "paidAt" IS NOT NULL)::int AS paid
+      FROM bookings WHERE "createdAt" >= ${from} AND "createdAt" < ${to} AND "createdByAdmin" = false AND "clientId" NOT IN ${TEST_USERS}`),
+    // 2. Horas desde el registro hasta la primera reserva pagada (dueños registrados en la ventana)
+    q(Prisma.sql`SELECT count(*)::int AS n, coalesce(percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY extract(epoch FROM (f.first_at - u."createdAt")) / 3600), 0)::float8 AS median_h
+      FROM users u JOIN (SELECT "clientId", min("paidAt") AS first_at FROM bookings
+                          WHERE "paidAt" IS NOT NULL AND "createdByAdmin" = false GROUP BY 1) f ON f."clientId" = u.id
+      WHERE u."createdAt" >= ${from} AND u."createdAt" < ${to} AND u.id NOT IN ${TEST_USERS}`),
+    // 3a. Mensajes de personas por reserva pagada
+    q(Prisma.sql`SELECT count(*)::int AS n, coalesce(avg(m.c), 0)::float8 AS avg_msgs FROM (
+        SELECT b.id, (SELECT count(*) FROM chat_messages cm WHERE cm."bookingId" = b.id AND cm."isSystem" = false) AS c
+          FROM bookings b WHERE b."paidAt" >= ${from} AND b."paidAt" < ${to} AND b."createdByAdmin" = false AND b."clientId" NOT IN ${TEST_USERS}) m`),
+    // 3b. Aperturas del mapa por el dueño por paseo iniciado (evento map_open)
+    q(Prisma.sql`SELECT
+        (SELECT count(*) FROM analytics_events WHERE name = 'map_open' AND props->>'role' = 'CLIENT'
+           AND "createdAt" >= ${from} AND "createdAt" < ${to})::int AS opens,
+        (SELECT count(*) FROM bookings WHERE "serviceType"::text = 'PASEO' AND "createdByAdmin" = false
+           AND "clientId" NOT IN ${TEST_USERS}
+           AND "serviceStartedAt" >= ${from} AND "serviceStartedAt" < ${to})::int AS walks,
+        (SELECT count(*) FROM analytics_events WHERE name = 'map_open' AND "createdAt" < ${to})::int AS ever`),
+    // 4. Conversaciones de soporte de dueños cada 100 reservas pagadas
+    q(Prisma.sql`SELECT
+        (SELECT count(DISTINCT sm."threadId") FROM support_messages sm
+           JOIN support_threads st ON st.id = sm."threadId" JOIN users u ON u.id = st."userId"
+          WHERE sm."senderRole" = 'CLIENT' AND u.role::text = 'CLIENT' AND u.id NOT IN ${TEST_USERS}
+            AND sm."createdAt" >= ${from} AND sm."createdAt" < ${to})::int AS threads,
+        (SELECT count(*) FROM bookings WHERE "paidAt" >= ${from} AND "paidAt" < ${to} AND "createdByAdmin" = false
+           AND "clientId" NOT IN ${TEST_USERS})::int AS paid`),
+    // 5. Reservas terminadas que el dueño calificó, y la nota media
+    q(Prisma.sql`SELECT count(*)::int AS done, count(*) FILTER (WHERE "ownerRating" IS NOT NULL)::int AS rated,
+        coalesce(avg("ownerRating"), 0)::float8 AS avg_rating
+      FROM bookings WHERE status::text = 'COMPLETED' AND "createdByAdmin" = false
+        AND "serviceEndedAt" >= ${from} AND "serviceEndedAt" < ${to} AND "clientId" NOT IN ${TEST_USERS}`),
+    // 6. Reservas pagadas que repiten cuidador: el mismo dueño ya le había pagado en los 30 días previos
+    q(Prisma.sql`SELECT count(*)::int AS paid, count(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM bookings p WHERE p."clientId" = b."clientId" AND p."caregiverId" = b."caregiverId"
+             AND p.id <> b.id AND p."paidAt" IS NOT NULL AND p."createdByAdmin" = false
+             AND p."paidAt" < b."paidAt" AND p."paidAt" >= b."paidAt" - interval '30 days'))::int AS repeats
+      FROM bookings b WHERE b."paidAt" >= ${from} AND b."paidAt" < ${to} AND b."createdByAdmin" = false AND "clientId" NOT IN ${TEST_USERS}`),
+    // 7. Cuidadores que empezaron el registro en la ventana y lo enviaron a revisión
+    q(Prisma.sql`SELECT count(*)::int AS started, count(*) FILTER (WHERE status::text <> 'DRAFT')::int AS submitted
+      FROM caregiver_profiles WHERE "createdAt" >= ${from} AND "createdAt" < ${to} AND "userId" NOT IN ${TEST_USERS}`),
+  ]);
+  return {
+    conv: conv[0] ?? {}, signup: signup[0] ?? {}, msgs: msgs[0] ?? {}, map: mapOpens[0] ?? {},
+    support: support[0] ?? {}, rated: rated[0] ?? {}, repeat: repeat[0] ?? {}, cgReg: cgReg[0] ?? {},
+  };
+}
+
+export async function getRedesignImpact() {
+  const now = new Date();
+  const after: Window = { from: REDESIGN_LAUNCH, to: now };
+  const before: Window = { from: HISTORY_START, to: REDESIGN_LAUNCH };
+  const [b, a, draftSteps] = await Promise.all([
+    impactWindow(before),
+    impactWindow(after),
+    // Dónde quedan los registros de cuidador sin enviar (empezados después del lanzamiento)
+    q(Prisma.sql`SELECT coalesce(("onboardingStatus"->>'step'), '?') AS step, count(*)::int AS n
+      FROM caregiver_profiles WHERE status::text = 'DRAFT' AND "createdAt" >= ${REDESIGN_LAUNCH}
+        AND "userId" NOT IN ${TEST_USERS}
+      GROUP BY 1 ORDER BY 2 DESC LIMIT 10`),
+  ]);
+
+  const ratingNote = (w: typeof a) => (num(w.rated.rated) ? String(round(w.rated.avg_rating, 2)) : '—');
+  const metrics: ImpactMetric[] = [
+    {
+      key: 'paid_conversion', label: 'Reservas creadas que se pagan', unit: '%', better: 'up',
+      before: pct(b.conv.paid, b.conv.created), after: pct(a.conv.paid, a.conv.created),
+      nBefore: num(b.conv.created), nAfter: num(a.conv.created),
+      note: 'Si el perfil y la reserva generan confianza suficiente para pagar.',
+    },
+    {
+      key: 'signup_to_first_paid', label: 'Del registro a la primera reserva pagada', unit: 'h', better: 'down',
+      before: num(b.signup.n) ? round(b.signup.median_h, 1) : null,
+      after: num(a.signup.n) ? round(a.signup.median_h, 1) : null,
+      nBefore: num(b.signup.n), nAfter: num(a.signup.n),
+      note: 'Mediana, solo dueños que ya pagaron alguna reserva.',
+    },
+    {
+      key: 'messages_per_booking', label: 'Mensajes por reserva pagada', unit: 'x', better: 'none',
+      before: num(b.msgs.n) ? round(b.msgs.avg_msgs, 1) : null,
+      after: num(a.msgs.n) ? round(a.msgs.avg_msgs, 1) : null,
+      nBefore: num(b.msgs.n), nAfter: num(a.msgs.n),
+      note: 'Más no siempre es mejor: muchos mensajes pueden ser ansiedad.',
+    },
+    {
+      key: 'map_opens_per_walk', label: 'Veces que el dueño abre el mapa por paseo', unit: 'x', better: 'none',
+      before: null,
+      after: num(a.map.ever) && num(a.map.walks) ? round(num(a.map.opens) / num(a.map.walks), 1) : null,
+      nBefore: num(b.map.walks), nAfter: num(a.map.walks),
+      note: 'Se empezó a medir con esta versión; no hay dato anterior.',
+    },
+    {
+      key: 'support_per_100', label: 'Conversaciones de soporte de dueños cada 100 reservas', unit: '/100', better: 'down',
+      before: num(b.support.paid) ? round((num(b.support.threads) / num(b.support.paid)) * 100, 1) : null,
+      after: num(a.support.paid) ? round((num(a.support.threads) / num(a.support.paid)) * 100, 1) : null,
+      nBefore: num(b.support.paid), nAfter: num(a.support.paid),
+      note: 'Ansiedad sin resolver: debería bajar.',
+    },
+    {
+      key: 'rated_pct', label: 'Reservas terminadas que el dueño califica', unit: '%', better: 'up',
+      before: pct(b.rated.rated, b.rated.done), after: pct(a.rated.rated, a.rated.done),
+      nBefore: num(b.rated.done), nAfter: num(a.rated.done),
+      note: `Nota media: ${ratingNote(b)} antes, ${ratingNote(a)} después.`,
+    },
+    {
+      key: 'repeat_same_caregiver', label: 'Reservas que repiten cuidador en 30 días', unit: '%', better: 'up',
+      before: pct(b.repeat.repeats, b.repeat.paid), after: pct(a.repeat.repeats, a.repeat.paid),
+      nBefore: num(b.repeat.paid), nAfter: num(a.repeat.paid),
+      note: 'El vínculo que convierte la app en hábito.',
+    },
+    {
+      key: 'caregiver_registration', label: 'Cuidadores que terminan el registro', unit: '%', better: 'up',
+      before: pct(b.cgReg.submitted, b.cgReg.started), after: pct(a.cgReg.submitted, a.cgReg.started),
+      nBefore: num(b.cgReg.started), nAfter: num(a.cgReg.started),
+      note: 'Enviaron el perfil a revisión sobre los que lo empezaron.',
+    },
+  ];
+
+  return {
+    launch: REDESIGN_LAUNCH.toISOString(),
+    minSample: IMPACT_MIN_SAMPLE,
+    before: { from: before.from.toISOString(), to: before.to.toISOString() },
+    after: { from: after.from.toISOString(), to: after.to.toISOString() },
+    metrics,
+    draftSteps: draftSteps.map((r) => ({ step: String(r.step), n: num(r.n) })),
+  };
+}
