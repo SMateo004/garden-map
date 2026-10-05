@@ -417,10 +417,6 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   ProfessionalInvitesCard(
                     adminToken: widget.adminToken,
                     textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  _buildStringTile(icon: GIcon.empresa, iconColor: Colors.teal,
-                    title: 'Código registro de empresas', subtitle: 'Código para hoteles, hostales, guarderías, etc.',
-                    settingKey: 'companyRegistrationCode', surface: surface, textColor: textColor,
-                    subtextColor: subtextColor, borderColor: borderColor),
                 ]),
                 const SizedBox(height: 16),
 

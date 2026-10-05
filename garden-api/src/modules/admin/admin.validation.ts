@@ -131,8 +131,6 @@ export const ALLOWED_SETTING_KEYS = [
   // Zonas bloqueadas (JSON array)
   'blockedZones',
   // Registro profesional y empresas
-  'professionalRegistrationCode',
-  'companyRegistrationCode',
   // Versión mínima de app (force-update)
   'minAppVersion',
   'storeUrlIos',

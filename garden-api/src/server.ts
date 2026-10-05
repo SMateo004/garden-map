@@ -194,9 +194,6 @@ async function start() {
         { key: 'betaInviteRequired',       value: 'false' },
         // JSON array of valid invite codes: ["GARDEN2025","BETA01"]
         { key: 'betaInviteCodes',          value: '[]'    },
-        // ── Códigos de registro especiales (string) ──────────────────────────
-        { key: 'professionalRegistrationCode', value: '' }, // ← faltaba seed
-        { key: 'companyRegistrationCode',      value: '' }, // ← faltaba seed
         // ── Pagos y finanzas (numeric) ───────────────────────────────────────
         { key: 'platformCommissionPct',    value: '10'    },
         { key: 'montoMinimoRetiro',        value: '50'    },

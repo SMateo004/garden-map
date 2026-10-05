@@ -810,8 +810,9 @@ export async function validateProfessionalCode(code: string): Promise<boolean> {
 
 /**
  * Registro de cuidador profesional.
- * Requiere code == AppSettings.professionalRegistrationCode.
- * Crea usuario CAREGIVER + CaregiverProfile con isProfessional=true, verified=true, status=APPROVED.
+ * Requiere una invitación individual válida (código GP-…, un solo uso; ver professional-invite.service.ts).
+ * Crea usuario CAREGIVER + CaregiverProfile con isProfessional=true en estado DRAFT: NO nace aprobado, tiene que
+ * pasar por identidad con IA, teléfono y correo, y se aprueba recién en /caregiver/submit.
  */
 export async function registerProfessional(body: RegisterProfessionalBody): Promise<RegisterCaregiverResult> {
   // Validate code (invitación individual de un solo uso)
@@ -950,8 +951,9 @@ export interface RegisterCompanyBody {
 
 /**
  * Registro de empresa (hotel, hostal, guardería, etc.).
- * Requiere code == AppSettings.companyRegistrationCode.
- * Crea usuario CAREGIVER + CaregiverProfile con isCompany=true, isProfessional=true.
+ * Requiere una invitación individual válida (código GE-…, un solo uso; ver professional-invite.service.ts).
+ * Crea usuario CAREGIVER + CaregiverProfile con isCompany=true, isProfessional=true. La identidad del dueño queda
+ * PENDING: debe verificarse con IA para que la empresa aparezca en el marketplace.
  * Status queda APPROVED; verified=false hasta completar phone+email verification.
  */
 export async function registerCompany(body: RegisterCompanyBody): Promise<RegisterCaregiverResult> {
