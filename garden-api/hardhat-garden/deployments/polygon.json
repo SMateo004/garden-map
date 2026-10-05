@@ -1,0 +1,19 @@
+{
+  "network": "polygon",
+  "chainId": 137,
+  "deployedAt": "2026-10-05T05:31:34.153Z",
+  "owner": "0x4C7A1D128e71f54fDd378F0710E943cFE0b78e75",
+  "recorder": "0x4C7A1D128e71f54fDd378F0710E943cFE0b78e75",
+  "GardenEscrow": {
+    "address": "0x6377Ee1E3B26C9e19019217C6842342EDE4a147B",
+    "version": 3,
+    "tx": "0x2f1d7bc376016a975234187c379821f8fa5036931b7529c5b60ec8594748f70c",
+    "block": 94982090
+  },
+  "GardenProfiles": {
+    "address": "0xea69e2E758f93174859CD5c535db7f6861A46D45",
+    "version": 2,
+    "tx": "0xebef532d7882eb096806238aa65d1558fe8f68660e804dc65a7531dabf05ca12",
+    "block": 94982094
+  }
+}
