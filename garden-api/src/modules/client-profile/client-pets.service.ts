@@ -188,7 +188,7 @@ export async function updatePet(
   }
 
   const photoUrlValue =
-    body.photoUrl !== undefined ? ensureAbsoluteUrl(body.photoUrl) ?? null : undefined;
+    body.photoUrl !== undefined ? (body.photoUrl === null ? null : ensureAbsoluteUrl(body.photoUrl) ?? null) : undefined;
   const updated = await prisma.pet.update({
     where: { id: petId },
     data: {

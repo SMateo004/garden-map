@@ -117,6 +117,8 @@ async function getBookingSettings() {
  * - Calcula total, comisión, genera QR placeholder.
  * - Status inicial PENDING_PAYMENT.
  */
+const PET_SIZE_LABEL: Record<string, string> = { SMALL: 'pequeño', MEDIUM: 'mediano', LARGE: 'grande', GIANT: 'gigante' };
+
 export async function createBooking(
   clientId: string,
   body: CreateBookingBody,
@@ -280,6 +282,19 @@ export async function createBooking(
       );
     }
 
+    // Sin especie o tamaño no se puede saber si el cuidador acepta a la
+    // mascota (los filtros de abajo la dejaban pasar). Desde octubre 2026 la
+    // app los pide al registrarla; las mascotas viejas se completan en
+    // Mis mascotas.
+    const incompletePet = orderedPets.find((p) => !p.animalType || !p.size);
+    if (incompletePet) {
+      throw new BadRequestError(
+        `Completa si ${incompletePet.name} es perro o gato y su tamaño en Mis mascotas para poder reservar.`,
+        'PET_INCOMPLETE',
+        'petIds'
+      );
+    }
+
     // Validar que el cuidador acepte el TAMAÑO de cada mascota seleccionada —
     // antes no se validaba ninguna, así que se podía reservar una mascota
     // GIANT con un cuidador que solo aceptaba SMALL/MEDIUM, y este se
@@ -291,7 +306,7 @@ export async function createBooking(
       const incompatiblePet = orderedPets.find((p) => p.size && !sizesAccepted.includes(p.size));
       if (incompatiblePet) {
         throw new BadRequestError(
-          `Este cuidador no acepta mascotas de tamaño ${incompatiblePet.size} (${incompatiblePet.name}). Elige otro cuidador o revisa el tamaño registrado de tu mascota.`,
+          `Este cuidador no acepta mascotas de tamaño ${PET_SIZE_LABEL[incompatiblePet.size!] ?? incompatiblePet.size} (${incompatiblePet.name}). Elige otro cuidador o revisa el tamaño registrado de tu mascota.`,
           'PET_SIZE_NOT_ACCEPTED',
           'petIds'
         );

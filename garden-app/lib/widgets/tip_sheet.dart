@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../design/garden_icons.dart';
 import '../theme/garden_theme.dart';
+import '../utils/input_formatters.dart';
 
 /// Ofrece la propina después de una calificación de 3 estrellas o más — mismo
 /// sheet desde "Mis reservas" y desde el resumen del servicio.
@@ -73,7 +74,7 @@ class _TipSheetState extends State<TipSheet> {
     super.dispose();
   }
 
-  double get _amount => _selected ?? double.tryParse(_customController.text) ?? 0;
+  double get _amount => _selected ?? parseDecimal(_customController.text) ?? 0;
   bool get _exceedsBalance => _availableBalance != null && _amount > _availableBalance!;
 
   Future<void> _submit() async {
@@ -212,6 +213,7 @@ class _TipSheetState extends State<TipSheet> {
                       child: TextField(
                         controller: _customController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [decimalInputFormatter],
                         style: TextStyle(color: textColor, fontSize: 13),
                         onChanged: (v) {
                           // Tope al saldo disponible — evita que el cliente

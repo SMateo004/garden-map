@@ -39,7 +39,7 @@ jest.mock('../../src/config/database', () => {
   const user = { findUnique: jest.fn() };
   const notification = { create: jest.fn().mockResolvedValue({}) };
   const walletTransaction = { create: jest.fn().mockResolvedValue({}) };
-  const petData = { id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', name: 'Max', ownerId: 'user-client-1', species: 'DOG', breed: 'Labrador' };
+  const petData = { id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', name: 'Max', ownerId: 'user-client-1', species: 'DOG', breed: 'Labrador', animalType: 'DOGS', size: 'LARGE' };
   const pet = {
     findUnique: jest.fn().mockResolvedValue(petData),
     findFirst: jest.fn().mockResolvedValue(petData),
@@ -209,6 +209,28 @@ describe('POST /api/bookings', () => {
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
     expect(response.body.data.serviceType).toBe('HOSPEDAJE');
+  });
+
+  // Usa los mocks del cuidador del test anterior; solo cambia la mascota.
+  it('rechaza la reserva si a la mascota le falta especie o tamaño', async () => {
+    (mockPrisma.pet.findMany as jest.Mock).mockResolvedValueOnce([
+      { id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', name: 'Max', animalType: 'DOGS', size: null, isAggressive: false },
+    ]);
+
+    const response = await request(app)
+      .post('/api/bookings')
+      .send({
+        serviceType: 'HOSPEDAJE',
+        caregiverId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        petIds: ['b2c3d4e5-f6a7-8901-bcde-f12345678901'],
+        startDate: '2026-12-15',
+        endDate: '2026-12-18',
+        totalDays: 3,
+        petName: 'Max',
+      });
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).toContain('es perro o gato y su tamaño');
   });
 
   it('debe rechazar crear reserva si el cuidador no está APPROVED', async () => {

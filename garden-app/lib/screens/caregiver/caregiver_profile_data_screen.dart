@@ -14,6 +14,7 @@ import '../../widgets/extra_services_editor.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
+import '../../utils/input_formatters.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -479,9 +480,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final needsSpace      = offersHospedaje || offersGuarderia;
 
     // Precio según servicio
-    final hasPaseoPrice     = !offersPaseo     || (double.tryParse(_pricePerWalk30Controller.text) ?? 0) > 0 || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) > 0;
-    final hasHospedajePrice = !offersHospedaje || (double.tryParse(_pricePerDayController.text) ?? 0) > 0;
-    final hasGuarderiaPrice = !offersGuarderia || (double.tryParse(_pricePerGuarderiaController.text) ?? 0) > 0;
+    final hasPaseoPrice     = !offersPaseo     || (parseDecimal(_pricePerWalk30Controller.text) ?? 0) > 0 || (parseDecimal(_pricePerWalk60Controller.text) ?? 0) > 0;
+    final hasHospedajePrice = !offersHospedaje || (parseDecimal(_pricePerDayController.text) ?? 0) > 0;
+    final hasGuarderiaPrice = !offersGuarderia || (parseDecimal(_pricePerGuarderiaController.text) ?? 0) > 0;
 
     // Fotos del lugar
     final hasPlacePhotos = !needsSpace || (['sala', 'descanso', 'alimentacion'].every((s) => (_placePhotoUrls[s]?.isNotEmpty ?? false)));
@@ -525,9 +526,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final offersGuarderia = services.contains('GUARDERIA');
     final needsSpace      = offersHospedaje || offersGuarderia;
 
-    final hasPaseoPrice     = (double.tryParse(_pricePerWalk30Controller.text) ?? 0) > 0 || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) > 0;
-    final hasHospedajePrice = (double.tryParse(_pricePerDayController.text) ?? 0) > 0;
-    final hasGuarderiaPrice = (double.tryParse(_pricePerGuarderiaController.text) ?? 0) > 0;
+    final hasPaseoPrice     = (parseDecimal(_pricePerWalk30Controller.text) ?? 0) > 0 || (parseDecimal(_pricePerWalk60Controller.text) ?? 0) > 0;
+    final hasHospedajePrice = (parseDecimal(_pricePerDayController.text) ?? 0) > 0;
+    final hasGuarderiaPrice = (parseDecimal(_pricePerGuarderiaController.text) ?? 0) > 0;
     final hasPlacePhotos = ['sala', 'descanso', 'alimentacion'].every((s) => (_placePhotoUrls[s]?.isNotEmpty ?? false));
     final minPhotos = services.length == 1 && offersPaseo ? 2 : 4;
     final hasPhotos = _caregiverPhotoUrls.length >= minPhotos;
@@ -660,20 +661,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final needsSpace = offersHospedaje || offersGuarderia;
 
     if (offersPaseo) {
-      final w30 = double.tryParse(_pricePerWalk30Controller.text) ?? 0;
-      final w60 = double.tryParse(_pricePerWalk60Controller.text) ?? 0;
+      final w30 = parseDecimal(_pricePerWalk30Controller.text) ?? 0;
+      final w60 = parseDecimal(_pricePerWalk60Controller.text) ?? 0;
       if (w30 <= 0 && w60 <= 0) {
         return _showValidationError('Configura al menos un precio de paseo (30 o 60 minutos)', scrollTo: _keyServicesPrices);
       }
     }
     if (offersHospedaje) {
-      final dayPrice = double.tryParse(_pricePerDayController.text) ?? 0;
+      final dayPrice = parseDecimal(_pricePerDayController.text) ?? 0;
       if (dayPrice <= 0) {
         return _showValidationError('Configura el precio por noche de hospedaje', scrollTo: _keyServicesPrices);
       }
     }
     if (offersGuarderia) {
-      final guarderiaPrice = double.tryParse(_pricePerGuarderiaController.text) ?? 0;
+      final guarderiaPrice = parseDecimal(_pricePerGuarderiaController.text) ?? 0;
       if (guarderiaPrice <= 0) {
         return _showValidationError('Configura el precio por día de guardería', scrollTo: _keyServicesPrices);
       }
@@ -745,10 +746,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       final expYears = int.tryParse(expYearsText) ?? 0;
 
       // Precios según los servicios ofrecidos
-      final pricePerDay = double.tryParse(_pricePerDayController.text);
-      final pricePerWalk30 = double.tryParse(_pricePerWalk30Controller.text);
-      final pricePerWalk60 = double.tryParse(_pricePerWalk60Controller.text);
-      final pricePerGuarderia = double.tryParse(_pricePerGuarderiaController.text);
+      final pricePerDay = parseDecimal(_pricePerDayController.text);
+      final pricePerWalk30 = parseDecimal(_pricePerWalk30Controller.text);
+      final pricePerWalk60 = parseDecimal(_pricePerWalk60Controller.text);
+      final pricePerGuarderia = parseDecimal(_pricePerGuarderiaController.text);
 
       final body = <String, dynamic>{
         'bio': _bioController.text.trim(),
@@ -1984,6 +1985,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     return TextFormField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [decimalInputFormatter],
       style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

@@ -38,7 +38,27 @@ export const createWalkInPetBodySchema = z.object({
   documents: z.array(z.string().url()).max(6).optional(),
 }).strict();
 
-export const patchWalkInPetBodySchema = createWalkInPetBodySchema.partial().strict();
+// Al editar, los datos opcionales aceptan null para poder BORRARLOS (con
+// .partial() la app no tenía forma de quitar una raza o un peso ya cargado).
+export const patchWalkInPetBodySchema = z.object({
+  name: z.string().trim().min(1, 'Nombre requerido').max(200).optional(),
+  breed: z.string().max(100).nullable().optional(),
+  age: z.number().int().min(0).max(30).nullable().optional(),
+  size: z.nativeEnum(PetSize).nullable().optional(),
+  animalType: z.enum(['DOGS', 'CATS']).nullable().optional(),
+  isAggressive: z.boolean().optional(),
+  photoUrl: z.string().url().nullable().optional(),
+  specialNeeds: z.string().max(2000).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  gender: z.enum(['MALE', 'FEMALE']).nullable().optional(),
+  weight: z.number().positive().max(200).nullable().optional(),
+  color: z.string().max(100).nullable().optional(),
+  sterilized: z.boolean().nullable().optional(),
+  microchipNumber: z.string().max(50).nullable().optional(),
+  extraPhotos: z.array(z.string().url()).max(6).optional(),
+  vaccinePhotos: z.array(z.string().url()).max(6).optional(),
+  documents: z.array(z.string().url()).max(6).optional(),
+}).strict();
 
 export const checkInBodySchema = z.object({
   // Requerido — decide si la visita cuenta para el cupo combinado

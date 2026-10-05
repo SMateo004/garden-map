@@ -14,6 +14,7 @@ import 'design/garden_service.dart';
 import 'design/garden_status_pill.dart';
 import 'narrative/booking_story.dart';
 import 'narrative/chat_event.dart';
+import 'screens/client/pet_form_sheet.dart';
 import 'theme/garden_motion.dart';
 import 'theme/garden_theme.dart';
 
@@ -269,6 +270,24 @@ class _CatalogPageState extends State<_CatalogPage> {
               '🚫 Meet & Greet cancelado',
             ])
               _ChatEventRow(ChatEvent.parse(raw)),
+          ]),
+          _Section('Presentar mascota', [
+            Builder(builder: (ctx) {
+              void open(Map<String, dynamic>? existing) => showModalBottomSheet<void>(
+                    context: ctx,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => PetFormSheet(token: '', baseUrl: '', existing: existing, onSaved: () {}),
+                  );
+              return Wrap(spacing: 12, runSpacing: 12, children: [
+                GardenButton(label: 'Nueva mascota', gIcon: GIcon.agregar, onPressed: () => open(null)),
+                GardenButton(label: 'Editar a Luna', outline: true, onPressed: () => open(const {
+                  'id': 'p1', 'name': 'Luna', 'animalType': 'DOGS', 'size': 'MEDIUM', 'age': 3, 'weight': 12.5,
+                  'gender': 'FEMALE', 'breed': 'Mestizo', 'sterilized': true, 'isAggressive': false,
+                  'notes': 'Le asustan los truenos', 'extraPhotos': [], 'vaccinePhotos': [], 'documents': [],
+                })),
+              ]);
+            }),
           ]),
           _Section('Movimiento', [
             for (final (name, d) in const [

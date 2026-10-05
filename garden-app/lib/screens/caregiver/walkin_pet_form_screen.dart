@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
@@ -10,6 +10,8 @@ import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_visit_detail_screen.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
+import '../../utils/input_formatters.dart';
+import '../client/pet_form_sheet.dart' show PetFormSheet;
 
 /// Ficha completa de una mascota walk-in — mismos campos/agrupamiento que
 /// el formulario de mascota real (my_pets_screen.dart _PetFormSheet), pero
@@ -148,27 +150,41 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
     }
   }
 
+  bool get _anyUploading => _uploadingPhoto || _uploadingExtra || _uploadingVaccine || _uploadingDocument;
+
   Future<void> _submit() async {
+    // Guardar mientras sube una foto la dejaba afuera sin avisar.
+    if (_anyUploading) {
+      GardenSnackBar.warning(context, 'Espera a que termine de subir la foto');
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
     HapticFeedback.lightImpact();
     setState(() => _saving = true);
     try {
-      final body = <String, dynamic>{'name': _nameCtrl.text.trim()};
-      if (_breedCtrl.text.trim().isNotEmpty) body['breed'] = _breedCtrl.text.trim();
-      final age = int.tryParse(_ageCtrl.text.trim());
-      if (age != null) body['age'] = age;
-      final weight = double.tryParse(_weightCtrl.text.trim());
-      if (weight != null) body['weight'] = weight;
-      if (_colorCtrl.text.trim().isNotEmpty) body['color'] = _colorCtrl.text.trim();
-      if (_microchipCtrl.text.trim().isNotEmpty) body['microchipNumber'] = _microchipCtrl.text.trim();
-      if (_size != null) body['size'] = _size;
-      if (_animalType != null) body['animalType'] = _animalType;
-      body['isAggressive'] = _isAggressive;
-      if (_gender != null) body['gender'] = _gender;
-      if (_sterilized != null) body['sterilized'] = _sterilized;
-      if (_specialCtrl.text.trim().isNotEmpty) body['specialNeeds'] = _specialCtrl.text.trim();
-      if (_photoUrl != null) body['photoUrl'] = _photoUrl;
+      String? opt(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
+      final body = <String, dynamic>{
+        'name': _nameCtrl.text.trim(),
+        'isAggressive': _isAggressive,
+      };
+      final optional = <String, dynamic>{
+        'breed': opt(_breedCtrl),
+        'age': int.tryParse(_ageCtrl.text.trim()),
+        'weight': parseDecimal(_weightCtrl.text),
+        'color': opt(_colorCtrl),
+        'microchipNumber': opt(_microchipCtrl)?.replaceAll(' ', ''),
+        'size': _size,
+        'animalType': _animalType,
+        'gender': _gender,
+        'sterilized': _sterilized,
+        'specialNeeds': opt(_specialCtrl),
+        'photoUrl': _photoUrl,
+      };
+      // Al editar se manda null para borrar de verdad lo que se vació.
+      optional.forEach((k, v) {
+        if (v != null || _isEditing) body[k] = v;
+      });
       body['extraPhotos'] = _extraPhotos;
       body['vaccinePhotos'] = _vaccinePhotos;
       body['documents'] = _documents;
@@ -370,7 +386,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                     controller: _nameCtrl,
                     style: TextStyle(color: textColor),
                     decoration: fieldDeco('Nombre *', icon: GIcon.identidadVerificada),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+                    validator: PetFormSheet.validateName,
                   ),
                   const SizedBox(height: 12),
                   Text('Tipo de mascota', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -389,7 +405,14 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                       controller: _ageCtrl,
                       style: TextStyle(color: textColor),
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
                       decoration: fieldDeco('Edad (años)', icon: GIcon.cumpleanos),
+                      validator: (v) {
+                        final t = v?.trim() ?? '';
+                        if (t.isEmpty) return null;
+                        final n = int.tryParse(t);
+                        return (n == null || n > 30) ? 'Entre 0 y 30' : null;
+                      },
                     )),
                   ]),
                   const SizedBox(height: 12),
@@ -414,6 +437,8 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                       controller: _weightCtrl,
                       style: TextStyle(color: textColor),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [decimalInputFormatter],
+                      validator: PetFormSheet.validateWeight,
                       decoration: fieldDeco('Peso (kg)', icon: GIcon.peso),
                     )),
                   ]),
@@ -432,7 +457,7 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                   const SizedBox(height: 10),
                   toggle('Puede mostrar agresividad con extraños', _isAggressive, GardenColors.warning, () => setState(() => _isAggressive = !_isAggressive)),
                   const SizedBox(height: 12),
-                  TextFormField(controller: _microchipCtrl, style: TextStyle(color: textColor), decoration: fieldDeco('Número de microchip (opcional)', icon: GIcon.ia)),
+                  TextFormField(controller: _microchipCtrl, style: TextStyle(color: textColor), keyboardType: TextInputType.number, validator: PetFormSheet.validateMicrochip, decoration: fieldDeco('Número de microchip (opcional)', icon: GIcon.identidadVerificada)),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _specialCtrl,

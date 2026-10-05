@@ -16,6 +16,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
 import '../../theme/garden_motion.dart';
+import '../../utils/input_formatters.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -1167,7 +1168,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   // Monto
                   TextField(
                     controller: amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [decimalInputFormatter],
                     style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w700),
                     decoration: InputDecoration(
                       prefixText: 'Bs ',
@@ -1203,7 +1205,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     loading: isSubmitting,
                     onPressed: () async {
                       if (isSubmitting) return;
-                      final amount = double.tryParse(amountController.text) ?? 0;
+                      final amount = parseDecimal(amountController.text) ?? 0;
                       if (amount <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido')));
                         return;

@@ -76,7 +76,7 @@ jobs:
       - name: Tests del sistema de diseño
         run: |
           flutter pub get
-          flutter test test/design_system_test.dart test/widget_test.dart
+          flutter test test/design_system_test.dart test/widget_test.dart test/pet_form_test.dart
 
       # Fotos de referencia del catálogo en claro y oscuro (test/goldens).
       # Para regenerarlas tras un cambio de diseño a propósito:

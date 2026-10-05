@@ -7,6 +7,7 @@ import '../../services/caregiver_crm_service.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../utils/input_formatters.dart';
 
 const Map<String, GIcon> _kEventIcon = {
   'FEEDING': GIcon.comida, 'WALK': GIcon.paseo, 'MEDICATION': GIcon.medicina, 'BATH': GIcon.bano,
@@ -248,6 +249,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
             TextField(
               controller: amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [decimalInputFormatter],
               decoration: const InputDecoration(hintText: 'Bs 0.00'),
             ),
           ],
@@ -261,7 +263,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
     if (confirmed != true) return;
     setState(() => _busy = true);
     try {
-      final amount = double.tryParse(amountCtrl.text.trim());
+      final amount = parseDecimal(amountCtrl.text);
       await widget.service.checkOut(widget.visitId, amountCollected: amount);
       if (mounted) {
         GardenSnackBar.success(context, 'Check-out registrado');
