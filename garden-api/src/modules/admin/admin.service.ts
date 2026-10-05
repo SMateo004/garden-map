@@ -7,7 +7,7 @@ import * as caregiverProfileService from '../caregiver-profile/caregiver-profile
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
 import { getBoolSetting } from '../../utils/settings-cache.js';
-import { computeTermsStatus, listTermsAcceptances } from '../legal/caregiver-terms.service.js';
+import { computeTermsStatus, isTermsExemptEmail, listTermsAcceptances } from '../legal/caregiver-terms.service.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 import type {
@@ -59,7 +59,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
   if (!profile) throw new CaregiverNotFoundError(profileId);
 
   const termsAcceptances = await listTermsAcceptances(profileId);
-  const termsStatus = computeTermsStatus(profile.termsAcceptedAt);
+  const termsStatus = computeTermsStatus(profile.termsAcceptedAt, new Date(), { exempt: isTermsExemptEmail(profile.user?.email) });
 
   const lastSession = await prisma.identityVerificationSession.findFirst({
     where: { userId: profile.userId },
@@ -144,6 +144,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     termsRenewal: {
       required: termsStatus.required,
       blocked: termsStatus.blocked,
+      exempt: termsStatus.exempt,
       reason: termsStatus.reason,
       dueAt: toIso(termsStatus.dueAt),
       daysLeft: termsStatus.daysLeft,

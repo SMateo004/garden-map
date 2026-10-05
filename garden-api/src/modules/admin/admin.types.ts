@@ -157,6 +157,8 @@ export interface AdminCaregiverDetailDto {
   termsRenewal: {
     required: boolean;
     blocked: boolean;
+    /** Cuenta de prueba de las tiendas (reviewer.*): exenta de la renovación. */
+    exempt: boolean;
     reason: 'NEVER' | 'EXPIRED' | 'NEW_VERSION' | null;
     dueAt: string | null;
     daysLeft: number | null;

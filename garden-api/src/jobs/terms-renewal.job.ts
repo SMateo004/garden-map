@@ -11,7 +11,7 @@ import cron from 'node-cron';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { sendPushToUser } from '../services/firebase.service.js';
-import { computeTermsStatus } from '../modules/legal/caregiver-terms.service.js';
+import { computeTermsStatus, isTermsExemptEmail } from '../modules/legal/caregiver-terms.service.js';
 
 const NOTIFICATION_TYPE = 'TERMS_RENEWAL';
 const REPEAT_EVERY_DAYS = 3;
@@ -48,7 +48,7 @@ export function buildTermsNotification(status: ReturnType<typeof computeTermsSta
 export async function enviarRecordatoriosTerminos(now: Date = new Date()): Promise<number> {
   const caregivers = await prisma.caregiverProfile.findMany({
     where: { status: 'APPROVED', suspended: false },
-    select: { id: true, userId: true, termsAcceptedAt: true },
+    select: { id: true, userId: true, termsAcceptedAt: true, user: { select: { email: true } } },
   });
 
   const repeatCutoff = new Date(now.getTime() - REPEAT_EVERY_DAYS * 24 * 60 * 60 * 1000);
@@ -56,7 +56,8 @@ export async function enviarRecordatoriosTerminos(now: Date = new Date()): Promi
 
   for (const c of caregivers) {
     try {
-      const content = buildTermsNotification(computeTermsStatus(c.termsAcceptedAt, now));
+      // Las cuentas de prueba de las tiendas (reviewer.*) están exentas: nunca se les avisa.
+      const content = buildTermsNotification(computeTermsStatus(c.termsAcceptedAt, now, { exempt: isTermsExemptEmail(c.user?.email) }));
       if (!content) continue;
 
       const recent = await prisma.notification.findFirst({

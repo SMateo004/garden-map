@@ -10,7 +10,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { auditLog } from '../../services/audit.service.js';
 import * as caregiverProfileService from './caregiver-profile.service.js';
 import * as bookingService from '../booking-service/booking.service.js';
-import { recordCaregiverTermsAcceptance, computeTermsStatus } from '../legal/caregiver-terms.service.js';
+import { recordCaregiverTermsAcceptance, computeTermsStatus, isTermsExemptEmail } from '../legal/caregiver-terms.service.js';
 import {
   patchCaregiverProfileSchema,
   patchAvailabilityBodySchema,
@@ -30,7 +30,14 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
   }
   res.json({
     success: true,
-    data: { ...profile, termsStatus: computeTermsStatus((profile as { termsAcceptedAt?: Date | null }).termsAcceptedAt) },
+    data: {
+      ...profile,
+      termsStatus: computeTermsStatus(
+        (profile as { termsAcceptedAt?: Date | null }).termsAcceptedAt,
+        new Date(),
+        { exempt: isTermsExemptEmail((profile as { user?: { email?: string | null } }).user?.email) },
+      ),
+    },
   });
 });
 

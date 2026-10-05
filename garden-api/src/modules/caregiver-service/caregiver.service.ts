@@ -1,7 +1,7 @@
 import { CaregiverStatus, BookingStatus, ServiceType, Zone, Prisma, type TimeSlot } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { getCache, CAREGIVER_LIST_CACHE_TTL, CAREGIVER_DETAIL_CACHE_TTL } from '../../shared/cache.js';
-import { termsEnforcementFrom } from '../legal/caregiver-terms.service.js';
+import { termsGateWhere } from '../legal/caregiver-terms.service.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 import {
   CaregiverNotFoundError,
@@ -127,7 +127,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     OR: PUBLIC_VISIBILITY_OR,
     // Aceptación de Términos vigente (cada 2 meses, haya trabajado o no): si venció, el perfil
     // no se muestra hasta que vuelva a aceptar (ver caregiver-terms.service.ts).
-    termsAcceptedAt: { gte: termsEnforcementFrom() },
+    AND: [termsGateWhere()],
     // Cuidadores amateur (0 años de experiencia) con capacitación obligatoria
     // pendiente no reciben reservas hasta completarla — no aparecen en el
     // marketplace. trainingComplete se recalcula en training.service.ts y
@@ -444,7 +444,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     status: CaregiverStatus.APPROVED,
     verified: true,
     OR: PUBLIC_VISIBILITY_OR,
-    termsAcceptedAt: { gte: termsEnforcementFrom() },
+    AND: [termsGateWhere()],
   } as Prisma.CaregiverProfileWhereUniqueInput;
 
   // Manejar el caso donde timeBlocks no existe en la DB

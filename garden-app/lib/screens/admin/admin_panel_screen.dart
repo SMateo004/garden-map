@@ -4919,7 +4919,12 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       row('Contrato firmado el', (detail!['contractAcceptedAt'] as String).substring(0, 10)),
                     // Renovación cada 2 meses: solo el admin ve este historial (con IP y dispositivo).
                     if (detail?['termsRenewal'] != null) ...[
-                      checkRow('Aceptación de Términos vigente (cada 2 meses)', (detail!['termsRenewal'] as Map)['blocked'] != true),
+                      checkRow(
+                        (detail!['termsRenewal'] as Map)['exempt'] == true
+                            ? 'Aceptación de Términos: exenta (cuenta de prueba de las tiendas)'
+                            : 'Aceptación de Términos vigente (cada 2 meses)',
+                        (detail['termsRenewal'] as Map)['blocked'] != true,
+                      ),
                       if ((detail['termsRenewal'] as Map)['dueAt'] != null)
                         row('Próxima renovación', ((detail['termsRenewal'] as Map)['dueAt'] as String).substring(0, 10)),
                       ...(((detail['termsRenewal'] as Map)['history'] as List?) ?? const []).take(8).map((h) {

@@ -8,6 +8,10 @@ const mockAuditCreate = jest.fn();
 const mockProfileUpdate = jest.fn();
 const mockProfileFind = jest.fn();
 const mockAuditFindMany = jest.fn();
+const mockProfileFindMany = jest.fn();
+const mockNotificationCreate = jest.fn();
+const mockNotificationFindFirst = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('../../src/config/database', () => ({
   __esModule: true,
@@ -15,6 +19,11 @@ jest.mock('../../src/config/database', () => ({
     caregiverProfile: {
       findUnique: (...a: unknown[]) => mockProfileFind(...a),
       update: (...a: unknown[]) => mockProfileUpdate(...a),
+      findMany: (...a: unknown[]) => mockProfileFindMany(...a),
+    },
+    notification: {
+      create: (...a: unknown[]) => mockNotificationCreate(...a),
+      findFirst: (...a: unknown[]) => mockNotificationFindFirst(...a),
     },
     auditLog: {
       create: (...a: unknown[]) => mockAuditCreate(...a),
@@ -22,6 +31,10 @@ jest.mock('../../src/config/database', () => ({
     },
     $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   },
+}));
+
+jest.mock('../../src/services/firebase.service', () => ({
+  sendPushToUser: (...a: unknown[]) => mockPush(...a),
 }));
 
 const mockDelByPrefix = jest.fn();
@@ -37,12 +50,15 @@ import {
   TERMS_RENEWAL_DAYS,
   TERMS_VERSION_GRACE_DAYS,
   computeTermsStatus,
+  getTermsStatusForUser,
+  isTermsExemptEmail,
   listTermsAcceptances,
   recordCaregiverTermsAcceptance,
   renewalCutoff,
   termsEnforcementFrom,
+  termsGateWhere,
 } from '../../src/modules/legal/caregiver-terms.service';
-import { buildTermsNotification } from '../../src/jobs/terms-renewal.job';
+import { buildTermsNotification, enviarRecordatoriosTerminos } from '../../src/jobs/terms-renewal.job';
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Una fecha lo bastante posterior a la vigencia (60 días + gracia + margen) como para que toda aceptación simulada
@@ -167,6 +183,68 @@ describe('listTermsAcceptances — solo admin', () => {
     expect(rows[0]).toMatchObject({ version: '2026-10-05', source: 'PERIODIC', ip: '1.1.1.1', userAgent: 'ua' });
     expect(rows[1]).toMatchObject({ version: null, source: null, acceptedAt: '2026-08-01T00:00:00.000Z' });
     expect(mockAuditFindMany.mock.calls[0]![0].where).toMatchObject({ action: 'CAREGIVER_TERMS_ACCEPTED', entityId: 'prof-1' });
+  });
+});
+
+
+describe('excepción para las cuentas de prueba de las tiendas (reviewer.*)', () => {
+  it.each([
+    ['reviewer.cuidador@gardenbo.com', true],
+    ['reviewer.admin@gardenbo.com', true],
+    ['reviewer.cliente@gardenbo.com', true],
+    ['  REVIEWER.Cuidador@GardenBo.com ', true],
+    ['reviewer.cuidador@gmail.com', false],
+    ['reviewer@gardenbo.com', false],
+    ['reviewer.@gardenbo.com', false],
+    ['xreviewer.cuidador@gardenbo.com', false],
+    ['reviewer.cuidador@gardenbo.com.evil.com', false],
+    ['reviewer.cuidador@evilgardenbo.com', false],
+    ['sai@gardenbo.com', false],
+    ['', false],
+    [null, false],
+    [undefined, false],
+  ])('isTermsExemptEmail(%p) → %p', (email, expected) => {
+    expect(isTermsExemptEmail(email as string | null | undefined)).toBe(expected);
+  });
+
+  it('una cuenta exenta nunca queda requerida ni bloqueada, aunque jamás haya aceptado o esté vencida', () => {
+    expect(computeTermsStatus(null, AFTER_GRACE, { exempt: true })).toMatchObject({ exempt: true, required: false, blocked: false, reason: null });
+    expect(computeTermsStatus(ago(AFTER_GRACE, 200), AFTER_GRACE, { exempt: true })).toMatchObject({ required: false, blocked: false, reminderDue: false });
+  });
+
+  it('una cuenta normal sigue exigiéndose igual', () => {
+    expect(computeTermsStatus(null, AFTER_GRACE, { exempt: false })).toMatchObject({ exempt: false, required: true, blocked: true });
+    expect(computeTermsStatus(null, AFTER_GRACE)).toMatchObject({ exempt: false, required: true, blocked: true });
+  });
+
+  it('getTermsStatusForUser aplica la excepción según el correo del usuario', async () => {
+    mockProfileFind.mockResolvedValue({ termsAcceptedAt: null, user: { email: 'reviewer.cuidador@gardenbo.com' } });
+    expect(await getTermsStatusForUser('u1')).toMatchObject({ exempt: true, required: false, blocked: false });
+
+    mockProfileFind.mockResolvedValue({ termsAcceptedAt: null, user: { email: 'otra@persona.com' } });
+    expect(await getTermsStatusForUser('u2')).toMatchObject({ exempt: false, required: true, blocked: true });
+  });
+
+  it('termsGateWhere deja pasar por aceptación vigente O por correo reviewer.*@gardenbo.com', () => {
+    const where = termsGateWhere(AFTER_GRACE) as { OR: Array<Record<string, any>> };
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR[0]!.termsAcceptedAt.gte).toEqual(termsEnforcementFrom(AFTER_GRACE));
+    expect(where.OR[1]!.user.email).toMatchObject({ startsWith: 'reviewer.', endsWith: '@gardenbo.com', mode: 'insensitive' });
+  });
+
+  it('el job de avisos no le escribe a una cuenta exenta, pero sí a una normal vencida', async () => {
+    jest.clearAllMocks();
+    mockNotificationFindFirst.mockResolvedValue(null);
+    mockNotificationCreate.mockResolvedValue({});
+    mockPush.mockResolvedValue(undefined);
+    mockProfileFindMany.mockResolvedValue([
+      { id: 'p-rev', userId: 'u-rev', termsAcceptedAt: null, user: { email: 'reviewer.cuidador@gardenbo.com' } },
+      { id: 'p-x', userId: 'u-x', termsAcceptedAt: ago(AFTER_GRACE, 90), user: { email: 'cuidador@real.com' } },
+    ]);
+    const sent = await enviarRecordatoriosTerminos(AFTER_GRACE);
+    expect(sent).toBe(1);
+    expect(mockNotificationCreate).toHaveBeenCalledTimes(1);
+    expect(mockNotificationCreate.mock.calls[0]![0].data.userId).toBe('u-x');
   });
 });
 
