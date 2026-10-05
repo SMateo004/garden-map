@@ -17,7 +17,25 @@ class CaregiverContractStep extends StatefulWidget {
   /// mismo, así cada flujo controla su propio manejo de errores.
   final Future<void> Function() onAccept;
 
-  const CaregiverContractStep({super.key, required this.onAccept});
+  /// Textos opcionales: la pantalla de renovación periódica (caregiver_terms_renewal_screen.dart)
+  /// reutiliza este paso con otros textos. Sin ellos se ve el contrato del registro de siempre.
+  final String title;
+  final String? subtitle;
+  final String buttonLabel;
+  final String endHint;
+
+  /// Widget extra sobre el botón de aceptar (p. ej. accesos a los Términos completos).
+  final Widget? footer;
+
+  const CaregiverContractStep({
+    super.key,
+    required this.onAccept,
+    this.title = 'Contrato de Cuidador',
+    this.subtitle,
+    this.buttonLabel = 'Acepto y finalizo el registro',
+    this.endHint = 'Llegaste al final. Ya puedes aceptar el contrato.',
+    this.footer,
+  });
 
   @override
   State<CaregiverContractStep> createState() => _CaregiverContractStepState();
@@ -79,11 +97,11 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Contrato de Cuidador',
+                    Text(widget.title,
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
                     const SizedBox(height: 6),
                     Text(
-                      'Último paso — lee el contrato completo hasta el final para poder aceptarlo.',
+                      widget.subtitle ?? 'Último paso — lee el contrato completo hasta el final para poder aceptarlo.',
                       style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
                     ),
                     const SizedBox(height: 8),
@@ -111,7 +129,7 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
                         Expanded(
                           child: Text(
                             _scrolledToEnd
-                                ? 'Llegaste al final. Ya puedes aceptar el contrato.'
+                                ? widget.endHint
                                 : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
                             style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
                           ),
@@ -125,9 +143,8 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
             if (!_scrolledToEnd)
               Container(
                 width: double.infinity,
-                color: surface,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: borderColor))),
+                decoration: BoxDecoration(color: surface, border: Border(top: BorderSide(color: borderColor))),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -142,14 +159,21 @@ class _CaregiverContractStepState extends State<CaregiverContractStep> {
             Container(
               color: surface,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: SizedBox(
-                width: double.infinity,
-                child: GardenButton(
-                  label: 'Acepto y finalizo el registro',
-                  loading: _accepting,
-                  height: 48,
-                  onPressed: (_accepting || !_scrolledToEnd) ? null : _handleAccept,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.footer != null) widget.footer!,
+                  SizedBox(
+                    width: double.infinity,
+                    child: GardenButton(
+                      label: widget.buttonLabel,
+                      loading: _accepting,
+                      height: 48,
+                      onPressed: (_accepting || !_scrolledToEnd) ? null : _handleAccept,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

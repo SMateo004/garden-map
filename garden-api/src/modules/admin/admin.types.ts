@@ -153,6 +153,16 @@ export interface AdminCaregiverDetailDto {
   termsAcceptedAt: string | null;
   /// Contrato de cuidador — timestamp de aceptación (scroll-to-accept al final del registro).
   contractAcceptedAt: string | null;
+  /// Renovación periódica de la aceptación (cada 2 meses). SOLO el admin la ve.
+  termsRenewal: {
+    required: boolean;
+    blocked: boolean;
+    reason: 'NEVER' | 'EXPIRED' | 'NEW_VERSION' | null;
+    dueAt: string | null;
+    daysLeft: number | null;
+    currentVersion: string;
+    history: Array<{ version: string | null; source: string | null; acceptedAt: string; ip: string | null; userAgent: string | null }>;
+  };
 
   // --- Experiencia ---
   experienceYears: number | null;

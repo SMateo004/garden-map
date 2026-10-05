@@ -60,6 +60,7 @@ import { iniciarJobAnalyticsRollup } from './jobs/analytics-rollup.job.js';
 import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
 import { iniciarJobHospedajeLocationPing } from './jobs/hospedaje-location-ping.job.js';
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
+import { iniciarJobRenovacionTerminos } from './jobs/terms-renewal.job.js';
 import { iniciarJobSosRetry } from './jobs/sos-retry.job.js';
 import { iniciarJobRecurringBookingGeneration } from './jobs/recurring-booking-generation.job.js';
 import { iniciarJobInstantBookingAutoAccept } from './jobs/instant-booking-auto-accept.job.js';
@@ -264,6 +265,7 @@ async function start() {
     iniciarJobAnalyticsRollup();
     iniciarJobNoShowExpiry();
     iniciarJobRecordatorioCapacitaciones();
+    iniciarJobRenovacionTerminos();
     iniciarJobHospedajeLocationPing();
     iniciarJobSosRetry();
     iniciarJobRecurringBookingGeneration();

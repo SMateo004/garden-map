@@ -10,6 +10,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { auditLog } from '../../services/audit.service.js';
 import * as caregiverProfileService from './caregiver-profile.service.js';
 import * as bookingService from '../booking-service/booking.service.js';
+import { recordCaregiverTermsAcceptance, computeTermsStatus } from '../legal/caregiver-terms.service.js';
 import {
   patchCaregiverProfileSchema,
   patchAvailabilityBodySchema,
@@ -27,7 +28,10 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
     });
     return;
   }
-  res.json({ success: true, data: profile });
+  res.json({
+    success: true,
+    data: { ...profile, termsStatus: computeTermsStatus((profile as { termsAcceptedAt?: Date | null }).termsAcceptedAt) },
+  });
 });
 
 /** PATCH /api/caregiver/profile - Actualización parcial. 403 si status APPROVED. */
@@ -35,6 +39,11 @@ export const patchProfile = asyncHandler(async (req: Request, res: Response) => 
   const userId = req.user!.userId;
   const body = req.body as PatchCaregiverProfileBody;
   const result = await caregiverProfileService.patchProfile(userId, body);
+  // Registro profesional/empresa: aceptan el contrato con este PATCH (no pasan por /submit).
+  // Se deja la misma evidencia que en la aceptación periódica (versión, fecha, IP, dispositivo).
+  if ((body as { contractAccepted?: unknown }).contractAccepted === true) {
+    await recordCaregiverTermsAcceptance(userId, { source: 'REGISTRATION', ip: req.ip, userAgent: req.get('user-agent') });
+  }
   res.json({ success: true, data: result });
 });
 
@@ -68,6 +77,7 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     });
   }
   const result = await caregiverProfileService.submitProfile(userId);
+  await recordCaregiverTermsAcceptance(userId, { source: 'REGISTRATION', ip: req.ip, userAgent: req.get('user-agent') });
   auditLog({ userId, action: 'PROFILE_SUBMITTED', entity: 'CaregiverProfile', ip: req.ip });
   res.json(result);
 });

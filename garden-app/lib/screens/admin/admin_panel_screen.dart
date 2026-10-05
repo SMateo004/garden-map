@@ -4917,6 +4917,18 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     checkRow('Contrato de cuidador firmado', detail?['contractAcceptedAt'] != null),
                     if (detail?['contractAcceptedAt'] != null)
                       row('Contrato firmado el', (detail!['contractAcceptedAt'] as String).substring(0, 10)),
+                    // Renovación cada 2 meses: solo el admin ve este historial (con IP y dispositivo).
+                    if (detail?['termsRenewal'] != null) ...[
+                      checkRow('Aceptación de Términos vigente (cada 2 meses)', (detail!['termsRenewal'] as Map)['blocked'] != true),
+                      if ((detail['termsRenewal'] as Map)['dueAt'] != null)
+                        row('Próxima renovación', ((detail['termsRenewal'] as Map)['dueAt'] as String).substring(0, 10)),
+                      ...(((detail['termsRenewal'] as Map)['history'] as List?) ?? const []).take(8).map((h) {
+                        final m = h as Map;
+                        final when = (m['acceptedAt'] as String? ?? '').replaceFirst('T', ' ');
+                        final short = when.length >= 16 ? when.substring(0, 16) : when;
+                        return row('Aceptó ($short)', 'v${m['version'] ?? '?'} · ${m['source'] == 'REGISTRATION' ? 'registro' : 'renovación'} · IP ${m['ip'] ?? '—'}');
+                      }),
+                    ],
                   ])),
 
                   // IDENTIFICADORES TÉCNICOS

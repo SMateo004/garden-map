@@ -66,6 +66,7 @@ const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
 const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
 import { getNumericSetting } from '../../utils/settings-cache.js';
+import { termsEnforcementFrom } from '../legal/caregiver-terms.service.js';
 import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf } from '../pricing/pricing.service.js';
 
 /** Lee los parámetros del negocio desde AppSettings (con cache 30s). */
@@ -235,6 +236,8 @@ export async function createBooking(
         id: body.caregiverId,
         status: CaregiverStatus.APPROVED,
         suspended: false,
+        // Términos vencidos (cada 2 meses): sin reservas nuevas hasta que vuelva a aceptar.
+        termsAcceptedAt: { gte: termsEnforcementFrom() },
       },
       select: {
         id: true,

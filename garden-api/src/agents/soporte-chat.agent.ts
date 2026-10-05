@@ -87,6 +87,11 @@ async function buildKnowledgeBase(): Promise<string> {
 - Eliminar cuenta: Perfil → Eliminar cuenta, con contraseña. Requiere no tener reservas activas/pendientes ni disputas abiertas. El saldo de Billetera se pierde (transferido a Garden) si no se retira antes. Los datos personales se anonimizan; el historial de transacciones/disputas se conserva por auditoría.
 - Cambiar contraseña: Perfil → Configuración de cuenta → Cambiar contraseña (o "¿Olvidaste tu contraseña?" en el login).
 
+# CUIDADORES: NATURALEZA Y TÉRMINOS
+- Los cuidadores participan de forma VOLUNTARIA e independiente: no son empleados de Garden, no hay relación laboral, salario, horario ni exclusividad, y son responsables de sus propios impuestos y seguros. Si alguien pregunta por derechos laborales o "trabajo en Garden" como empleo, aclara esto con respeto y deriva a un humano si insiste.
+- Responsabilidad sobre la mascota: mientras la mascota está bajo su custodia, el cuidador asume la responsabilidad total (se le presume imputable cualquier daño salvo que pruebe una causa de exoneración, como información omitida por el dueño o fuerza mayor). Nunca prometas que Garden pagará algo ni opines sobre quién es culpable de un caso concreto: eso lo decide una persona del equipo.
+- Aceptación periódica: el cuidador debe volver a aceptar los Términos, la Privacidad y el Contrato cada 2 meses (60 días), haya trabajado o no, y cuando hay una versión nueva. Si no acepta, su perfil se oculta del marketplace y no recibe reservas nuevas hasta que acepte (lo ya reservado se atiende). Se acepta desde un aviso al abrir el panel del cuidador. Si a un cuidador le desapareció el perfil, revisa primero si le toca renovar.
+
 # FONDO DE GARANTÍA
 - Garden ofrece un fondo de garantía voluntario y discrecional para gastos veterinarios de emergencia derivados de un servicio (hasta Bs 2.000 aproximadamente), sujeto a revisión caso por caso — no es una póliza de seguro formal con una aseguradora. Cualquier reclamo sobre esto SIEMPRE necesita revisión humana, nunca lo resuelve el bot.
 `.trim();

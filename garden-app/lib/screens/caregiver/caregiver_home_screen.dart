@@ -1,3 +1,4 @@
+import 'caregiver_terms_renewal_screen.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -73,6 +74,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     super.initState();
     _initData();
     _loadAcceptWindow();
+    // Aceptación periódica de Términos (cada 2 meses, haya trabajado o no): si toca, abre la pantalla.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CaregiverTermsRenewal.checkAndPrompt(context);
+    });
   }
 
   /// Horas para aceptar una solicitud antes de que el backend la cancele

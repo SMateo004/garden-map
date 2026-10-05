@@ -9,6 +9,11 @@ import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { mejorarRedaccion, RedaccionRechazadaError } from '../../agents/redaccion.agent.js';
+import {
+  CAREGIVER_TERMS_VERSION,
+  getTermsStatusForUser,
+  recordCaregiverTermsAcceptance,
+} from '../legal/caregiver-terms.service.js';
 import { uploadImage, uploadRawFile } from '../../services/storage.service.js';
 import { assertImageBuffer, assertImageOrPdfBuffer } from '../../shared/mime-validation.js';
 import { validarFoto } from '../../agents/foto-validacion.agent.js';
@@ -47,6 +52,34 @@ router.post('/profile/check-text', asyncHandler(async (req, res) => {
   const resultado = await verificarCoherenciaTexto(field, capped);
   res.json({ success: true, data: resultado });
 }));
+/** GET /terms/status — ¿le toca aceptar de nuevo los Términos? (cada 2 meses o por versión nueva). */
+router.get('/terms/status', asyncHandler(async (req, res) => {
+  const status = await getTermsStatusForUser((req as any).user.userId);
+  res.json({ success: true, data: status });
+}));
+
+/** POST /terms/accept — renovación de la aceptación. Body: { version, accepted: true }.
+ *  `version` es la que la app mostró: si no coincide con la vigente, el texto que leyó está
+ *  desactualizado y no se registra (409) — así nunca se acepta un texto distinto al vigente. */
+router.post('/terms/accept', asyncHandler(async (req, res) => {
+  const { version, accepted } = (req.body ?? {}) as { version?: unknown; accepted?: unknown };
+  if (accepted !== true) {
+    return res.status(400).json({ success: false, error: { code: 'ACCEPTANCE_REQUIRED', message: 'Debes aceptar los Términos para continuar.' } });
+  }
+  if (version !== CAREGIVER_TERMS_VERSION) {
+    return res.status(409).json({
+      success: false,
+      error: { code: 'TERMS_VERSION_MISMATCH', message: 'Los Términos se actualizaron. Actualiza la app para leer la versión vigente.', currentVersion: CAREGIVER_TERMS_VERSION },
+    });
+  }
+  const status = await recordCaregiverTermsAcceptance((req as any).user.userId, {
+    source: 'PERIODIC',
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+  });
+  res.json({ success: true, data: status });
+}));
+
 // Cada llamada es una invocación real y facturada a Claude: límite por usuario (no por IP).
 const improveTextLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
