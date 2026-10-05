@@ -5,6 +5,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_client_detail_screen.dart';
 import '../../design/garden_icons.dart';
+import '../../utils/person_validators.dart';
 
 /// Lista + buscador de clientes walk-in (CRM interno, sin dinero de por
 /// medio). Punto de entrada para ver/editar fichas y su historial —
@@ -40,7 +41,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
       final clients = await widget.service.listClients(search: search);
       if (mounted) setState(() => _clients = clients);
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -50,6 +51,7 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
+    var saving = false;
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -89,26 +91,35 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
               const SizedBox(height: 10),
               TextField(controller: emailCtrl, style: TextStyle(color: textColor), decoration: deco('Email (opcional)'), keyboardType: TextInputType.emailAddress),
               const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: GardenButton(
-                  label: 'Crear cliente',
-                  onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) {
-                      GardenSnackBar.warning(ctx, 'Ingresa el nombre del cliente');
-                      return;
-                    }
-                    try {
-                      await widget.service.createClient(
-                        name: nameCtrl.text.trim(),
-                        phone: phoneCtrl.text.trim(),
-                        email: emailCtrl.text.trim(),
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx, true);
-                    } catch (e) {
-                      if (ctx.mounted) GardenSnackBar.error(ctx, e.toString().replaceFirst('Exception: ', ''));
-                    }
-                  },
+              // Bloqueado mientras guarda: un doble toque creaba el cliente dos veces.
+              StatefulBuilder(
+                builder: (ctx2, setBtn) => SizedBox(
+                  width: double.infinity,
+                  child: GardenButton(
+                    label: saving ? 'Creando...' : 'Crear cliente',
+                    loading: saving,
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final error = walkInClientError(nameCtrl.text, emailCtrl.text);
+                            if (error != null) {
+                              GardenSnackBar.warning(ctx, error);
+                              return;
+                            }
+                            setBtn(() => saving = true);
+                            try {
+                              await widget.service.createClient(
+                                name: nameCtrl.text.trim(),
+                                phone: phoneCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                              );
+                              if (ctx.mounted) Navigator.pop(ctx, true);
+                            } catch (e) {
+                              if (ctx.mounted) GardenSnackBar.error(ctx, friendlyError(e));
+                              if (ctx2.mounted) setBtn(() => saving = false);
+                            }
+                          },
+                  ),
                 ),
               ),
             ],
@@ -217,3 +228,16 @@ class _WalkInClientsScreenState extends State<WalkInClientsScreen> {
     );
   }
 }
+
+/// Nombre obligatorio y, si se escribió, un correo con formato real. Mismas
+/// reglas que createWalkInClientBodySchema (caregiver-crm.validation.ts).
+String? walkInClientError(String name, String email) {
+  if (name.trim().isEmpty) return 'Escribe el nombre del cliente';
+  if (email.trim().isNotEmpty) return PersonValidators.email(email);
+  return null;
+}
+
+/// El mensaje del servidor sin "Exception:", o uno claro si fue la conexión.
+String friendlyError(Object e) => e is Exception && e is! FormatException
+    ? e.toString().replaceFirst('Exception: ', '')
+    : 'Sin conexión. Revisa tu internet e intenta de nuevo.';

@@ -6,6 +6,8 @@ import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/password_rules.dart';
+import '../../utils/person_validators.dart';
 
 /// "Unirme a un equipo" — un empleado invitado por el dueño de una empresa
 /// ingresa su código y queda vinculado al negocio. Si ya tiene sesión iniciada
@@ -104,7 +106,11 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
       GardenSnackBar.success(context, 'Ya eres parte de $_companyName');
       context.go('/caregiver-staff/home');
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        GardenErrorDialog.show(context, e is Exception && e is! FormatException
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'Sin conexión. Revisa tu internet e intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -115,12 +121,15 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
       GardenSnackBar.warning(context, 'Primero verifica tu código de invitación');
       return;
     }
-    if (_firstNameCtrl.text.trim().isEmpty || _lastNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Completa tu nombre y apellido');
-      return;
-    }
-    if (_emailCtrl.text.trim().isEmpty || _phoneCtrl.text.trim().isEmpty || _passwordCtrl.text.isEmpty) {
-      GardenSnackBar.warning(context, 'Completa todos los campos');
+    // Mismas reglas que registerStaffBodySchema: antes solo se revisaba que no
+    // estuvieran vacíos y el servidor rechazaba la cuenta con un texto genérico.
+    final error = PersonValidators.name(_firstNameCtrl.text) ??
+        PersonValidators.name(_lastNameCtrl.text, label: 'apellido') ??
+        PersonValidators.email(_emailCtrl.text) ??
+        PersonValidators.boPhone(_phoneCtrl.text) ??
+        PersonValidators.password(_passwordCtrl.text);
+    if (error != null) {
+      GardenErrorDialog.show(context, error);
       return;
     }
 
@@ -130,7 +139,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
         code: _codeCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
-        phone: _phoneCtrl.text.trim(),
+        phone: PersonValidators.normalizeBoPhone(_phoneCtrl.text),
         firstName: _firstNameCtrl.text.trim(),
         lastName: _lastNameCtrl.text.trim(),
       );
@@ -145,7 +154,11 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
       if (!mounted) return;
       context.go('/caregiver-staff/home');
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        GardenErrorDialog.show(context, e is Exception && e is! FormatException
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'Sin conexión. Revisa tu internet e intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -230,7 +243,7 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                   const SizedBox(height: 10),
                   TextField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress, style: TextStyle(color: textColor), decoration: deco('Email')),
                   const SizedBox(height: 10),
-                  TextField(controller: _phoneCtrl, keyboardType: TextInputType.phone, style: TextStyle(color: textColor), decoration: deco('Teléfono')),
+                  TextField(controller: _phoneCtrl, keyboardType: TextInputType.phone, style: TextStyle(color: textColor), decoration: deco('Celular (ej: 76543210)')),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _passwordCtrl,
@@ -243,6 +256,8 @@ class _StaffInviteAcceptScreenState extends State<StaffInviteAcceptScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  PasswordRules(controller: _passwordCtrl),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

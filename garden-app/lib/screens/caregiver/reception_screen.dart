@@ -38,7 +38,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
       final dashboard = await _service.getOccupancy();
       if (mounted) setState(() => _dashboard = dashboard);
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -49,7 +49,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
       await _service.checkOut(visitId);
       await _load();
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     }
   }
 
@@ -324,15 +324,18 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
     try {
       final clients = await widget.service.listClients(search: search);
       if (mounted) setState(() => _clients = clients);
-    } catch (_) {
+    } catch (e) {
+      // Antes se tragaba y la lista vacía parecía "no hay clientes".
+      if (mounted) GardenSnackBar.error(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _createClientAndContinue() async {
+    if (_isLoading) return;
     if (_newClientNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Ingresa el nombre del cliente');
+      GardenSnackBar.warning(context, 'Escribe el nombre del cliente');
       return;
     }
     setState(() => _isLoading = true);
@@ -347,15 +350,16 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         _step = 1;
       });
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _createPetAndContinue() async {
+    if (_isLoading) return;
     if (_newPetNameCtrl.text.trim().isEmpty) {
-      GardenSnackBar.warning(context, 'Ingresa el nombre de la mascota');
+      GardenSnackBar.warning(context, 'Escribe el nombre de la mascota');
       return;
     }
     setState(() => _isLoading = true);
@@ -372,13 +376,14 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         _step = 2;
       });
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _confirmCheckIn() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
       await widget.service.checkIn(_selectedPet!['id'] as String, serviceType: _serviceType);
@@ -386,7 +391,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
       GardenSnackBar.success(context, '¡Check-in registrado!');
       Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -473,7 +478,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
               const SizedBox(height: 8),
               TextField(controller: _newClientPhoneCtrl, style: TextStyle(color: textColor), decoration: deco('Teléfono (opcional)')),
               const SizedBox(height: 12),
-              GardenButton(label: 'Crear y continuar', onPressed: _createClientAndContinue),
+              GardenButton(label: 'Crear y continuar', loading: _isLoading, onPressed: _isLoading ? null : _createClientAndContinue),
             ],
           ),
         ),
@@ -529,7 +534,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
           ),
         ]),
         const SizedBox(height: 12),
-        GardenButton(label: 'Agregar y continuar', onPressed: _createPetAndContinue),
+        GardenButton(label: 'Agregar y continuar', loading: _isLoading, onPressed: _isLoading ? null : _createPetAndContinue),
       ],
     );
   }
@@ -552,7 +557,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
             ),
         ]),
         const Spacer(),
-        SizedBox(width: double.infinity, child: GardenButton(label: 'Confirmar check-in', onPressed: _confirmCheckIn)),
+        SizedBox(width: double.infinity, child: GardenButton(label: 'Confirmar check-in', loading: _isLoading, onPressed: _isLoading ? null : _confirmCheckIn)),
       ],
     );
   }

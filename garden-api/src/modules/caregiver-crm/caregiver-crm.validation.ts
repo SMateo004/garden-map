@@ -1,13 +1,18 @@
 import { z } from 'zod';
 import { PetSize, ServiceType } from '@prisma/client';
 
+// Vacío = sin dato (null). Antes la app mandaba email: '' al editar un
+// cliente sin correo y el servidor respondía "Email inválido": ninguna
+// edición de esos clientes se podía guardar, y borrar un dato era imposible.
+const blankToNull = (v: unknown) => (typeof v === 'string' ? v.trim() || null : v);
+
 export const createWalkInClientBodySchema = z.object({
-  name: z.string().min(1, 'Nombre requerido').max(200),
+  name: z.string().trim().min(1, 'Escribe el nombre del cliente').max(200),
   // Sin regex estricto a propósito — un walk-in puede traer un fijo, un
   // número extranjero, o nada.
-  phone: z.string().max(30).optional(),
-  email: z.string().email('Email inválido').optional(),
-  notes: z.string().max(2000).optional(),
+  phone: z.preprocess(blankToNull, z.string().max(30, 'Revisa el teléfono: es demasiado largo').nullable().optional()),
+  email: z.preprocess(blankToNull, z.string().email('Revisa el correo del cliente').max(200).nullable().optional()),
+  notes: z.preprocess(blankToNull, z.string().max(2000, 'Las notas pueden tener hasta 2000 caracteres').nullable().optional()),
 }).strict();
 
 export const patchWalkInClientBodySchema = createWalkInClientBodySchema.partial();

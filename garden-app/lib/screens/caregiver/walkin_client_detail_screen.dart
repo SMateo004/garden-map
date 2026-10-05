@@ -3,6 +3,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_pet_form_screen.dart';
+import 'walkin_clients_screen.dart' show walkInClientError, friendlyError;
 import '../../design/garden_icons.dart';
 
 /// Ficha de un cliente walk-in: datos editables + lista de sus mascotas.
@@ -31,7 +32,7 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
       final client = await widget.service.getClient(widget.clientId);
       if (mounted) setState(() => _client = client);
     } catch (e) {
-      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -43,6 +44,7 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
     final phoneCtrl = TextEditingController(text: c['phone'] as String? ?? '');
     final emailCtrl = TextEditingController(text: c['email'] as String? ?? '');
     final notesCtrl = TextEditingController(text: c['notes'] as String? ?? '');
+    var saving = false;
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -84,27 +86,38 @@ class _WalkInClientDetailScreenState extends State<WalkInClientDetailScreen> {
               const SizedBox(height: 10),
               TextField(controller: notesCtrl, style: TextStyle(color: textColor), decoration: deco('Notas'), maxLines: 2),
               const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: GardenButton(
-                  label: 'Guardar cambios',
-                  onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) {
-                      GardenSnackBar.warning(ctx, 'El nombre no puede estar vacío');
-                      return;
-                    }
-                    try {
-                      await widget.service.updateClient(widget.clientId, {
-                        'name': nameCtrl.text.trim(),
-                        'phone': phoneCtrl.text.trim(),
-                        'email': emailCtrl.text.trim(),
-                        'notes': notesCtrl.text.trim(),
-                      });
-                      if (ctx.mounted) Navigator.pop(ctx, true);
-                    } catch (e) {
-                      if (ctx.mounted) GardenSnackBar.error(ctx, e.toString().replaceFirst('Exception: ', ''));
-                    }
-                  },
+              StatefulBuilder(
+                builder: (ctx2, setBtn) => SizedBox(
+                  width: double.infinity,
+                  child: GardenButton(
+                    label: saving ? 'Guardando...' : 'Guardar cambios',
+                    loading: saving,
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final error = walkInClientError(nameCtrl.text, emailCtrl.text);
+                            if (error != null) {
+                              GardenSnackBar.warning(ctx, error);
+                              return;
+                            }
+                            setBtn(() => saving = true);
+                            try {
+                              // Los vacíos se mandan a propósito: el servidor los
+                              // guarda como borrados (antes un correo vacío daba
+                              // "Email inválido" y no se podía guardar nada).
+                              await widget.service.updateClient(widget.clientId, {
+                                'name': nameCtrl.text.trim(),
+                                'phone': phoneCtrl.text.trim(),
+                                'email': emailCtrl.text.trim(),
+                                'notes': notesCtrl.text.trim(),
+                              });
+                              if (ctx.mounted) Navigator.pop(ctx, true);
+                            } catch (e) {
+                              if (ctx.mounted) GardenSnackBar.error(ctx, friendlyError(e));
+                              if (ctx2.mounted) setBtn(() => saving = false);
+                            }
+                          },
+                  ),
                 ),
               ),
             ],
