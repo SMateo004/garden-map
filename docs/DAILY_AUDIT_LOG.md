@@ -2147,3 +2147,112 @@ soporte y prompt de disputas ya no citan «10 %».
 Fallan `liveness.binding`, `verification.submit.binding`, `professional-invite` y `auth.service`:
 código de otras sesiones sin commitear, sin relación con precios. No se probó contra producción
 (el esquema no está aplicado allí).
+
+---
+
+## 2026-10-05 — Registro de disputas en el smart contract de Polygon (mainnet)
+
+**Commit de referencia al iniciar la auditoría:** `0e6910e` (feat: presentar una mascota en 3
+pasos). `git log` mostró ~30 commits nuevos desde la última entrada de este log (2026-10-03
+noche) que esta rutina no había auditado todavía: el rediseño completo de UI/UX, el modelo de
+comisión variable + distribución por destino, y — lo más riesgoso y nunca tocado por esta
+auditoría — el registro on-chain de reservas, ya desplegado en la **red principal de Polygon**
+(`678aaf6`, `668228f`, `facafed`, `d904f97`). Un sistema que escribe en una blockchain pública e
+inmutable, con dinero real de gas, encaja directo en la categoría de riesgo (b) de CLAUDE.md
+(flujos de dinero) y además es irreversible por diseño — se eligió como foco de hoy en vez del
+rediseño de Flutter (de menor riesgo, y los textos de copy ya se auditan seguido).
+
+**Alcance revisado:** `garden-api/src/services/blockchain.service.ts` (E/S con la cadena) y
+`garden-api/src/services/chain-registry.service.ts` (cola persistente outbox: encolar, procesar,
+reconciliar, generar el comprobante que ve el usuario) — el módulo completo, no solo el diff
+reciente. El diseño en general es sólido: patrón outbox con `dedupeKey` único (createMany +
+skipDuplicates, a prueba de reintentos), guardado del `txHash` antes de esperar confirmación
+(sobrevive un reinicio), recuperación del hash desde los eventos del contrato si un revert dice
+"ya está hecho", backoff exponencial, alerta a admins tras 3 fallos o sin saldo, y un solo ciclo
+de worker a la vez por proceso. No se encontraron condiciones de carrera nuevas ahí.
+
+### Hallazgo (ALTO RIESGO — no aplicado, solo reportado): el veredicto `PARTIAL` de una disputa
+registra en el smart contract (público, en Polygon mainnet, para siempre) que el cliente recibió
+en efectivo un monto que en realidad nunca se le acreditó — solo recibió un código de descuento
+de un solo uso, no dinero en su billetera
+
+**Dónde:**
+- `garden-api/src/modules/dispute/dispute.routes.ts:993-1038` (rama `PARTIAL` de
+  `applyResolution`, resolución inicial por IA/admin) y `garden-api/src/modules/admin/admin.service.ts:1381-1494`
+  (misma rama en la resolución de una apelación): en ambos lugares, el cuidador recibe
+  `netAmount × 0.80` **en su `User.balance`** (con `WalletTransaction` real), pero el cliente
+  **no recibe nada en su billetera** — en su lugar se crea un `GiftCode` de un solo uso
+  (`maxUses: 1`) por `netAmount × 0.20`, que solo tiene efecto si el cliente hace otra reserva y
+  lo usa.
+- `garden-api/src/services/chain-registry.service.ts:616-626` (`disputeAmounts()`, el comentario
+  dice explícitamente "mismo reparto que `applyResolution`"):
+  ```ts
+  if (verdict === 'CLIENT_WINS') return { verdict, caregiverAmount: 0, clientAmount: total };
+  return { verdict, caregiverAmount: Math.round(net * 80) / 100, clientAmount: Math.round(net * 20) / 100 }; // PARTIAL
+  ```
+  Este `clientAmount` se manda tal cual como `clientCents` al método `resolveDispute(bookingId,
+  verdict, caregiverCents, clientCents)` del contrato `GardenEscrow` (líneas 489-496 del mismo
+  archivo, y confirmado en `dispute.routes.ts:1081` y `admin.service.ts:1528`, los dos únicos
+  llamadores reales además de la reconciliación). El propio test unitario
+  (`tests/unit/chain-registry.test.ts:276-282`) deja constancia explícita de este comportamiento
+  — `disputeAmounts('PARTIAL', b)` con un total de Bs 100 espera `clientAmount: 14.4` — así que no
+  es un descuido sin verificar, pero sí contradice lo que el comentario de la misma función
+  promete ("mismo reparto que `applyResolution`"), porque `applyResolution` nunca mueve ese monto
+  a la billetera del cliente en el caso `PARTIAL`.
+
+**Por qué es grave y no un detalle cosmético:** esto no es un typo en una pantalla que se corrige
+mañana — es una escritura pública, verificable en polygonscan.com y **permanente** en la red
+principal de Polygon (no se puede editar ni borrar, ni por Garden). El propio texto legal que
+promete este registro (`legal.routes.ts` sección 19, línea 314, y la pantalla equivalente en
+`legal_screen.dart`) lo vende explícitamente como "herramienta de transparencia", y el widget que
+lo muestra al usuario (`garden-app/lib/design/garden_chain_proof.dart`, comentario líneas 8-16)
+se autodescribe con "Cuatro estados, todos honestos" — y el propio commit `facafed` de ayer se
+llama "test: comprobante en blockchain muestra estados honestos". Para cada disputa resuelta
+`PARTIAL` desde que el contrato está en mainnet (4 de octubre de 2026 en adelante), el registro
+público dice que Garden le pagó al cliente un monto en efectivo que, en los hechos, nunca salió
+de ningún lado — es un código de descuento condicionado a una reserva futura que quizás nunca se
+use. Cualquiera (un cliente, un cuidador, un periodista, un regulador) que compare el comprobante
+público con lo que realmente recibió el cliente puede encontrar una discrepancia entre lo que
+Garden afirma públicamente haber pagado y lo que pagó de verdad.
+
+**Qué NO se pudo verificar desde esta sesión (sin acceso a producción ni staging):** cuántas
+disputas `PARTIAL` ya se resolvieron y confirmaron on-chain desde el 4 de octubre — es información
+que solo se puede sacar del panel `Admin > Blockchain` o de `blockchain_records` en producción. Si
+ya hay alguna, ya quedó escrita en la cadena de forma irreversible; esto no se puede "revertir" con
+un fix de código, solo evitar que se repita.
+
+**Decisión de producto que esto requiere (no es solo un bug técnico):** ¿qué debería registrarse
+en el campo `clientCents` del veredicto `PARTIAL`?
+1. **`0`** — honesto con lo que de verdad se movió hoy (nada a la billetera del cliente), pero el
+   comprobante público deja de reflejar que el cliente recibió *algún* tipo de compensación.
+2. **El valor nominal del código de descuento, pero documentado como tal** — requeriría un método
+   nuevo en el contrato (`resolveDispute` no distingue "efectivo" de "código condicionado") o, como
+   mínimo, aclarar en los Términos que "el monto registrado para el veredicto parcial puede incluir
+   compensación en forma de código de descuento, no necesariamente efectivo inmediato" — cambia lo
+   que el documento legal promete.
+3. Dejarlo como está y asumir que, a los fines de este registro, "cuánto le correspondía al cliente
+   por el veredicto" es la lectura correcta aunque el mecanismo de entrega sea un código — una
+   lectura defendible, pero que contradice la palabra "honesto" que usa el propio código/commits.
+
+Cualquiera de las tres cambia una promesa legal pública y, para las reservas futuras, lo que queda
+escrito para siempre en Polygon — por eso se deja completamente para que el dueño del proyecto
+decida, sin aplicar ningún cambio.
+
+**Por qué no se aplicó ningún fix:** cae de lleno en alto riesgo por dos vías a la vez — dinero
+(reparto de una disputa) y una escritura pública e irreversible en una blockchain mainnet que ya
+está en producción. Un fix mal pensado acá no se puede deshacer una vez enviado.
+
+### Sin cambios aplicados hoy
+El único hallazgo de la pasada es de alto riesgo — no se tocó código ni copy. Solo se actualiza
+este log. No se encontró ningún ítem de bajo riesgo claro dentro del módulo de blockchain en esta
+pasada (el resto del diseño outbox/reintentos está bien).
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces, no revisadas hoy
+en profundidad — se dejan solo como recordatorio)
+- Antecedentes del cuidador: auto-aprobación de "antecedentes limpios" por una sola IA sin humano,
+  y auto-limpieza de una revisión ya marcada con solo resubir un documento (2026-10-02).
+- Meet & Greet sin reembolso en caso de incompatibilidad (2026-10-02).
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — no se confirmó hoy si ya se revisó.
