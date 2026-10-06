@@ -514,6 +514,7 @@ final GoRouter _router = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return PaymentScreen(
           bookingParams: extra?['bookingParams'] as Map<String, dynamic>?,
+          caregiverPreview: extra?['caregiver'] as Map<String, dynamic>?,
         );
       },
     ),

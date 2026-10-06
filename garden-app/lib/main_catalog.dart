@@ -9,6 +9,7 @@ import 'design/garden_trust_seals.dart';
 import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
 import 'design/garden_mode_switcher.dart';
+import 'design/garden_payment.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
 import 'design/garden_status_pill.dart';
@@ -160,6 +161,63 @@ class _CatalogPageState extends State<_CatalogPage> {
               constraints: const BoxConstraints(maxWidth: 420),
               child: const GardenTrustSeals(
                 identityVerified: true, backgroundChecked: false, offersWalks: true, caregiverFirstName: 'Andrea'),
+            ),
+          ]),
+          _Section('Pago de una reserva', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const GardenPaymentHero(
+                service: GardenService.paseo,
+                petName: 'Luna',
+                petSpecies: 'DOG',
+                caregiverName: 'Andrea Rojas',
+                when: 'mañana a las 9:00 · 60 min',
+                total: 41.5,
+                initiallyExpanded: true,
+                lines: [
+                  GardenPaymentLine('Servicio', 36.5),
+                  GardenPaymentLine('Impuestos (IVA e IT · 13.7%)', 5),
+                  GardenPaymentLine('Desde tu billetera', 20, negative: true),
+                  GardenPaymentLine('Pagas por QR', 21.5, emphasis: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const GardenPaymentHero(
+                service: GardenService.hospedaje,
+                petName: 'Toby',
+                caregiverName: 'Carla',
+                when: 'del 07/10 al 09/10 · 2 noches',
+                total: 320,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const GardenPaySectionTitle(GIcon.billetera, 'Cómo pagas', hint: 'Lo que no cubra tu billetera se paga con QR.'),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenPaymentProtection(
+                details: const [
+                  (GIcon.reloj, 'El cuidador recibe el pago únicamente cuando el servicio es completado.'),
+                  (GIcon.billetera, 'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.'),
+                ],
+                onTerms: () {},
+              ),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: GardenPayBar(
+                  amount: 21.5,
+                  note: 'Bs 20.00 desde tu billetera',
+                  buttonLabel: 'Generar QR',
+                  buttonIcon: GIcon.pagarQr,
+                  onPressed: () {},
+                ),
+              ),
             ),
           ]),
           _Section('Qué sigue (pago confirmado, reservas)', [

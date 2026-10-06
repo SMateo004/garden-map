@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_payment.dart';
 import '../../design/garden_pet_avatar.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_story_progress.dart';
@@ -33,11 +34,16 @@ class PaymentScreen extends StatefulWidget {
   final Map<String, dynamic>? bookingParams;
   final Map<String, dynamic>? mgData;
 
+  /// Nombre y foto del cuidador ({'name', 'photo'}) para el encabezado:
+  /// la reserva recién creada no los trae (GET /bookings/:id sí).
+  final Map<String, dynamic>? caregiverPreview;
+
   const PaymentScreen({
     super.key,
     this.bookingId,
     this.bookingParams,
     this.mgData,
+    this.caregiverPreview,
   }) : assert(bookingId != null || bookingParams != null,
             'Either bookingId or bookingParams must be provided');
 
@@ -395,7 +401,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (mounted) setState(() => _booking = bk);
       } catch (e) {
         if (mounted) {
-          GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+          GardenErrorDialog.show(
+            context,
+            e.runtimeType == Exception('').runtimeType
+                ? e.toString().replaceFirst('Exception: ', '')
+                : 'No pudimos conectar para preparar tu reserva. Revisa tu internet e intenta de nuevo.',
+          );
         }
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -667,11 +678,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         // en vez de solo mostrar un error y dejar al cliente sin salida.
         setState(() => _sipUnavailable = true);
       } else {
-        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al iniciar pago');
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'No pudimos iniciar el pago. Intenta de nuevo.');
       }
     } catch (e) {
+      // Sin conexión llegaba "ClientException: Failed to fetch, uri=…" o
+      // "Exception: …" tal cual. Solo se muestra el mensaje del servidor.
       if (mounted) {
-        GardenErrorDialog.show(context, e.toString());
+        GardenErrorDialog.show(
+          context,
+          e.runtimeType == Exception('').runtimeType
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'No pudimos conectar para iniciar el pago. Revisa tu internet e intenta de nuevo.',
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -1087,7 +1105,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             backgroundColor: bg,
             appBar: AppBar(
               title: Text(
-                'Confirmar pago',
+                _qrResponse == null ? 'Confirmar y pagar' : 'Pago por QR',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18),
               ),
               backgroundColor: surface,
@@ -1098,6 +1116,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             body: _buildPaymentBody(),
+            bottomNavigationBar: _qrResponse == null && _booking != null ? _buildPayBar() : null,
           ),
         );
       },
@@ -1710,17 +1729,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildQrView(Color textColor, Color subtextColor) {
+    // Tres pasos a la vista: antes solo decía "Escanea para pagar" y no
+    // quedaba claro que después había que volver y avisar.
+    Widget step(int n, String label, bool last) => Expanded(
+          child: Column(children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Text('$n', style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(height: 5),
+            Text(label, textAlign: TextAlign.center, style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.25)),
+          ]),
+        );
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
           children: [
             Text(
-              'Escanea para pagar',
+              'Paga con la app de tu banco',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                  color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
+                  color: textColor, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              step(1, 'Abre tu banco y elige pagar con QR', false),
+              step(2, 'Escanea o sube este QR', false),
+              step(3, 'Vuelve y toca "Ya realicé el pago"', true),
+            ]),
+            const SizedBox(height: 18),
 
             // ── Monto específico a transferir — como el QR es provisional
             // (no bancario real), quien paga debe escribir el monto a mano
@@ -1738,9 +1781,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   Text('Monto a transferir',
                       style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
-                  Text('Bs ${_qrAmountToPay.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          color: GardenColors.primary, fontSize: 28, fontWeight: FontWeight.w900)),
+                  GardenAmount(_qrAmountToPay, size: 32, color: GardenColors.primary),
                   const SizedBox(height: 6),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1813,17 +1854,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   children: [
                     const GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                     const SizedBox(width: 8),
-                    Text(
-                      'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
-                      style: const TextStyle(
-                          color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    Flexible(
+                      child: Text(
+                        'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
+                        style: const TextStyle(
+                            color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
 
-            const SizedBox(height: 48),
+            const SizedBox(height: 32),
 
             // ── "Ya realicé el pago" — immediate check ─────────────────────
             GardenButton(
@@ -1846,6 +1889,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Text('Cancelar reserva', style: TextStyle(color: subtextColor)),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -1871,178 +1915,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return _buildQrView(textColor, subtextColor);
     }
 
-    // Build summary card — use _booking if available, else bookingParams preview
-    final Widget summaryCard;
-    if (_booking != null) {
-      final bk = _booking!;
-      summaryCard = Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(GardenRadius.xl),
-          border: Border.all(color: borderColor),
-          boxShadow: GardenShadows.card,
-        ),
-        child: Column(
-          children: [
-            _summaryRow(GIcon.mascotas, 'Mascota', bk['petName'] ?? '—',
-                textColor, subtextColor),
-            const SizedBox(height: 12),
-            _summaryRow(
-              GIcon.forService(GardenService.fromApi(bk['serviceType'] as String?) ?? GardenService.hospedaje),
-              'Servicio',
-              (GardenService.fromApi(bk['serviceType'] as String?) ?? GardenService.hospedaje).label,
-              textColor,
-              subtextColor,
-            ),
-            const SizedBox(height: 12),
-            _summaryRow(GIcon.calendario, 'Fecha',
-                bk['walkDate'] ?? bk['startDate'] ?? '—', textColor, subtextColor),
-            const SizedBox(height: 18),
-            Divider(height: 1, color: borderColor),
-            const SizedBox(height: 18),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    GardenColors.primary.withValues(alpha: 0.10),
-                    GardenColors.accent.withValues(alpha: 0.06),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(GardenRadius.lg),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('Total a pagar',
-                          style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('Bs ${_totalAmount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                color: GardenColors.primary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                        if (_donationAmount > 0 && _taxAmount <= 0)
-                          Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
-                              style: TextStyle(color: subtextColor, fontSize: 11)),
-                      ]),
-                    ],
-                  ),
-                  // ── Desglose del pago — solo acá, en el resumen final antes de
-                  // pagar: servicio + impuestos (IVA e IT) = total. Valores
-                  // reales de la reserva, nunca un % hardcodeado.
-                  if (_booking != null && _taxAmount > 0) ...[
-                    const SizedBox(height: 12),
-                    Divider(height: 1, color: GardenColors.primary.withValues(alpha: 0.15)),
-                    const SizedBox(height: 10),
-                    _feeBreakdownLine('Servicio', _serviceBeforeTax, subtextColor),
-                    const SizedBox(height: 4),
-                    _feeBreakdownLine('Impuestos (IVA e IT · $_taxRateLabel%)', _taxAmount, subtextColor),
-                    if (_donationAmount > 0) ...[
-                      const SizedBox(height: 4),
-                      _feeBreakdownLine('Donación', _donationAmount, subtextColor),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      // Params mode — show preview from bookingParams before booking is created
-      final params = widget.bookingParams!;
-      final serviceType = params['serviceType'] as String? ?? '';
-      final petIds = params['petIds'] as List? ?? [];
-      final date = (params['walkDate'] ?? params['startDate'] ?? '') as String;
-      summaryCard = Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(GardenRadius.xl),
-          border: Border.all(color: borderColor),
-          boxShadow: GardenShadows.card,
-        ),
-        child: Column(
-          children: [
-            _summaryRow(GIcon.mascotas, 'Mascotas',
-                '${petIds.length} mascota${petIds.length == 1 ? '' : 's'}',
-                textColor, subtextColor),
-            const SizedBox(height: 12),
-            _summaryRow(
-              GIcon.forService(GardenService.fromApi(serviceType) ?? GardenService.hospedaje),
-              'Servicio',
-              (GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label,
-              textColor,
-              subtextColor,
-            ),
-            if (date.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _summaryRow(GIcon.calendario, 'Fecha', date, textColor, subtextColor),
-            ],
-            const SizedBox(height: 18),
-            Divider(height: 1, color: borderColor),
-            const SizedBox(height: 18),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    GardenColors.primary.withValues(alpha: 0.10),
-                    GardenColors.accent.withValues(alpha: 0.06),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(GardenRadius.lg),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('Total a pagar',
-                      style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                  Text('Se calculará al generar el QR',
-                      style: TextStyle(color: subtextColor, fontSize: 13)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final hero = _buildPaymentHero();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toda esta sección (billetera, QR bancario, seguridad, donación)
-          // debe verse SIEMPRE antes de generar el QR — es lo que determina
-          // el monto final que se le pide al banco (servicio + donación −
-          // lo cubierto por billetera). Ya no depende de _booking != null
-          // porque ahora la reserva se crea al entrar a esta pantalla (ver
-          // _loadData), no al presionar el botón.
-          Text('Método de pago',
-              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text('Elige cómo vas a pagar el saldo que no cubra tu billetera.',
-              style: TextStyle(color: subtextColor, fontSize: 12.5)),
-          const SizedBox(height: 12),
+          // Primero QUÉ pagas (mascota, cuidador, cuándo y total); antes el
+          // resumen quedaba al final, después de todas las opciones. Billetera,
+          // donación y código cambian el total arriba y abajo en vivo.
+          hero,
+          const SizedBox(height: 26),
 
-          // ── Carrusel de métodos (compacto, rounded — estilo Uber/PedidosYa) ──
-          // Solo elecciones de MÉTODO real (QR bancario, Tarjeta). La
-          // billetera y la donación NO son ítems del carrusel — viven en sus
-          // propias secciones abajo, con su lógica intacta.
+          const GardenPaySectionTitle(GIcon.pagarQr, 'Cómo pagas',
+              hint: 'Lo que no cubra tu billetera se paga con QR desde la app de tu banco.'),
           _buildMethodCarousel(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 10),
           if (_selectedMethod == 'card' && _cardPaymentEnabled && _savedCard != null)
@@ -2061,20 +1948,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 8),
-          Divider(height: 1, color: borderColor),
-          const SizedBox(height: 20),
-
-          // ── Datos de facturación (NIT) — se pide siempre, para QR o Tarjeta.
-          // No bloquea el pago si se deja vacío (cae a NIT "0" en el backend).
-          _buildBillingSummaryTile(textColor, subtextColor, surface, borderColor),
-          const SizedBox(height: 20),
-
-          // ── Billetera Garden — sección separada, lógica intacta ──────────
-          Text('Billetera',
-              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
-          const SizedBox(height: 10),
-
+          const SizedBox(height: 4),
           // ── Wallet option ────────────────────────────────────────────────
           // Siempre visible cuando ya cargó el saldo — con saldo 0 se muestra
           // opaca/deshabilitada (AbsorbPointer) en vez de ocultarse, para que
@@ -2190,118 +2064,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
             if (_useWallet) const SizedBox(height: 12),
           ],
 
-          // La elección QR-vs-Tarjeta ahora vive en el carrusel de arriba —
-          // aquí solo queda, si corresponde, el detalle de cuánto se paga
-          // por QR cuando la billetera cubre una parte (complemento).
-          if (!_walletCoversAll && _useWallet && _walletBalance > 0) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const GardenIcon(GIcon.pagarQr, size: GIconSize.sm, color: GardenColors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Pagarás Bs ${_remainingAfterWallet.toStringAsFixed(2)} por QR (complemento a tu billetera)',
-                      style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          const SizedBox(height: 8),
+          // El monto por QR cuando la billetera cubre una parte ya lo dicen el
+          // recuadro de arriba y la barra fija de abajo.
+          const SizedBox(height: 14),
 
-          // ── Security note ────────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: GardenColors.success.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: GardenColors.success.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const GardenIcon(GIcon.pagoProtegido,
-                          color: GardenColors.success, state: GIconState.active),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text('Tu pago está protegido',
-                          style: TextStyle(
-                              color: GardenColors.success,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _securityRow(GIcon.reloj,
-                    'El cuidador recibe el pago únicamente cuando el servicio es completado.',
-                    textColor, subtextColor),
-                const SizedBox(height: 8),
-                _securityRow(GIcon.billetera,
-                    'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.',
-                    textColor, subtextColor),
-                const SizedBox(height: 8),
-                _securityRow(GIcon.pagoProtegido,
-                    'Garden custodia el dinero hasta confirmar que todo salió bien.',
-                    textColor, subtextColor),
-                const SizedBox(height: 8),
-                // Fondo de Garantía Garden — ya existe como cláusula real en
-                // los Términos (legal_screen.dart, sección 12), acá solo se
-                // hace visible en el momento en que más importa (antes de
-                // pagar). Cifra y condiciones textuales tal como están en el
-                // contrato — no es una promesa nueva ni inflada.
-                _securityRow(GIcon.veterinaria,
-                    'Fondo de Garantía Garden: hasta Bs 2.000 en gastos veterinarios de emergencia por incidente, cuando no sea negligencia del cuidador.',
-                    textColor, subtextColor),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.only(left: 22),
-                      minimumSize: const Size(0, 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      context.push('/terms');
-                    },
-                    child: const Text('Ver condiciones completas',
-                        style: TextStyle(
-                            color: GardenColors.success, fontSize: 11.5, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Política de cancelación — visible ANTES de pagar, no solo
-          // cuando se intenta cancelar. Valores reales cargados de
-          // /settings (nunca hardcodeados), mismos que aplica de verdad
-          // calculateRefund() en el backend.
-          if (_booking != null) ...[
-            _buildCancellationPolicy(textColor, subtextColor, surface, borderColor),
-            const SizedBox(height: 20),
-          ],
-
-          // ── Código promocional ────────────────────────────────────────────
+          const GardenPaySectionTitle(GIcon.recibo, 'Factura y descuentos'),
+          _buildBillingSummaryTile(textColor, subtextColor, surface, borderColor),
+          const SizedBox(height: 10),
           if (_booking != null && _booking!['promoCode'] == null) ...[
             _buildPromoCodeTile(textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 20),
@@ -2326,27 +2095,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           // ── Donación voluntaria ─────────────────────────────────────────────
           _buildDonationSection(textColor, subtextColor, surface, borderColor),
-          const SizedBox(height: 28),
+          const SizedBox(height: 22),
 
-          // ── Resumen — ahora debajo de "Método de pago" para que primero se
-          // decida billetera/donación y recién después se vea el resumen final ──
-          Text('Resumen',
-              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 16),
-          summaryCard,
-          const SizedBox(height: 20),
+          // Antes: un bloque verde largo que empujaba el botón de pagar. Ahora
+          // tres garantías a la vista y el detalle (mismo texto) a un toque.
+          GardenPaymentProtection(
+            details: const [
+              (GIcon.reloj, 'El cuidador recibe el pago únicamente cuando el servicio es completado.'),
+              (GIcon.billetera, 'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.'),
+              (GIcon.pagoProtegido, 'Garden custodia el dinero hasta confirmar que todo salió bien.'),
+              // Fondo de Garantía Garden — cláusula real de los Términos
+              // (legal_screen.dart, sección 12), con su cifra y condición.
+              (GIcon.veterinaria, 'Fondo de Garantía Garden: hasta Bs 2.000 en gastos veterinarios de emergencia por incidente, cuando no sea negligencia del cuidador.'),
+            ],
+            onTerms: () {
+              HapticFeedback.selectionClick();
+              context.push('/terms');
+            },
+          ),
+          const SizedBox(height: 12),
 
-          GardenButton(
-            label: _isSubmitting
-                ? 'Procesando...'
-                : _walletCoversAll
-                    ? 'Pagar con billetera'
-                    : _useWallet
-                        ? 'Usar billetera + Generar QR'
-                        : 'Generar QR de pago',
-            loading: _isSubmitting,
-            gIcon: _walletCoversAll ? GIcon.billetera : GIcon.pagarQr,
-            onPressed: _isSubmitting ? null : _initPayment),
+          // Política de cancelación real (calculateRefund), visible ANTES de pagar.
+          if (_booking != null) ...[
+            _buildCancellationPolicy(textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 12),
+          ],
 
           if (_sipUnavailable) ...[
             const SizedBox(height: 16),
@@ -2390,7 +2163,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           ],
           const SizedBox(height: 16),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -2402,6 +2174,60 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Encabezado: mascota + cuidador + cuándo + total, con el desglose real de
+  /// la reserva (pricing.service.ts) — nunca un % fijo.
+  Widget _buildPaymentHero() {
+    final bk = _booking ?? widget.bookingParams ?? const <String, dynamic>{};
+    final service = GardenService.fromApi(bk['serviceType'] as String?) ?? GardenService.paseo;
+    final petIds = (widget.bookingParams?['petIds'] as List?) ?? const [];
+    final petName = (_booking?['petName'] as String?)?.trim().isNotEmpty == true
+        ? _booking!['petName'] as String
+        : (petIds.length > 1 ? '${petIds.length} mascotas' : 'tu mascota');
+    final caregiverName = (_booking?['caregiverName'] as String?) ?? widget.caregiverPreview?['name'] as String?;
+    final caregiverPhoto = (_booking?['caregiverPhoto'] as String?) ?? widget.caregiverPreview?['photo'] as String?;
+
+    final lines = <GardenPaymentLine>[];
+    if (_booking != null) {
+      if (_taxAmount > 0) {
+        lines
+          ..add(GardenPaymentLine('Servicio', _serviceBeforeTax))
+          ..add(GardenPaymentLine('Impuestos (IVA e IT · $_taxRateLabel%)', _taxAmount));
+      } else {
+        lines.add(GardenPaymentLine('Servicio', _serviceAmount));
+      }
+      if (_donationAmount > 0) lines.add(GardenPaymentLine('Donación', _donationAmount));
+      if (_useWallet && _walletCoverage > 0) {
+        lines.add(GardenPaymentLine('Desde tu billetera', _walletCoverage, negative: true));
+        if (!_walletCoversAll) lines.add(GardenPaymentLine('Pagas por QR', _remainingAfterWallet, emphasis: true));
+      }
+    }
+
+    return GardenPaymentHero(
+      service: service,
+      petName: petName,
+      caregiverName: caregiverName,
+      caregiverPhoto: caregiverPhoto,
+      when: paymentWhenLabel(bk),
+      total: _booking != null ? _totalAmount : null,
+      lines: lines,
+    );
+  }
+
+  /// Barra fija: lo que se paga AHORA (por QR o con billetera) y el botón.
+  Widget _buildPayBar() {
+    final viaWallet = _walletCoversAll;
+    final amount = viaWallet ? _totalAmount : (_useWallet ? _remainingAfterWallet : _totalAmount);
+    return GardenPayBar(
+      amount: _booking != null ? amount : null,
+      amountLabel: viaWallet ? 'Con tu billetera' : 'Pagas por QR',
+      note: !viaWallet && _useWallet && _walletCoverage > 0 ? '+ ${gardenBs(_walletCoverage)} de billetera' : null,
+      buttonLabel: _isSubmitting ? 'Procesando…' : (viaWallet ? 'Pagar ahora' : 'Generar QR'),
+      buttonIcon: viaWallet ? GIcon.billetera : GIcon.pagarQr,
+      loading: _isSubmitting,
+      onPressed: _isSubmitting || _booking == null ? null : _initPayment,
     );
   }
 
@@ -2878,27 +2704,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Small widgets ────────────────────────────────────────────────────────────
 
-  Widget _feeBreakdownLine(String label, double amount, Color subtextColor) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: subtextColor, fontSize: 12)),
-          Text('Bs ${amount.toStringAsFixed(2)}',
-              style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
-      );
-
-  Widget _securityRow(GIcon icon, String text, Color textColor, Color subtextColor) =>
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
-          const SizedBox(width: 8),
-          Expanded(
-              child: Text(text,
-                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
-        ],
-      );
-
   Widget _reviewStep(GIcon icon, String text, Color subtextColor, Color textColor) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -2921,19 +2726,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Text(label, style: TextStyle(color: labelColor, fontSize: 13)),
           Text(value,
               style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.w700)),
-        ],
-      );
-
-  Widget _summaryRow(GIcon icon, String label, String value, Color textColor,
-          Color subtextColor) =>
-      Row(
-        children: [
-          GardenIcon(icon, size: GIconSize.sm, color: subtextColor),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
-          const Spacer(),
-          Text(value,
-              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
         ],
       );
 

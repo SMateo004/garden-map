@@ -711,7 +711,15 @@ class _BookingScreenState extends State<BookingScreen> {
     Analytics.instance.track('booking_submit', sinceMark: 'booking_start', props: {'flow': 'payment'});
     // The booking (PENDING_PAYMENT) is created only when the user generates the QR.
     if (!mounted) return;
-    context.push('/payment-new', extra: {'bookingParams': body});
+    context.push('/payment-new', extra: {
+      'bookingParams': body,
+      // Para el encabezado del pago ("Paseo de Luna con Andrea" + foto).
+      if (_caregiver != null)
+        'caregiver': {
+          'name': [_caregiver!['firstName'], _caregiver!['lastName']].whereType<String>().join(' '),
+          'photo': _caregiver!['profilePicture'],
+        },
+    });
   }
 
   void _showError(String msg) => GardenSnackBar.error(context, msg);
