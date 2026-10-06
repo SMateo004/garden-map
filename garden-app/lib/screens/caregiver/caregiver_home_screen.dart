@@ -809,9 +809,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Page title
-                    Text('Inicio', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-                    const SizedBox(height: 4),
-                    Text('Bienvenido, ${_userName.split(' ').first}', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    _buildGreeting(textColor, subtextColor, pendingCount),
                     const SizedBox(height: 20),
 
                     if (heroCard != null) ...[
@@ -842,14 +840,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                 ),
                                 // Reservas recientes
                                 if (_bookings.isNotEmpty) ...[
-                                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                    Text('Reservas recientes', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                                    GestureDetector(
-                                      onTap: () => setState(() => _selectedTab = 2),
-                                      child: const Text('Ver todas', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                                    ),
-                                  ]),
-                                  const SizedBox(height: 10),
+                                  _recentHeader(),
                                   ..._bookings.take(4).map((b) => _buildBookingPreviewCard(b, surface, textColor, subtextColor, borderColor)),
                                 ],
                               ],
@@ -862,37 +853,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Bienvenida / perfil
-                                _buildWelcomeCard(
-                                  isDark: isDark, surface: surface, textColor: textColor,
-                                  subtextColor: subtextColor, borderColor: borderColor,
-                                  rating: (allTime?['rating'] as num? ?? 0).toDouble(),
-                                  reviewCount: allTime?['reviewCount'] as int? ?? 0,
-                                  pendingCount: pendingCount,
-                                ),
-                                const SizedBox(height: 10),
-                                _buildMonthPride(stats, textColor, subtextColor, surface, borderColor),
-                                const SizedBox(height: 14),
-                                // Métricas en 2 chips
-                                Row(children: [
-                                  Expanded(child: _totalStatChip(
-                                    '${allTime?['bookings'] ?? 0}',
-                                    GIcon.terminado,
-                                    GardenColors.success, surface, borderColor, subtextColor,
-                                    sublabel: 'Servicios',
-                                  )),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: _totalStatChip(
-                                    '$acceptanceRate%',
-                                    GIcon.confirmado,
-                                    GardenColors.secondary, surface, borderColor, subtextColor,
-                                    sublabel: 'Aceptación',
-                                  )),
-                                ]),
-                                const SizedBox(height: 14),
-                                // Próxima reserva
-                                Text('Próxima reserva', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 8),
+                                _buildEarningsCard(stats, allTime, acceptanceRate),
+                                const SizedBox(height: 18),
+                                const GardenListHeader('Próxima reserva'),
                                 _buildNextBookingCard(
                                   nextBooking: nextBooking, surface: surface, surfaceEl: surfaceEl,
                                   textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
@@ -942,41 +905,26 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Saludo, lo que necesita atención ahora y cuánto va ganando.
+                  // Antes: bienvenida, "este mes" y dos contadores en tres bloques.
+                  _buildGreeting(textColor, subtextColor, pendingCount),
+                  const SizedBox(height: 14),
                   if (heroCard != null) ...[heroCard, const SizedBox(height: 16)],
-                  _buildWelcomeCard(
-                    isDark: isDark, surface: surface, textColor: textColor,
-                    subtextColor: subtextColor, borderColor: borderColor,
-                    rating: (allTime?['rating'] as num? ?? 0).toDouble(),
-                    reviewCount: allTime?['reviewCount'] as int? ?? 0,
-                    pendingCount: pendingCount,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildMonthPride(stats, textColor, subtextColor, surface, borderColor),
+                  _buildEarningsCard(stats, allTime, acceptanceRate),
                   const SizedBox(height: 16),
                   PriceSuggestionBanner(token: _caregiverToken, baseUrl: _baseUrl, onPriceUpdated: _loadCaregiverProfile),
                   const SizedBox(height: 8),
                   ..._buildPendingRequestsSection(surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                   ..._buildConfirmedBookingsSection(surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-                  Text('Próxima reserva', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 10),
+                  const GardenListHeader('Próxima reserva'),
                   _buildNextBookingCard(nextBooking: nextBooking, surface: surface, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
                   const SizedBox(height: 16),
                   if (completeness < 100 && _caregiver?['status'] != 'APPROVED') ...[
                     _buildCompletenessBar(completeness: completeness, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
                     const SizedBox(height: 16),
                   ],
-                  Row(children: [
-                    Expanded(child: _totalStatChip('${allTime?['bookings'] ?? 0} servicios totales', GIcon.terminado, GardenColors.success, surface, borderColor, subtextColor)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _totalStatChip('$acceptanceRate% aceptación', GIcon.confirmado, GardenColors.secondary, surface, borderColor, subtextColor)),
-                  ]),
-                  const SizedBox(height: 16),
                   if (_bookings.isNotEmpty) ...[
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text('Reservas recientes', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                      GestureDetector(onTap: () => setState(() => _selectedTab = 2), child: const Text('Ver todas', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600))),
-                    ]),
-                    const SizedBox(height: 10),
+                    _recentHeader(),
                     ..._bookings.take(3).map((b) => _buildBookingPreviewCard(b, surface, textColor, subtextColor, borderColor)),
                   ],
                 ],
@@ -987,6 +935,79 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       ],
     );
   }
+
+  /// "Buenos días, Andrea" con el estado de la cuenta y, si hay, cuántas
+  /// solicitudes esperan respuesta (lleva a Reservas).
+  Widget _buildGreeting(Color textColor, Color subtextColor, int pendingCount) {
+    final status = _caregiver?['status'] as String? ?? 'APPROVED';
+    final (label, color) = switch (status) {
+      'APPROVED' => ('Activo', GardenColors.success),
+      'PENDING_REVIEW' => ('En revisión', GardenColors.warning),
+      'NEEDS_REVISION' => ('Necesita ajustes', GardenColors.warning),
+      'DRAFT' => ('Borrador', GardenColors.warning),
+      'REJECTED' => ('Rechazado', GardenColors.error),
+      'SUSPENDED' => ('Suspendido', GardenColors.error),
+      _ => ('Pendiente', GardenColors.warning),
+    };
+    final first = _userName.trim().isEmpty ? '' : _userName.trim().split(' ').first;
+    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${_greeting()} ${first.isEmpty ? '' : first}'.trim().replaceFirst(RegExp(r',$'), ''),
+              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+          const SizedBox(height: 4),
+          Row(children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w800)),
+          ]),
+        ]),
+      ),
+      if (pendingCount > 0)
+        TextButton.icon(
+          onPressed: () => setState(() => _selectedTab = 2),
+          style: TextButton.styleFrom(foregroundColor: GardenColors.warning),
+          icon: const GardenIcon(GIcon.notificaciones, size: GIconSize.sm, state: GIconState.active, inheritColor: true),
+          label: Text('$pendingCount por responder', style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+    ]);
+  }
+
+  /// Lo ganado este mes en grande (mismo diseño que la billetera) con
+  /// servicios, horas, calificación y aceptación, y los atajos de siempre.
+  Widget _buildEarningsCard(Map<String, dynamic>? stats, Map<String, dynamic>? allTime, int acceptanceRate) {
+    final month = stats?['thisMonth'] as Map<String, dynamic>?;
+    final earnings = (month?['earnings'] as num?)?.toDouble();
+    final services = month?['bookings'] as int? ?? 0;
+    final hours = (month?['hoursWorked'] as num? ?? 0).toDouble();
+    final rating = (allTime?['rating'] as num? ?? 0).toDouble();
+    final reviews = allTime?['reviewCount'] as int? ?? 0;
+    String h(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1).replaceAll('.', ',');
+    return GardenBalanceCard(
+      label: 'Ganado este mes',
+      icon: GIcon.billetera,
+      available: stats == null ? null : (earnings ?? 0),
+      stats: [
+        ('Servicios', '$services'),
+        ('Cuidando', '${h(hours)} h'),
+        if (rating > 0) ('Calificación', '${rating.toStringAsFixed(1).replaceAll('.', ',')} ($reviews)'),
+        ('Aceptación', '$acceptanceRate%'),
+      ],
+      actions: [
+        GardenWalletAction(GIcon.billetera, 'Billetera', () => context.push('/wallet'), primary: true),
+        GardenWalletAction(GIcon.disponibilidad, 'Horarios', () => setState(() => _selectedTab = 1)),
+        GardenWalletAction(GIcon.reservas, 'Reservas', () => setState(() => _selectedTab = 2)),
+      ],
+    );
+  }
+
+  Widget _recentHeader() => Row(children: [
+        const Expanded(child: GardenListHeader('Recientes')),
+        TextButton(
+          onPressed: () => setState(() => _selectedTab = 2),
+          child: const Text('Ver todas', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w700)),
+        ),
+      ]);
 
   Widget _buildHeroBooking(Map<String, dynamic> b) {
     final id = b['id'] as String? ?? '';
@@ -1038,217 +1059,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   /// Orgullo y progreso del mes (plan, interfaz M): lo ganado y lo hecho,
   /// con datos que ya manda /caregiver/dashboard-stats.
-  Widget _buildMonthPride(Map<String, dynamic>? stats, Color textColor, Color subtextColor,
-      Color surface, Color borderColor) {
-    final month = stats?['thisMonth'] as Map<String, dynamic>?;
-    if (month == null) return const SizedBox.shrink();
-    final earnings = (month['earnings'] as num? ?? 0).toDouble();
-    final bookings = month['bookings'] as int? ?? 0;
-    final hours = (month['hoursWorked'] as num? ?? 0).toDouble();
-    String fmtHours(double h) => h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toStringAsFixed(1).replaceAll('.', ',');
-
-    Widget item(GIcon icon, String value, String label, Color color) => Expanded(
-          child: Row(children: [
-            GardenIcon(icon, color: color, state: GIconState.active),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GardenText.metadata.copyWith(color: textColor, fontSize: 15)),
-                Text(label, style: GardenText.caption.copyWith(color: subtextColor)),
-              ]),
-            ),
-          ]),
-        );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Este mes', style: GardenText.labelSmall.copyWith(color: subtextColor)),
-        const SizedBox(height: 8),
-        Row(children: [
-          item(GIcon.billetera, 'Bs ${earnings.toStringAsFixed(0)}', 'ganados', GardenColors.primary),
-          item(GIcon.terminado, '$bookings', bookings == 1 ? 'servicio' : 'servicios', GardenColors.successDark),
-          item(GIcon.reloj, '${fmtHours(hours)} h', 'cuidando', GardenColors.warning),
-        ]),
-      ]),
-    );
-  }
-
-  // ── CARD DE BIENVENIDA ──────────────────────────────────────────────────
-  Widget _buildWelcomeCard({
-    required bool isDark,
-    required Color surface,
-    required Color textColor,
-    required Color subtextColor,
-    required Color borderColor,
-    required double rating,
-    required int reviewCount,
-    required int pendingCount,
-  }) {
-    final status = _caregiver?['status'] as String? ?? 'APPROVED';
-    final photoUrl = _caregiver?['profilePhoto'] as String?;
-    final initial = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'C';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [GardenColors.navy, GardenColors.navyDark],
-        ),
-        borderRadius: GardenRadius.xl_,
-        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5), width: 2),
-            ),
-            child: ClipOval(
-              child: photoUrl != null && photoUrl.isNotEmpty
-                  ? Image.network(fixImageUrl(photoUrl), fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _avatarPlaceholder(initial))
-                  : _avatarPlaceholder(initial),
-            ),
-          ),
-          const SizedBox(width: 14),
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _greeting(),
-                  style: const TextStyle(color: Colors.white60, fontSize: 12),
-                ),
-                Text(
-                  _userName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    // Badge estado
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: GardenColors.success.withValues(alpha: 0.15),
-                        borderRadius: GardenRadius.full_,
-                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6, height: 6,
-                            decoration: const BoxDecoration(
-                              color: GardenColors.success, shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            switch (status) {
-                              'APPROVED' => 'Activo',
-                              'PENDING_REVIEW' => 'En revisión',
-                              'NEEDS_REVISION' => 'Necesita ajustes',
-                              'DRAFT' => 'Borrador',
-                              'REJECTED' => 'Rechazado',
-                              'SUSPENDED' => 'Suspendido',
-                              _ => 'Pendiente',
-                            },
-                            style: const TextStyle(
-                              color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (rating > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: GardenColors.star.withValues(alpha: 0.15),
-                          borderRadius: GardenRadius.full_,
-                          border: Border.all(color: GardenColors.star.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
-                            const SizedBox(width: 4),
-                            Text(
-                              rating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                color: GardenColors.star, fontSize: 10, fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Badge pendientes
-          if (pendingCount > 0)
-            GestureDetector(
-              onTap: () => setState(() => _selectedTab = 2),
-              child: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: GardenColors.warning.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const GardenIcon(GIcon.notificaciones, size: GIconSize.md, color: GardenColors.warning),
-                    Positioned(
-                      top: 6, right: 6,
-                      child: Container(
-                        width: 12, height: 12,
-                        decoration: const BoxDecoration(
-                          color: GardenColors.warning, shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$pendingCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   // ── SOLICITUDES PENDIENTES DE APROBACIÓN ──────────────────────────────────
   List<Widget> _buildPendingRequestsSection({
     required Color surface,
@@ -1806,18 +1616,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _avatarPlaceholder(String initial) {
-    return Container(
-      color: GardenColors.primary.withValues(alpha: 0.2),
-      child: Center(
-        child: Text(
-          initial,
-          style: const TextStyle(color: GardenColors.primary, fontSize: 22, fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-
   // ── RESERVA EN CURSO ────────────────────────────────────────────────────
   Widget _buildNextBookingCard({
     required Map<String, dynamic>? nextBooking,
@@ -2039,67 +1837,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // ── STAT CHIP TOTAL ─────────────────────────────────────────────────────
-  Widget _totalStatChip(
-    String label,
-    GIcon icon,
-    Color color,
-    Color surface,
-    Color borderColor,
-    Color subtextColor, {
-    String? sublabel, // optional sublabel shown above large value on web
-  }) {
-    // On web with sublabel: show icon + sublabel + large value
-    if (kIsWeb && sublabel != null) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: GardenRadius.md_,
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(child: GardenIcon(icon, color: color, size: GIconSize.sm, state: GIconState.active)),
-          ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(sublabel, style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w500)),
-            Text(label, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800, height: 1.1)),
-          ]),
-        ]),
-      );
-    }
-    // Mobile / default
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: GardenRadius.md_,
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GardenIcon(icon, color: color, size: GIconSize.sm, state: GIconState.active),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w500),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }

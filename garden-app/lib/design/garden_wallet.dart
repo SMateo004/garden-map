@@ -28,9 +28,16 @@ class GardenBalanceCard extends StatelessWidget {
   final List<(String, String)> stats;
   final List<GardenWalletAction> actions;
 
+  /// Título sobre el monto ("Disponible" en la billetera, "Ganado este mes"
+  /// en el inicio del cuidador).
+  final String label;
+  final GIcon icon;
+
   const GardenBalanceCard({
     super.key,
     required this.available,
+    this.label = 'Disponible',
+    this.icon = GIcon.billetera,
     this.pending = 0,
     this.stats = const [],
     this.actions = const [],
@@ -54,9 +61,9 @@ class GardenBalanceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active, color: Colors.white70),
+            GardenIcon(icon, size: GIconSize.sm, state: GIconState.active, color: Colors.white70),
             const SizedBox(width: 8),
-            const Text('Disponible', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700)),
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700)),
             const Spacer(),
             if (pending > 0)
               Container(
@@ -116,18 +123,28 @@ class _ActionButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: a.onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            GardenIcon(a.icon, size: GIconSize.sm, state: GIconState.active, color: fg),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(a.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w800)),
-            ),
-          ]),
+        // Si el texto no entra (columna angosta en web), solo el ícono con
+        // su nombre como ayuda — antes se cortaba en "Ho…".
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final compact = c.maxWidth < 96 && !a.primary;
+            final content = Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                GardenIcon(a.icon, size: GIconSize.sm, state: GIconState.active, color: fg),
+                if (!compact) ...[
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(a.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ]),
+            );
+            return compact ? Tooltip(message: a.label, child: content) : content;
+          },
         ),
       ),
     );
