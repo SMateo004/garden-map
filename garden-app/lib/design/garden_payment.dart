@@ -267,7 +267,11 @@ class GardenAmount extends StatelessWidget {
   final double? value;
   final double size;
   final Color color;
-  const GardenAmount(this.value, {super.key, this.size = 24, required this.color});
+
+  /// false = sin transición entre valores (ej. dentro de un conteo animado,
+  /// donde cada cuadro es un valor nuevo y se superponían).
+  final bool animate;
+  const GardenAmount(this.value, {super.key, this.size = 24, required this.color, this.animate = true});
 
   @override
   Widget build(BuildContext context) {
@@ -289,6 +293,7 @@ class GardenAmount extends StatelessWidget {
         style: TextStyle(color: color, height: 1.1, fontFeatures: const [FontFeature.tabularFigures()]),
       );
     }
+    if (!animate) return child;
     return AnimatedSwitcher(
       duration: GardenMotion.resolve(context, GardenMotion.quick),
       switchInCurve: GardenMotion.enter,

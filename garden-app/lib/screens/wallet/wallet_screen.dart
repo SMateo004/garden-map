@@ -10,12 +10,13 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../design/garden_icons.dart';
+import '../../design/garden_payment.dart';
+import '../../design/garden_wallet.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
-import '../../theme/garden_motion.dart';
 import '../../utils/input_formatters.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   bool _uploadingQr = false;
   bool _switchingMethod = false;
   String? _cancellingWithdrawalId;
+  String _txFilter = 'all'; // all | in | out
   // Los datos de cobro (número de cuenta, titular, QR de pago) son
   // información sensible que antes se mostraba siempre expandida en la
   // billetera — el dueño de la plataforma pidió ocultarla por defecto y
@@ -393,13 +395,6 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
               onPressed: () => context.pop(),
             ),
-            actions: [
-              IconButton(
-                tooltip: 'Invitá y ganá',
-                icon: GardenIcon(GIcon.regalo, size: GIconSize.md, state: GIconState.active, color: textColor),
-                onPressed: () => context.push('/referral'),
-              ),
-            ],
           ),
           body: Column(
             children: [
@@ -413,12 +408,6 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       IconButton(icon: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor), onPressed: () => context.pop()),
                       const SizedBox(width: 6),
                       Text('Mi billetera', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: 'Invitá y ganá',
-                        icon: GardenIcon(GIcon.regalo, size: GIconSize.sm, state: GIconState.active, color: textColor),
-                        onPressed: () => context.push('/referral'),
-                      ),
                     ],
                   ),
                 ),
@@ -442,7 +431,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       // SECCIÓN 1 — Tarjeta de saldo (+ tarjeta de donador, solo CLIENT)
                       if (_role == 'CLIENT') ...[
                         SizedBox(
-                          height: 220,
+                          height: 262,
                           child: PageView(
                             controller: _cardPageController,
                             onPageChanged: (i) => setState(() => _cardPage = i),
@@ -461,38 +450,17 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         _buildBalanceCard(),
                       const SizedBox(height: 16),
 
-                      // Botón código de regalo
-                      GardenPressable(
-                        pressedScale: 0.97,
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => _showRedeemDialog(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: GardenColors.star.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: GardenColors.star.withValues(alpha: 0.2)),
-                          ),
-                          child: const Row(
-                            children: [
-                              GardenIcon(GIcon.regalo, color: GardenColors.primary, state: GIconState.active),
-                              SizedBox(width: 12),
-                              Text('¿Tienes un código de regalo?',
-                                style: TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w700)),
-                              Spacer(),
-                              GardenIcon(GIcon.siguiente, size: GIconSize.xs, color: GardenColors.star),
-                            ],
-                          ),
-                        ),
-                      ),
-
+                      if (_pendingWithdrawal != null) ...[
+                        _buildPendingWithdrawal(_pendingWithdrawal!),
+                        const SizedBox(height: 4),
+                      ],
                       const SizedBox(height: 24),
                       if (_cardPage == 1 && _role == 'CLIENT')
                         _buildDonorHistorySection(textColor, subtextColor, surface, borderColor)
                       else ...[
                       // SECCIÓN 2 — Modalidad de retiro, datos de cobro y botón de retiro (todos los roles)
-                      Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
+                      const GardenPaySectionTitle(GIcon.retiro, 'A dónde llega tu dinero',
+                          hint: 'Cuando retires, lo enviamos aquí. Tus datos se ven solo si tocas el ojo.'),
                         // ── Selector de modalidad: transferencia bancaria vs QR de transferencia ──
                         Row(
                           children: [
@@ -588,54 +556,21 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        GardenButton(
-                          label: 'Solicitar retiro',
-                          gIcon: GIcon.arriba,
-                          onPressed: () => _showWithdrawSheet()),
-                      const SizedBox(height: 32),
-                      // SECCIÓN 3 — Historial de transacciones
-                      Text('Historial', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 16),
-                      if ((_walletData?['transactions'] as List?)?.isEmpty ?? true)
-                        Center(
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 32),
-                              Container(
-                                width: 72, height: 72,
-                                decoration: BoxDecoration(
-                                  color: GardenColors.primary.withValues(alpha: 0.08),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: GardenIcon(GIcon.recibo, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
-                              ),
-                              const SizedBox(height: 16),
-                              Text('Todavía no hay movimientos',
-                                  style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                              const SizedBox(height: 6),
-                              Text(
-                                _role == 'CAREGIVER'
-                                    ? 'Tus ganancias y retiros aparecerán aquí apenas completes tu primer servicio.'
-                                    : 'Tus pagos, reembolsos y retiros aparecerán aquí apenas hagas tu primera reserva.',
-                                style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 32),
-                            ],
-                          ),
-                        )
-                      else
-                        ...(_walletData!['transactions'] as List)
-                          .where((t) {
-                            // Mostrar todos — incluyendo retiros PENDING para que el
-                            // usuario vea el estado de sus solicitudes.
-                            // Solo se ocultan reembolsos internos de tipo SYSTEM.
-                            final tx = t as Map;
-                            if (tx['type'] == 'SYSTEM') return false;
-                            return true;
-                          })
-                          .map((t) => _buildTransactionTile(t as Map<String, dynamic>, surface, textColor, subtextColor, borderColor)),
+                      const SizedBox(height: 28),
+                      // SECCIÓN 3 — Historial: filtro y agrupado por mes
+                      Row(children: [
+                        Expanded(child: Text('Movimientos', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800))),
+                        GardenFilterPills<String>(
+                          options: const [('all', 'Todo'), ('in', 'Entradas'), ('out', 'Salidas')],
+                          selected: _txFilter,
+                          onSelect: (v) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _txFilter = v);
+                          },
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      ..._buildHistory(surface, textColor, subtextColor, borderColor),
                       ],
                     ],
                   ),
@@ -649,62 +584,130 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     );
   }
 
-  // ── Tarjeta de saldo (extraída para poder vivir dentro de un PageView) ──────
+  // ── Tarjeta de saldo (vive dentro de un PageView para el dueño) ───────────
+  // Muestra lo DISPONIBLE (saldo − retiros en camino), que es lo que de
+  // verdad se puede usar o retirar; antes mostraba el saldo bruto y el
+  // retiro fallaba con "saldo insuficiente" sin que se entendiera por qué.
   Widget _buildBalanceCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [GardenColors.navy, GardenColors.primary.withValues(alpha: 0.8)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: GardenShadows.elevated,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              GardenIcon(GIcon.billetera, size: GIconSize.sm, color: Colors.white70),
-              SizedBox(width: 8),
-              Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TweenAnimationBuilder<double>(
-            key: ValueKey((_walletData?['balance'] ?? 0).toString()),
-            tween: Tween(begin: 0, end: (_walletData?['balance'] as num? ?? 0).toDouble()),
-            duration: const Duration(milliseconds: 700),
-            curve: GardenMotion.enter,
-            builder: (context, value, _) => Text(
-              'Bs ${value.toStringAsFixed(2)}',
-              style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              if (_role == 'CAREGIVER') ...[
-                _walletStat('Ganado', 'Bs ${(_walletData?['totalEarned'] ?? 0).toStringAsFixed(0)}', GardenColors.success),
-                const SizedBox(width: 20),
-                _walletStat('Retirado', 'Bs ${(_walletData?['totalWithdrawn'] ?? 0).toStringAsFixed(0)}', Colors.white70),
-                if ((_walletData?['pendingWithdrawals'] ?? 0) > 0) ...[
-                  const SizedBox(width: 20),
-                  _walletStat('Pendiente', 'Bs ${(_walletData?['pendingWithdrawals'] ?? 0).toStringAsFixed(0)}', GardenColors.warning),
-                ],
-              ] else ...[
-                _walletStat('Pagado', 'Bs ${(_walletData?['totalPaid'] ?? 0).toStringAsFixed(0)}', Colors.white70),
-                const SizedBox(width: 20),
-                _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunds'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
-              ],
-            ],
-          ),
-        ],
-      ),
+    final d = _walletData;
+    double n(String k) => (d?[k] as num?)?.toDouble() ?? 0;
+    final pending = n('pendingWithdrawals');
+    final available = d == null ? null : ((d['availableBalance'] as num?)?.toDouble() ?? (n('balance') - pending));
+    return GardenBalanceCard(
+      available: available,
+      pending: pending,
+      stats: _role == 'CAREGIVER'
+          ? [('Ganado', gardenBs(n('totalEarned'))), ('Retirado', gardenBs(n('totalWithdrawn')))]
+          : [('Pagado', gardenBs(n('totalPaid'))), ('Reembolsos', gardenBs(n('totalRefunds')))],
+      actions: [
+        GardenWalletAction(GIcon.retiro, 'Retirar', _showWithdrawSheet, primary: true),
+        GardenWalletAction(GIcon.regalo, 'Código', _showRedeemDialog),
+        GardenWalletAction(GIcon.equipo, 'Invita', () => context.push('/referral')),
+      ],
     );
+  }
+
+  /// Retiro PENDING/PROCESSING más reciente, si hay uno.
+  Map<String, dynamic>? get _pendingWithdrawal {
+    final txs = (_walletData?['transactions'] as List?) ?? const [];
+    for (final t in txs) {
+      if (t is Map<String, dynamic> && t['type'] == 'WITHDRAWAL' &&
+          (t['status'] == 'PENDING' || t['status'] == 'PROCESSING')) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildPendingWithdrawal(Map<String, dynamic> t) {
+    // El destino sale de la descripción guardada al pedir el retiro ("Retiro
+    // a BNB - Titular (cuenta)") — no de los datos actuales, que pudieron
+    // cambiar después. La cuenta se muestra enmascarada.
+    final desc = t['description'] as String? ?? '';
+    String destination = 'tu cuenta';
+    if (desc.startsWith('Retiro vía QR')) {
+      destination = 'tu QR de cobro';
+    } else if (desc.startsWith('Retiro a ')) {
+      final bank = desc.substring(9).split(' - ').first.trim();
+      final acct = RegExp(r'\(([^)]*)\)\s*$').firstMatch(desc)?.group(1);
+      destination = acct != null ? '$bank ${_maskAccount(acct)}' : bank;
+    }
+    final id = t['id'] as String?;
+    return GardenPendingWithdrawal(
+      amount: (t['amount'] as num?)?.toDouble() ?? 0,
+      destination: destination,
+      requestedAt: DateTime.tryParse(t['createdAt'] as String? ?? ''),
+      processing: t['status'] == 'PROCESSING',
+      cancelling: id != null && _cancellingWithdrawalId == id,
+      onCancel: id == null ? null : () => _cancelWithdrawal(id),
+    );
+  }
+
+  /// Entra dinero a la billetera (vs. sale). Misma regla que el signo de cada fila.
+  static bool _isIncoming(Map<String, dynamic> t) {
+    final type = t['type'] as String? ?? '';
+    final isTipReceived = type == 'TIP_RECEIVED' ||
+        (type == 'TIP' && (t['description'] as String? ?? '').startsWith('Propina recibida'));
+    return type == 'EARNING' || type == 'REFUND' || type == 'GIFT' || type == 'OVERTIME_EARNING' ||
+        type == 'DEBT_RECOVERY' || type == 'REFERRAL_BONUS' || isTipReceived;
+  }
+
+  List<Widget> _buildHistory(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final all = ((_walletData?['transactions'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        // Solo se ocultan reembolsos internos de tipo SYSTEM; los retiros
+        // PENDING se muestran para que se vea el estado de la solicitud.
+        .where((t) => t['type'] != 'SYSTEM')
+        .toList();
+    final txs = all.where((t) => _txFilter == 'all' || (_txFilter == 'in') == _isIncoming(t)).toList();
+
+    if (txs.isEmpty) {
+      final filtered = all.isNotEmpty;
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          child: Center(
+            child: Column(children: [
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+                child: GardenIcon(GIcon.recibo, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
+              ),
+              const SizedBox(height: 14),
+              Text(filtered ? 'Nada por aquí con este filtro' : 'Todavía no hay movimientos',
+                  style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(
+                filtered
+                    ? 'Prueba con "Todo" para ver todos tus movimientos.'
+                    : _role == 'CAREGIVER'
+                        ? 'Tus ganancias y retiros aparecerán aquí apenas completes tu primer servicio.'
+                        : 'Tus pagos, reembolsos y retiros aparecerán aquí apenas hagas tu primera reserva.',
+                style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+            ]),
+          ),
+        ),
+      ];
+    }
+
+    final out = <Widget>[];
+    String? lastMonth;
+    for (final t in txs) {
+      final date = DateTime.tryParse(t['createdAt'] as String? ?? '')?.toLocal();
+      final month = date != null ? walletMonthLabel(date) : null;
+      if (month != null && month != lastMonth) {
+        out.add(Padding(
+          padding: EdgeInsets.only(top: lastMonth == null ? 0 : 12, bottom: 8, left: 2),
+          child: Text(month.toUpperCase(),
+              style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+        ));
+        lastMonth = month;
+      }
+      out.add(_buildTransactionTile(t, surface, textColor, subtextColor, borderColor));
+    }
+    return out;
   }
 
   /// Chip seleccionable para elegir la modalidad de retiro (transferencia
@@ -1758,17 +1761,17 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       _ => (GIcon.repetir, subtextColor),
     };
 
-    final date = DateTime.tryParse(t['createdAt'] as String? ?? '');
-    final dateStr = date != null ? '${date.day}/${date.month}/${date.year}' : '';
+    final date = DateTime.tryParse(t['createdAt'] as String? ?? '')?.toLocal();
+    final dateStr = date != null ? walletDayLabel(date) : '';
     final canCancel = type == 'WITHDRAWAL' && isPending && t['id'] != null;
     final isCancelling = canCancel && _cancellingWithdrawalId == t['id'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor),
       ),
       child: Row(
@@ -1800,7 +1803,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           color: GardenColors.warning.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('Pendiente', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
+                        child: const Text('En camino', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ],
@@ -1838,16 +1841,6 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           ],
         ],
       ),
-    );
-  }
-
-  Widget _walletStat(String label, String value, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-        Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
-      ],
     );
   }
 

@@ -10,6 +10,7 @@ import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
 import 'design/garden_mode_switcher.dart';
 import 'design/garden_payment.dart';
+import 'design/garden_wallet.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
 import 'design/garden_status_pill.dart';
@@ -218,6 +219,32 @@ class _CatalogPageState extends State<_CatalogPage> {
                   onPressed: () {},
                 ),
               ),
+            ),
+          ]),
+          _Section('Billetera', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenBalanceCard(
+                available: 140,
+                pending: 100,
+                stats: const [('Ganado', 'Bs 820.00'), ('Retirado', 'Bs 580.00')],
+                actions: [
+                  GardenWalletAction(GIcon.retiro, 'Retirar', () {}, primary: true),
+                  GardenWalletAction(GIcon.regalo, 'Código', () {}),
+                  GardenWalletAction(GIcon.equipo, 'Invita', () {}),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenPendingWithdrawal(amount: 100, destination: 'Banco BNB •••• 2345', onCancel: () {}),
+            ),
+            const SizedBox(height: 12),
+            GardenFilterPills<String>(
+              options: const [('all', 'Todo'), ('in', 'Entradas'), ('out', 'Salidas')],
+              selected: 'all',
+              onSelect: (_) {},
             ),
           ]),
           _Section('Qué sigue (pago confirmado, reservas)', [
