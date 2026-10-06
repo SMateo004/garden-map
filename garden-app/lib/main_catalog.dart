@@ -10,6 +10,7 @@ import 'design/garden_tiles.dart';
 import 'design/garden_icons.dart';
 import 'design/garden_mode_switcher.dart';
 import 'design/garden_payment.dart';
+import 'design/garden_pets.dart';
 import 'design/garden_wallet.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
@@ -219,6 +220,21 @@ class _CatalogPageState extends State<_CatalogPage> {
                   onPressed: () {},
                 ),
               ),
+            ),
+          ]),
+          _Section('Mis mascotas (ficha)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenPetCard(
+                pet: const {'id': 'c1', 'name': 'Luna', 'animalType': 'DOGS', 'size': 'MEDIUM', 'breed': 'Labrador', 'age': 3, 'weight': 18.5, 'gender': 'FEMALE', 'sterilized': true},
+                onTap: () {},
+                onDelete: () {},
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenAddPetTile(onTap: () {}),
             ),
           ]),
           _Section('Billetera', [

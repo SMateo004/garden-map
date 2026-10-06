@@ -4,7 +4,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
-import '../../design/garden_pet_avatar.dart';
+import '../../design/garden_pets.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -22,8 +22,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   String _token = '';
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-
-  static const _sizeLabels = {'SMALL': 'Pequeño', 'MEDIUM': 'Mediano', 'LARGE': 'Grande', 'GIANT': 'Gigante'};
 
   @override
   void initState() {
@@ -120,21 +118,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
           appBar: AppBar(
             backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
             elevation: 0,
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(GardenRadius.sm),
-                  ),
-                  child: const GardenIcon(GIcon.mascotas, state: GIconState.active, size: GIconSize.md),
-                ),
-                const SizedBox(width: 10),
-                Text('Mis mascotas', style: GardenText.h4.copyWith(color: textColor)),
-              ],
-            ),
+            title: Text('Mis mascotas', style: GardenText.h4.copyWith(color: textColor)),
             centerTitle: true,
             actions: [
               Padding(
@@ -152,8 +136,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       borderRadius: BorderRadius.circular(GardenRadius.full),
                       boxShadow: GardenShadows.primary,
                     ),
-                    child: const Center(
-                        child: GardenIcon(GIcon.agregar, color: Colors.white, semanticLabel: 'Agregar mascota')),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      GardenIcon(GIcon.agregar, color: Colors.white, size: GIconSize.sm, semanticLabel: 'Agregar mascota'),
+                      SizedBox(width: 4),
+                      Text('Agregar', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800)),
+                    ]),
                   ),
                 ),
               ),
@@ -172,39 +159,50 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
-                            child: ListView.builder(
-                              padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 12, isWide ? 40 : 16, 100),
-                              itemCount: _pets.length,
-                              itemBuilder: (ctx, i) {
-                          final pet = _pets[i];
-                          return Dismissible(
-                            key: Key(pet['id'] as String),
-                            direction: DismissDirection.endToStart,
-                            confirmDismiss: (_) async {
-                              await _deletePet(pet['id'] as String, pet['name'] as String? ?? 'Mascota');
-                              return false; // We handle reload ourselves
-                            },
-                            background: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              decoration: BoxDecoration(
-                                color: GardenColors.error.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child: const GardenIcon(GIcon.eliminar,
-                                  color: GardenColors.error, size: GIconSize.xl),
-                            ),
-                            child: _PetCard(
-                              pet: pet,
-                              isDark: isDark,
-                              textColor: textColor,
-                              subtextColor: subtextColor,
-                              sizeLabels: _sizeLabels,
-                              onTap: () => _showPetForm(pet: pet),
-                            ),
-                          );
-                        },
+                            // Una columna en celular, dos en pantallas anchas.
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 14, isWide ? 40 : 16, 40),
+                              children: [
+                                Wrap(
+                                  spacing: 14,
+                                  runSpacing: 14,
+                                  children: [
+                                    for (final pet in _pets)
+                                      SizedBox(
+                                        width: isWide ? ((constraints.maxWidth.clamp(0, 860) - 80 - 14) / 2).floorToDouble() : double.infinity,
+                                        child: Dismissible(
+                                          key: Key(pet['id'] as String),
+                                          direction: DismissDirection.endToStart,
+                                          confirmDismiss: (_) async {
+                                            await _deletePet(pet['id'] as String, pet['name'] as String? ?? 'Mascota');
+                                            return false; // la lista se recarga en _deletePet
+                                          },
+                                          background: Container(
+                                            decoration: BoxDecoration(
+                                              color: GardenColors.error.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(22),
+                                            ),
+                                            alignment: Alignment.centerRight,
+                                            padding: const EdgeInsets.only(right: 20),
+                                            child: const GardenIcon(GIcon.eliminar, color: GardenColors.error, size: GIconSize.xl),
+                                          ),
+                                          child: GardenPetCard(
+                                            pet: pet,
+                                            onTap: () => _showPetForm(pet: pet),
+                                            // Quitar también desde un menú: deslizar no se descubre solo.
+                                            onDelete: () => _deletePet(pet['id'] as String, pet['name'] as String? ?? 'Mascota'),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                GardenAddPetTile(onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  _showPetForm();
+                                }),
+                              ],
                             ),
                           ),
                         );
@@ -239,138 +237,4 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       ),
     );
   }
-}
-
-// ── PET CARD ──────────────────────────────────────────────────────────────────
-
-class _PetCard extends StatelessWidget {
-  final Map<String, dynamic> pet;
-  final bool isDark;
-  final Color textColor;
-  final Color subtextColor;
-  final Map<String, String> sizeLabels;
-  final VoidCallback onTap;
-
-  const _PetCard({
-    required this.pet,
-    required this.isDark,
-    required this.textColor,
-    required this.subtextColor,
-    required this.sizeLabels,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final photoUrl = pet['photoUrl'] as String?;
-    final name = pet['name'] as String? ?? 'Sin nombre';
-    final breed = pet['breed'] as String?;
-    final age = pet['age'];
-    final size = pet['size'] as String?;
-    final specialNeeds = pet['specialNeeds'] as String?;
-    final animalType = pet['animalType'] as String?;
-    final isAggressive = pet['isAggressive'] as bool? ?? false;
-    final gender = pet['gender'] as String?;
-    final weight = pet['weight'];
-    final sterilized = pet['sterilized'] as bool?;
-    final extraPhotos = (pet['extraPhotos'] as List?)?.cast<String>() ?? [];
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(GardenRadius.xl),
-          border: Border.all(color: borderColor),
-          boxShadow: GardenShadows.card,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            // Photo
-            Stack(
-              children: [
-                GardenPetAvatar(
-                  name: name,
-                  imageUrl: photoUrl,
-                  species: animalType,
-                  size: 68,
-                  heroTag: 'pet-${pet['id']}',
-                ),
-                if (sterilized == true)
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: Container(
-                      width: 20, height: 20,
-                      decoration: BoxDecoration(
-                        color: GardenColors.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: surface, width: 1.5),
-                      ),
-                      child: const Center(
-                          child: GardenIcon(GIcon.enviado, color: Colors.white, size: GIconSize.xs,
-                              semanticLabel: 'Esterilizado')),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            // Info
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: GardenText.h4.copyWith(color: textColor, fontSize: 16)),
-              if (breed != null && breed.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(breed, style: GardenText.bodyMedium.copyWith(color: subtextColor)),
-              ],
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 4, children: [
-                if (animalType == 'DOGS') _pill('Perro', GardenColors.primary, GIcon.perro),
-                if (animalType == 'CATS') _pill('Gato', GardenColors.primary, GIcon.gato),
-                if (animalType == null || size == null)
-                  _pill('Completa especie y tamaño', GardenColors.warning, GIcon.advertencia),
-                if (age != null)
-                  _pill(age == 0 ? 'Menos de 1 año' : (age == 1 ? '1 año' : '$age años'), GardenColors.primary),
-                if (size != null && sizeLabels.containsKey(size))
-                  _pill(sizeLabels[size]!, GardenColors.primary, GIcon.huella),
-                if (isAggressive) _pill('Agresiva', GardenColors.error, GIcon.conflicto),
-                if (gender == 'MALE') _pill('Macho', GardenColors.textSecondary),
-                if (gender == 'FEMALE') _pill('Hembra', GardenColors.textSecondary),
-                if (weight != null) _pill('${weight.toString().replaceAll('.', ',')} kg', GardenColors.textSecondary),
-                if (specialNeeds != null && specialNeeds.isNotEmpty)
-                  _pill('Necesidades especiales', GardenColors.warning, GIcon.salud),
-                if (extraPhotos.isNotEmpty) _pill('${extraPhotos.length}', GardenColors.primary, GIcon.galeria),
-              ]),
-            ])),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(GardenRadius.sm),
-              ),
-              child: const GardenIcon(GIcon.editar, color: GardenColors.primary, size: GIconSize.sm,
-                  semanticLabel: 'Editar'),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _pill(String label, Color color, [GIcon? icon]) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      if (icon != null) ...[
-        GardenIcon(icon, color: color, size: GIconSize.xs, state: GIconState.active),
-        const SizedBox(width: 3),
-      ],
-      Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-    ]),
-  );
 }
