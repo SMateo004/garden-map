@@ -549,18 +549,7 @@ class _Page2Illustration extends StatelessWidget {
                 children: [
                   const SizedBox(height: 12),
                   // Ícono de candado dentro del escudo
-                  Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: GardenColors.success.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: GardenColors.success.withValues(alpha: 0.4),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, state: GIconState.active, color: GardenColors.success),
-                  ),
+                  GardenClay(size: 56, tint: GardenColors.success.withValues(alpha: 0.2), interactive: false, child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, state: GIconState.active, color: GardenColors.success)),
                   const SizedBox(height: 8),
                   Text(
                     '100% Seguro',
@@ -629,17 +618,9 @@ class _Page2Illustration extends StatelessWidget {
           ),
 
           // ── Checkmark flotante arriba ─────────────────────────
-          Positioned(
+          const Positioned(
             top: 0, left: 24,
-            child: Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                color: GardenColors.success,
-                shape: BoxShape.circle,
-                boxShadow: GardenShadows.primary,
-              ),
-              child: const GardenIcon(GIcon.hecho, size: GIconSize.sm, color: Colors.white),
-            ),
+            child: GardenClay(size: 28, color: GardenColors.success, interactive: false, child: GardenIcon(GIcon.hecho, size: GIconSize.sm, color: Colors.white)),
           ),
         ],
       ),
@@ -892,16 +873,9 @@ class _Page3Illustration extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(
-                      color: GardenColors.secondary.withValues(alpha: 0.15),
-                      borderRadius: GardenRadius.sm_,
-                    ),
-                    child: const Center(
+                  GardenClay(size: 28, tint: GardenColors.secondary.withValues(alpha: 0.15), circle: false, radius: GardenRadius.sm, interactive: false, child: const Center(
                       child: GardenIcon(GIcon.foto, size: GIconSize.sm, color: GardenColors.secondary, state: GIconState.active),
-                    ),
-                  ),
+                    )),
                   const SizedBox(width: 7),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -929,17 +903,9 @@ class _Page3Illustration extends StatelessWidget {
           // ── Corazón flotante (izquierda) ──────────────────────
           Positioned(
             left: 4, top: 60,
-            child: Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: GardenColors.error.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
-              ),
-              child: const Center(
+            child: GardenClay(size: 32, tint: GardenColors.error.withValues(alpha: 0.12), interactive: false, child: const Center(
                 child: GardenIcon(GIcon.favorito, size: GIconSize.sm, color: GardenColors.error, state: GIconState.active),
-              ),
-            ),
+              )),
           ),
         ],
       ),

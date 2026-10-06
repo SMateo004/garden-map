@@ -21,6 +21,7 @@ import '../service/meet_and_greet_screen.dart';
 import '../chat/chat_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_depth.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -411,15 +412,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 28),
-            Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                color: GardenColors.error.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: GardenColors.error.withValues(alpha: 0.3), width: 2),
-              ),
-              child: const GardenIcon(GIcon.cancelado, size: GIconSize.xl, color: GardenColors.error),
-            ),
+            GardenClay(size: 72, tint: GardenColors.error.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.cancelado, size: GIconSize.xl, color: GardenColors.error)),
             const SizedBox(height: 20),
             Text(
               'Cancelar reserva',
@@ -1240,7 +1233,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Meet & Greet confirmado',
+                                      const Text('Meet & Greet confirmado',
                                           style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
                                       Text(dateLabel,
                                           style: TextStyle(color: subtextColor, fontSize: 11)),
@@ -1298,13 +1291,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Widget _buildEmptyState(bool isDark) {
     switch (_selectedFilter) {
       case 'completadas':
-        return GardenEmptyState(
+        return const GardenEmptyState(
           type: GardenEmptyType.bookings,
           title: 'Sin reservas completadas',
           subtitle: 'Los servicios que hayas finalizado aparecerán aquí.',
         );
       case 'canceladas':
-        return GardenEmptyState(
+        return const GardenEmptyState(
           type: GardenEmptyType.bookings,
           title: 'Sin reservas canceladas',
           subtitle: 'Aquí verás las reservas que hayas cancelado.',

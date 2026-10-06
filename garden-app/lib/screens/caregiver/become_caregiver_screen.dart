@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../client/my_data_screen.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 class BecomeCaregiverScreen extends StatefulWidget {
   const BecomeCaregiverScreen({super.key});
@@ -75,7 +76,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                 color: GardenColors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(GardenRadius.sm),
               ),
-              child: GardenIcon(GIcon.perfil, size: GIconSize.md, color: GardenColors.warning),
+              child: const GardenIcon(GIcon.perfil, size: GIconSize.md, color: GardenColors.warning),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -104,7 +105,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  GardenIcon(GIcon.cancelado, size: GIconSize.sm, color: GardenColors.error),
+                  const GardenIcon(GIcon.cancelado, size: GIconSize.sm, color: GardenColors.error),
                   const SizedBox(width: 8),
                   Text(
                     field,
@@ -295,7 +296,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
           Expanded(child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Center(child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: kIsWeb ? 520.0 : double.infinity),
+          constraints: const BoxConstraints(maxWidth: kIsWeb ? 520.0 : double.infinity),
           child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -317,25 +318,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
               ),
               child: Column(
                 children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [GardenColors.primary, GardenColors.lime],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: GardenColors.primary.withValues(alpha: 0.30),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const GardenIcon(GIcon.favorito, size: GIconSize.xl, state: GIconState.active, color: Colors.white),
-                  ),
+                  const GardenClay(size: 72, color: GardenColors.primary, interactive: false, child: GardenIcon(GIcon.favorito, size: GIconSize.xl, state: GIconState.active, color: Colors.white)),
                   const SizedBox(height: 18),
                   Text(
                     'Cuida mascotas y\ngana dinero extra',

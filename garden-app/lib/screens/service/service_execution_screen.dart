@@ -1427,15 +1427,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Container(
-            width: 24, height: 24,
-            decoration: BoxDecoration(
-              color: GardenColors.success.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-              border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
-            ),
-            child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.success),
-          ),
+          GardenClay(size: 24, tint: GardenColors.success.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.success)),
           const SizedBox(width: 12),
           Text(text, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
@@ -1505,7 +1497,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           ],
           Row(
             children: [
-              GardenIcon(GIcon.ubicacion, size: GIconSize.sm, color: GardenColors.primary),
+              const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, color: GardenColors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -2595,12 +2587,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                     color: GardenColors.success.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(GardenRadius.full),
                                   ),
-                                  child: Row(
+                                  child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       _PulsingDot(size: 6, color: GardenColors.success),
-                                      const SizedBox(width: 5),
-                                      const Text('Activo',
+                                      SizedBox(width: 5),
+                                      Text('Activo',
                                         style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
@@ -2633,9 +2625,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   ),
                                 ),
                               ),
-                              GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.polygon),
+                              const GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.polygon),
                               const SizedBox(width: 4),
-                              Text('Pago en escrow',
+                              const Text('Pago en escrow',
                                 style: TextStyle(color: GardenColors.polygon, fontSize: 11.5, fontWeight: FontWeight.w600)),
                             ],
                           ),
@@ -3181,7 +3173,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             children: [
                               Row(
                                 children: [
-                                  _PulsingDot(size: 8),
+                                  const _PulsingDot(size: 8),
                                   const SizedBox(width: 8),
                                   Flexible(
                                     child: Text(
@@ -4082,12 +4074,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         borderRadius: BorderRadius.circular(GardenRadius.full),
                         border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
-                          const SizedBox(width: 6),
-                          const Text('Servicio verificado por GARDEN',
+                          GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
+                          SizedBox(width: 6),
+                          Text('Servicio verificado por GARDEN',
                             style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
                         ],
                       ),
@@ -5624,7 +5616,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Recursos de emergencia', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w900)),
-                        Text(incidentLabel, style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(incidentLabel, style: const TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
                     )),
                   ]),
@@ -5635,9 +5627,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       color: GardenColors.error.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Row(children: [
-                      const GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
-                      const SizedBox(width: 8),
+                    child: const Row(children: [
+                      GardenIcon(GIcon.confirmado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success),
+                      SizedBox(width: 8),
                       Text('El dueño ya fue notificado', style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
                     ]),
                   ),
@@ -5660,10 +5652,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            const GardenIcon(GIcon.info, size: GIconSize.sm, color: Color(0xFF00897B)),
-                            const SizedBox(width: 8),
-                            Text('Sin veterinarias geo-registradas aún', style: TextStyle(color: const Color(0xFF00897B), fontSize: 12, fontWeight: FontWeight.w700)),
+                          const Row(children: [
+                            GardenIcon(GIcon.info, size: GIconSize.sm, color: Color(0xFF00897B)),
+                            SizedBox(width: 8),
+                            Text('Sin veterinarias geo-registradas aún', style: TextStyle(color: Color(0xFF00897B), fontSize: 12, fontWeight: FontWeight.w700)),
                           ]),
                           const SizedBox(height: 10),
                           Text('Clínicas veterinarias de referencia — Bolivia:', style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -5948,14 +5940,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
             if (_surveyShowValidationError && commentRequired && _surveyCommentController.text.trim().isEmpty) ...[
               const SizedBox(height: 8),
-              Row(
+              const Row(
                 children: [
-                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
-                  const SizedBox(width: 6),
+                  GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
+                  SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Cuéntanos qué pasó para poder ayudarte con el reclamo',
-                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -5963,14 +5955,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ],
             if (_surveyShowValidationError && _surveyRating == 0) ...[
               const SizedBox(height: 8),
-              Row(
+              const Row(
                 children: [
-                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
-                  const SizedBox(width: 6),
+                  GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
+                  SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Selecciona una calificación de estrellas',
-                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -6317,14 +6309,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
             if (_caregiverSurveyShowValidationError && _caregiverSurveyRating == 0) ...[
               const SizedBox(height: 10),
-              Row(
+              const Row(
                 children: [
-                  const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
-                  const SizedBox(width: 6),
+                  GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
+                  SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Selecciona una calificación de estrellas para enviar',
-                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],

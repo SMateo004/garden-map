@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
 import '../design/garden_icons.dart';
+import '../design/garden_depth.dart';
 
 /// "Gancho" de ingresos estimados — mismo patrón que usa Uber para sostener
 /// motivación durante el registro ("ganá hasta $X en tu zona"). Usa los
@@ -61,12 +62,7 @@ class EstimatedEarningsBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(11)),
-            alignment: Alignment.center,
-            child: const GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active),
-          ),
+          const GardenClay(size: 38, color: GardenColors.primary, circle: false, radius: 11, interactive: false, child: GardenIcon(GIcon.billetera, size: GIconSize.sm, state: GIconState.active)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
