@@ -45,4 +45,13 @@ void main() {
     expect(find.text('Antecedentes revisados'), findsOneWidget);
     expect(find.text('Norte'), findsOneWidget);
   });
+
+  testWidgets('cifras del perfil en recuadros', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: GardenStatTiles(tiles: [('4,9', '3 reseñas'), ('41', 'servicios'), ('mar 2026', 'en GARDEN')], highlightFirst: true)),
+    ));
+    expect(find.text('4,9'), findsOneWidget);
+    expect(find.text('mar 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

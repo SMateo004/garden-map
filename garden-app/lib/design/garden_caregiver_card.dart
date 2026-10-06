@@ -226,3 +226,59 @@ class GardenCaregiverCard extends StatelessWidget {
     );
   }
 }
+
+/// Cifras del perfil del cuidador en recuadros ("4,9 · 3 reseñas",
+/// "41 · servicios"…), fáciles de leer de un vistazo.
+class GardenStatTiles extends StatelessWidget {
+  final List<(String, String)> tiles;
+
+  /// El primero lleva la estrella (calificación).
+  final bool highlightFirst;
+  const GardenStatTiles({super.key, required this.tiles, this.highlightFirst = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    return Row(children: [
+      for (var i = 0; i < tiles.length; i++) ...[
+        if (i > 0) const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border),
+            ),
+            child: Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                if (i == 0 && highlightFirst) ...[
+                  const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
+                  const SizedBox(width: 3),
+                ],
+                // Se achica en vez de cortarse ("mar 20…").
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(tiles[i].$1,
+                        maxLines: 1,
+                        style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 2),
+              Text(tiles[i].$2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: sub, fontSize: 11, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      ],
+    ]);
+  }
+}

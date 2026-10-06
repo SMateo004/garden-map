@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import '../../widgets/garden_empty_state.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_trust_seals.dart';
@@ -554,7 +555,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final name = (isCompany && (companyName?.isNotEmpty ?? false))
         ? companyName!
         : '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
-    final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
+    final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1).replaceAll('.', ',');
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
     final zone = _caregiver!['zone'] as String? ?? '';
     // bio ("Editar mi perfil") es opcional y solo lo ve el admin — el
@@ -708,8 +709,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Wrap(
                           spacing: 8, runSpacing: 8,
                           children: [
-                            if (verified) _verifiedBadge(),
-                            _paymentBadge(),
+
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -1109,21 +1109,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               const SizedBox(height: 4),
                               _zoneChip(zone, subtextColor, borderColor, surface),
                             ])),
-                            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                              Row(children: [
-                                const GardenIcon(GIcon.estrella, color: GardenColors.star, state: GIconState.active),
-                                const SizedBox(width: 4),
-                                Text(rating, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
-                              ]),
-                              if (reviewCount > 0) Text('$reviewCount reseñas', style: TextStyle(color: subtextColor, fontSize: 11)),
-                            ]),
                           ]),
                         ])),
-                      ]),
-                      const SizedBox(height: 16),
-                      Wrap(spacing: 8, runSpacing: 8, children: [
-                        if (verified) _verifiedBadge(),
-                        _paymentBadge(),
                       ]),
                       const SizedBox(height: 16),
                       _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),
@@ -1131,6 +1118,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       const SizedBox(height: 16),
                       _trustSeals(verified: verified, offersWalks: offersPaseo),
                       const SizedBox(height: 24),
+                      Divider(color: borderColor),
+                      const SizedBox(height: 20),
+                      _buildReviewsSection(textColor, subtextColor, surface, borderColor),
+                      const SizedBox(height: 4),
                       Divider(color: borderColor),
                       const SizedBox(height: 20),
                       // Servicios
@@ -1336,8 +1327,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         _buildPlacePhotosPreview(placePhotoSections, textColor, subtextColor, borderColor),
                         const SizedBox(height: 20),
                       ],
-                      Divider(color: borderColor), const SizedBox(height: 20),
-                      _buildReviewsSection(textColor, subtextColor, surface, borderColor),
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -1356,14 +1345,24 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08), blurRadius: 20, offset: const Offset(0, -4))],
               ),
               child: Row(children: [
-                // Solo muestra precio si ofrece UN solo servicio
-                if (!(offersHospedaje && offersPaseo)) ...[
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                    Text(priceDisplay, style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                    Text('precio por servicio', style: TextStyle(color: subtextColor, fontSize: 12)),
-                  ]),
-                  const SizedBox(width: 20),
-                ],
+                // Antes: "Bs 20/30 min · precio por servicio" sin decir de qué
+                // servicio, y "ofrece paseo" salía de si había un precio
+                // guardado, no de los servicios que ofrece de verdad.
+                ...() {
+                  final prices = caregiverPrices(_caregiver!);
+                  if (prices.isEmpty) return <Widget>[];
+                  final p0 = prices.first;
+                  final more = prices.length - 1;
+                  return [
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                      Text('${p0.service.label}${more > 0 ? ' y $more más' : ''}',
+                          style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                      Text('Bs ${p0.amount % 1 == 0 ? p0.amount.toInt() : p0.amount} / ${p0.unit}',
+                          style: TextStyle(color: textColor, fontSize: 19, fontWeight: FontWeight.w900)),
+                    ]),
+                    const SizedBox(width: 16),
+                  ];
+                }(),
                 Expanded(child: GardenButton(label: _reserveLabel, loading: _petsLoading, onPressed: _petsLoading ? null : _onReserve)),
               ]),
             ),
@@ -1519,29 +1518,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         caregiverFirstName: _caregiver?['isCompany'] == true ? null : _caregiver?['firstName'] as String?,
       );
 
-  Widget _verifiedBadge() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.success.withValues(alpha: 0.4))),
-    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-      GardenIcon(GIcon.verificado, color: GardenColors.success, size: GIconSize.sm, state: GIconState.active),
-      SizedBox(width: 6),
-      Text('Verificado por IA', style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
-    ]),
-  );
-
-  // Antes decía "Polygon Amoy" (nombre de la red de pruebas donde queda el
-  // registro). Para el dueño lo que importa es la garantía: el pago queda
-  // protegido hasta que termina el servicio, en todas las reservas.
-  Widget _paymentBadge() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4))),
-    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-      GardenIcon(GIcon.pagoProtegido, size: GIconSize.xs, color: GardenColors.primary, state: GIconState.active),
-      SizedBox(width: 6),
-      Text('Pago protegido', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-    ]),
-  );
-
   Widget _buildTrustBadges(Color subtextColor, {bool offersHospedaje = false, bool offersGuarderia = false}) {
     if (_caregiver == null) return const SizedBox.shrink();
     final ratingNum = (_caregiver!['rating'] as num? ?? 0).toDouble();
@@ -1559,11 +1535,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     // se muestra si el dato real lo respalda (nunca un badge inventado).
     if (ratingNum >= 4.8 && reviewCount >= 10) {
       badges.add({'icon': GIcon.favorito, 'label': 'Favorito de la zona', 'color': GardenColors.star});
-    } else {
-      if (reviewCount >= 10) badges.add({'icon': GIcon.estrella, 'label': '$reviewCount+ reseñas', 'color': GardenColors.star});
-      if (ratingNum >= 4.8) badges.add({'icon': GIcon.estrella, 'label': 'Muy bien calificado', 'color': GardenColors.star});
     }
-    // "Verificado IA" ya se muestra arriba con _verifiedBadge() — no repetirlo acá.
+    // La calificación y las reseñas ya van en las cifras de arriba
+    // (_buildTrustStats); identidad y pago protegido, en "Por qué confiar".
     // Antecedentes vive en GardenTrustSeals (siempre visible, mismo lugar).
     if (experienceYears >= 3) badges.add({'icon': GIcon.antecedentes, 'label': '$experienceYears años de experiencia', 'color': GardenColors.primary});
     if (sizesAccepted.length >= 4) badges.add({'icon': GIcon.huella, 'label': 'Todos los tamaños', 'color': GardenColors.primary});
@@ -1610,34 +1584,22 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final memberSinceStr = _caregiver!['memberSince'] as String?;
     final completedCount = _caregiver!['completedServicesCount'] as int? ?? 0;
     final responseRate = _caregiver!['responseRate'] as int?;
-    final acceptanceRate = _caregiver!['acceptanceRate'] as int?;
+    final rating = (_caregiver!['rating'] as num? ?? 0).toDouble();
+    final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
 
-    final items = <String>[];
     final memberSince = memberSinceStr != null ? DateTime.tryParse(memberSinceStr) : null;
-    if (memberSince != null) {
-      const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-      items.add('Cuidador desde ${months[memberSince.month - 1]} ${memberSince.year}');
-    }
-    if (completedCount > 0) {
-      items.add('$completedCount ${completedCount == 1 ? "servicio completado" : "servicios completados"}');
-    }
-    if (responseRate != null) items.add('$responseRate% tasa de respuesta');
-    if (acceptanceRate != null) items.add('$acceptanceRate% tasa de aceptación');
-    if (items.isEmpty) return const SizedBox.shrink();
-
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    final tiles = <(String, String)>[
+      reviewCount > 0
+          ? (rating.toStringAsFixed(1).replaceAll('.', ','), '$reviewCount ${reviewCount == 1 ? 'reseña' : 'reseñas'}')
+          : ('Nuevo', 'sin reseñas aún'),
+      if (completedCount > 0) ('$completedCount', completedCount == 1 ? 'servicio' : 'servicios'),
+      if (responseRate != null) ('$responseRate%', 'responde'),
+      if (memberSince != null) ('${months[memberSince.month - 1]} ${memberSince.year}', 'en GARDEN'),
+    ];
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (int i = 0; i < items.length; i++) ...[
-            if (i > 0) Text('·', style: TextStyle(color: subtextColor, fontSize: 12)),
-            Text(items[i], style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
-        ],
-      ),
+      padding: const EdgeInsets.only(top: 12),
+      child: GardenStatTiles(tiles: tiles, highlightFirst: reviewCount > 0),
     );
   }
 
@@ -1666,13 +1628,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(color: GardenColors.star.withValues(alpha: 0.06), borderRadius: GardenRadius.lg_, border: Border.all(color: GardenColors.star.withValues(alpha: 0.2))),
             child: Row(children: [
-              Text(rating.toStringAsFixed(1), style: const TextStyle(color: GardenColors.star, fontSize: 48, fontWeight: FontWeight.w800, height: 1, letterSpacing: -1)),
+              Text(rating.toStringAsFixed(1).replaceAll('.', ','), style: const TextStyle(color: GardenColors.star, fontSize: 48, fontWeight: FontWeight.w800, height: 1, letterSpacing: -1)),
               const SizedBox(width: 16),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: List.generate(5, (i) {
                   final filled = i < rating.floor();
                   final half = !filled && i < rating;
-                  return GardenIcon(half ? GIcon.estrella : (filled ? GIcon.estrella : GIcon.estrella), size: GIconSize.md, color: GardenColors.star);
+                  return GardenIcon(GIcon.estrella,
+                      size: GIconSize.md,
+                      state: filled || half ? GIconState.active : GIconState.idle,
+                      color: GardenColors.star);
                 })),
                 const SizedBox(height: 4),
                 Text('Calificación promedio', style: TextStyle(color: subtextColor, fontSize: 12)),
