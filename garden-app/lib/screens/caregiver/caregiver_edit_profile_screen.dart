@@ -15,6 +15,8 @@ import '../../services/cities_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_profile.dart';
+import '../../utils/person_validators.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -79,14 +81,111 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   @override
   void initState() {
     super.initState();
+    for (final c in [_bioController, _firstNameController, _lastNameController, _phoneController,
+        _streetCtrl, _bankAccountController, _bankHolderController]) {
+      c.addListener(_onFieldChanged);
+    }
     _initData();
   }
 
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Lo que le falta al perfil, en el orden de la pantalla (mismo criterio
+  /// que el registro: descripción de 50+, celular boliviano, dirección con
+  /// mapa y datos de cobro válidos para la modalidad elegida).
+  List<String> _missing() {
+    final m = <String>[];
+    final hasPhoto = _newPhotoBytes != null || ((_profile?['profilePhoto'] as String?)?.trim().isNotEmpty ?? false);
+    if (!hasPhoto) m.add('Foto de perfil');
+    if (_bioController.text.trim().length < 50) m.add('Descripción (50+ caracteres)');
+    if (_firstNameController.text.trim().isEmpty) m.add('Nombre');
+    if (_lastNameController.text.trim().isEmpty) m.add('Apellido');
+    if (PersonValidators.boPhone(_phoneController.text) != null) m.add('Teléfono');
+    if (_streetCtrl.text.trim().isEmpty) m.add('Calle');
+    if (_addressZone == null) m.add('Zona');
+    if (_addressLat == null || _addressLng == null) m.add('Ubicación en el mapa');
+    final payoutOk = _withdrawalMethod == 'QR_TRANSFER'
+        ? _qrInfo != null
+        : _selectedBankName.isNotEmpty &&
+            GardenBanks.validateAccount(_selectedBankType, _bankAccountController.text) == null &&
+            GardenBanks.validateHolder(_bankHolderController.text) == null;
+    if (!payoutOk) m.add('Datos de cobro');
+    return m;
+  }
+
+  static const _kSobreTi = {'Foto de perfil', 'Descripción (50+ caracteres)'};
+  static const _kPersonal = {'Nombre', 'Apellido', 'Teléfono'};
+  static const _kUbicacion = {'Calle', 'Zona', 'Ubicación en el mapa'};
+  static const _kCobro = {'Datos de cobro'};
+  static const _kTotal = 9;
+
+  static String _statusLabel(String? s) => switch (s) {
+        'APPROVED' => 'Perfil aprobado',
+        'PENDING_REVIEW' => 'En revisión',
+        'REJECTED' => 'Rechazado: revisa lo que falta',
+        'SUSPENDED' => 'Suspendido',
+        'DRAFT' => 'Borrador',
+        _ => 'Pendiente',
+      };
+
+  /// Foto editable (en modo edición) para el encabezado.
+  Widget _editableAvatar(double size) {
+    final firstName = _profile?['user']?['firstName'] as String? ?? _profile?['firstName'] as String? ?? 'C';
+    return Stack(
+      children: [
+        _newPhotoBytes != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(size / 2),
+                child: Image.memory(_newPhotoBytes!, width: size, height: size, fit: BoxFit.cover),
+              )
+            : GardenAvatar(
+                imageUrl: _profile?['profilePhoto'] as String?,
+                size: size,
+                initials: firstName.isNotEmpty ? firstName[0] : 'C',
+              ),
+        if (_isEditing)
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _pickProfilePhoto,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _completionHeader() {
+    final missing = _missing();
+    final first = _firstNameController.text.trim();
+    final last = _lastNameController.text.trim();
+    return GardenProfileCompletion(
+      avatar: _editableAvatar(76),
+      name: '$first $last'.trim(),
+      subtitle: _newPhotoBytes != null
+          ? 'Foto nueva: se guarda al tocar Guardar cambios'
+          : _statusLabel(_profile?['status'] as String?),
+      done: _kTotal - missing.length,
+      total: _kTotal,
+      missing: missing,
+    );
+  }
+
   Future<void> _initData() async {
-    String token = AuthState.token;
+    final token = AuthState.token;
+    // Antes: sin sesión se usaba un token de desarrollo escrito en el código
+    // (de un usuario concreto). Sin sesión no hay nada que mostrar.
     if (token.isEmpty) {
-      // Fallback a token de dev si no hay sesión
-      token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjOWViOGU0NS1hZTIwLTQyYTYtOGI5NC0wNmYzYTBiOTE4YjciLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJjOWViOGU0NS1hZTIwLTQyYTYtOGI5NC0wNmYzYTBiOTE4YjciLCJpYXQiOjE3NDI0MjI3MTYsImV4cCI6MTc0NTAxNDcxNn0.8mIu-oA7N_R2xWj4J5_vC_REj78Vp2LMTM7R_g_J8-w';
+      if (mounted) Navigator.of(context).maybePop();
+      return;
     }
     setState(() => _caregiverToken = token);
     await Future.wait([_loadProfile(), _loadWithdrawalInfo()]);
@@ -463,143 +562,119 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Sección 1 - Foto
-                      Center(
-                        child: Stack(
-                          children: [
-                            _newPhotoBytes != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image.memory(_newPhotoBytes!, width: 100, height: 100, fit: BoxFit.cover),
-                                )
-                              : GardenAvatar(
-                                  imageUrl: _profile?['profilePhoto'] as String?,
-                                  size: 100,
-                                  initials: (_profile?['firstName'] as String? ?? 'C')[0],
+                      // Antes: foto suelta, secciones separadas por líneas y el estado
+                      // del perfil al final. Ahora el avance arriba y cada sección
+                      // dice si está completa.
+                      _completionHeader(),
+                      const SizedBox(height: 16),
+                      Builder(builder: (_) {
+                        final missing = _missing();
+                        int n(Set<String> k) => missing.where(k.contains).length;
+                        return Column(children: [
+                          GardenFormSection(
+                            icon: GIcon.editar,
+                            title: 'Sobre ti',
+                            hint: 'Lo primero que leen los dueños en tu perfil.',
+                            missing: n(_kSobreTi),
+                            children: [
+                                // bioDetail (máx. 300): este campo se guarda en bio y en bioDetail a la vez.
+                                if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
+                                // Sección 2 - Información básica
+                                TextField(
+                                  controller: _bioController,
+                                  maxLines: 4,
+                                  readOnly: !_isEditing,
+                                  style: TextStyle(color: textColor),
+                                  decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                                 ),
-                            Positioned(
-                              bottom: 0, right: 0,
-                              child: IgnorePointer(
-                                ignoring: !_isEditing,
-                                child: GestureDetector(
-                                  onTap: _pickProfilePhoto,
-                                  child: Container(
-                                    width: 32, height: 32,
-                                    decoration: const BoxDecoration(
-                                      color: GardenColors.primary,
-                                      shape: BoxShape.circle,
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          GardenFormSection(
+                            icon: GIcon.ubicacion,
+                            title: 'Ubicación',
+                            hint: 'Define tu zona de servicio. Los dueños solo ven la zona, no tu calle.',
+                            missing: n(_kUbicacion),
+                            children: [
+                                IgnorePointer(
+                                  ignoring: !_isEditing,
+                                  child: Theme(
+                                    data: Theme.of(context).copyWith(
+                                      inputDecorationTheme: InputDecorationTheme(
+                                        filled: true,
+                                        fillColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+                                        hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      ),
                                     ),
-                                    child: const GardenIcon(GIcon.foto, size: GIconSize.sm, color: Colors.white),
+                                    child: AddressSection(
+                                      isDark: isDark,
+                                      textColor: textColor,
+                                      subtextColor: subtextColor,
+                                      borderColor: borderColor,
+                                      surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                                      streetController: _streetCtrl,
+                                      numberController: _numberCtrl,
+                                      apartmentController: _apartmentCtrl,
+                                      condominioController: _condominioCtrl,
+                                      referenceController: _referenceCtrl,
+                                      selectedZone: _addressZone,
+                                      onZoneChanged: (val) => setState(() => _addressZone = val),
+                                      initialCityId: _gardenCityId,
+                                      onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                                      onCityChangeReset: () => setState(() {
+                                        _addressLat = null;
+                                        _addressLng = null;
+                                        _streetCtrl.clear();
+                                        _numberCtrl.clear();
+                                        _apartmentCtrl.clear();
+                                        _condominioCtrl.clear();
+                                        _referenceCtrl.clear();
+                                      }),
+                                      addressLat: _addressLat,
+                                      addressLng: _addressLng,
+                                      isApartment: _isApartment,
+                                      purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
+                                      onMapResult: (result) => setState(() {
+                                        _addressLat = result.lat;
+                                        _addressLng = result.lng;
+                                      }),
+                                      onApartmentToggle: (val) => setState(() => _isApartment = val),
+                                    ),
                                   ),
                                 ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          GardenFormSection(
+                            icon: GIcon.perfil,
+                            title: 'Datos personales',
+                            missing: n(_kPersonal),
+                            children: [
+                              IgnorePointer(
+                                ignoring: !_isEditing,
+                                child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_newPhotoBytes != null)
-                        const Center(
-                          child: Text('Nueva foto seleccionada',
-                            style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ),
-                      const Divider(height: 32),
-
-                      // bioDetail (máx. 300): este campo se guarda en bio y en bioDetail a la vez.
-                      if (_isEditing) AiWriteAssist(controller: _bioController, field: 'bioDetail', onApplied: () => setState(() {})),
-                      // Sección 2 - Información básica
-                      Text('Sobre ti', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _bioController,
-                        maxLines: 4,
-                        readOnly: !_isEditing,
-                        style: TextStyle(color: textColor),
-                        decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
-                      ),
-                      const Divider(height: 32),
-
-                      // Sección 3 - Dirección detallada
-                      Text('Ubicación', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tu dirección es usada para mostrar tu zona de servicio y calcular distancias.',
-                        style: TextStyle(color: subtextColor, fontSize: 12),
-                      ),
-                      const SizedBox(height: 14),
-                      IgnorePointer(
-                        ignoring: !_isEditing,
-                        child: Theme(
-                          data: Theme.of(context).copyWith(
-                            inputDecorationTheme: InputDecorationTheme(
-                              filled: true,
-                              fillColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
-                              hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            ),
+                            ],
                           ),
-                          child: AddressSection(
-                            isDark: isDark,
-                            textColor: textColor,
-                            subtextColor: subtextColor,
-                            borderColor: borderColor,
-                            surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                            streetController: _streetCtrl,
-                            numberController: _numberCtrl,
-                            apartmentController: _apartmentCtrl,
-                            condominioController: _condominioCtrl,
-                            referenceController: _referenceCtrl,
-                            selectedZone: _addressZone,
-                            onZoneChanged: (val) => setState(() => _addressZone = val),
-                            initialCityId: _gardenCityId,
-                            onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
-                            onCityChangeReset: () => setState(() {
-                              _addressLat = null;
-                              _addressLng = null;
-                              _streetCtrl.clear();
-                              _numberCtrl.clear();
-                              _apartmentCtrl.clear();
-                              _condominioCtrl.clear();
-                              _referenceCtrl.clear();
-                            }),
-                            addressLat: _addressLat,
-                            addressLng: _addressLng,
-                            isApartment: _isApartment,
-                            purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
-                            onMapResult: (result) => setState(() {
-                              _addressLat = result.lat;
-                              _addressLng = result.lng;
-                            }),
-                            onApartmentToggle: (val) => setState(() => _isApartment = val),
+                          const SizedBox(height: 14),
+                          GardenFormSection(
+                            icon: GIcon.retiro,
+                            title: 'Datos de cobro',
+                            hint: 'A dónde enviamos tus ganancias cuando retiras.',
+                            missing: n(_kCobro),
+                            children: [
+                              IgnorePointer(
+                                ignoring: !_isEditing,
+                                child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      const Divider(height: 32),
-
-                      IgnorePointer(
-                        ignoring: !_isEditing,
-                        child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
-                      ),
-                      const Divider(height: 32),
-
-                      // Sección — Datos de cobro
-                      IgnorePointer(
-                        ignoring: !_isEditing,
-                        child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark),
-                      ),
-                      const Divider(height: 32),
-
-                      // Sección — Estado
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Estado del perfil', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                          _statusBadge(_profile?['status'] ?? ''),
-                        ],
-                      ),
+                        ]);
+                      }),
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -619,9 +694,6 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     Color subtextColor,
     Color borderColor,
   ) {
-    final firstName = _profile?['user']?['firstName'] as String? ?? _profile?['firstName'] as String? ?? 'Cuidador';
-    final lastName  = _profile?['user']?['lastName']  as String? ?? _profile?['lastName']  as String? ?? '';
-
     return Scaffold(
       backgroundColor: bg,
       body: Column(
@@ -705,10 +777,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // ── Profile header card ────────────────────────
-                            _buildWebProfileHeaderCard(
-                              surface, borderColor, textColor, subtextColor, isDark,
-                              firstName, lastName,
-                            ),
+                            _completionHeader(),
                             const SizedBox(height: 20),
 
                             // ── Two-column main content ────────────────────
@@ -724,6 +793,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Sobre ti',
+                                          badge: _missing().where(_kSobreTi.contains).isEmpty ? 'Completo' : 'Falta ${_missing().where(_kSobreTi.contains).length}',
+                                          badgeColor: _missing().where(_kSobreTi.contains).isEmpty ? GardenColors.success : GardenColors.warning,
                                           icon: GIcon.editar,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -744,6 +815,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Ubicación',
+                                          badge: _missing().where(_kUbicacion.contains).isEmpty ? 'Completo' : 'Falta ${_missing().where(_kUbicacion.contains).length}',
+                                          badgeColor: _missing().where(_kUbicacion.contains).isEmpty ? GardenColors.success : GardenColors.warning,
                                           icon: GIcon.ubicacion,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
@@ -808,6 +881,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Información personal',
+                                          badge: _missing().where(_kPersonal.contains).isEmpty ? 'Completo' : 'Falta ${_missing().where(_kPersonal.contains).length}',
+                                          badgeColor: _missing().where(_kPersonal.contains).isEmpty ? GardenColors.success : GardenColors.warning,
                                           icon: GIcon.perfil,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
@@ -817,22 +892,12 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Datos de cobro',
+                                          badge: _missing().where(_kCobro.contains).isEmpty ? 'Completo' : 'Falta ${_missing().where(_kCobro.contains).length}',
+                                          badgeColor: _missing().where(_kCobro.contains).isEmpty ? GardenColors.success : GardenColors.warning,
                                           icon: GIcon.retiro,
                                           child: IgnorePointer(
                                             ignoring: !_isEditing,
                                             child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
-                                          )),
-                                        const SizedBox(height: 16),
-                                        _webCard(
-                                          surface, borderColor, textColor,
-                                          title: 'Estado del perfil',
-                                          icon: GIcon.verificado,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text('Estado actual', style: TextStyle(color: subtextColor, fontSize: 13)),
-                                              _statusBadge(_profile?['status'] ?? ''),
-                                            ],
                                           )),
                                       ],
                                     ),
@@ -910,76 +975,6 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebProfileHeaderCard(
-    Color surface, Color borderColor, Color textColor, Color subtextColor,
-    bool isDark, String firstName, String lastName,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          // Avatar with camera overlay
-          Stack(
-            children: [
-              _newPhotoBytes != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(36),
-                      child: Image.memory(_newPhotoBytes!, width: 72, height: 72, fit: BoxFit.cover),
-                    )
-                  : GardenAvatar(
-                      imageUrl: _profile?['profilePhoto'] as String?,
-                      size: 72,
-                      initials: firstName.isNotEmpty ? firstName[0] : 'C',
-                    ),
-              Positioned(
-                bottom: 0, right: 0,
-                child: IgnorePointer(
-                  ignoring: !_isEditing,
-                  child: GestureDetector(
-                    onTap: _pickProfilePhoto,
-                    child: Container(
-                      width: 24, height: 24,
-                      decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                      child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$firstName $lastName'.trim(),
-                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                if (_newPhotoBytes != null)
-                  const Text(
-                    'Nueva foto seleccionada — se guardará al presionar "Guardar cambios"',
-                    style: TextStyle(color: GardenColors.success, fontSize: 11),
-                  )
-                else
-                  Text(
-                    'Haz clic en la cámara para cambiar tu foto de perfil',
-                    style: TextStyle(color: subtextColor, fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -1395,20 +1390,6 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     );
   }
 
-  Widget _statusBadge(String status) {
-    Color color;
-    String label;
-    switch (status) {
-      case 'APPROVED': color = GardenColors.success; label = 'Aprobado'; break;
-      case 'PENDING_REVIEW': color = GardenColors.warning; label = 'Pendiente'; break;
-      case 'REJECTED': color = GardenColors.error; label = 'Rechazado'; break;
-      case 'DRAFT': color = GardenColors.textHint; label = 'Borrador'; break;
-      case 'SUSPENDED': color = GardenColors.error; label = 'Suspendido'; break;
-      default: color = GardenColors.textHint; label = 'Pendiente';
-    }
-    return GardenBadge(text: label, color: color, fontSize: 12);
-  }
-
   Widget _buildPersonalInfoSection(Color textColor, Color subtextColor, bool isDark) {
     bool isVerified = _profile?['identityVerificationStatus'] == 'VERIFIED';
     bool isPhoneVerified = _profile?['phoneVerified'] == true;
@@ -1416,10 +1397,9 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // El título lo pone la sección que la contiene; acá solo el sello.
         Row(
           children: [
-            Text('Información personal',
-              style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
             const Spacer(),
             if (isVerified)
               Container(
