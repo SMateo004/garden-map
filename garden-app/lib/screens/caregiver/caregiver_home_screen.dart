@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../design/garden_booking_hero_card.dart';
+import '../../design/garden_bookings.dart';
+import '../../design/garden_payment.dart';
+import '../../design/garden_wallet.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../narrative/booking_story.dart';
@@ -44,6 +48,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   // Estado base
   Map<String, dynamic>? _availability;
   List<Map<String, dynamic>> _bookings = [];
+  String _bookingFilter = 'todas'; // todas | responder | proximas | pasadas
   bool _isLoading = true;
   bool _isAbandoningConversion = false;
   bool _setupPending = false; // true = show resume-registration screen
@@ -1300,7 +1305,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final dateStr     = booking['walkDate']    as String? ?? booking['startDate'] as String?;
     final startTime   = booking['startTime']   as String?;
     final net = _caregiverNetAmount(booking);
-    final isPaseo     = serviceType == 'PASEO';
     final bookingId   = booking['id'] as String? ?? '';
 
     // Multi-day paseo support
@@ -1395,7 +1399,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Wrap(
                   spacing: 6,
                   children: [
-                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', GIcon.huella, subtextColor, borderColor),
+                    _infoChip((GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label, GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
                     if (!isMultiDayPending && startTime != null)
@@ -1541,7 +1545,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final dateStr     = booking['walkDate'] as String? ?? booking['startDate'] as String?;
     final startTime   = booking['startTime'] as String?;
     final bookingId   = booking['id'] as String? ?? '';
-    final isPaseo     = serviceType == 'PASEO';
     final net         = _caregiverNetAmount(booking);
 
     // Multi-day paseo support
@@ -1667,7 +1670,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Wrap(
                   spacing: 6,
                   children: [
-                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', GIcon.huella, subtextColor, borderColor),
+                    _infoChip((GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label, GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
                     if (!isMultiDay && startTime != null)
@@ -1907,7 +1910,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje'} · ${_formatNextDate(dateStr)}${startTime != null ? ' · $startTime' : ''}',
+                  '${(GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label} · ${_formatNextDate(dateStr)}${startTime != null ? ' · $startTime' : ''}',
                   style: TextStyle(color: subtextColor, fontSize: 12),
                 ),
               ],
@@ -3095,95 +3098,102 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  static const _toAnswer = {'WAITING_CAREGIVER_APPROVAL'};
+  static const _ahead = {'PENDING_MG', 'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'CONFIRMED', 'IN_PROGRESS', 'SLOT_CONFLICT'};
+
+  List<Map<String, dynamic>> _bookingsFor(String f) => switch (f) {
+        'responder' => _bookings.where((b) => _toAnswer.contains(b['status'])).toList(),
+        'proximas' => _bookings.where((b) => _ahead.contains(b['status'])).toList(),
+        'pasadas' => _bookings.where((b) => !_toAnswer.contains(b['status']) && !_ahead.contains(b['status'])).toList(),
+        _ => _bookings,
+      };
+
+  /// Reservas del cuidador: "Por responder" arriba (tienen plazo), luego en
+  /// curso, próximas y pasadas por mes. Antes era una lista plana sin orden
+  /// por momento ni filtros, igual en celular y en web.
   Widget _buildBookings() {
-    if (kIsWeb) {
-      return _buildBookingsWeb();
-    }
-    if (_bookings.isEmpty) {
-      return const GardenEmptyState(
-        type: GardenEmptyType.bookings,
-        title: 'Sin reservas por ahora',
-        subtitle: 'Cuando los dueños reserven tus servicios, tus reservas aparecerán aquí.',
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: _bookings.length,
-      itemBuilder: (context, index) {
-        return _buildFullBookingCard(_bookings[index]);
-      },
-    );
-  }
-
-  Widget _buildBookingsWeb() {
     final isDark = themeNotifier.isDark;
-    final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final list = _bookingsFor(_bookingFilter);
+    final pad = kIsWeb ? 32.0 : 16.0;
 
-    // Header section (not scrollable)
-    Widget header = Padding(
-      padding: const EdgeInsets.fromLTRB(32, 28, 32, 0),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Mis Reservas',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${_bookings.length} reserva${_bookings.length == 1 ? '' : 's'} en total',
-                style: TextStyle(fontSize: 13, color: subtextColor),
-              ),
-              const SizedBox(height: 20),
-            ],
+    Widget constrained(Widget child) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SizedBox(width: double.infinity, child: child),
           ),
-        ),
-      ),
-    );
-
-    if (_bookings.isEmpty) {
-      return Column(
-        children: [
-          header,
-          const Expanded(
-            child: GardenEmptyState(
-              type: GardenEmptyType.bookings,
-              title: 'Sin reservas por ahora',
-              subtitle: 'Cuando los dueños reserven tus servicios, tus reservas aparecerán aquí.',
-            ),
-          ),
-        ],
-      );
-    }
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        header,
+        constrained(Padding(
+          padding: EdgeInsets.fromLTRB(pad, kIsWeb ? 24 : 14, pad, 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (kIsWeb) ...[
+              Text('Mis reservas',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.4)),
+              const SizedBox(height: 2),
+              Text('${_bookings.length} reserva${_bookings.length == 1 ? '' : 's'} en total',
+                  style: TextStyle(fontSize: 13, color: subtextColor)),
+              const SizedBox(height: 14),
+            ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: GardenFilterPills<String>(
+                options: [
+                  for (final (v, label) in const [
+                    ('todas', 'Todas'),
+                    ('responder', 'Por responder'),
+                    ('proximas', 'Próximas'),
+                    ('pasadas', 'Pasadas'),
+                  ])
+                    (v, v == 'todas' ? label : '$label ${_bookingsFor(v).length}'),
+                ],
+                selected: _bookingFilter,
+                onSelect: (v) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _bookingFilter = v);
+                },
+              ),
+            ),
+          ]),
+        )),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 32),
-            itemCount: _bookings.length,
-            itemBuilder: (context, index) {
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: _buildFullBookingCard(_bookings[index]),
+          child: RefreshIndicator(
+            color: GardenColors.primary,
+            onRefresh: _loadBookings,
+            child: list.isEmpty
+                ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+                    const SizedBox(height: 40),
+                    GardenEmptyState(
+                      type: GardenEmptyType.bookings,
+                      title: _bookings.isEmpty ? 'Sin reservas por ahora' : 'Nada por aquí con este filtro',
+                      subtitle: _bookings.isEmpty
+                          ? 'Cuando los dueños reserven tus servicios, tus reservas aparecerán aquí.'
+                          : 'Prueba con "Todas" para ver todas tus reservas.',
+                    ),
+                  ])
+                : ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(top: 6, bottom: 32),
+                    children: [
+                      for (final g in groupBookings(list, caregiverView: true)) ...[
+                        constrained(Padding(
+                          padding: EdgeInsets.symmetric(horizontal: kIsWeb ? pad + 16 : pad),
+                          child: GardenListHeader(g.title,
+                              count: g.bookings.length > 1 ? g.bookings.length : null, emphasis: g.emphasis),
+                        )),
+                        for (final b in g.bookings)
+                          constrained(Padding(
+                            padding: EdgeInsets.symmetric(horizontal: kIsWeb ? pad : 0),
+                            child: _buildFullBookingCard(b),
+                          )),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
                   ),
-                ),
-              );
-            },
           ),
         ),
       ],
@@ -4029,20 +4039,20 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          booking['serviceType'] == 'PASEO'
-                              ? 'Paseo'
-                              : booking['serviceType'] == 'GUARDERIA'
-                                  ? 'Guardería'
-                                  : 'Hospedaje',
+                          bookingServiceLine(Map<String, dynamic>.from(booking)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: widget.textColor, fontSize: 15, fontWeight: FontWeight.w700),
                         ),
+                        // Antes: "Luna · 2026-10-07 09:00" (fecha cruda).
                         Text(
                           () {
                             final pet = booking['petName'] ?? '—';
-                            final rawDate = (booking['walkDate'] ?? booking['startDate'] ?? '—').toString().split('T')[0];
-                            final st = (booking['startTime'] ?? '').toString().trim();
-                            return st.isNotEmpty ? '$pet · $rawDate $st' : '$pet · $rawDate';
+                            final when = paymentWhenLabel({...Map<String, dynamic>.from(booking), 'duration': null});
+                            return when == null ? '$pet' : '$pet · $when';
                           }(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: widget.subtextColor, fontSize: 13),
                         ),
                       ],

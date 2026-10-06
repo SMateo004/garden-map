@@ -20,6 +20,17 @@ void main() {
     expect(groups[2].bookings.single['id'], 'pasada-oct');
   });
 
+  test('cuidador: las solicitudes por responder van aparte y primero', () {
+    final groups = groupBookings([
+      {'id': 'conf', 'status': 'CONFIRMED', 'walkDate': '2026-10-07'},
+      {'id': 'pedido', 'status': 'WAITING_CAREGIVER_APPROVAL', 'walkDate': '2026-10-09'},
+      {'id': 'ahora', 'status': 'IN_PROGRESS', 'walkDate': '2026-10-05'},
+    ], now: now, caregiverView: true);
+    expect(groups.map((g) => g.title).toList(), ['Por responder', 'En curso', 'Próximas']);
+    expect(groups.first.bookings.single['id'], 'pedido');
+    expect(groups.last.bookings.single['id'], 'conf');
+  });
+
   test('línea de servicio corta', () {
     expect(bookingServiceLine({'serviceType': 'PASEO', 'duration': 60}), 'Paseo · 60 min');
     expect(bookingServiceLine({'serviceType': 'GUARDERIA', 'duration': 240}), 'Guardería · 4 h');

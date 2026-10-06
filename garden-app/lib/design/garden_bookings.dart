@@ -26,14 +26,18 @@ class BookingGroup {
   const BookingGroup(this.title, this.bookings, {this.emphasis = false});
 }
 
-List<BookingGroup> groupBookings(List<Map<String, dynamic>> list, {DateTime? now}) {
+/// [caregiverView]: las solicitudes que esperan respuesta del cuidador van
+/// aparte, arriba de todo ("Por responder"), porque tienen plazo.
+List<BookingGroup> groupBookings(List<Map<String, dynamic>> list, {DateTime? now, bool caregiverView = false}) {
   DateTime start(Map<String, dynamic> b) =>
       BookingStoryContext.bookingStart(b) ??
       DateTime.tryParse(b['createdAt'] as String? ?? '')?.toLocal() ??
       DateTime(2000);
 
   final live = list.where((b) => _liveStatuses.contains(b['status'])).toList();
-  final upcoming = list.where((b) => _upcomingStatuses.contains(b['status'])).toList()
+  bool toAnswer(Map<String, dynamic> b) => caregiverView && b['status'] == 'WAITING_CAREGIVER_APPROVAL';
+  final answer = list.where(toAnswer).toList()..sort((a, b) => start(a).compareTo(start(b)));
+  final upcoming = list.where((b) => _upcomingStatuses.contains(b['status']) && !toAnswer(b)).toList()
     ..sort((a, b) => start(a).compareTo(start(b)));
   final past = list
       .where((b) => !_liveStatuses.contains(b['status']) && !_upcomingStatuses.contains(b['status']))
@@ -41,6 +45,7 @@ List<BookingGroup> groupBookings(List<Map<String, dynamic>> list, {DateTime? now
     ..sort((a, b) => start(b).compareTo(start(a)));
 
   final groups = <BookingGroup>[
+    if (answer.isNotEmpty) BookingGroup('Por responder', answer, emphasis: true),
     if (live.isNotEmpty) BookingGroup('En curso', live, emphasis: true),
     if (upcoming.isNotEmpty) BookingGroup('Próximas', upcoming),
   ];
