@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_availability.dart';
 import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_bookings.dart';
 import '../../design/garden_payment.dart';
@@ -2237,11 +2238,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    final now = DateTime.now();
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    // Los conteos son del mes que muestra el calendario: antes siempre
+    // contaban el mes actual aunque se estuviera mirando otro.
+    final shown = _calendarMonth;
+    final daysInMonth = DateTime(shown.year, shown.month + 1, 0).day;
     int availableCount = 0, blockedCount = 0, bookedCount = 0;
     for (int i = 1; i <= daysInMonth; i++) {
-      final ds = '${now.year}-${now.month.toString().padLeft(2,'0')}-${i.toString().padLeft(2,'0')}';
+      final ds = '${shown.year}-${shown.month.toString().padLeft(2,'0')}-${i.toString().padLeft(2,'0')}';
       final s = _dayStatus[ds] ?? 'available';
       if (s == 'blocked') blockedCount++;
       else if (s == 'booked') bookedCount++;
@@ -2298,24 +2301,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     Widget controlsSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          _availStatChip('$availableCount disponibles', GardenColors.success),
-          const SizedBox(width: 8),
-          _availStatChip('$blockedCount bloqueados', GardenColors.error),
-          const SizedBox(width: 8),
-          _availStatChip('$bookedCount reservados', GardenColors.primary),
-        ]),
+        // Qué ve un dueño hoy, dicho en una frase, y el mes que se está mirando.
+        GardenAvailabilitySummary(
+          schedule: _availability?['defaultSchedule'] as Map?,
+          monthLabel: _monthName(_calendarMonth),
+          available: availableCount,
+          blocked: blockedCount,
+          booked: bookedCount,
+        ),
         const SizedBox(height: 24),
-        Text('Días disponibles', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 3),
-        Text('Activa los días en que puedes recibir servicios', style: TextStyle(color: subtextColor, fontSize: 12)),
-        const SizedBox(height: 12),
+        const GardenPaySectionTitle(GIcon.calendario, 'Qué días trabajas',
+            hint: 'Para un día puntual, tócalo en el calendario y bloquéalo.'),
         _buildDayTypeToggles(textColor, subtextColor, borderColor, surface),
         const SizedBox(height: 24),
-        Text('Horarios habituales', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 3),
-        Text('Toca para activar/desactivar · Toca "Editar hora" para cambiar rango', style: TextStyle(color: subtextColor, fontSize: 12)),
-        const SizedBox(height: 12),
+        const GardenPaySectionTitle(GIcon.reloj, 'En qué horarios',
+            hint: 'Activa los turnos en que haces paseos y toca "Editar hora" para ajustar el rango.'),
         _buildScheduleBlockCards(textColor, subtextColor, borderColor, surface),
       ],
     );
@@ -2385,7 +2385,15 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             const SizedBox(height: 16),
             controlsSection,
             const SizedBox(height: 28),
-            calendarSection,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: GardenRadius.lg_,
+                border: Border.all(color: borderColor),
+              ),
+              child: calendarSection,
+            ),
           ],
         ),
       ),
@@ -2480,22 +2488,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
-  Widget _availStatChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-    );
-  }
-
-  /// Cambia el mes mostrado en el calendario y, si el nuevo mes cae fuera de
-  /// la ventana ya cargada (más de 90 días desde hoy), refresca la
-  /// disponibilidad desde el servidor para que los overrides de ese mes no se
-  /// muestren como "disponible" por defecto sin datos reales detrás.
   Future<void> _navigateCalendarMonth(int deltaMonths) async {
     setState(() => _calendarMonth =
         DateTime(_calendarMonth.year, _calendarMonth.month + deltaMonths));
