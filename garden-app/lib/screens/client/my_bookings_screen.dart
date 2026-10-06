@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../design/garden_bookings.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_payment.dart';
+import '../../design/garden_wallet.dart';
 import '../../design/garden_pet_avatar.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_status_pill.dart';
@@ -286,21 +290,23 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return _hasActiveQr(b);
   }
 
-  List<Map<String, dynamic>> get _filteredBookings {
+  List<Map<String, dynamic>> get _filteredBookings => _bookingsFor(_selectedFilter);
+
+  List<Map<String, dynamic>> _bookingsFor(String filter) {
     // Only show PENDING_PAYMENT bookings that have an active QR;
     // hide those without QR or with an expired one.
     final visible = _bookings.where(_shouldShowBooking).toList();
-    if (_selectedFilter == 'todas') return visible;
-    if (_selectedFilter == 'activas') {
+    if (filter == 'todas') return visible;
+    if (filter == 'activas') {
       return visible.where((b) => [
         'PENDING_MG', 'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL',
         'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'
       ].contains(b['status'])).toList();
     }
-    if (_selectedFilter == 'completadas') {
+    if (filter == 'completadas') {
       return visible.where((b) => b['status'] == 'COMPLETED').toList();
     }
-    if (_selectedFilter == 'canceladas') {
+    if (filter == 'canceladas') {
       return visible.where((b) => ['CANCELLED', 'REJECTED_BY_CAREGIVER'].contains(b['status'])).toList();
     }
     return visible;
@@ -554,44 +560,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return '$day a las $hh:$mm';
   }
 
-  Widget _filterPill(String label, String value, bool isDark) {
-    final isSelected = _selectedFilter == value;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? GardenColors.primary
-              : (isDark
-                  ? GardenColors.primary.withValues(alpha: 0.10)
-                  : GardenColors.lime.withValues(alpha: 0.70)),
-          borderRadius: BorderRadius.circular(GardenRadius.full),
-          boxShadow: isSelected
-              ? [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : GardenColors.primary,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-
   static String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   Widget _buildBookingCard(Map<String, dynamic> booking, bool isDark) {
     final status = booking['status'] as String;
     final serviceType = booking['serviceType'] as String? ?? '';
     final isPaseo = serviceType == 'PASEO';
-    final isGuarderia = serviceType == 'GUARDERIA';
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -776,90 +750,49 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             ),
             Divider(height: 1, color: borderColor),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
                 children: [
+                  // Qué, cuándo y cuánto en una sola fila. Antes: el nombre de
+                  // la mascota repetido (ya está en el titular), la fecha en
+                  // otra columna y el total en una caja aparte.
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: (svc ?? GardenService.paseo).soft(isDark),
                           borderRadius: BorderRadius.circular(GardenRadius.md),
                         ),
                         child: GardenIcon(GIcon.forService(svc ?? GardenService.paseo),
-                            size: GIconSize.lg, state: GIconState.active),
+                            size: GIconSize.md, state: GIconState.active),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(booking['petName'] ?? 'Mascota',
-                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                            Text(bookingServiceLine(booking),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
                             Text(
-                              isPaseo
-                                  ? 'Paseo de ${booking['duration']} min'
-                                  : isGuarderia
-                                      ? 'Guardería ${(booking['duration'] as num? ?? 0) ~/ 60}h'
-                                      : 'Hospedaje',
-                              style: TextStyle(color: subtextColor, fontSize: 12),
+                              _capitalize(paymentWhenLabel({...booking, 'duration': null}) ?? '—'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: subtextColor, fontSize: 12.5),
                             ),
                           ],
                         ),
                       ),
-                      // Flexible evita overflow cuando la fecha/texto es largo
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              storyCtx.start != null
-                                  ? _capitalize(BookingStory.whenLabel(storyCtx.start!, now: DateTime.now())
-                                      .replaceFirst(RegExp(r' a las? \d+:\d+$'), ''))
-                                  : (isPaseo || isGuarderia)
-                                      ? (booking['walkDate'] ?? '').toString().split('T')[0]
-                                      : (booking['startDate'] ?? '').toString().split('T')[0],
-                              style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              (isPaseo || isGuarderia)
-                                  ? (() {
-                                      final st = (booking['startTime'] ?? '').toString().trim();
-                                      if (st.isNotEmpty) return st;
-                                      // fallback: translate slot name
-                                      switch ((booking['timeSlot'] ?? '').toString()) {
-                                        case 'MANANA': return 'Mañana';
-                                        case 'TARDE':  return 'Tarde';
-                                        case 'NOCHE':  return 'Noche';
-                                        default:       return (booking['timeSlot'] ?? '').toString();
-                                      }
-                                    })()
-                                  : '${booking['totalDays'] ?? 0} noches',
-                              style: TextStyle(color: subtextColor, fontSize: 11),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                      const SizedBox(width: 8),
+                      GardenAmount(
+                        double.tryParse(booking['totalAmount']?.toString() ?? ''),
+                        size: 19,
+                        color: textColor,
+                        animate: false,
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(GardenRadius.md),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Total', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
-                        Text('Bs ${booking['totalAmount']}',
-                            style: GardenText.price.copyWith(fontSize: 17)),
-                      ],
-                    ),
                   ),
                 Builder(builder: (_) {
                   final exts = (booking['serviceEvents'] as List<dynamic>? ?? [])
@@ -1116,52 +1049,61 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   // (fotos, distancia recorrida, resumen) en
                   // service_execution_screen.dart, solo faltaba el link
                   // para llegar a ella una vez COMPLETED.
-                  if (status == 'COMPLETED') ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => context.push(
-                        '/service/${booking['id']}',
-                        extra: {'role': 'CLIENT', 'token': _clientToken},
-                      ),
-                      icon: const GardenIcon(GIcon.recibo, size: GIconSize.sm, inheritColor: true),
-                      label: const Text('Ver resumen del servicio', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        minimumSize: const Size(double.infinity, 40),
-                      ),
-                    ),
-                  ],
                   // "Reservar de nuevo" — precarga el mismo cuidador,
                   // servicio Y mascota (la misma que se usó en esta reserva,
                   // no la primera del cliente por defecto) — fecha/hora se
                   // eligen frescas, eso sí, booking_screen.dart las auto-carga
                   // con caregiverId+serviceType+petId.
-                  if (status == 'COMPLETED' && booking['caregiverId'] != null) ...[
+                  // Resumen y "Reservar de nuevo" lado a lado (antes apilados).
+                  if (status == 'COMPLETED') ...[
                     const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => context.push(
-                        '/booking/${booking['caregiverId']}',
-                        extra: {
-                          'serviceType': booking['serviceType'],
-                          if (booking['petId'] != null) 'petId': booking['petId'],
-                        },
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push(
+                            '/service/${booking['id']}',
+                            extra: {'role': 'CLIENT', 'token': _clientToken},
+                          ),
+                          icon: const GardenIcon(GIcon.recibo, size: GIconSize.sm, inheritColor: true),
+                          label: const Text('Ver resumen', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GardenColors.primary,
+                            side: const BorderSide(color: GardenColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: const Size(0, 40),
+                          ),
+                        ),
                       ),
-                      icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
-                      label: const Text('Reservar de nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        minimumSize: const Size(double.infinity, 40),
-                      ),
-                    ),
+                      if (booking['caregiverId'] != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => context.push(
+                              '/booking/${booking['caregiverId']}',
+                              extra: {
+                                'serviceType': booking['serviceType'],
+                                if (booking['petId'] != null) 'petId': booking['petId'],
+                              },
+                            ),
+                            icon: const GardenIcon(GIcon.repetir, size: GIconSize.sm, inheritColor: true),
+                            label: const Text('Reservar de nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: GardenColors.primary,
+                              side: const BorderSide(color: GardenColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              minimumSize: const Size(0, 40),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ]),
                   ],
-                  // Chat button — visible for all active statuses
+                  // Chat y "Ampliar tiempo" lado a lado: antes eran dos botones a
+                  // todo el ancho apilados y la tarjeta en curso quedaba altísima.
                   if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'IN_PROGRESS') ...[
                     const SizedBox(height: 8),
-                    Stack(
+                    Row(children: [
+                    Expanded(child: Stack(
                       clipBehavior: Clip.none,
                       children: [
                         OutlinedButton.icon(
@@ -1207,31 +1149,29 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             ),
                           ),
                       ],
-                    ),
-                  ],
-                  // Ampliar tiempo — solo PASEO IN_PROGRESS. Antes esto abría una
-                  // hoja propia de esta pantalla que llamaba a POST /extend-paseo
-                  // (un endpoint que aplicaba los minutos y el monto directo, sin
-                  // pedir ni verificar ningún pago real — bug de dinero real
-                  // encontrado en pruebas de campo). Ahora navega a la pantalla de
-                  // servicio activo, que ya tiene el flujo correcto con QR/pago
-                  // obligatorio antes de aplicar la extensión.
-                  if (status == 'IN_PROGRESS' && isPaseo) ...[
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () => context.push(
-                        '/service/${booking['id']}',
-                        extra: {'role': 'CLIENT', 'token': _clientToken},
+                    )),
+                    // Ampliar tiempo — solo PASEO IN_PROGRESS; navega a la pantalla
+                    // del servicio, que cobra la extensión con QR antes de aplicarla.
+                    if (status == 'IN_PROGRESS' && isPaseo) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push(
+                            '/service/${booking['id']}',
+                            extra: {'role': 'CLIENT', 'token': _clientToken},
+                          ),
+                          icon: const GardenIcon(GIcon.alarma, size: GIconSize.sm, inheritColor: true),
+                          label: const Text('Más tiempo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GardenColors.primary,
+                            side: const BorderSide(color: GardenColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: const Size(0, 40),
+                          ),
+                        ),
                       ),
-                      icon: const GardenIcon(GIcon.alarma, size: GIconSize.sm, inheritColor: true),
-                      label: const Text('Ampliar tiempo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        minimumSize: const Size(double.infinity, 42),
-                      ),
-                    ),
+                    ],
+                    ]),
                   ],
                   // ── BOTÓN REPORTAR ──────────────────────────────────────────
                   // Visible cuando la reserva está CONFIRMED y ya pasó el tiempo de gracia
@@ -1427,10 +1367,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 icon: GardenIcon(GIcon.repetir, size: GIconSize.md, color: subtextColor),
                 onPressed: () => context.push('/recurring-bookings'),
               ),
-              IconButton(
-                icon: GardenIcon(GIcon.repetir, size: GIconSize.md, color: subtextColor),
-                onPressed: _loadBookings,
-              ),
             ],
           ),
           body: LayoutBuilder(builder: (context, constraints) {
@@ -1444,13 +1380,21 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 12, isWide ? 40 : 16, 12),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _filterPill('Todas', 'todas', isDark),
-                            _filterPill('Ahora', 'activas', isDark),
-                            _filterPill('Recuerdos', 'completadas', isDark),
-                            _filterPill('Canceladas', 'canceladas', isDark),
+                        child: GardenFilterPills<String>(
+                          options: [
+                            for (final (v, label) in const [
+                              ('todas', 'Todas'),
+                              ('activas', 'Ahora'),
+                              ('completadas', 'Recuerdos'),
+                              ('canceladas', 'Canceladas'),
+                            ])
+                              (v, _isLoading || v == 'todas' ? label : '$label ${_bookingsFor(v).length}'),
                           ],
+                          selected: _selectedFilter,
+                          onSelect: (v) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedFilter = v);
+                          },
                         ),
                       ),
                     ),
@@ -1465,10 +1409,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               alignment: Alignment.topCenter,
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
-                                child: ListView.builder(
-                                  padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 16, isWide ? 40 : 16, 16),
-                                  itemCount: _filteredBookings.length,
-                                  itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index], isDark),
+                                // En curso → Próximas (la más cercana primero) → pasadas
+                                // por mes. Antes todo iba mezclado por fecha de creación.
+                                child: RefreshIndicator(
+                                  color: GardenColors.primary,
+                                  onRefresh: _loadBookings,
+                                  child: ListView(
+                                    physics: const AlwaysScrollableScrollPhysics(),
+                                    padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 8, isWide ? 40 : 16, 24),
+                                    children: [
+                                      for (final g in groupBookings(_filteredBookings)) ...[
+                                        GardenListHeader(g.title,
+                                            count: g.bookings.length > 1 ? g.bookings.length : null,
+                                            emphasis: g.emphasis),
+                                        for (final b in g.bookings) _buildBookingCard(b, isDark),
+                                        const SizedBox(height: 6),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

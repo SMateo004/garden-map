@@ -17,9 +17,9 @@ void main() {
 
     test('solo franja horaria, sin hora exacta', () {
       expect(paymentWhenLabel({'serviceType': 'GUARDERIA', 'walkDate': '2026-10-08', 'timeSlot': 'TARDE'}, now: now),
-          'el jueves · en la tarde');
+          'el jueves · turno tarde');
       expect(paymentWhenLabel({'serviceType': 'PASEO', 'walkDate': '2026-10-20T00:00:00.000Z', 'timeSlot': 'MANANA'}, now: now),
-          'el 20/10 · en la mañana');
+          'el 20/10 · turno mañana');
     });
 
     test('hospedaje: rango y noches', () {

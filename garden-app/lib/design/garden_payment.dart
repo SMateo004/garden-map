@@ -50,7 +50,7 @@ String? paymentWhenLabel(Map<String, dynamic> b, {DateTime? now}) {
   final dur = mins != null && mins > 0 ? ' · $mins min' : '';
   if (b['startTime'] != null) return '${BookingStory.whenLabel(start, now: today)}$dur';
 
-  // Solo franja (sin hora exacta): el día y "en la mañana/tarde/noche".
+  // Solo franja (sin hora exacta): el día y el turno ("mañana · turno mañana").
   const weekdays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
   final diff = DateTime(start.year, start.month, start.day).difference(DateTime(today.year, today.month, today.day)).inDays;
   final dayLabel = diff == 0
@@ -61,9 +61,9 @@ String? paymentWhenLabel(Map<String, dynamic> b, {DateTime? now}) {
               ? 'el ${weekdays[start.weekday - 1]}'
               : 'el ${dm(start)}';
   final slot = switch (b['timeSlot']) {
-    'MANANA' => ' · en la mañana',
-    'TARDE' => ' · en la tarde',
-    'NOCHE' => ' · en la noche',
+    'MANANA' => ' · turno mañana',
+    'TARDE' => ' · turno tarde',
+    'NOCHE' => ' · turno noche',
     _ => '',
   };
   return '$dayLabel$slot$dur';

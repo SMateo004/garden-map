@@ -84,6 +84,8 @@ void main() {
       expect(BookingStory.whenLabel(DateTime(2026, 10, 3, 1), now: now), 'mañana a la 1:00');
       expect(BookingStory.whenLabel(DateTime(2026, 10, 4, 9), now: now), 'el domingo a las 9:00');
       expect(BookingStory.whenLabel(DateTime(2026, 11, 14, 9), now: now), 'el 14/11 a las 9:00');
+      // Hospedaje: solo fecha, sin "a las 0:00".
+      expect(BookingStory.whenLabel(DateTime(2026, 10, 4), now: now), 'el domingo');
     });
   });
 

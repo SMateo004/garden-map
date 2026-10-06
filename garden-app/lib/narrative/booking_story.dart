@@ -411,13 +411,19 @@ class BookingStory {
     final diff = day.difference(today).inDays;
     final hh = local.hour.toString();
     final mm = local.minute.toString().padLeft(2, '0');
-    final at = local.hour == 1 ? 'a la $hh:$mm' : 'a las $hh:$mm';
-    if (diff == 0) return 'hoy $at';
-    if (diff == 1) return 'mañana $at';
-    if (diff > 1 && diff < 7) return 'el ${_weekdays[local.weekday - 1]} $at';
+    // 0:00 = sin hora (hospedaje solo tiene fecha): antes decía
+    // "el domingo a las 0:00".
+    final at = local.hour == 0 && local.minute == 0
+        ? ''
+        : local.hour == 1
+            ? ' a la $hh:$mm'
+            : ' a las $hh:$mm';
+    if (diff == 0) return 'hoy$at';
+    if (diff == 1) return 'mañana$at';
+    if (diff > 1 && diff < 7) return 'el ${_weekdays[local.weekday - 1]}$at';
     final dd = local.day.toString().padLeft(2, '0');
     final mo = local.month.toString().padLeft(2, '0');
-    return 'el $dd/$mo $at';
+    return 'el $dd/$mo$at';
   }
 }
 
