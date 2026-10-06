@@ -10,6 +10,7 @@ import '../legal/legal_screen.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
+import '../../utils/person_validators.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../services/auth_state.dart';
@@ -330,12 +331,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final lastName  = _lastNameController.text.trim();
     final email     = _emailController.text.trim();
     final password  = _passwordController.text;
-    final phone     = _phoneController.text.trim();
+    final phone     = PersonValidators.normalizeBoPhone(_phoneController.text);
     final bio       = _bioController.text.trim();
     final street    = _addressStreetController.text.trim();
 
-    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty || _dateOfBirth == null || bio.isEmpty) {
-      GardenSnackBar.warning(context, 'Completa todos los campos para continuar');
+    // Dice QUÉ falta o está mal (antes: "Completa todos los campos") y revisa
+    // el formato con las mismas reglas que registerClientSchema, para que el
+    // error no aparezca recién después del diálogo de términos.
+    final fieldError = PersonValidators.name(firstName) ??
+        PersonValidators.name(lastName, label: 'apellido') ??
+        PersonValidators.email(email) ??
+        PersonValidators.boPhone(phone) ??
+        (_dateOfBirth == null ? 'Elige tu fecha de nacimiento' : null) ??
+        (bio.isEmpty ? 'Cuéntanos un poco sobre ti y tus mascotas' : null);
+    if (fieldError != null) {
+      GardenSnackBar.warning(context, fieldError);
       return;
     }
     if (_addressLat == null || street.isEmpty) {
@@ -351,7 +361,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     if (bio.length < 20) {
-      GardenSnackBar.warning(context, 'La descripción debe tener al menos 20 caracteres');
+      GardenSnackBar.warning(context, 'Cuéntanos un poco más: mínimo 20 caracteres (llevas ${bio.length})');
+      return;
+    }
+    if (bio.length > 500) {
+      GardenSnackBar.warning(context, 'Tu descripción es muy larga: máximo 500 caracteres (llevas ${bio.length})');
       return;
     }
     if (!_acceptedTerms) {

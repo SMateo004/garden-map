@@ -84,6 +84,9 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
   }
 
   Future<void> _propose() async {
+    // La hoja de propuesta no se redibuja con _submitting: sin esto un
+    // doble toque mandaba dos propuestas.
+    if (_submitting) return;
     if (_proposedDate == null || _proposedTime == null) {
       _snack('Selecciona fecha y hora', isError: true);
       return;
@@ -120,15 +123,16 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         if (mounted) Navigator.pop(context);
         _snack('Propuesta enviada');
       } else {
-        _snack(data['error']?['message'] ?? 'Error', isError: true);
+        _snack(data['error']?['message'] ?? 'No se pudo completar. Intenta de nuevo.', isError: true);
       }
     } catch (_) {
-      _snack('Error de conexión', isError: true);
+      _snack('Sin conexión. Revisa tu internet e intenta de nuevo.', isError: true);
     }
     if (mounted) setState(() => _submitting = false);
   }
 
   Future<void> _accept() async {
+    if (_submitting) return;
     if (mounted) setState(() => _submitting = true);
     try {
       final res = await http.post(
@@ -141,10 +145,10 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>);
         _snack('¡Meet & Greet confirmado!');
       } else {
-        _snack(data['error']?['message'] ?? 'Error', isError: true);
+        _snack(data['error']?['message'] ?? 'No se pudo completar. Intenta de nuevo.', isError: true);
       }
     } catch (_) {
-      _snack('Error de conexión', isError: true);
+      _snack('Sin conexión. Revisa tu internet e intenta de nuevo.', isError: true);
     }
     if (mounted) setState(() => _submitting = false);
   }
@@ -184,18 +188,34 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>);
         _snack('Meet & Greet cancelado');
       } else {
-        _snack(data['error']?['message'] ?? 'Error', isError: true);
+        _snack(data['error']?['message'] ?? 'No se pudo completar. Intenta de nuevo.', isError: true);
       }
     } catch (_) {
-      _snack('Error de conexión', isError: true);
+      _snack('Sin conexión. Revisa tu internet e intenta de nuevo.', isError: true);
     }
     if (mounted) setState(() => _submitting = false);
   }
 
   Future<void> _complete() async {
+    if (_submitting) return;
     if (_approved == null) {
       _snack('Indica si el hospedaje es compatible', isError: true);
       return;
+    }
+    // "No compatible" cancela la reserva y reembolsa al dueño: no se deshace.
+    if (_approved == false) {
+      final sure = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => GardenGlassDialog(
+          title: const Text('¿Cancelar la reserva?'),
+          content: const Text('Si marcas que no es compatible, la reserva se cancela y el dueño recibe su reembolso. No se puede deshacer.'),
+          actions: [
+            GardenButton(label: 'Volver', outline: true, height: 44, onPressed: () => Navigator.pop(ctx, false)),
+            GardenButton(label: 'Sí, cancelar', color: GardenColors.error, height: 44, onPressed: () => Navigator.pop(ctx, true)),
+          ],
+        ),
+      );
+      if (sure != true || !mounted) return;
     }
     if (mounted) setState(() => _submitting = true);
     try {
@@ -212,17 +232,23 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>);
         _snack(_approved! ? '¡Hospedaje confirmado!' : 'Reserva cancelada. El cliente recibirá reembolso.');
       } else {
-        _snack(data['error']?['message'] ?? 'Error', isError: true);
+        _snack(data['error']?['message'] ?? 'No se pudo completar. Intenta de nuevo.', isError: true);
       }
     } catch (_) {
-      _snack('Error de conexión', isError: true);
+      _snack('Sin conexión. Revisa tu internet e intenta de nuevo.', isError: true);
     }
     if (mounted) setState(() => _submitting = false);
   }
 
+  // Antes todo (también "Propuesta enviada" o "¡Confirmado!") salía en el
+  // diálogo de error.
   void _snack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    GardenErrorDialog.show(context, msg);
+    if (isError) {
+      GardenErrorDialog.show(context, msg);
+    } else {
+      GardenSnackBar.success(context, msg);
+    }
   }
 
   String _formatDate(String? iso) {

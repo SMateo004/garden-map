@@ -737,6 +737,11 @@ class _BookingScreenState extends State<BookingScreen> {
   /// valida booking.service.ts al crear la reserva — mostrarlo aquí evita
   /// que el cliente llene todo el formulario y recién al final se entere.
   String? _petIncompatibilityReason(Map<String, dynamic> pet) {
+    // Sin especie o tamaño el servidor rechaza la reserva (PET_INCOMPLETE):
+    // se avisa acá, al elegir la mascota, y no al final del formulario.
+    if (pet['animalType'] == null || pet['size'] == null) {
+      return 'Falta especie y tamaño';
+    }
     if (_caregiver == null) return null;
     final sizesAccepted = (_caregiver!['sizesAccepted'] as List?)?.cast<String>() ?? [];
     final petSize = pet['size'] as String?;
@@ -1098,7 +1103,16 @@ class _BookingScreenState extends State<BookingScreen> {
                       if (isSelected && petIndex == 1) discountLabel = '-25%';
                       if (isSelected && petIndex == 2) discountLabel = '-50%';
                       return GestureDetector(
-                        onTap: sizeNotAccepted ? null : () {
+                        // Incompleta: el toque lleva a completarla (y vuelve con
+                        // la lista actualizada) en vez de no hacer nada.
+                        onTap: sizeNotAccepted
+                            ? (pet['animalType'] == null || pet['size'] == null
+                                ? () async {
+                                    await context.push('/my-pets');
+                                    if (mounted) _loadPets();
+                                  }
+                                : null)
+                            : () {
                           HapticFeedback.selectionClick();
                           setState(() {
                             if (isSelected) {
