@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
+import 'design/garden_caregiver_card.dart';
 import 'design/garden_chain_proof.dart';
 import 'design/garden_live_hero.dart';
 import 'design/garden_story_progress.dart';
@@ -219,6 +220,19 @@ class _CatalogPageState extends State<_CatalogPage> {
                   buttonIcon: GIcon.pagarQr,
                   onPressed: () {},
                 ),
+              ),
+            ),
+          ]),
+          _Section('Cuidador en el marketplace', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenCaregiverCard(
+                caregiver: const {
+                  'id': 'cat-1', 'firstName': 'Andrea', 'lastName': 'Rojas', 'verified': true, 'antecedentesVerified': true,
+                  'rating': 4.9, 'reviewCount': 37, 'zone': 'EQUIPETROL', 'experienceYears': 2,
+                  'services': ['PASEO', 'GUARDERIA'], 'pricePerWalk30': 20, 'pricePerGuarderia': 90,
+                },
+                onTap: () {},
               ),
             ),
           ]),
