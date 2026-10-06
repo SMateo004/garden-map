@@ -14,6 +14,7 @@ import '../../utils/input_formatters.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_profile.dart';
 import '../support/support_chat_screen.dart';
 
 class MyDataScreen extends StatefulWidget {
@@ -499,335 +500,350 @@ class _MyDataScreenState extends State<MyDataScreen> {
 
         final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
 
+        // Avance del perfil, en vivo mientras se completa: antes recién al
+        // tocar Guardar aparecía la lista de todo lo que faltaba.
+        final missingNow = _missingFields();
+        int missingIn(Set<String> names) => missingNow.where(names.contains).length;
+        final totalFields = 15 + (_isApartment ? 2 : 0);
+
         Widget formContent = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Photo section
-            Center(
-              child: Stack(
-                children: [
-                  GardenPressable(
-                    pressedScale: 0.94,
-                    borderRadius: BorderRadius.circular(kIsWeb ? 44 : 50),
-                    onTap: _uploadingPhoto ? null : () {
-                      HapticFeedback.selectionClick();
-                      _pickAndUploadPhoto();
-                    },
-                    child: Container(
-                      width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
+            GardenProfileCompletion(
+              avatar:
+                Stack(
+                    children: [
+                      GardenPressable(
+                        pressedScale: 0.94,
+                        borderRadius: BorderRadius.circular(38),
+                        onTap: _uploadingPhoto ? null : () {
+                          HapticFeedback.selectionClick();
+                          _pickAndUploadPhoto();
+                        },
+                        child: Container(
+                          width: 76, height: 76,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
+                          ),
+                          child: _uploadingPhoto
+                              ? Padding(
+                                  padding: const EdgeInsets.all(22),
+                                  child: GardenLoadingIndicator(color: GardenColors.primary))
+                              : ClipOval(
+                                  child: _pendingPhotoBytes != null
+                                      ? Image.memory(_pendingPhotoBytes!,
+                                          width: 76, height: 76, fit: BoxFit.cover)
+                                      : _userData?['profilePicture'] != null
+                                          ? Image.network(
+                                              fixImageUrl(_userData!['profilePicture'] as String),
+                                              width: 76, height: 76, fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => _avatarFallback(textColor),
+                                            )
+                                          : _avatarFallback(textColor),
+                                ),
+                        ),
                       ),
-                      child: _uploadingPhoto
-                          ? Padding(
-                              padding: EdgeInsets.all(kIsWeb ? 26 : 30),
-                              child: const GardenLoadingIndicator(color: GardenColors.primary))
-                          : ClipOval(
-                              child: _pendingPhotoBytes != null
-                                  ? Image.memory(_pendingPhotoBytes!,
-                                      width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100, fit: BoxFit.cover)
-                                  : _userData?['profilePicture'] != null
-                                      ? Image.network(
-                                          fixImageUrl(_userData!['profilePicture'] as String),
-                                          width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100, fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => _avatarFallback(textColor),
-                                        )
-                                      : _avatarFallback(textColor),
-                            ),
+                      Positioned(
+                        bottom: 0, right: 0,
+                        child: GardenPressable(
+                          pressedScale: 0.85,
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: _uploadingPhoto ? null : () {
+                            HapticFeedback.selectionClick();
+                            _pickAndUploadPhoto();
+                          },
+                          child: Container(
+                            width: 28, height: 28,
+                            decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                            child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              name: '${_firstCtrl.text.trim()} ${_lastCtrl.text.trim()}'.trim(),
+              subtitle: (_userData?['email'] as String?) ?? 'Toca la foto para cambiarla',
+              done: totalFields - missingNow.length,
+              total: totalFields,
+              missing: missingNow,
+            ),
+            const SizedBox(height: 18),
+
+            GardenFormSection(
+              icon: GIcon.perfil,
+              title: 'Sobre ti',
+              hint: 'Así te ven los cuidadores cuando reservas.',
+              missing: missingIn(const {'Nombre', 'Apellido', 'Fecha de nacimiento', 'Descripción', 'Foto de perfil'}),
+              children: [
+                // Name
+                Row(children: [
+                  Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
+                      inputFormatters: [noDigitsFormatter],
+                      onChanged: (_) => setState(() {}),
+                      decoration: fieldDeco('Nombre *', GIcon.perfil, missing: _firstCtrl.text.trim().isEmpty))),
+                  const SizedBox(width: 12),
+                  Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
+                      inputFormatters: [noDigitsFormatter],
+                      onChanged: (_) => setState(() {}),
+                      decoration: fieldDeco('Apellido *', GIcon.perfil, missing: _lastCtrl.text.trim().isEmpty))),
+                ]),
+                const SizedBox(height: 16),
+                // Date of birth
+                Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _dateOfBirth ?? DateTime(1995),
+                      firstDate: DateTime(1940),
+                      lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
+                    );
+                    if (picked != null) setState(() => _dateOfBirth = picked);
+                  },
+                  child: Container(
+                    height: kIsWeb ? 46 : 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: surfaceEl,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(children: [
+                      GardenIcon(GIcon.cumpleanos, size: GIconSize.md, color: subtextColor),
+                      const SizedBox(width: 12),
+                      Text(
+                        _dateOfBirth == null
+                            ? 'Seleccionar fecha'
+                            : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                        style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                      ),
+                    ]),
+                  ),
+                ),
+                if (_showErrors && _dateOfBirth == null)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4, left: 4),
+                    child: Text('Requerido', style: TextStyle(color: GardenColors.error, fontSize: 12)),
+                  ),
+                const SizedBox(height: 16),
+                // Bio
+                Text('Descripción', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _bioCtrl,
+                  onChanged: (_) => setState(() {}),
+                  maxLines: 3, maxLength: 300,
+                  style: TextStyle(color: textColor, fontSize: 14),
+                  decoration: fieldDeco('Una breve descripción de ti', GIcon.documento, missing: _bioCtrl.text.trim().isEmpty).copyWith(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            GardenFormSection(
+              icon: GIcon.telefono,
+              title: 'Contacto',
+              hint: 'Por aquí te avisamos de tus reservas y pagos.',
+              missing: missingIn(const {'Correo electrónico válido', 'Teléfono (8 dígitos, empieza con 6 o 7)'}),
+              children: [
+                // Email
+                if (_userData?['email'] != null) ...[
+                  Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  if (_userData?['emailVerified'] == true)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: surfaceEl.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(children: [
+                        GardenIcon(GIcon.correo, size: GIconSize.md, color: subtextColor),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_userData!['email'] as String,
+                          style: TextStyle(color: subtextColor, fontSize: 14))),
+                        const GardenIcon(GIcon.verificado, size: GIconSize.sm, color: GardenColors.success),
+                      ]),
+                    )
+                  else
+                    TextField(
+                      controller: _emailCtrl,
+                      onChanged: (_) => setState(() {}),
+                      style: TextStyle(color: textColor),
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: fieldDeco('Correo electrónico', GIcon.correo, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
+                        suffixIcon: const Tooltip(
+                          message: 'Correo no verificado',
+                          child: GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                ],
+                // Phone — verificado = bloqueado (solo cambia con autorización de
+                // soporte); sin verificar = editable y con aviso para verificar.
+                Row(children: [
+                  Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                  if (_savedPhone.isNotEmpty && _phoneCtrl.text.trim() == _savedPhone) ...[
+                    const SizedBox(width: 8),
+                    if (_phoneVerified)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.success),
+                        const SizedBox(width: 3),
+                        Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 11.5)),
+                      ])
+                    else
+                      GestureDetector(
+                        onTap: _startPhoneVerification,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: GardenColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: GardenColors.warning),
+                          ),
+                          child: const Text('Sin verificar · Verificar ahora',
+                              style: TextStyle(color: GardenColors.warning, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                  ],
+                ]),
+                const SizedBox(height: 6),
+                TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
+                    keyboardType: TextInputType.phone,
+                    readOnly: _phoneLocked,
+                    onChanged: (_) => setState(() {}),
+                    decoration: fieldDeco('Número de teléfono', GIcon.telefono, missing: !_phoneRegex.hasMatch(_phoneCtrl.text.trim())).copyWith(
+                      suffixIcon: _phoneLocked ? Padding(padding: const EdgeInsets.all(14), child: GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor)) : null,
+                    )),
+                if (_phoneLocked) ...[
+                  const SizedBox(height: 6),
+                  Text('Tu teléfono está verificado y no se puede editar. Si necesitas cambiarlo, solicítalo por el chat de soporte.',
+                      style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen())),
+                      icon: const GardenIcon(GIcon.soporte, size: GIconSize.sm),
+                      label: const Text('Pedir cambio por el chat'),
                     ),
                   ),
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: GardenPressable(
-                      pressedScale: 0.85,
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: _uploadingPhoto ? null : () {
-                        HapticFeedback.selectionClick();
-                        _pickAndUploadPhoto();
-                      },
-                      child: Container(
-                        width: 28, height: 28,
-                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                        child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
-                      ),
+                ] else if (_phoneVerified && _phoneChangeAuthorized) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      'Cambio autorizado por soporte${_phoneChangeUntil != null ? ' (hasta las ${_phoneChangeUntil!.hour.toString().padLeft(2, '0')}:${_phoneChangeUntil!.minute.toString().padLeft(2, '0')})' : ''}. '
+                      'Escribe tu número nuevo y guarda: te enviaremos un código a ESE número. Si no lo confirmas, se mantiene el anterior.',
+                      style: TextStyle(color: textColor, fontSize: 11.5),
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Center(child: Text('Toca para cambiar foto', style: TextStyle(color: subtextColor, fontSize: 12))),
-            const SizedBox(height: 28),
-
-            // Email
-            if (_userData?['email'] != null) ...[
-              Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              if (_userData?['emailVerified'] == true)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: surfaceEl.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-                  ),
-                  child: Row(children: [
-                    GardenIcon(GIcon.correo, size: GIconSize.md, color: subtextColor),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_userData!['email'] as String,
-                      style: TextStyle(color: subtextColor, fontSize: 14))),
-                    const GardenIcon(GIcon.verificado, size: GIconSize.sm, color: GardenColors.success),
-                  ]),
-                )
-              else
-                TextField(
-                  controller: _emailCtrl,
-                  style: TextStyle(color: textColor),
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: fieldDeco('Correo electrónico', GIcon.correo, missing: !_emailRegex.hasMatch(_emailCtrl.text.trim())).copyWith(
-                    suffixIcon: const Tooltip(
-                      message: 'Correo no verificado',
-                      child: GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-            ],
-
-            // Name
-            Text('Nombre', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            Row(children: [
-              Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
-                  inputFormatters: [noDigitsFormatter],
-                  onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Nombre *', GIcon.perfil, missing: _firstCtrl.text.trim().isEmpty))),
-              const SizedBox(width: 12),
-              Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
-                  inputFormatters: [noDigitsFormatter],
-                  onChanged: (_) => setState(() {}),
-                  decoration: fieldDeco('Apellido *', GIcon.perfil, missing: _lastCtrl.text.trim().isEmpty))),
-            ]),
-            const SizedBox(height: 16),
-
-            // Phone — verificado = bloqueado (solo cambia con autorización de
-            // soporte); sin verificar = editable y con aviso para verificar.
-            Row(children: [
-              Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              if (_savedPhone.isNotEmpty && _phoneCtrl.text.trim() == _savedPhone) ...[
-                const SizedBox(width: 8),
-                if (_phoneVerified)
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.success),
-                    const SizedBox(width: 3),
-                    Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 11.5)),
-                  ])
-                else
-                  GestureDetector(
-                    onTap: _startPhoneVerification,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: GardenColors.warning.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: GardenColors.warning),
-                      ),
-                      child: const Text('Sin verificar · Verificar ahora',
-                          style: TextStyle(color: GardenColors.warning, fontSize: 11.5, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
+                const SizedBox(height: 16),
               ],
-            ]),
-            const SizedBox(height: 6),
-            TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
-                keyboardType: TextInputType.phone,
-                readOnly: _phoneLocked,
-                onChanged: (_) => setState(() {}),
-                decoration: fieldDeco('Número de teléfono', GIcon.telefono, missing: !_phoneRegex.hasMatch(_phoneCtrl.text.trim())).copyWith(
-                  suffixIcon: _phoneLocked ? Padding(padding: const EdgeInsets.all(14), child: GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor)) : null,
-                )),
-            if (_phoneLocked) ...[
-              const SizedBox(height: 6),
-              Text('Tu teléfono está verificado y no se puede editar. Si necesitas cambiarlo, solicítalo por el chat de soporte.',
-                  style: TextStyle(color: subtextColor, fontSize: 11.5)),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen())),
-                  icon: const GardenIcon(GIcon.soporte, size: GIconSize.sm),
-                  label: const Text('Pedir cambio por el chat'),
-                ),
-              ),
-            ] else if (_phoneVerified && _phoneChangeAuthorized) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: GardenColors.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5)),
-                ),
-                child: Text(
-                  'Cambio autorizado por soporte${_phoneChangeUntil != null ? ' (hasta las ${_phoneChangeUntil!.hour.toString().padLeft(2, '0')}:${_phoneChangeUntil!.minute.toString().padLeft(2, '0')})' : ''}. '
-                  'Escribe tu número nuevo y guarda: te enviaremos un código a ESE número. Si no lo confirmas, se mantiene el anterior.',
-                  style: TextStyle(color: textColor, fontSize: 11.5),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            // Ciudad y país ya no se piden acá — la ciudad la define el
-            // selector de AddressSection (más abajo), que reemplaza este dato
-            // legado. Pedirlo dos veces confundía al usuario.
-
-            // Address
-            Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            AddressSection(
-              isDark: isDark,
-              textColor: textColor,
-              subtextColor: subtextColor,
-              borderColor: borderColor,
-              surfaceEl: surfaceEl,
-              streetController: _streetCtrl,
-              numberController: _numberCtrl,
-              apartmentController: _apartmentCtrl,
-              condominioController: _condominioCtrl,
-              referenceController: _referenceCtrl,
-              selectedZone: _addressZone,
-              onZoneChanged: (val) => setState(() => _addressZone = val),
-              initialCityId: _gardenCityId,
-              onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
-              onCityChangeReset: () => setState(() {
-                _addressLat = null;
-                _addressLng = null;
-                _streetCtrl.clear();
-                _numberCtrl.clear();
-                _apartmentCtrl.clear();
-                _condominioCtrl.clear();
-                _referenceCtrl.clear();
-              }),
-              addressLat: _addressLat,
-              addressLng: _addressLng,
-              isApartment: _isApartment,
-              purposeText: 'Tu dirección se usa para que el cuidador pueda recoger a tu mascota en los paseos. Solo se comparte con el cuidador que acepte tu reserva.',
-              onMapResult: (result) => setState(() {
-                _addressLat = result.lat;
-                _addressLng = result.lng;
-                if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
-                  _streetCtrl.text = result.formattedAddress!;
-                }
-              }),
-              onApartmentToggle: (val) => setState(() => _isApartment = val),
-              onFieldsChanged: () => setState(() {}),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Date of birth
-            Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _dateOfBirth ?? DateTime(1995),
-                  firstDate: DateTime(1940),
-                  lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
-                );
-                if (picked != null) setState(() => _dateOfBirth = picked);
-              },
-              child: Container(
-                height: kIsWeb ? 46 : 52,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: surfaceEl,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderColor),
+            GardenFormSection(
+              icon: GIcon.inicio,
+              title: 'Dirección',
+              missing: missingIn(const {
+                'Ciudad', 'Zona', 'Calle', 'Número de la dirección', 'Departamento',
+                'Condominio o edificio', 'Referencia de la dirección', 'Ubicación exacta en el mapa',
+              }),
+              children: [
+                AddressSection(
+                  isDark: isDark,
+                  textColor: textColor,
+                  subtextColor: subtextColor,
+                  borderColor: borderColor,
+                  surfaceEl: surfaceEl,
+                  streetController: _streetCtrl,
+                  numberController: _numberCtrl,
+                  apartmentController: _apartmentCtrl,
+                  condominioController: _condominioCtrl,
+                  referenceController: _referenceCtrl,
+                  selectedZone: _addressZone,
+                  onZoneChanged: (val) => setState(() => _addressZone = val),
+                  initialCityId: _gardenCityId,
+                  onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                  onCityChangeReset: () => setState(() {
+                    _addressLat = null;
+                    _addressLng = null;
+                    _streetCtrl.clear();
+                    _numberCtrl.clear();
+                    _apartmentCtrl.clear();
+                    _condominioCtrl.clear();
+                    _referenceCtrl.clear();
+                  }),
+                  addressLat: _addressLat,
+                  addressLng: _addressLng,
+                  isApartment: _isApartment,
+                  purposeText: 'Tu dirección se usa para que el cuidador pueda recoger a tu mascota en los paseos. Solo se comparte con el cuidador que acepte tu reserva.',
+                  onMapResult: (result) => setState(() {
+                    _addressLat = result.lat;
+                    _addressLng = result.lng;
+                    if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
+                      _streetCtrl.text = result.formattedAddress!;
+                    }
+                  }),
+                  onApartmentToggle: (val) => setState(() => _isApartment = val),
+                  onFieldsChanged: () => setState(() {}),
                 ),
-                child: Row(children: [
-                  GardenIcon(GIcon.cumpleanos, size: GIconSize.md, color: subtextColor),
-                  const SizedBox(width: 12),
-                  Text(
-                    _dateOfBirth == null
-                        ? 'Seleccionar fecha'
-                        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
-                    style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
-                  ),
+                const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            GardenFormSection(
+              icon: GIcon.recibo,
+              title: 'Facturación',
+              missing: missingIn(const {'NIT o Carnet', 'Razón social'}),
+              children: [
+                // NIT / Carnet — dato de facturación, vive en el perfil (no en
+                // cada reserva) para no tener que volver a escribirlo cada vez
+                // que se paga un servicio. Acepta tanto NIT como número de
+                // Carnet (CI) — ambos son válidos para emitir la factura.
+                Row(children: [
+                  GardenIcon(GIcon.recibo, size: GIconSize.sm, color: textColor),
+                  const SizedBox(width: 6),
+                  Text('NIT o Carnet (facturación)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                 ]),
-              ),
-            ),
-            if (_showErrors && _dateOfBirth == null)
-              const Padding(
-                padding: EdgeInsets.only(top: 4, left: 4),
-                child: Text('Requerido', style: TextStyle(color: GardenColors.error, fontSize: 12)),
-              ),
-            const SizedBox(height: 16),
-
-            // Bio
-            Text('Descripción', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _bioCtrl,
-              maxLines: 3, maxLength: 300,
-              style: TextStyle(color: textColor, fontSize: 14),
-              decoration: fieldDeco('Una breve descripción de ti', GIcon.documento, missing: _bioCtrl.text.trim().isEmpty).copyWith(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // NIT / Carnet — dato de facturación, vive en el perfil (no en
-            // cada reserva) para no tener que volver a escribirlo cada vez
-            // que se paga un servicio. Acepta tanto NIT como número de
-            // Carnet (CI) — ambos son válidos para emitir la factura.
-            Row(children: [
-              GardenIcon(GIcon.recibo, size: GIconSize.sm, color: textColor),
-              const SizedBox(width: 6),
-              Text('NIT o Carnet (facturación)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            ]),
-            const SizedBox(height: 4),
-            Text(
-              'Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
-              style: TextStyle(color: subtextColor, fontSize: 11.5),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _nitCtrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: TextStyle(color: textColor),
-              decoration: fieldDeco('NIT o Carnet', GIcon.identidadVerificada, missing: _nitCtrl.text.trim().isEmpty),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nitRazonSocialCtrl,
-              style: TextStyle(color: textColor),
-              decoration: fieldDeco('Razón social', GIcon.documento, missing: _nitRazonSocialCtrl.text.trim().isEmpty),
-            ),
-            const SizedBox(height: 16),
-
-            // Save button
-            if (kIsWeb)
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                SizedBox(
-                  width: 180,
-                  child: GardenButton(
-                    label: _saving ? 'Guardando...' : 'Guardar cambios',
-                    loading: _saving,
-                    onPressed: _saving ? null : _save,
-                  ),
+                const SizedBox(height: 4),
+                Text(
+                  'Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
+                  style: TextStyle(color: subtextColor, fontSize: 11.5),
                 ),
-              ])
-            else
-              SizedBox(
-                width: double.infinity,
-                child: GardenButton(
-                  label: _saving ? 'Guardando...' : 'Guardar cambios',
-                  loading: _saving,
-                  onPressed: _saving ? null : _save,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _nitCtrl,
+                  onChanged: (_) => setState(() {}),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: TextStyle(color: textColor),
+                  decoration: fieldDeco('NIT o Carnet', GIcon.identidadVerificada, missing: _nitCtrl.text.trim().isEmpty),
                 ),
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nitRazonSocialCtrl,
+                  onChanged: (_) => setState(() {}),
+                  style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Razón social', GIcon.documento, missing: _nitRazonSocialCtrl.text.trim().isEmpty),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
             const SizedBox(height: 24),
           ],
         );
@@ -882,6 +898,14 @@ class _MyDataScreenState extends State<MyDataScreen> {
               ),
             ],
           ),
+          bottomNavigationBar: _isLoading
+              ? null
+              : GardenSaveBar(
+                  label: _saving ? 'Guardando...' : 'Guardar cambios',
+                  loading: _saving,
+                  onPressed: _saving ? null : _save,
+                  note: missingNow.isEmpty ? null : 'Faltan ${missingNow.length} dato${missingNow.length == 1 ? '' : 's'}',
+                ),
           ),
         );
       },
