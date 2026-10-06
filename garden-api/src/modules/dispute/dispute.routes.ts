@@ -999,9 +999,10 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
 
     } else {
       // ── PARTIAL: 80% al cuidador + 20% → código de descuento para el dueño ─
-      // La comisión (10%) se mantiene. El split es sobre el netAmount (90%).
-      const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2)); // 72% del total
-      const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2)); // 18% del total
+      // El split es sobre netAmount = caregiverNetOf(booking) (total − comisión
+      // variable del servicio/cuidador − impuesto, no el 90% fijo de antes).
+      const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
+      const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
 
       // Generar código único de descuento de un solo uso
       const discountCode = `GDN-${bookingId.slice(0, 6).toUpperCase()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
