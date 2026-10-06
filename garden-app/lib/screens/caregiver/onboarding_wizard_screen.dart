@@ -29,6 +29,7 @@ import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import '../../utils/person_validators.dart';
 import '../../widgets/password_rules.dart';
+import '../../design/garden_depth.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -1868,11 +1869,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, color: GardenColors.primary),
-          ),
+          GardenClay(size: 56, tint: GardenColors.primary.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.seguridad, size: GIconSize.lg, color: GardenColors.primary)),
           const SizedBox(height: 16),
           Text('Crea tu PIN de seguridad',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),

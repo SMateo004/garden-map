@@ -7,6 +7,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -150,14 +151,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
             child: Row(children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: (completed ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: GardenIcon(completed ? GIcon.hecho : GIcon.iniciar, size: GIconSize.lg, color: completed ? GardenColors.success : GardenColors.primary),
-              ),
+              GardenClay(size: 44, tint: (completed ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.1), interactive: false, child: GardenIcon(completed ? GIcon.hecho : GIcon.iniciar, size: GIconSize.lg, color: completed ? GardenColors.success : GardenColors.primary)),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

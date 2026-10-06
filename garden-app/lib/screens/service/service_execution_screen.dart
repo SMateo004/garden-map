@@ -34,6 +34,7 @@ import '../../services/auth_state.dart';
 import '../../services/garden_live_activity.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
+import '../../design/garden_depth.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -482,15 +483,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 child: Row(children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(color: _svc.soft(themeNotifier.isDark), shape: BoxShape.circle),
-                    child: Center(
+                  GardenClay(size: 30, color: _svc.soft(themeNotifier.isDark), interactive: false, child: Center(
                       child: GardenIcon(iconForNote(notes[i]['description'] as String?),
                           size: GIconSize.sm, color: _svc.ink(themeNotifier.isDark), state: GIconState.active),
-                    ),
-                  ),
+                    )),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(notes[i]['description'] as String,
@@ -2273,14 +2269,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         if (_caregiverPhone != null && _caregiverPhone!.isNotEmpty)
                           GestureDetector(
                             onTap: () => launchUrl(Uri.parse('tel:$_caregiverPhone')),
-                            child: Container(
-                              width: 44, height: 44,
-                              decoration: BoxDecoration(
-                                color: GardenColors.primary.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const GardenIcon(GIcon.telefono, size: GIconSize.md, color: GardenColors.primary),
-                            ),
+                            child: GardenClay(size: 44, tint: GardenColors.primary.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.telefono, size: GIconSize.md, color: GardenColors.primary)),
                           ),
                       ],
                     ),
@@ -4788,11 +4777,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
             )),
             Row(children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
-              ),
+              GardenClay(size: 44, tint: GardenColors.error.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error)),
               const SizedBox(width: 12),
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -4945,14 +4930,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 ),
               ),
               const SizedBox(height: 24),
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  color: GardenColors.warning.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.warning),
-              ),
+              GardenClay(size: 64, tint: GardenColors.warning.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.foto, size: GIconSize.xl, color: GardenColors.warning)),
               const SizedBox(height: 16),
               Text('Faltan fotos', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 10),
@@ -5010,14 +4988,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
             ),
             const SizedBox(height: 24),
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                color: GardenColors.success.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const GardenIcon(GIcon.confirmado, size: GIconSize.xl, state: GIconState.active, color: GardenColors.success),
-            ),
+            GardenClay(size: 64, tint: GardenColors.success.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.confirmado, size: GIconSize.xl, state: GIconState.active, color: GardenColors.success)),
             const SizedBox(height: 16),
             Text('¿Finalizar servicio?',
               style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -5271,14 +5242,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: GardenColors.warning.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.warning),
-            ),
+            GardenClay(size: 56, tint: GardenColors.warning.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.warning)),
             const SizedBox(height: 14),
             Text(title,
               textAlign: TextAlign.center,
@@ -5554,11 +5518,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 ),
               )),
               Row(children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
-                ),
+                GardenClay(size: 44, tint: GardenColors.error.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error)),
                 const SizedBox(width: 12),
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -5658,11 +5618,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   )),
                   // Header
                   Row(children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
-                      child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, color: GardenColors.error),
-                    ),
+                    GardenClay(size: 44, tint: GardenColors.error.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.emergencia, size: GIconSize.lg, color: GardenColors.error)),
                     const SizedBox(width: 12),
                     Expanded(child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5749,11 +5705,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
                       ),
                       child: Row(children: [
-                        Container(
-                          width: 38, height: 38,
-                          decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.12), shape: BoxShape.circle),
-                          child: const GardenIcon(GIcon.veterinaria, size: GIconSize.sm, state: GIconState.active, color: Color(0xFF00897B)),
-                        ),
+                        GardenClay(size: 38, tint: const Color(0xFF00897B).withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.veterinaria, size: GIconSize.sm, state: GIconState.active, color: Color(0xFF00897B))),
                         const SizedBox(width: 10),
                         Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -6212,17 +6164,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  color: (rating >= 3 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
+              GardenClay(size: 80, tint: (rating >= 3 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.1), interactive: false, child: Center(
                   child: GardenIcon(rating >= 3 ? GIcon.confirmado : GIcon.esperando, size: GIconSize.hero,
                       color: rating >= 3 ? GardenColors.success : GardenColors.warning, state: GIconState.active),
-                ),
-              ),
+                )),
               const SizedBox(height: 24),
               Text(
                 rating >= 3 ? 'Pago liberado' : 'Pago en revisión',
@@ -6615,19 +6560,12 @@ class _ActionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.11),
-                  borderRadius: BorderRadius.circular(GardenRadius.md),
-                ),
-                child: loading
+              GardenClay(size: 40, tint: color.withValues(alpha: 0.11), circle: false, radius: GardenRadius.md, interactive: false, child: loading
                     ? Padding(
                         padding: const EdgeInsets.all(9),
                         child: GardenLoadingIndicator(color: color),
                       )
-                    : Center(child: GardenIcon(icon, color: color, state: GIconState.active)),
-              ),
+                    : Center(child: GardenIcon(icon, color: color, state: GIconState.active))),
               const SizedBox(height: 10),
               Text(label,
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
@@ -7195,14 +7133,7 @@ class _EmergencyCallTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: GardenIcon(GIcon.telefono, size: GIconSize.sm, color: accentColor),
-            ),
+            GardenClay(size: 40, tint: accentColor.withValues(alpha: 0.12), interactive: false, child: GardenIcon(GIcon.telefono, size: GIconSize.sm, color: accentColor)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

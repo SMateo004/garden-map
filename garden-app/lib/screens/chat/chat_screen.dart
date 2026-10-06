@@ -15,6 +15,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
@@ -280,7 +281,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
+                        const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Text(
                           selectedDate != null ? '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}' : 'Seleccionar fecha',
@@ -307,7 +308,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
+                        const GardenIcon(GIcon.reloj, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Text(
                           selectedTime != null
@@ -344,7 +345,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     decoration: InputDecoration(
                       hintText: 'Punto de encuentro',
                       hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
+                      prefixIcon: const GardenIcon(GIcon.ubicacion, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),
@@ -553,7 +554,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       context: context,
       builder: (ctx) => GardenGlassDialog(
         title: Text('¿Bloquear a ${widget.otherPersonName}?'),
-        content: Text('Ya no podrá enviarte mensajes en esta conversación. Puedes desbloquearlo más tarde desde tu perfil.'),
+        content: const Text('Ya no podrá enviarte mensajes en esta conversación. Puedes desbloquearlo más tarde desde tu perfil.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           ElevatedButton(
@@ -820,7 +821,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           body: !_initialized
             ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : Center(child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: kIsWeb ? 780.0 : double.infinity),
+                constraints: const BoxConstraints(maxWidth: kIsWeb ? 780.0 : double.infinity),
                 child: Column(
                   children: [
                     // Web compact header (replaces AppBar)
@@ -1036,16 +1037,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         const SizedBox(width: 10),
                         GestureDetector(
                           onTap: _sendMessage,
-                          child: Container(
-                            width: 46, height: 46,
-                            decoration: const BoxDecoration(
-                              color: GardenColors.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
+                          child: const GardenClay(size: 46, color: GardenColors.primary, interactive: false, child: Center(
                                 child: GardenIcon(GIcon.enviar, color: Colors.white, state: GIconState.active,
-                                    semanticLabel: 'Enviar')),
-                          ),
+                                    semanticLabel: 'Enviar'))),
                         ),
                       ],
                     ),
@@ -1144,10 +1138,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   color: GardenColors.primary.withValues(alpha: 0.12),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const GardenIcon(GIcon.meetGreet, state: GIconState.active),
-                    const SizedBox(width: 8),
+                    GardenIcon(GIcon.meetGreet, state: GIconState.active),
+                    SizedBox(width: 8),
                     Text('Meet & Greet propuesto',
                         style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 13)),
                   ],

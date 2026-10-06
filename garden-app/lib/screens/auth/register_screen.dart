@@ -15,6 +15,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../services/auth_state.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -507,14 +508,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Center(child: GardenIcon(GIcon.huella, color: GardenColors.primary, size: GIconSize.hero, state: GIconState.active)),
-                  ),
+                  GardenClay(size: 72, tint: GardenColors.primary.withValues(alpha: 0.2), circle: false, radius: 20, interactive: false, child: const Center(child: GardenIcon(GIcon.huella, color: GardenColors.primary, size: GIconSize.hero, state: GIconState.active))),
                   const SizedBox(height: 32),
                   Image.asset('assets/images/logo-white.png', height: 224),
                   const SizedBox(height: 8),
@@ -541,14 +535,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _featureRow(GIcon icon, String text) {
     return Row(
       children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: GardenColors.primary.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(child: GardenIcon(icon, color: GardenColors.primary, state: GIconState.active)),
-        ),
+        GardenClay(size: 36, tint: GardenColors.primary.withValues(alpha: 0.15), circle: false, radius: 10, interactive: false, child: Center(child: GardenIcon(icon, color: GardenColors.primary, state: GIconState.active))),
         const SizedBox(width: 12),
         Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
       ],
@@ -607,14 +594,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Center(child: GardenIcon(GIcon.inicio, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active)),
-                      ),
+                      GardenClay(size: 40, tint: GardenColors.primary.withValues(alpha: 0.15), circle: false, radius: 10, interactive: false, child: const Center(child: GardenIcon(GIcon.inicio, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active))),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text('Conviértete en cuidador',

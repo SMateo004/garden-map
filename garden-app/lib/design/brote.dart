@@ -44,9 +44,12 @@ class Brote extends StatefulWidget {
   State<Brote> createState() => _BroteState();
 }
 
-class _BroteState extends State<Brote> with SingleTickerProviderStateMixin {
+class _BroteState extends State<Brote> with TickerProviderStateMixin {
   late final AnimationController _c =
       AnimationController(vsync: this, duration: GardenMotion.celebrate);
+  // Respiración en reposo: sube y baja apenas, para que no se vea quieto.
+  late final AnimationController _breath =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 3200));
   bool _started = false;
 
   @override
@@ -58,6 +61,9 @@ class _BroteState extends State<Brote> with SingleTickerProviderStateMixin {
         _c.value = 1;
       } else {
         _c.forward();
+        // Unas pocas respiraciones y descansa: vivo al llegar, sin bucle eterno
+        // (regla del sistema: solo lo que está en vivo se mueve sin parar).
+        _breath.repeat(count: 3);
       }
     }
   }
@@ -71,6 +77,7 @@ class _BroteState extends State<Brote> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _c.dispose();
+    _breath.dispose();
     super.dispose();
   }
 
@@ -82,11 +89,20 @@ class _BroteState extends State<Brote> with SingleTickerProviderStateMixin {
       excludeSemantics: widget.semanticLabel == null,
       child: RepaintBoundary(
         child: AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) => CustomPaint(
-            size: Size.square(widget.size),
-            painter: _BrotePainter(widget.pose, _c.value),
-          ),
+          animation: Listenable.merge([_c, _breath]),
+          builder: (context, _) {
+            final b = math.sin(_breath.value * 2 * math.pi);
+            return Transform(
+              alignment: Alignment.bottomCenter,
+              transform: Matrix4.identity()
+                ..translateByDouble(0.0, -b * widget.size * 0.012, 0.0, 1.0)
+                ..scaleByDouble(1 - b * 0.012, 1 + b * 0.018, 1.0, 1.0),
+              child: CustomPaint(
+                size: Size.square(widget.size),
+                painter: _BrotePainter(widget.pose, _c.value),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -156,11 +172,25 @@ class _BrotePainter extends CustomPainter {
       ..cubicTo(34, 90, 22, 84, 21, 70)
       ..cubicTo(20, 56, 28, 36, 50, 36)
       ..close();
-    canvas.drawPath(body, Paint()..color = _body);
-    // Sombra interna inferior para dar volumen sin contorno.
+    // Volumen: luz arriba a la izquierda que se va oscureciendo hacia abajo.
+    canvas.drawPath(
+      body,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-0.35, -0.45),
+          radius: 0.95,
+          colors: [Color(0xFFF1FAD2), _body, _bodyShade],
+          stops: [0, 0.55, 1],
+        ).createShader(const Rect.fromLTWH(20, 36, 60, 54)),
+    );
+    // Sombra interna inferior y brillo, sin contorno.
     canvas.save();
     canvas.clipPath(body);
-    canvas.drawOval(const Rect.fromLTWH(14, 74, 72, 30), Paint()..color = _bodyShade);
+    canvas.drawOval(const Rect.fromLTWH(14, 76, 72, 30), Paint()..color = _bodyShade.withValues(alpha: 0.85));
+    canvas.drawOval(
+      const Rect.fromLTWH(31, 42, 17, 10),
+      Paint()..color = Colors.white.withValues(alpha: 0.55)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+    );
     canvas.restore();
   }
 

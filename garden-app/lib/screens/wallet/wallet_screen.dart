@@ -18,6 +18,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
 import '../../utils/input_formatters.dart';
+import '../../design/garden_depth.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -490,14 +491,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                width: 44, height: 44,
-                                decoration: BoxDecoration(
-                                  color: GardenColors.secondary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const GardenIcon(GIcon.retiro, size: GIconSize.md, color: GardenColors.secondary),
-                              ),
+                              GardenClay(size: 44, tint: GardenColors.secondary.withValues(alpha: 0.1), circle: false, radius: 12, interactive: false, child: const GardenIcon(GIcon.retiro, size: GIconSize.md, color: GardenColors.secondary)),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _walletData?['bankInfo']?['bankName'] != null
@@ -668,11 +662,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           padding: const EdgeInsets.symmetric(vertical: 28),
           child: Center(
             child: Column(children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
-                child: GardenIcon(GIcon.recibo, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
-              ),
+              GardenClay(size: 64, tint: GardenColors.primary.withValues(alpha: 0.08), interactive: false, child: GardenIcon(GIcon.recibo, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6))),
               const SizedBox(height: 14),
               Text(filtered ? 'Nada por aquí con este filtro' : 'Todavía no hay movimientos',
                   style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
@@ -1017,11 +1007,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
               child: Row(children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(color: _donorGold.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: _donorGold),
-                ),
+                GardenClay(size: 36, tint: _donorGold.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: _donorGold)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -1053,11 +1039,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
               child: Row(children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(color: GardenColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const GardenIcon(GIcon.empresa, size: GIconSize.sm, color: GardenColors.secondary),
-                ),
+                GardenClay(size: 36, tint: GardenColors.secondary.withValues(alpha: 0.1), circle: false, radius: 10, interactive: false, child: const GardenIcon(GIcon.empresa, size: GIconSize.sm, color: GardenColors.secondary)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(r['businessName'] as String? ?? '—', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -1139,11 +1121,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
-                        child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
-                      ),
+                      GardenClay(size: 36, tint: GardenColors.success.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success)),
                       const SizedBox(width: 10),
                       Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                     ],
@@ -1399,11 +1377,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
-                        child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success),
-                      ),
+                      GardenClay(size: 36, tint: GardenColors.success.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.seguridad, size: GIconSize.sm, state: GIconState.active, color: GardenColors.success)),
                       const SizedBox(width: 10),
                       Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                     ],
@@ -1612,16 +1586,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 color: Colors.transparent,
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  leading: Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
-                      color: isSelected
+                  leading: GardenClay(size: 36, tint: isSelected
                           ? GardenColors.primary.withValues(alpha: 0.15)
-                          : GardenColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor),
-                  ),
+                          : GardenColors.primary.withValues(alpha: 0.08), circle: false, radius: 10, interactive: false, child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor)),
                   title: Text(bank['name']!,
                       style: TextStyle(
                         color: isSelected ? GardenColors.primary : textColor,
@@ -1776,14 +1743,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       ),
       child: Row(
         children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(child: GardenIcon(icon, color: color, state: GIconState.active)),
-          ),
+          GardenClay(size: 42, tint: color.withValues(alpha: 0.12), circle: false, radius: 10, interactive: false, child: Center(child: GardenIcon(icon, color: color, state: GIconState.active))),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

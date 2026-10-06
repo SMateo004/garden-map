@@ -16,6 +16,7 @@ import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_profile.dart';
 import '../support/support_chat_screen.dart';
+import '../../design/garden_depth.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -527,8 +528,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
                             border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
                           ),
                           child: _uploadingPhoto
-                              ? Padding(
-                                  padding: const EdgeInsets.all(22),
+                              ? const Padding(
+                                  padding: EdgeInsets.all(22),
                                   child: GardenLoadingIndicator(color: GardenColors.primary))
                               : ClipOval(
                                   child: _pendingPhotoBytes != null
@@ -553,11 +554,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                             HapticFeedback.selectionClick();
                             _pickAndUploadPhoto();
                           },
-                          child: Container(
-                            width: 28, height: 28,
-                            decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                            child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
-                          ),
+                          child: const GardenClay(size: 28, color: GardenColors.primary, interactive: false, child: GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white)),
                         ),
                       ),
                     ],
@@ -693,9 +690,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   if (_savedPhone.isNotEmpty && _phoneCtrl.text.trim() == _savedPhone) ...[
                     const SizedBox(width: 8),
                     if (_phoneVerified)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        const GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.success),
-                        const SizedBox(width: 3),
+                      const Row(mainAxisSize: MainAxisSize.min, children: [
+                        GardenIcon(GIcon.verificado, size: GIconSize.xs, color: GardenColors.success),
+                        SizedBox(width: 3),
                         Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 11.5)),
                       ])
                     else
@@ -887,10 +884,10 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 child: _isLoading
                     ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                     : SingleChildScrollView(
-                        padding: EdgeInsets.all(kIsWeb ? 28 : 24),
+                        padding: const EdgeInsets.all(kIsWeb ? 28 : 24),
                         child: Center(
                           child: ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: kIsWeb ? 680.0 : double.infinity),
+                            constraints: const BoxConstraints(maxWidth: kIsWeb ? 680.0 : double.infinity),
                             child: formContent,
                           ),
                         ),

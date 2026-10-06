@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../design/garden_icons.dart';
 import '../widgets/garden_loading_indicator.dart';
 import 'garden_motion.dart';
+import '../design/garden_depth.dart';
 
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
@@ -1859,15 +1860,7 @@ class _GardenErrorDialogContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      icon: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          color: const Color(0xFFC0392B).withValues(alpha: 0.12),
-          shape: BoxShape.circle,
-        ),
-        child: const GardenIcon(GIcon.conflicto, size: GIconSize.lg, state: GIconState.active, color: Color(0xFFC0392B)),
-      ),
+      icon: GardenClay(size: 52, tint: const Color(0xFFC0392B).withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.conflicto, size: GIconSize.lg, state: GIconState.active, color: Color(0xFFC0392B))),
       title: Text(title ?? 'Algo salió mal'),
       content: Text(message),
       actions: [

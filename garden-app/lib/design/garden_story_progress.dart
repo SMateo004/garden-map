@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
+import 'garden_depth.dart';
 import 'garden_icons.dart';
 
 // ── PASOS DE LA HISTORIA ───────────────────────────────────────────────────
@@ -102,14 +103,12 @@ class _Dot extends StatelessWidget {
       duration: GardenMotion.resolve(context, GardenMotion.expressive),
       curve: GardenMotion.pop,
       builder: (context, s, child) => Transform.scale(scale: s, child: child),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          border: step.state == StoryStepState.current ? Border.all(color: fg, width: 1.5) : null,
-        ),
+      // Con volumen; el paso actual flota ("estás aquí").
+      child: GardenClay(
+        size: 36,
+        tint: bg,
+        float: step.state == StoryStepState.current,
+        interactive: false,
         child: Center(
           child: GardenIcon(icon,
               size: GIconSize.md,

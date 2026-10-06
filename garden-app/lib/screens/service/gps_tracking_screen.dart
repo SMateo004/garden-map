@@ -17,6 +17,7 @@ import '../../design/garden_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/analytics_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_depth.dart';
 
 class GpsTrackingScreen extends StatefulWidget {
   final String bookingId;
@@ -948,15 +949,10 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
         children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Center(
+          GardenClay(size: 40, tint: color.withValues(alpha: 0.12), interactive: false, child: Center(
               child: GardenIcon(icon, color: color, state: GIconState.active,
                   live: icon == GIcon.paseo),
-            ),
-          ),
+            )),
           const SizedBox(height: 6),
           Text(value,
               style: TextStyle(

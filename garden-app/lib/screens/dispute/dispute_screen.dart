@@ -7,6 +7,7 @@ import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/garden_depth.dart';
 
 class DisputeScreen extends StatefulWidget {
   final String bookingId;
@@ -1119,14 +1120,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const GardenIcon(GIcon.ia, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
-                    ),
+                    GardenClay(size: 32, tint: GardenColors.primary.withValues(alpha: 0.1), circle: false, radius: 8, interactive: false, child: const GardenIcon(GIcon.ia, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary)),
                     const SizedBox(width: 10),
                     Text('Análisis de GARDEN IA', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                   ],

@@ -36,6 +36,7 @@ import 'trainings_screen.dart';
 import 'caregiver_profile_data_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -1677,22 +1678,15 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       child: Row(
         children: [
           // Ícono servicio
-          Container(
-            width: 48, height: 48,
-            decoration: BoxDecoration(
-              color: isUrgent
+          GardenClay(size: 48, tint: isUrgent
                   ? GardenColors.warning.withValues(alpha: 0.12)
-                  : GardenColors.secondary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
+                  : GardenColors.secondary.withValues(alpha: 0.12), interactive: false, child: Center(
               child: GardenIcon(
                 GIcon.forService(GardenService.fromApi(serviceType) ?? GardenService.hospedaje),
                 size: GIconSize.lg,
                 state: GIconState.active,
               ),
-            ),
-          ),
+            )),
           const SizedBox(width: 14),
           // Info
           Expanded(
@@ -2236,14 +2230,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     return TapScale(
       pressedScale: 0.88,
       onTap: onTap,
-      child: Container(
-        width: 34, height: 34,
-        decoration: BoxDecoration(
-          color: GardenColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Center(child: GardenIcon(icon, color: GardenColors.primary)),
-      ),
+      child: GardenClay(size: 34, tint: GardenColors.primary.withValues(alpha: 0.1), circle: false, radius: 9, interactive: false, child: Center(child: GardenIcon(icon, color: GardenColors.primary))),
     );
   }
 
@@ -3754,14 +3741,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje), size: GIconSize.md, state: GIconState.active),
-                  ),
+                  GardenClay(size: 42, tint: GardenColors.primary.withValues(alpha: 0.1), circle: false, radius: 10, interactive: false, child: GardenIcon(GIcon.forService(GardenService.fromApi(booking['serviceType'] as String?) ?? GardenService.hospedaje), size: GIconSize.md, state: GIconState.active)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -3850,14 +3830,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
                   child: Row(
                     children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
-                      ),
+                      GardenClay(size: 36, tint: GardenColors.primary.withValues(alpha: 0.08), circle: false, radius: 8, interactive: false, child: const GardenIcon(GIcon.huella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(

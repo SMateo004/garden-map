@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 class ClientWelcomeScreen extends StatefulWidget {
   const ClientWelcomeScreen({super.key});
@@ -414,14 +415,7 @@ class _MiniCaregiverCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(
-                  color: GardenColors.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(child: GardenIcon(icon, size: GIconSize.md, state: GIconState.active)),
-              ),
+              GardenClay(size: 38, tint: GardenColors.primary.withValues(alpha: 0.12), interactive: false, child: Center(child: GardenIcon(icon, size: GIconSize.md, state: GIconState.active))),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(

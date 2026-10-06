@@ -4,6 +4,7 @@ import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
 import 'garden_icons.dart';
 import 'garden_pet_avatar.dart';
+import '../design/garden_depth.dart';
 
 /// Piezas de "Mis mascotas" (my_pets_screen.dart): una ficha por mascota con
 /// lo esencial a la vista y lo que falta para que el cuidador llegue preparado.
@@ -233,12 +234,7 @@ class GardenAddPetTile extends StatelessWidget {
           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.5),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-            child: const Center(child: GardenIcon(GIcon.agregar, color: Colors.white, size: GIconSize.sm)),
-          ),
+          const GardenClay(size: 34, color: GardenColors.primary, interactive: false, child: Center(child: GardenIcon(GIcon.agregar, color: Colors.white, size: GIconSize.sm))),
           const SizedBox(width: 12),
           Flexible(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -10,6 +10,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 /// Implementación WEB de la pantalla de verificación de identidad.
 /// Muestra un QR que el cuidador escanea con su teléfono.
@@ -222,11 +223,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: const GardenIcon(GIcon.esperando, size: GIconSize.xl, color: GardenColors.warning),
-            ),
+            GardenClay(size: 72, tint: GardenColors.warning.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.esperando, size: GIconSize.xl, color: GardenColors.warning)),
             const SizedBox(height: 20),
             Text('Tu verificación está en revisión',
                 style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold),

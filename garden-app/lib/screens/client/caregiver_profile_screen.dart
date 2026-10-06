@@ -15,6 +15,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -2373,7 +2374,7 @@ class _ServiceOption extends StatelessWidget {
           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
         ),
         child: Row(children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary)),
+          GardenClay(size: 44, tint: GardenColors.primary.withValues(alpha: 0.1), interactive: false, child: GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: TextStyle(color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 16, fontWeight: FontWeight.w700)),

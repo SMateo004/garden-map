@@ -9,6 +9,7 @@ import '../chat/chat_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 class MeetAndGreetScreen extends StatefulWidget {
   final String bookingId;
@@ -455,14 +456,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
     return Column(
       children: [
         const SizedBox(height: 16),
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color: GardenColors.warning.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: const Center(child: GardenIcon(GIcon.calendario, size: GIconSize.xl, state: GIconState.active)),
-        ),
+        GardenClay(size: 80, tint: GardenColors.warning.withValues(alpha: 0.12), interactive: false, child: const Center(child: GardenIcon(GIcon.calendario, size: GIconSize.xl, state: GIconState.active))),
         const SizedBox(height: 20),
         Text('Propuesta pendiente', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/garden_theme.dart';
 import 'garden_icons.dart';
+import '../design/garden_depth.dart';
 
 // ── SELLOS DE CONFIANZA ────────────────────────────────────────────────────
 // Los mismos cuatro sellos, siempre en el mismo orden y lugar, para todos los
@@ -103,18 +104,10 @@ class _SealTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: ink.withValues(alpha: ok ? 0.12 : 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
+            GardenClay(size: 34, tint: ink.withValues(alpha: ok ? 0.12 : 0.08), interactive: false, child: Center(
                 child: GardenIcon(seal.icon,
                     state: ok ? GIconState.active : GIconState.idle, color: ink, size: GIconSize.md),
-              ),
-            ),
+              )),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

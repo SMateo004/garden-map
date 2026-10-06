@@ -5,6 +5,7 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 /// Chat de soporte de Garden — reemplaza el botón de WhatsApp del Centro de
 /// Ayuda. Responde un asistente automático (Claude, grounded en el centro
@@ -89,12 +90,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-              child: const GardenIcon(GIcon.soporte, size: GIconSize.sm, state: GIconState.active, color: Colors.white),
-            ),
+            const GardenClay(size: 34, color: GardenColors.primary, interactive: false, child: GardenIcon(GIcon.soporte, size: GIconSize.sm, state: GIconState.active, color: Colors.white)),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

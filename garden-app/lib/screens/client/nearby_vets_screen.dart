@@ -7,6 +7,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 /// Veterinarias cercanas a la dirección guardada del usuario (Mi Perfil).
 /// Pensada para casos de emergencia: mismo dato que usa el cuidador durante
@@ -171,14 +172,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 48, height: 48,
-                                    decoration: BoxDecoration(
-                                      color: GardenColors.error.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const GardenIcon(GIcon.veterinaria, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error),
-                                  ),
+                                  GardenClay(size: 48, tint: GardenColors.error.withValues(alpha: 0.1), circle: false, radius: 12, interactive: false, child: const GardenIcon(GIcon.veterinaria, size: GIconSize.lg, state: GIconState.active, color: GardenColors.error)),
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(

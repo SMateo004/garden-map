@@ -17,6 +17,7 @@ import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_profile.dart';
 import '../../utils/person_validators.dart';
+import '../../design/garden_depth.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -151,12 +152,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
             right: 0,
             child: GestureDetector(
               onTap: _pickProfilePhoto,
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                child: const GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white),
-              ),
+              child: const GardenClay(size: 28, color: GardenColors.primary, interactive: false, child: GardenIcon(GIcon.foto, size: GIconSize.xs, color: Colors.white)),
             ),
           ),
       ],
@@ -1328,14 +1324,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 color: Colors.transparent,
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  leading: Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
-                      color: isSelected ? GardenColors.primary.withValues(alpha: 0.15) : GardenColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor),
-                  ),
+                  leading: GardenClay(size: 36, tint: isSelected ? GardenColors.primary.withValues(alpha: 0.15) : GardenColors.primary.withValues(alpha: 0.08), circle: false, radius: 10, interactive: false, child: GardenIcon(category == 'Bancos' ? GIcon.retiro : GIcon.billetera, size: GIconSize.sm, state: category == 'Bancos' ? GIconState.idle : GIconState.active, color: isSelected ? GardenColors.primary : subtextColor)),
                   title: Text(bank['name']!, style: TextStyle(
                     color: isSelected ? GardenColors.primary : textColor,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 /// Guía completa para nuevos cuidadores GARDEN.
 /// Ruta pública: /guia-cuidador — accesible desde el correo de bienvenida.
@@ -491,15 +492,7 @@ class CaregiverGuideScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: GardenColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(child: GardenIcon(icon, state: GIconState.active)),
-          ),
+          GardenClay(size: 40, tint: GardenColors.primary.withValues(alpha: 0.1), circle: false, radius: 10, interactive: false, child: Center(child: GardenIcon(icon, state: GIconState.active))),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -600,15 +593,7 @@ class CaregiverGuideScreen extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: GardenColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Center(child: GardenIcon(icon, color: GardenColors.primary, size: GIconSize.md, state: GIconState.active)),
-        ),
+        GardenClay(size: 42, tint: GardenColors.primary.withValues(alpha: 0.1), circle: false, radius: 11, interactive: false, child: Center(child: GardenIcon(icon, color: GardenColors.primary, size: GIconSize.md, state: GIconState.active))),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -665,12 +650,7 @@ class CaregiverGuideScreen extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Center(child: GardenIcon(icon, color: color, size: GIconSize.lg, state: GIconState.active)),
-            ),
+            GardenClay(size: 44, tint: color.withValues(alpha: 0.12), circle: false, radius: 10, interactive: false, child: Center(child: GardenIcon(icon, color: color, size: GIconSize.lg, state: GIconState.active))),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

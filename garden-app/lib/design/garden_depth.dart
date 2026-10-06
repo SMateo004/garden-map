@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/garden_motion.dart';
+import '../theme/garden_theme.dart';
 import 'garden_icons.dart';
 
 /// Profundidad: piezas con volumen (estilo "clay") para que las figuras no
@@ -16,8 +17,16 @@ Color _darken(Color c, double t) => Color.lerp(c, Colors.black, t)!;
 class GardenClay extends StatefulWidget {
   final Widget child;
   final double size;
-  final Color color;
+  final Color? color;
+
+  /// Color tenue de las figuras planas (ej. verde al 12 %): se vuelve un
+  /// material sólido mezclándolo con la superficie, un poco más intenso para
+  /// que el tono se note con el volumen. Se usa en lugar de [color].
+  final Color? tint;
   final bool circle;
+
+  /// Radio para las cuadradas (por defecto, 30 % del tamaño).
+  final double? radius;
 
   /// Flota suave (para lo seleccionado o lo que pide atención).
   final bool float;
@@ -28,12 +37,14 @@ class GardenClay extends StatefulWidget {
   const GardenClay({
     super.key,
     required this.child,
-    required this.color,
+    this.color,
+    this.tint,
     this.size = 48,
     this.circle = true,
+    this.radius,
     this.float = false,
     this.interactive = true,
-  });
+  }) : assert(color != null || tint != null, 'GardenClay necesita color o tint');
 
   @override
   State<GardenClay> createState() => _GardenClayState();
@@ -57,14 +68,19 @@ class _GardenClayState extends State<GardenClay> with SingleTickerProviderStateM
     _syncFloat();
   }
 
+  bool _wasFloat = false;
+
+  /// Flota unas pocas veces cuando pasa a [float] (ej. al elegirla) y
+  /// descansa: sin bucle eterno, como pide el sistema de movimiento.
   void _syncFloat() {
     final run = widget.float && !GardenMotion.reduced(context);
-    if (run && !_float.isAnimating) {
-      _float.repeat();
-    } else if (!run && _float.isAnimating) {
+    if (run && !_wasFloat) {
+      _float.repeat(count: 3);
+    } else if (!run && _wasFloat) {
       _float.stop();
       _float.value = 0;
     }
+    _wasFloat = run;
   }
 
   @override
@@ -81,9 +97,18 @@ class _GardenClayState extends State<GardenClay> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.color;
     final s = widget.size;
-    final radius = widget.circle ? BorderRadius.circular(s / 2) : BorderRadius.circular(s * 0.3);
+    final Color c;
+    if (widget.color != null) {
+      c = widget.color!;
+    } else {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurface;
+      final t = widget.tint!;
+      final a = (t.a * 2.2).clamp(0.18, 1.0);
+      c = Color.alphaBlend(t.withValues(alpha: a), surface);
+    }
+    final radius = widget.circle ? BorderRadius.circular(s / 2) : BorderRadius.circular(widget.radius ?? s * 0.3);
 
     final body = Container(
       width: s,
@@ -150,10 +175,10 @@ class _GardenClayState extends State<GardenClay> with SingleTickerProviderStateM
             final dy = widget.float ? math.sin(_float.value * 2 * math.pi) * 2.5 : 0.0;
             final m = Matrix4.identity()
               ..setEntry(3, 2, 0.0015)
-              ..translate(0.0, dy + (_pressed ? 2.0 : 0.0))
+              ..translateByDouble(0.0, dy + (_pressed ? 2.0 : 0.0), 0.0, 1.0)
               ..rotateX(-_tilt.dy * 0.22)
               ..rotateY(_tilt.dx * 0.22)
-              ..scale(_pressed ? 0.94 : 1.0);
+              ..scaleByDouble(_pressed ? 0.94 : 1.0, _pressed ? 0.94 : 1.0, 1.0, 1.0);
             return Transform(alignment: Alignment.center, transform: m, child: child);
           },
           child: body,
@@ -179,5 +204,45 @@ class GardenClayIcon extends StatelessWidget {
       ),
       GardenIcon(icon, size: size, state: GIconState.active, color: color),
     ]);
+  }
+}
+
+/// Cualquier pieza tocable con volumen: sombra de apoyo debajo y se hunde
+/// (baja y se achica apenas) mientras se presiona.
+class GardenPress extends StatefulWidget {
+  final Widget child;
+  final BorderRadius radius;
+
+  /// Sombra de apoyo (null = sin sombra, solo el hundimiento).
+  final Color? shadow;
+  const GardenPress({super.key, required this.child, this.radius = const BorderRadius.all(Radius.circular(14)), this.shadow});
+
+  @override
+  State<GardenPress> createState() => _GardenPressState();
+}
+
+class _GardenPressState extends State<GardenPress> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = GardenMotion.resolve(context, GardenMotion.instant);
+    return Listener(
+      onPointerDown: (_) => setState(() => _down = true),
+      onPointerUp: (_) => setState(() => _down = false),
+      onPointerCancel: (_) => setState(() => _down = false),
+      child: AnimatedContainer(
+        duration: d,
+        curve: GardenMotion.enter,
+        transform: Matrix4.translationValues(0, _down ? 2 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: widget.radius,
+          boxShadow: widget.shadow == null
+              ? null
+              : [BoxShadow(color: widget.shadow!, blurRadius: _down ? 2 : 6, offset: Offset(0, _down ? 1 : 3))],
+        ),
+        child: AnimatedScale(duration: d, scale: _down ? 0.97 : 1, child: widget.child),
+      ),
+    );
   }
 }

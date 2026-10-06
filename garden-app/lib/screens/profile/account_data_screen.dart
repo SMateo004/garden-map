@@ -10,6 +10,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_depth.dart';
 
 class AccountDataScreen extends StatefulWidget {
   const AccountDataScreen({super.key});
@@ -116,11 +117,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 60, height: 60,
-                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const GardenIcon(GIcon.eliminar, size: GIconSize.xl, color: GardenColors.error),
-                ),
+                GardenClay(size: 60, tint: GardenColors.error.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.eliminar, size: GIconSize.xl, color: GardenColors.error)),
                 const SizedBox(height: 16),
                 Text(_role == 'CAREGIVER' ? 'Solicitar eliminación de cuenta' : 'Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),

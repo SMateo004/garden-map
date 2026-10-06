@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../design/garden_icons.dart';
 import '../theme/garden_theme.dart';
+import '../design/garden_depth.dart';
 
 /// Notificación individual tal como la devuelve el backend.
 class AppNotification {
@@ -295,15 +296,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
             padding: const EdgeInsets.fromLTRB(20, 4, 8, 12),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const GardenIcon(GIcon.notificaciones, color: GardenColors.primary, state: GIconState.active),
-                ),
+                GardenClay(size: 36, tint: GardenColors.primary.withValues(alpha: 0.10), circle: false, radius: 10, interactive: false, child: const GardenIcon(GIcon.notificaciones, color: GardenColors.primary, state: GIconState.active)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -398,19 +391,11 @@ class _NotificationRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Ícono tipo
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _typeColor(notif.type).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: GardenIcon(
+            GardenClay(size: 42, tint: _typeColor(notif.type).withValues(alpha: 0.12), circle: false, radius: 12, interactive: false, child: GardenIcon(
                 _typeIcon(notif.type),
                 color: _typeColor(notif.type),
                 state: GIconState.active,
-              ),
-            ),
+              )),
             const SizedBox(width: 12),
             // Contenido
             Expanded(
@@ -561,15 +546,7 @@ class _NotificationDetailDialog extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: iconColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: GardenIcon(iconData, color: iconColor, size: GIconSize.lg, state: GIconState.active),
-                  ),
+                  GardenClay(size: 48, tint: iconColor.withValues(alpha: 0.15), circle: false, radius: 14, interactive: false, child: GardenIcon(iconData, color: iconColor, size: GIconSize.lg, state: GIconState.active)),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
@@ -694,15 +671,7 @@ class _EmptyNotifications extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const GardenIcon(GIcon.notificaciones, size: GIconSize.xl, color: GardenColors.primary),
-            ),
+            GardenClay(size: 72, tint: GardenColors.primary.withValues(alpha: 0.08), interactive: false, child: const GardenIcon(GIcon.notificaciones, size: GIconSize.xl, color: GardenColors.primary)),
             const SizedBox(height: 16),
             Text(
               'Todo tranquilo por aquí',

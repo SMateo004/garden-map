@@ -20,6 +20,7 @@ import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_depth.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -253,14 +254,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const GardenIcon(GIcon.correo, size: GIconSize.lg, color: GardenColors.primary),
-                  ),
+                  GardenClay(size: 56, tint: GardenColors.primary.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.correo, size: GIconSize.lg, color: GardenColors.primary)),
                   const SizedBox(height: 16),
                   Text('Verifica tu correo',
                     style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
@@ -387,11 +381,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error),
-                ),
+                GardenClay(size: 56, tint: GardenColors.error.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error)),
                 const SizedBox(height: 16),
                 Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
@@ -1567,13 +1557,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 52, height: 52,
-                decoration: BoxDecoration(
-                    color: GardenColors.error.withValues(alpha: 0.10),
-                    shape: BoxShape.circle),
-                child: const GardenIcon(GIcon.cancelado, size: GIconSize.lg, color: GardenColors.error),
-              ),
+              GardenClay(size: 52, tint: GardenColors.error.withValues(alpha: 0.10), interactive: false, child: const GardenIcon(GIcon.cancelado, size: GIconSize.lg, color: GardenColors.error)),
               const SizedBox(height: 14),
               Text('¿Abandonar el registro?',
                   style: TextStyle(

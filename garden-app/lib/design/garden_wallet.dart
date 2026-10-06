@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
+import 'garden_depth.dart';
 import 'garden_icons.dart';
 import 'garden_payment.dart';
 
@@ -117,7 +118,10 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = a.primary ? GardenColors.navy : Colors.white;
-    return Material(
+    // Se hunde al tocar, con sombra de apoyo (antes era plano).
+    return GardenPress(
+      shadow: Colors.black.withValues(alpha: a.primary ? 0.22 : 0.12),
+      child: Material(
       color: a.primary ? Colors.white : Colors.white.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -147,6 +151,7 @@ class _ActionButton extends StatelessWidget {
           },
         ),
       ),
+    ),
     );
   }
 }
@@ -270,7 +275,11 @@ class GardenFilterPills<T> extends StatelessWidget {
       for (final (value, label) in options)
         GestureDetector(
           onTap: () => onSelect(value),
-          child: AnimatedContainer(
+          // Se hunde al tocar; la elegida queda apoyada con sombra.
+          child: GardenPress(
+            radius: BorderRadius.circular(999),
+            shadow: value == selected ? Colors.black.withValues(alpha: isDark ? 0.4 : 0.16) : null,
+            child: AnimatedContainer(
             duration: GardenMotion.resolve(context, GardenMotion.quick),
             curve: GardenMotion.enter,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -284,6 +293,7 @@ class GardenFilterPills<T> extends StatelessWidget {
                     color: value == selected ? (isDark ? GardenColors.darkBackground : Colors.white) : sub,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800)),
+            ),
           ),
         ),
     ]);
