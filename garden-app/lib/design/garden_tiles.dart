@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
+import 'garden_depth.dart';
 import 'garden_icons.dart';
 import 'garden_service.dart';
 
@@ -56,16 +57,19 @@ class GardenServiceTile extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: 34,
-                child: Center(
-                  child: svc == null
-                      ? GardenIcon(GIcon.huella,
-                          size: GIconSize.xl,
-                          state: selected ? GIconState.active : GIconState.idle,
-                          color: selected ? ink : null)
-                      : GardenIcon(GIcon.forService(svc),
-                          size: GIconSize.xl, state: selected ? GIconState.active : GIconState.idle),
+              // Figura con volumen: la elegida toma el color del servicio y
+              // flota; las demás quedan neutras (antes: ícono de línea plano).
+              GardenClay(
+                size: 46,
+                float: selected,
+                interactive: false,
+                color: selected
+                    ? Color.lerp(ink, Colors.white, isDark ? 0.0 : 0.12)!
+                    : (isDark ? GardenColors.darkSurfaceElevated : const Color(0xFFF1EEE4)),
+                child: GardenClayIcon(
+                  svc == null ? GIcon.huella : GIcon.forService(svc),
+                  size: GIconSize.lg,
+                  color: selected ? Colors.white : idleText,
                 ),
               ),
               const SizedBox(height: 6),
@@ -98,7 +102,6 @@ class GardenShortcut extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bubble = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurface;
-    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final text = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return Semantics(
@@ -118,15 +121,12 @@ class GardenShortcut extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: bubble,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: border),
-                  ),
-                  child: Center(child: GardenIcon(icon, size: GIconSize.lg, state: GIconState.active)),
+                // Burbuja con volumen (antes: círculo plano con borde).
+                GardenClay(
+                  size: 50,
+                  color: isDark ? GardenColors.darkSurfaceElevated : bubble,
+                  child: GardenClayIcon(icon,
+                      size: GIconSize.lg, color: isDark ? GardenColors.primaryLight : GardenColors.primary),
                 ),
                 const SizedBox(height: 6),
                 Text(

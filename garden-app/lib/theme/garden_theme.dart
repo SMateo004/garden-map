@@ -1112,29 +1112,44 @@ class GardenButton extends StatelessWidget {
       );
 
       if (!useBlur) {
-        return SizedBox(
-          width: width ?? double.infinity,
-          height: height,
-          child: outlinedBtn,
+        return _PressDip(
+          enabled: onPressed != null && !loading,
+          child: SizedBox(
+            width: width ?? double.infinity,
+            height: height,
+            child: outlinedBtn,
+          ),
         );
       }
 
-      return SizedBox(
-        width: width ?? double.infinity,
-        height: height,
-        child: ClipRRect(
-          borderRadius: radius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: outlinedBtn,
+      return _PressDip(
+        enabled: onPressed != null && !loading,
+        child: SizedBox(
+          width: width ?? double.infinity,
+          height: height,
+          child: ClipRRect(
+            borderRadius: radius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: outlinedBtn,
+            ),
           ),
         ),
       );
     }
 
-    return SizedBox(
-      width: width ?? double.infinity,
+    // Pieza con volumen: la cara del botón se apoya sobre un borde inferior
+    // más oscuro y se hunde al tocarla (antes era un degradado plano). El
+    // alto total sigue siendo [height].
+    return _Press3D(
       height: height,
+      width: width,
+      radius: radius,
+      lipColor: Color.lerp(btnColor, Colors.black, 0.35)!,
+      enabled: onPressed != null && !loading,
+      face: SizedBox(
+      width: width ?? double.infinity,
+      height: height - _kLip,
       child: ClipRRect(
         borderRadius: radius,
         child: Stack(
@@ -1160,7 +1175,7 @@ class GardenButton extends StatelessWidget {
             // Glass shimmer — reflexión de luz en el tercio superior
             Positioned(
               top: 0, left: 0, right: 0,
-              height: height * 0.52,
+              height: (height - _kLip) * 0.52,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -1193,7 +1208,7 @@ class GardenButton extends StatelessWidget {
                 overlayColor: Colors.white.withValues(alpha: 0.08),
                 shape: RoundedRectangleBorder(borderRadius: radius),
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 0),
-                minimumSize: Size(0, height),
+                minimumSize: Size(0, height - _kLip),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: _buildChild(Colors.white),
@@ -1201,6 +1216,7 @@ class GardenButton extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -1222,6 +1238,105 @@ class GardenButton extends StatelessWidget {
       );
     }
     return Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10));
+  }
+}
+
+const double _kLip = 4;
+
+/// Botón con volumen: cara + borde inferior. Se hunde al tocar (la cara baja
+/// hasta casi tapar el borde) y en web se levanta un poco con el cursor.
+class _Press3D extends StatefulWidget {
+  final Widget face;
+  final double height;
+  final double? width;
+  final BorderRadius radius;
+  final Color lipColor;
+  final bool enabled;
+  const _Press3D({
+    required this.face,
+    required this.height,
+    required this.width,
+    required this.radius,
+    required this.lipColor,
+    required this.enabled,
+  });
+
+  @override
+  State<_Press3D> createState() => _Press3DState();
+}
+
+class _Press3DState extends State<_Press3D> {
+  bool _down = false;
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = GardenMotion.reduced(context);
+    final dy = !widget.enabled
+        ? _kLip * 0.5
+        : _down
+            ? _kLip - 1
+            : (_hover && !reduced ? -1.0 : 0.0);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _down = true),
+        onPointerUp: (_) => setState(() => _down = false),
+        onPointerCancel: (_) => setState(() => _down = false),
+        child: SizedBox(
+          width: widget.width ?? double.infinity,
+          height: widget.height,
+          child: Stack(clipBehavior: Clip.none, children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              top: _kLip,
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: widget.lipColor, borderRadius: widget.radius),
+              ),
+            ),
+            AnimatedPositioned(
+              duration: reduced ? Duration.zero : GardenMotion.instant,
+              curve: GardenMotion.enter,
+              left: 0,
+              right: 0,
+              top: dy,
+              height: widget.height - _kLip,
+              child: widget.face,
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón de contorno: baja 1,5 px al tocarlo.
+class _PressDip extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+  const _PressDip({required this.child, required this.enabled});
+
+  @override
+  State<_PressDip> createState() => _PressDipState();
+}
+
+class _PressDipState extends State<_PressDip> {
+  bool _down = false;
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => setState(() => _down = widget.enabled),
+      onPointerUp: (_) => setState(() => _down = false),
+      onPointerCancel: (_) => setState(() => _down = false),
+      child: AnimatedSlide(
+        duration: GardenMotion.resolve(context, GardenMotion.instant),
+        offset: Offset(0, _down ? 0.03 : 0),
+        child: widget.child,
+      ),
+    );
   }
 }
 

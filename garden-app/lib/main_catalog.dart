@@ -4,6 +4,7 @@ import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
 import 'design/garden_caregiver_card.dart';
 import 'design/garden_chain_proof.dart';
+import 'design/garden_depth.dart';
 import 'design/garden_live_hero.dart';
 import 'design/garden_story_progress.dart';
 import 'design/garden_trust_seals.dart';
@@ -103,6 +104,15 @@ class _CatalogPageState extends State<_CatalogPage> {
             ]),
             const SizedBox(height: 6),
             _Note('idle · active · live (en curso)', fg),
+          ]),
+          _Section('Volumen (figuras y botones)', [
+            Wrap(spacing: 16, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              const GardenClay(color: Color(0xFFF1EEE4), child: GardenClayIcon(GIcon.veterinaria, color: GardenColors.primary)),
+              const GardenClay(color: Color(0xFF2FA83A), float: true, child: GardenClayIcon(GIcon.paseo, color: Colors.white)),
+              const GardenClay(color: Color(0xFFFFB020), circle: false, child: GardenClayIcon(GIcon.guarderia, color: Colors.white)),
+              SizedBox(width: 200, child: GardenButton(label: 'Botón con volumen', onPressed: () {})),
+            ]),
+            _Note('Se inclinan con el cursor, se aprietan al tocarlas; la elegida flota. Respetan "reducir movimiento".', fg),
           ]),
           _Section('Iconos (idle / active)', [
             Wrap(spacing: 8, runSpacing: 8, children: [
