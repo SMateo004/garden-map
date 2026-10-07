@@ -108,6 +108,7 @@ async function _expirarAceptacion(booking: {
 
     await tx.notification.create({
       data: {
+        bookingId: booking.id,
         userId: booking.clientId,
         title: 'Reserva cancelada',
         message: `El cuidador no respondió a tu solicitud para ${booking.petName} a tiempo, así que se canceló automáticamente. Se reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden.`,

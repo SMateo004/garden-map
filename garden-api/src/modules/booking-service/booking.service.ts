@@ -766,6 +766,7 @@ export async function createBooking(
       setImmediate(() => {
         prisma.notification.create({
           data: {
+            bookingId: booking.id,
             userId: caregiver.userId,
             type: 'INFO',
             title: '📅 Solicitud de Meet & Greet',
@@ -1545,6 +1546,7 @@ export async function cancelMGBooking(bookingId: string, userId: string): Promis
     const otherId = booking.clientId === userId ? booking.caregiverId : booking.clientId;
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: otherId,
         title: 'Reserva cancelada',
         message: 'La reserva fue cancelada después del Meet & Greet.',
@@ -2071,6 +2073,7 @@ export async function requestCancellationByCaregiver(
     // 1. Notificación para el dueño (cliente)
     await tx.notification.create({
       data: {
+        bookingId,
         userId: (booking as any).client.id,
         title: 'Tu reserva ha sido cancelada por el cuidador',
         message: `El cuidador ha cancelado la reserva de ${booking.petName} (ID: ${bookingId.slice(0, 8)}). Motivo: ${reason}.${walletRefundNote}`,
@@ -2081,6 +2084,7 @@ export async function requestCancellationByCaregiver(
     // 2. Notificación para el cuidador (confirmación propia)
     await tx.notification.create({
       data: {
+        bookingId,
         userId: caregiverUserId,
         title: 'Has cancelado la reserva exitosamente',
         message: `Has cancelado la reserva ${bookingId}. El cliente ha sido notificado y ya recibió el reembolso completo en su billetera Garden.`,
@@ -2440,6 +2444,7 @@ export async function cancelBooking(
         : 'No aplica reembolso según la política de cancelación.';
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: clientId,
           title: 'Has cancelado tu reserva',
           message: `Tu reserva ha sido cancelada. ${baseMsg}`,
@@ -2454,6 +2459,7 @@ export async function cancelBooking(
       if (caregiver) {
         await tx.notification.create({
           data: {
+            bookingId: booking.id,
             userId: caregiver.userId,
             title: 'Una reserva ha sido cancelada por el cliente',
             message: `El cliente ha cancelado la reserva ${bookingId}. Tu calendario se ha liberado automáticamente para estas fechas.`,
@@ -2961,6 +2967,7 @@ export async function confirmWalkExtensionQr(
       caregiverUserId = caregiver.userId;
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiver.userId,
           title: '⏱️ Extensión de paseo confirmada',
           message: `El cliente pagó ${additionalMinutes} min adicionales para el paseo de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount - extraCommission - extraTax} adicionales para ti.`,
@@ -3246,6 +3253,7 @@ export async function confirmHospedajeExtensionQr(
       caregiverUserId = caregiver.userId;
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiver.userId,
           title: '🏠 Hospedaje extendido',
           message: `El cliente agregó ${additionalDays} noche${additionalDays > 1 ? 's' : ''} al hospedaje de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount - extraCommission - extraTax} adicionales para ti.`,
@@ -3749,6 +3757,7 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '¡Tu reserva fue aceptada! 🐾',
         message: `El cuidador aceptó tu reserva para ${booking.petName}. Ya está confirmada. Puedes ver los detalles en "Mis reservas".`,
@@ -3837,6 +3846,7 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: 'Reserva rechazada por el cuidador',
         message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}.${walletRefundNote}`,
@@ -3923,6 +3933,7 @@ export async function startService(bookingId: string, caregiverUserId: string, p
     // Notificación in-app al cliente
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '¡El servicio ha comenzado! 🐕',
         message: `El cuidador inició el servicio para ${booking.petName}. Puedes seguir el progreso en "Mis reservas".`,
@@ -3976,6 +3987,7 @@ export async function markEnRoute(bookingId: string, caregiverUserId: string): P
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '🚗 Tu cuidador va en camino',
         message: `El cuidador está en camino para el servicio de ${booking.petName}.`,
@@ -4024,6 +4036,7 @@ export async function markArrived(bookingId: string, caregiverUserId: string): P
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '📍 Tu cuidador llegó',
         message: `El cuidador llegó a tu domicilio para el paseo de ${booking.petName}. En breve va a iniciar el servicio.`,
@@ -4163,6 +4176,7 @@ export async function addServiceEvent(
   if (type === 'INCIDENT' || type === 'ACCIDENT') {
     await prisma.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '🐾 Novedad con tu mascota',
         message: description || 'Tu cuidador reportó una novedad durante el servicio. El equipo GARDEN ya está al tanto y acompañando la situación.',
@@ -4208,6 +4222,7 @@ export async function addServiceEvent(
   if (type === 'PHOTO' && booking.serviceType !== ServiceType.PASEO) {
     await prisma.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: `📸 Novedades de ${booking.petName ?? 'tu mascota'}`,
         message: 'Tu cuidador subió una foto nueva durante el servicio — está con tu mascota ahora.',
@@ -4605,6 +4620,7 @@ export async function markServiceEndedByClient(
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.caregiver.userId,
         title: 'El dueño marcó el servicio como terminado',
         message: `El dueño de ${booking.petName ?? 'la mascota'} indicó que el servicio ya terminó. Sube tus fotos finales para cerrar el servicio y recibir tu pago.`,
@@ -4659,6 +4675,7 @@ export async function confirmServiceEndByCaregiver(
 
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: booking.clientId,
           title: 'El cuidador no confirmó el fin del servicio',
           message: `El cuidador indicó que el servicio con ${booking.petName ?? 'tu mascota'} todavía no terminó. El tiempo del servicio sigue corriendo normalmente — puedes volver a marcarlo cuando corresponda.`,
@@ -4676,6 +4693,7 @@ export async function confirmServiceEndByCaregiver(
     } else {
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: booking.clientId,
           title: 'El cuidador confirmó el fin del servicio',
           message: 'Está subiendo sus fotos finales para cerrar el servicio.',
@@ -4834,6 +4852,7 @@ export async function concludeService(
         : ` Se descontaron Bs ${overtimeFeeGross.toFixed(2)} de tu billetera.`;
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: booking.clientId,
           title: '⏰ Cargo por tiempo extra',
           message: `El ${svcLabel} de ${booking.petName ?? 'tu mascota'} se extendió ${overtimeMins} min sobre el tiempo contratado (incluidos 15 min de gracia gratuita). Cargo: Bs ${overtimeFeeGross.toFixed(2)}.${balanceMsg}`,
@@ -4873,6 +4892,7 @@ export async function concludeService(
     const ratingMsg = `El cuidador finalizó el servicio de ${booking.petName}.${distanceNote} ¡Califica para que reciba su pago!`;
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: 'Servicio finalizado ✅ — Califica ahora',
         message: ratingMsg,
@@ -5536,6 +5556,7 @@ export async function reportBooking(
     // To client: confirm refund
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: clientId,
         title: '✅ Reembolso procesado',
         message:
@@ -5559,6 +5580,7 @@ export async function reportBooking(
 
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.caregiver.userId,
         title: infractionType === 'WARNING' ? '⚠️ Advertencia por incumplimiento' : '🚫 Multa por incumplimiento',
         message: caregiverMsg,
@@ -5933,6 +5955,7 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
       caregiverUserId = caregiver.userId;
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiver.userId,
           title: pushTitle,
           message: notifMessage,

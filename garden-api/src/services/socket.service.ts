@@ -320,6 +320,7 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                         if (firstCaregiverMsg?.id === savedMessage.id) {
                             await prisma.notification.create({
                                 data: {
+                                    bookingId: bookingId,
                                     userId: recipientId,
                                     title: `${senderName} te envió un mensaje 💬`,
                                     message: `Tu cuidador se ha puesto en contacto contigo sobre la reserva de ${booking.petName}. Entra al chat para responder.`,

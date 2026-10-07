@@ -909,6 +909,7 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
 
   prisma.notification.create({
     data: {
+      bookingId: bookingId,
       userId: booking.clientId,
       title: 'Pago rechazado',
       message: notifMessage,
@@ -982,6 +983,7 @@ export async function approvePaymentSecure(
     if (caregiverProfile) {
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiverProfile.userId,
           title: 'Nueva reserva confirmada',
           message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',
@@ -1121,6 +1123,7 @@ export async function createTestBooking(
     });
     await tx.notification.create({
       data: {
+        bookingId: created.id,
         userId: caregiverProfile.userId,
         title: 'Nueva reserva confirmada',
         message: 'Tienes una nueva reserva esperando tu aceptación.',
@@ -1273,7 +1276,7 @@ export async function refundBooking(
       ? `Tu reembolso de Bs ${refundAmount.toFixed(2)} está disponible como cupón: ${couponCode}.`
       : `Tu reembolso de Bs ${refundAmount.toFixed(2)} fue procesado por transferencia.`;
   prisma.notification.create({
-    data: { userId: clientId, title: 'Reembolso procesado', message: notifMessage, type: 'PAYMENT' },
+    data: { bookingId: bookingId, userId: clientId, title: 'Reembolso procesado', message: notifMessage, type: 'PAYMENT' },
   }).catch((err) => logger.warn('Failed to notify client of refund', { bookingId, err }));
 
   logger.info('Admin: reembolso procesado', { bookingId, adminId, refundAmount, destination, couponCode });
@@ -1549,10 +1552,10 @@ export async function resolveDisputeAppeal(
   const caregiverMsg = clientMsg;
 
   await prisma.notification.create({
-    data: { userId: clientId, title: '⚖️ Resultado de tu apelación', message: clientMsg, type: 'SYSTEM' },
+    data: { bookingId: bookingId, userId: clientId, title: '⚖️ Resultado de tu apelación', message: clientMsg, type: 'SYSTEM' },
   }).catch(() => {});
   await prisma.notification.create({
-    data: { userId: caregiverUserId, title: '⚖️ Resultado de la apelación', message: caregiverMsg, type: 'SYSTEM' },
+    data: { bookingId: bookingId, userId: caregiverUserId, title: '⚖️ Resultado de la apelación', message: caregiverMsg, type: 'SYSTEM' },
   }).catch(() => {});
   sendPushToUser(clientId, '⚖️ Resultado de tu apelación', 'Un miembro de nuestro equipo revisó tu caso. Toca para ver el resultado.').catch(() => {});
   sendPushToUser(caregiverUserId, '⚖️ Resultado de la apelación', 'Un miembro de nuestro equipo revisó tu caso. Toca para ver el resultado.').catch(() => {});
@@ -1814,11 +1817,11 @@ export async function approveExtensionPayment(
       data: { readAt: new Date() },
     });
     await tx.notification.create({
-      data: { userId: booking.clientId, title: isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', message: clientMsg, type: 'SERVICE_EXTENSION' },
+      data: { bookingId: bookingId, userId: booking.clientId, title: isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', message: clientMsg, type: 'SERVICE_EXTENSION' },
     });
     if (booking.caregiver?.userId) {
       await tx.notification.create({
-        data: { userId: booking.caregiver.userId, title: isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión de paseo aprobada', message: caregiverMsg, type: 'SERVICE_EXTENSION' },
+        data: { bookingId: bookingId, userId: booking.caregiver.userId, title: isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión de paseo aprobada', message: caregiverMsg, type: 'SERVICE_EXTENSION' },
       });
     }
 
@@ -1872,6 +1875,7 @@ export async function rejectExtensionPayment(
     });
     await tx.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '❌ Extensión rechazada',
         message: `Tu solicitud de extensión (${label}) no pudo ser aprobada.`,
@@ -2440,6 +2444,7 @@ async function cancelActiveBookingsForSuspendedCaregiver(profileId: string, reas
 
       await tx.notification.create({
         data: {
+          bookingId: booking.id,
           userId: booking.clientId,
           title,
           message,

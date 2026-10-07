@@ -146,7 +146,7 @@ async function procesarAvisosFinHospedaje() {
         const msg   = `El hospedaje de ${b.petName ?? 'tu mascota'} termina el ${checkoutDay} a las ${checkoutTime}. ¿Necesitas sumar más días?`;
 
         await prisma.notification.create({
-          data: { userId: b.clientId, title, message: msg, type: 'WALK_EXPIRY_WARNING' },
+          data: { bookingId: b.id, userId: b.clientId, title, message: msg, type: 'WALK_EXPIRY_WARNING' },
         });
         sendPushToUser(b.clientId, title, msg).catch(() => {});
 
@@ -205,7 +205,7 @@ async function procesarAvisosFinHospedaje() {
       const clientTitle = '📋 Hospedaje finalizado — confirma la recepción';
       const clientMsg   = `El hospedaje de ${b.petName ?? 'tu mascota'} terminó hace ${overdueLabel}. Tu cuidador debe concluirlo pronto para liberar tu pago.`;
       await prisma.notification.create({
-        data: { userId: b.clientId, title: clientTitle, message: clientMsg, type: 'WALK_EXPIRY_END' },
+        data: { bookingId: b.id, userId: b.clientId, title: clientTitle, message: clientMsg, type: 'WALK_EXPIRY_END' },
       });
       sendPushToUser(b.clientId, clientTitle, clientMsg).catch(() => {});
 
@@ -213,7 +213,7 @@ async function procesarAvisosFinHospedaje() {
         const caregiverTitle = '⚠️ Hospedaje vencido — concluye ya';
         const caregiverMsg   = `El hospedaje de ${b.petName ?? 'la mascota'} terminó hace ${overdueLabel}. Sube las fotos finales y concluye el servicio para cobrar.`;
         await prisma.notification.create({
-          data: { userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'WALK_EXPIRY_END' },
+          data: { bookingId: b.id, userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'WALK_EXPIRY_END' },
         });
         sendPushToUser(b.caregiver.userId, caregiverTitle, caregiverMsg).catch(() => {});
       }
@@ -298,6 +298,7 @@ export async function procesarRecordatoriosCalificacion() {
           data: {
             userId: b.clientId,
             title: wave.title,
+            bookingId: b.id,
             message: wave.notifBody(svcLabel, b.petName ?? 'tu mascota', caregiverName),
             type: 'SERVICE_COMPLETED',
           },
@@ -371,7 +372,7 @@ async function procesarRecordatoriosFinServicioSinMarcar() {
       const clientTitle = '⏰ ¿Ya terminó el servicio?';
       const clientMsg = `El ${svcLabel} de ${b.petName ?? 'tu mascota'} lleva ${overtimeLabel} de más sobre el horario acordado. Si ya terminó, márcalo en la app para evitar cargos de tiempo extra.`;
       await prisma.notification.create({
-        data: { userId: b.clientId, title: clientTitle, message: clientMsg, type: 'SYSTEM' },
+        data: { bookingId: b.id, userId: b.clientId, title: clientTitle, message: clientMsg, type: 'SYSTEM' },
       });
       sendPushToUser(b.clientId, clientTitle, clientMsg).catch(() => {});
 
@@ -379,7 +380,7 @@ async function procesarRecordatoriosFinServicioSinMarcar() {
         const caregiverTitle = '⏰ Cierra el servicio';
         const caregiverMsg = `El ${svcLabel} de ${b.petName ?? 'la mascota'} lleva ${overtimeLabel} fuera de horario. Sube tus fotos y concluye para cobrar el tiempo extra.`;
         await prisma.notification.create({
-          data: { userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'SYSTEM' },
+          data: { bookingId: b.id, userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'SYSTEM' },
         });
         sendPushToUser(b.caregiver.userId, caregiverTitle, caregiverMsg).catch(() => {});
       }

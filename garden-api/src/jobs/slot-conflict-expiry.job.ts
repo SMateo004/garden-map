@@ -113,6 +113,7 @@ async function _expirarSlotConflict(booking: {
 
     await tx.notification.create({
       data: {
+        bookingId: booking.id,
         userId: booking.clientId,
         title: 'Reserva cancelada',
         message: `Tu reserva de ${booking.petName} tenía un conflicto de horario que no resolviste a tiempo — se canceló automáticamente.${walletRefundNote} El equipo de GARDEN gestionará el resto del reembolso en 1 día hábil.`,

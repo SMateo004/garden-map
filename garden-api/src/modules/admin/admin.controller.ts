@@ -263,6 +263,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
     if (caregiverProfile) {
       await tx.notification.create({
         data: {
+          bookingId: booking.id,
           userId: caregiverProfile.userId,
           title: 'Nueva reserva confirmada',
           message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',

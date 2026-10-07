@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:garden_app/design/garden_icons.dart';
 import 'package:garden_app/narrative/notification_kind.dart';
+import 'package:garden_app/widgets/notification_bell.dart';
 
 void main() {
   test('el título se muestra sin los emojis del backend', () {
@@ -35,5 +36,27 @@ void main() {
         .where((t) => NotificationKind.of(t).icon == GIcon.notificaciones)
         .toList();
     expect(missing, isEmpty, reason: 'Tipos sin icono en notification_kind.dart: $missing');
+  });
+
+  group('a dónde lleva (dueño)', () {
+    test('lo del servicio con reserva abre ese servicio', () {
+      final d = notificationDestination('SERVICE_STARTED', bookingId: 'b1')!;
+      expect(d.route, '/service/b1');
+      expect(d.extra?['role'], 'CLIENT');
+    });
+    test('una cancelación con reserva la resalta en Mis reservas', () {
+      final d = notificationDestination('BOOKING_CANCELLED', bookingId: 'b1')!;
+      expect(d.route, '/my-bookings');
+      expect(d.highlight, 'b1');
+      expect(d.label, 'Ver la reserva');
+    });
+    test('las viejas, sin reserva, llevan a la lista', () {
+      final d = notificationDestination('SERVICE_STARTED')!;
+      expect(d.route, '/my-bookings');
+      expect(d.highlight, isNull);
+    });
+    test('la plata va a la billetera aunque tenga reserva', () {
+      expect(notificationDestination('REFUND', bookingId: 'b1')!.route, '/wallet');
+    });
   });
 }

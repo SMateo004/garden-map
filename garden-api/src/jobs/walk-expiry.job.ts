@@ -91,6 +91,7 @@ export async function procesarVencimientoPaseos() {
                         data: {
                             userId: booking.clientId,
                             title: '⏱️ ¡Quedan 5 minutos!',
+                            bookingId: booking.id,
                             message: `La ${serviceLabel} de ${booking.petName ?? 'tu mascota'} termina en 5 min. Ve a recoger a tu mascota.`,
                             type: 'WALK_EXPIRY_WARNING',
                         },
@@ -122,6 +123,7 @@ export async function procesarVencimientoPaseos() {
                     const serviceLabelEnd = isGuarderiaEnd ? 'guardería' : 'paseo';
                     await prisma.notification.create({
                         data: {
+                            bookingId: booking.id,
                             userId: booking.clientId,
                             title: '🐾 Tu mascota está lista',
                             message: `El tiempo de la ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} ha terminado. ¡Es hora de recogerla!`,

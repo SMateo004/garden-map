@@ -124,6 +124,7 @@ async function _cancelarPorNoShow(booking: {
   await prisma.notification.createMany({
     data: [
       {
+        bookingId: booking.id,
         userId: booking.clientId,
         title: 'Reserva cancelada por no presentación',
         message: `La reserva de ${booking.petName ?? 'tu mascota'} se canceló automáticamente porque el servicio no comenzó a tiempo. Según la política de no-show, no aplica reembolso. Si crees que esto es un error, contacta a soporte.`,
@@ -136,6 +137,7 @@ async function _cancelarPorNoShow(booking: {
   if (caregiver) {
     await prisma.notification.create({
       data: {
+        bookingId: booking.id,
         userId: caregiver.userId,
         title: 'Reserva cancelada por no presentación',
         message: `La reserva de ${booking.petName ?? 'la mascota'} se canceló automáticamente porque el servicio no comenzó a tiempo (no-show).`,

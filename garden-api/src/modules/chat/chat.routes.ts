@@ -223,6 +223,7 @@ router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHan
             const senderName = `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`;
             await prisma.notification.create({
                 data: {
+                    bookingId: bookingId,
                     userId: recipientId,
                     title: `${senderName} te envió un mensaje 💬`,
                     message: `Tu cuidador se ha puesto en contacto contigo sobre la reserva de ${booking.petName}. Entra al chat para responder.`,

@@ -1304,6 +1304,10 @@ model Notification {
   title     String    @db.VarChar(200)
   message   String    @db.Text
   type      String    @db.VarChar(20)
+  /// Reserva a la que se refiere (null en avisos de cuenta, retiros o
+  /// anuncios). Sin relación a propósito: la notificación queda aunque la
+  /// reserva se borre. La app la usa para abrir esa reserva al tocarla.
+  bookingId String?
   read      Boolean   @default(false)
   readAt    DateTime?
   createdAt DateTime  @default(now())

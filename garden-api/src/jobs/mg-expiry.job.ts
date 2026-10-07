@@ -92,12 +92,14 @@ async function _expirarPendingMg(booking: {
     await tx.notification.createMany({
       data: [
         {
+          bookingId: booking.id,
           userId: booking.clientId,
           title: 'Reserva cancelada',
           message: 'Tu propuesta de Meet & Greet no fue aceptada a tiempo — la reserva se canceló automáticamente. No se realizó ningún cobro.',
           type: 'BOOKING_CANCELLED',
         },
         {
+          bookingId: booking.id,
           userId: booking.caregiver.userId,
           title: 'Reserva cancelada',
           message: 'Una solicitud de reserva con Meet & Greet pendiente se canceló automáticamente por falta de respuesta.',

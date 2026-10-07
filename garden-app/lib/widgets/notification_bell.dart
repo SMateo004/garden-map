@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../design/garden_depth.dart';
 import '../design/garden_icons.dart';
 import '../design/garden_wallet.dart' show GardenFilterPills;
@@ -23,6 +24,10 @@ class AppNotification {
   final bool read;
   final String createdAt;
 
+  /// Reserva a la que se refiere (null en avisos de cuenta, retiros,
+  /// anuncios y en las notificaciones anteriores al 7 de octubre de 2026).
+  final String? bookingId;
+
   const AppNotification({
     required this.id,
     required this.title,
@@ -30,6 +35,7 @@ class AppNotification {
     required this.type,
     required this.read,
     required this.createdAt,
+    this.bookingId,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
@@ -39,6 +45,7 @@ class AppNotification {
         type: j['type'] as String? ?? '',
         read: j['read'] as bool? ?? false,
         createdAt: j['createdAt'] as String? ?? '',
+        bookingId: j['bookingId'] as String?,
       );
 
   AppNotification copyWith({bool? read}) => AppNotification(
@@ -48,37 +55,59 @@ class AppNotification {
         type: type,
         read: read ?? this.read,
         createdAt: createdAt,
+        bookingId: bookingId,
       );
 }
 
-/// A dónde lleva una notificación según su tema y quién la mira. Las
-/// notificaciones no traen el id de la reserva (Notification no tiene esa
-/// columna), así que se lleva a la lista correspondiente.
-({String label, String route})? notificationDestination(String type) {
+/// A dónde lleva una notificación según su tema y quién la mira. Desde el 7
+/// de octubre de 2026 traen la reserva (Notification.bookingId): lo del
+/// servicio abre ese servicio y lo de reservas resalta esa reserva en la
+/// lista. Las anteriores, sin reserva, llevan a la lista.
+({String label, String route, Map<String, dynamic>? extra, String? highlight})? notificationDestination(
+  String type, {
+  String? bookingId,
+}) {
   final kind = NotificationKind.of(type);
   final role = AuthState.effectiveRole;
   final staff = AuthState.isCaregiverStaff;
   if (role == 'ADMIN' && (kind.topic == NotificationTopic.problem || kind.topic == NotificationTopic.account)) {
-    return (label: 'Abrir panel admin', route: '/admin');
+    return (label: 'Abrir panel admin', route: '/admin', extra: null, highlight: null);
+  }
+  // Servicio en curso o recién terminado: directo a esa reserva.
+  if (bookingId != null && kind.topic == NotificationTopic.service && !staff) {
+    return (
+      label: 'Ver el servicio',
+      route: '/service/$bookingId',
+      extra: {'role': role == 'CAREGIVER' ? 'CAREGIVER' : 'CLIENT', 'token': AuthState.token},
+      highlight: null,
+    );
   }
   String bookings() => role == 'CAREGIVER'
       ? (staff ? '/caregiver-staff/home' : '/caregiver/home?tab=reservas')
       : '/my-bookings';
   switch (type) {
     case 'CAREGIVER_WELCOME':
-      return (label: 'Ver la guía del cuidador', route: '/guia-cuidador');
+      return (label: 'Ver la guía del cuidador', route: '/guia-cuidador', extra: null, highlight: null);
     case 'TRAINING_REMINDER':
-      return (label: 'Ir a capacitaciones', route: '/caregiver/trainings');
+      return (label: 'Ir a capacitaciones', route: '/caregiver/trainings', extra: null, highlight: null);
     case 'ZONE_NOW_AVAILABLE':
-      return (label: 'Buscar cuidadores', route: '/marketplace');
+      return (label: 'Buscar cuidadores', route: '/marketplace', extra: null, highlight: null);
   }
   switch (kind.topic) {
     case NotificationTopic.booking:
     case NotificationTopic.service:
     case NotificationTopic.problem:
-      return (label: 'Ver mis reservas', route: bookings());
+      // El dueño ve esa reserva resaltada en la lista (mismo mecanismo que
+      // usa el pago al terminar: highlight_booking_id).
+      final ownerList = role != 'CAREGIVER';
+      return (
+        label: bookingId != null && ownerList ? 'Ver la reserva' : 'Ver mis reservas',
+        route: bookings(),
+        extra: null,
+        highlight: ownerList ? bookingId : null,
+      );
     case NotificationTopic.money:
-      return staff ? null : (label: 'Ir a mi billetera', route: '/wallet');
+      return staff ? null : (label: 'Ir a mi billetera', route: '/wallet', extra: null, highlight: null);
     case NotificationTopic.review:
     case NotificationTopic.chat:
     case NotificationTopic.account:
@@ -282,9 +311,14 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
     setState(() => _expanded = _expanded == n.id ? null : n.id);
   }
 
-  void _go(String route) {
+  Future<void> _go(({String label, String route, Map<String, dynamic>? extra, String? highlight}) dest) async {
+    if (dest.highlight != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('highlight_booking_id', dest.highlight!);
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
-    context.push(route);
+    context.push(dest.route, extra: dest.extra);
   }
 
   /// Hoy / Ayer / Esta semana / Antes.
@@ -332,13 +366,13 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
               ));
               last = g;
             }
-            final dest = notificationDestination(n.type);
+            final dest = notificationDestination(n.type, bookingId: n.bookingId);
             rows.add(_NotificationRow(
               notif: n,
               expanded: _expanded == n.id,
               onTap: () => _tap(n),
               actionLabel: dest?.label,
-              onAction: dest == null ? null : () => _go(dest.route),
+              onAction: dest == null ? null : () => _go(dest),
             ));
           }
 

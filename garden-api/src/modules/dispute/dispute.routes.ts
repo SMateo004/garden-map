@@ -126,6 +126,7 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
 
     await prisma.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.caregiver.userId,
         title: '⚠️ Disputa abierta',
         message: `El dueño reportó un problema con el servicio. Por favor responde a la encuesta para resolver la disputa.`,
@@ -284,6 +285,7 @@ router.post('/:bookingId/caregiver-report', authMiddleware, requireRole('CAREGIV
 
     await prisma.notification.create({
       data: {
+        bookingId: bookingId,
         userId: booking.clientId,
         title: '⚠️ Tu cuidador reportó un problema',
         message: `Tu cuidador reportó que no pudiste ser contactado/a para el servicio. Abre la app para dar tu versión — la IA de GARDEN evaluará ambas versiones antes de decidir.`,
@@ -929,6 +931,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiverUserId,
           title: '✅ Disputa resuelta a tu favor',
           message: `GARDEN IA analizó el caso y determinó que tienes razón. Recibirás Bs ${netAmount.toFixed(2)} en tu billetera.`,
@@ -937,6 +940,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: clientId,
           title: '⚖️ Disputa resuelta',
           message: `GARDEN IA analizó el caso. Veredicto: a favor del cuidador. ${resolution.analysis}`,
@@ -981,6 +985,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: clientId,
           title: '✅ Reembolso aprobado',
           message: `GARDEN IA analizó el caso y aprobó tu reembolso de Bs ${totalAmount.toFixed(2)} (el monto completo de tu pago).`,
@@ -990,6 +995,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       const recs = resolution.recommendations?.join(' | ') ?? '';
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiverUserId,
           title: '⚠️ Disputa resuelta — Mejora tu servicio',
           message: `La disputa se resolvió a favor del cliente. ${resolution.analysis} Recomendaciones: ${recs}`,
@@ -1054,6 +1060,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       // Notificar al dueño con el código de descuento (va directo a notificaciones)
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: clientId,
           title: '🎟️ Código de compensación — Uso único',
           message: `GARDEN IA analizó tu caso. Como compensación parcial, te enviamos un código de descuento de Bs ${clientDiscountAmount.toFixed(2)} para tu próxima reserva.\n\nCódigo: ${discountCode}\n\nUso único. Válido hasta que lo uses. ${resolution.analysis}`,
@@ -1062,6 +1069,7 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.notification.create({
         data: {
+          bookingId: bookingId,
           userId: caregiverUserId,
           title: '⚖️ Disputa resuelta — Pago parcial',
           message: `GARDEN IA resolvió la disputa con pago parcial. Recibirás Bs ${caregiverPayout.toFixed(2)} (80% del monto neto). ${resolution.analysis}`,
