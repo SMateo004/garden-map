@@ -18,6 +18,34 @@ export const BOLIVIA_HOLIDAYS = new Set([
   '2026-11-02', '2026-12-25',
 ]);
 
+export type DayType = 'HOLIDAY' | 'WEEKEND' | 'WEEKDAY';
+
+/** Tipo de día para la disponibilidad del cuidador. El feriado gana sobre el día de la semana
+ * (mismo orden que isDayTypeAllowed en booking.service.ts). */
+export function dayTypeOf(date: Date): DayType {
+  if (BOLIVIA_HOLIDAYS.has(date.toISOString().slice(0, 10))) return 'HOLIDAY';
+  const dow = date.getUTCDay();
+  return dow === 0 || dow === 6 ? 'WEEKEND' : 'WEEKDAY';
+}
+
+/**
+ * Mensaje para el cliente cuando el cuidador no trabaja ese tipo de día. Antes decía "no trabaja
+ * los días laborables" también en feriados (ej. el lunes 12 de octubre), lo que confundía.
+ */
+export function dayTypeUnavailableMessage(date: Date): string {
+  const label = date
+    .toLocaleDateString('es-BO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+    .replace(',', '');
+  switch (dayTypeOf(date)) {
+    case 'HOLIDAY':
+      return `El cuidador no trabaja en feriados y el ${label} es feriado. Elige otra fecha.`;
+    case 'WEEKEND':
+      return `El cuidador no trabaja los fines de semana (${label}). Elige otra fecha.`;
+    default:
+      return `El cuidador no trabaja de lunes a viernes (${label}). Elige otra fecha.`;
+  }
+}
+
 export interface PaseoSlot {
     slot: TimeSlot;
     enabled: boolean;

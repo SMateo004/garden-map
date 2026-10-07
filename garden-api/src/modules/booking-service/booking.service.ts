@@ -42,7 +42,7 @@ import type {
 } from './booking.validation.js';
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
-import { parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
+import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 import { grantReferralRewardIfEligible } from '../referral/referral.service.js';
 import {
@@ -1046,7 +1046,7 @@ async function assertPaseoAvailability(
   const hasExplicitAvailable = avail?.isAvailable === true;
   if (!isDayTypeAllowed(date, defaultSchedule, hasExplicitAvailable)) {
     throw new AvailabilityConflictError(
-      `El cuidador no trabaja los ${date.getUTCDay() === 0 || date.getUTCDay() === 6 ? 'fines de semana' : 'días laborables'} el ${walkDate}. Elige otra fecha.`,
+      dayTypeUnavailableMessage(date),
       'walkDate'
     );
   }
