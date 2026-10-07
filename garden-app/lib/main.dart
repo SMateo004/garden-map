@@ -438,7 +438,9 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/caregiver/home',
       name: 'caregiverHome',
-      builder: (context, state) => const CaregiverHomeScreen(),
+      builder: (context, state) => CaregiverHomeScreen(
+        initialTab: switch (state.uri.queryParameters['tab']) { 'disponibilidad' => 1, 'reservas' => 2, _ => 0 },
+      ),
     ),
     GoRoute(
       path: '/caregiver-staff/home',

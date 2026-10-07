@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,7 +20,9 @@ import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/brote.dart';
 import '../../design/garden_depth.dart';
+import '../../design/garden_settings.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -29,8 +31,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   bool _isDeletingAccount = false;
@@ -40,10 +41,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _role = '';
   String _activeRole = '';
   Map<String, dynamic>? _caregiverProfile;
-
-  // Pulsing animation for incomplete profile tiles
-  late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulseAnim;
 
   /// Rol efectivo: activeRole si está activo, si no el rol permanente.
   String get _effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
@@ -114,18 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..forward(); // una vez y queda resaltado: sin bucles (GardenMotion)
-    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: GardenMotion.move);
     _loadInitialData();
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -467,181 +453,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
 
-  Widget _profileTile({
-    required GIcon icon,
-    required String title,
-    required VoidCallback? onTap,
-    bool highlight = false,
-    Widget? trailing,
-  }) {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
-
-    if (highlight) {
-      return AnimatedBuilder(
-        animation: _pulseAnim,
-        builder: (context, _) {
-          final t = _pulseAnim.value;
-          final pulseBorder = Color.lerp(
-            GardenColors.warning, // amber base
-            GardenColors.warning, // amber bright
-            t,
-          )!;
-          final glowAlpha = 0.18 + 0.22 * t;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: GardenPressable(
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(GardenRadius.md),
-                  border: Border.all(color: pulseBorder, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: pulseBorder.withValues(alpha: glowAlpha),
-                      blurRadius: 10 + 8 * t,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: GardenColors.warning.withValues(alpha: 0.12 + 0.06 * t),
-                        borderRadius: BorderRadius.circular(GardenRadius.sm),
-                      ),
-                      child: GardenIcon(icon, color: GardenColors.warning, size: GIconSize.md, state: GIconState.active),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(title,
-                              style: TextStyle(
-                                  color: textColor,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Completa tu perfil',
-                            style: TextStyle(
-                              color: GardenColors.warning.withValues(alpha: 0.85 + 0.15 * t),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: GardenColors.warning),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    // Normal tile — GlassBox + squish táctil, consistente con el nav bar.
-    return Opacity(
-      opacity: onTap == null ? 0.55 : 1.0,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: GardenPressable(
-          onTap: onTap,
-          child: GlassBox(
-            borderRadius: BorderRadius.circular(GardenRadius.md),
-            blurSigma: 16,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.09),
-                    borderRadius: BorderRadius.circular(GardenRadius.sm),
-                  ),
-                  child: GardenIcon(icon, color: GardenColors.primary, size: GIconSize.md, state: GIconState.active),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(title,
-                      style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                ),
-                trailing ?? GardenIcon(GIcon.siguiente, color: hintColor, size: GIconSize.sm),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccountInfoTile() {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final user = _userData;
-    if (user == null) return const SizedBox.shrink();
-
-    String createdAt = '';
-    try {
-      final dt = DateTime.parse(user['createdAt'] as String? ?? '').toLocal();
-      createdAt = '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {}
-
-    final walletAddress = user['walletAddress'] as String? ??
-        (_caregiverProfile?['walletAddress'] as String?) ?? '';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(GardenRadius.md),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        children: [
-          _infoRow(GIcon.calendario, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
-          if (walletAddress.isNotEmpty) ...[
-            Divider(height: 1, color: borderColor),
-            _infoRow(GIcon.billetera, 'Wallet blockchain', walletAddress.length >= 10 ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}' : walletAddress, textColor, subtextColor),
-          ],
-          Divider(height: 1, color: borderColor),
-          _infoRow(GIcon.huellaDigital, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', textColor, subtextColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(GIcon icon, String label, String value, Color textColor, Color subtextColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          GardenIcon(icon, size: GIconSize.sm, color: GardenColors.primary, state: GIconState.active),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
-          const Spacer(),
-          Text(value, style: TextStyle(color: subtextColor, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // AnimatedBuilder garantiza que ESTA pantalla se reconstruya cada vez que
@@ -662,27 +473,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           appBar: kIsWeb ? null : AppBar(
             backgroundColor: surface,
             elevation: 0,
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(GardenRadius.sm),
-                  ),
-                  child: const GardenIcon(GIcon.perfil, size: GIconSize.sm, state: GIconState.active, color: GardenColors.primary),
-                ),
-                const SizedBox(width: 10),
-                Text('Mi Perfil', style: GardenText.h4.copyWith(color: textColor)),
-              ],
-            ),
+            title: Text('Mi perfil', style: GardenText.h4.copyWith(color: textColor)),
             centerTitle: true,
             actions: [
               if (_token.isNotEmpty)
                 IconButton(
                   icon: GardenIcon(GIcon.salir, size: GIconSize.md, color: hintColor),
                   onPressed: _logout,
+                  tooltip: 'Cerrar sesión',
                 ),
             ],
           ),
@@ -697,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     children: [
                       GardenBackButton(size: 32, iconColor: textColor, onTap: () => Navigator.pop(context)),
                       const SizedBox(width: 6),
-                      Text('Mi Perfil', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text('Mi perfil', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                       const Spacer(),
                       if (_token.isNotEmpty)
                         IconButton(icon: GardenIcon(GIcon.salir, size: GIconSize.sm, color: hintColor), onPressed: _logout, tooltip: 'Cerrar sesión'),
@@ -709,10 +507,10 @@ class _ProfileScreenState extends State<ProfileScreen>
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Center(child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: kIsWeb ? 900.0 : double.infinity),
+                    constraints: const BoxConstraints(maxWidth: kIsWeb ? 900.0 : double.infinity),
                     child: _token.isEmpty || _userData == null
                         ? _buildUnauthenticatedState()
-                        : kIsWeb ? _buildWebAuthenticatedState() : _buildAuthenticatedState(),
+                        : _buildAuthenticatedState(wide: kIsWeb && MediaQuery.sizeOf(context).width >= 760),
                   )),
                 )),
             ],
@@ -722,743 +520,305 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildUnauthenticatedState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 60),
-          const GardenIcon(GIcon.perfil, size: GIconSize.hero, color: GardenColors.primary),
-          const SizedBox(height: 16),
-          const Text('Inicia sesión para ver tu perfil',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Gestiona tus reservas, mascotas y configuración',
-              style: TextStyle(color: GardenColors.textHint),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 32),
-          GardenButton(label: 'Iniciar sesión', onPressed: () => context.push('/login')),
-          const SizedBox(height: 12),
-          GardenButton(label: 'Registrarse', outline: true, onPressed: () => context.push('/register')),
-        ],
-      ),
+  // ── Piezas de la pantalla ────────────────────────────────────────────────────
+
+  String get _roleLabel => switch (_effectiveRole) {
+        'CLIENT' => _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota',
+        'CAREGIVER' => AuthState.isCaregiverStaff ? 'Cuidador de un equipo' : 'Cuidador',
+        'ADMIN' => 'Administrador',
+        _ => 'Usuario',
+      };
+
+  Color get _roleColor => switch (_effectiveRole) {
+        'CLIENT' => GardenColors.success,
+        'ADMIN' => GardenColors.info,
+        _ => GardenColors.primary,
+      };
+
+  String? get _since {
+    final dt = DateTime.tryParse(_userData?['createdAt'] as String? ?? '')?.toLocal();
+    if (dt == null) return null;
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return 'En GARDEN desde ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  Future<void> _copy(String label, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label copiado')));
+  }
+
+  void _open(Widget screen) => Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+
+  Widget _header() {
+    final user = _userData!;
+    final cgPhoto = _caregiverProfile?['profilePhoto'] as String?;
+    return GardenProfileHeader(
+      name: '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
+      email: user['email'] as String? ?? '',
+      photoUrl: cgPhoto != null && cgPhoto.isNotEmpty ? cgPhoto : user['profilePicture'] as String?,
+      emailVerified: user['emailVerified'] == true,
+      onVerifyEmail: _sendVerificationEmail,
+      roleLabel: _roleLabel,
+      roleColor: _roleColor,
+      since: _since,
     );
   }
 
-  // ── Web 2-column layout ──────────────────────────────────────────────────────
-
-  Widget _buildWebAuthenticatedState() {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final user = _userData!;
-
-    String roleLabel = 'Usuario';
-    Color roleColor = GardenColors.primary;
+  /// Lo propio de cada rol: lo que se usa todos los días va primero.
+  List<Widget> _roleGroups() {
     if (_effectiveRole == 'CLIENT') {
-      roleLabel = _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota';
-      roleColor = GardenColors.success;
-    } else if (_effectiveRole == 'CAREGIVER') {
-      roleLabel = 'Cuidador';
-      roleColor = GardenColors.primary;
-    } else if (_effectiveRole == 'ADMIN') {
-      roleLabel = 'Administrador';
-      roleColor = GardenColors.info;
+      return [
+        GardenSettingsGroup(title: 'Mi cuenta', children: [
+          GardenSettingsRow(
+            icon: GIcon.perfil,
+            title: 'Mis datos',
+            tone: _isClientDataIncomplete ? GardenSettingsTone.attention : GardenSettingsTone.normal,
+            subtitle: _isClientDataIncomplete ? 'Te faltan datos por completar' : null,
+            onTap: () async {
+              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
+              if (result == true && mounted) _loadProfile();
+            },
+          ),
+          GardenSettingsRow(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
+          GardenSettingsRow(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
+          GardenSettingsRow(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+        ]),
+        GardenSettingsGroup(title: 'Para ti', children: [
+          GardenSettingsRow(icon: GIcon.favorito, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
+          GardenSettingsRow(icon: GIcon.estrella, title: 'Mis calificaciones', onTap: () => _open(const MyRatingsScreen())),
+          GardenSettingsRow(icon: GIcon.veterinaria, title: 'Veterinarias cercanas', onTap: () => _open(const NearbyVetsScreen())),
+        ]),
+        // Solo para CLIENT permanente (no para CAREGIVER actuando como CLIENT).
+        if (_role == 'CLIENT')
+          GardenSettingsGroup(title: 'Trabaja con GARDEN', children: [
+            GardenSettingsRow(
+                icon: GIcon.donar,
+                title: 'Hazte cuidador',
+                subtitle: 'Gana dinero cuidando mascotas',
+                onTap: () => context.push('/become-caregiver')),
+            GardenSettingsRow(
+                icon: GIcon.equipo,
+                title: 'Unirme a un equipo',
+                subtitle: 'Si una empresa te invitó con un código',
+                onTap: () => context.push('/caregiver-staff/join')),
+          ]),
+      ];
     }
-
-    // ── data for account info card ───────────────────────────────
-    String createdAt = '';
-    try {
-      final dt = DateTime.parse(user['createdAt'] as String? ?? '').toLocal();
-      createdAt = '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {}
-    final walletAddress = user['walletAddress'] as String? ??
-        (_caregiverProfile?['walletAddress'] as String?) ?? '';
-    final userId = user['id'] as String? ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Header card (full width) ────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                GardenColors.primary.withValues(alpha: 0.07),
-                GardenColors.lime.withValues(alpha: 0.25),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(GardenRadius.xl),
-            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.12)),
-          ),
-          child: Row(
-            children: [
-              GardenAvatar(
-                imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
-                    ? _caregiverProfile!['profilePhoto'] as String
-                    : user['profilePicture'] as String?,
-                size: 64,
-                initials: '${user['firstName']} ${user['lastName']}',
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${user['firstName']} ${user['lastName']}',
-                        style: GardenText.h4.copyWith(color: textColor)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        GardenIcon(GIcon.correo, size: GIconSize.xs, color: subtextColor),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            user['email'] as String? ?? '',
-                            style: GardenText.bodySmall.copyWith(color: subtextColor),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        if (user['emailVerified'] == true)
-                          const GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success)
-                        else
-                          GestureDetector(
-                            onTap: _sendVerificationEmail,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: GardenColors.warning.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(GardenRadius.full),
-                                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
-                              ),
-                              child: const Text('Verificar',
-                                style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: roleColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(GardenRadius.full),
-                        border: Border.all(color: roleColor.withValues(alpha: 0.25)),
-                      ),
-                      child: Text(roleLabel,
-                          style: TextStyle(color: roleColor, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // ── Banner conversión (full width) ──────────────────────
-        if (_role == 'CAREGIVER' && _conversionInProgress) ...[
-          _buildConversionBanner(textColor, subtextColor),
-          const SizedBox(height: 20),
-        ],
-
-        // ── 2-column body ───────────────────────────────────────
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: info + theme
-              Expanded(
-                flex: 40,
-                child: Column(
-                  children: [
-                    // Account info card
-                    Container(
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                            child: Row(children: [
-                              const GardenIcon(GIcon.info, size: GIconSize.xs, color: GardenColors.primary),
-                              const SizedBox(width: 8),
-                              Text('Información de cuenta',
-                                  style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
-                            ]),
-                          ),
-                          Divider(height: 1, color: borderColor),
-                          _infoRow(GIcon.calendario, 'Miembro desde',
-                              createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
-                          if (walletAddress.isNotEmpty) ...[
-                            Divider(height: 1, color: borderColor),
-                            _infoRow(GIcon.billetera, 'Wallet blockchain',
-                                '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}',
-                                textColor, subtextColor),
-                          ],
-                          Divider(height: 1, color: borderColor),
-                          _infoRow(GIcon.huellaDigital, 'ID de cuenta',
-                              userId.isNotEmpty ? '${userId.substring(0, 8)}...' : 'N/A',
-                              textColor, subtextColor),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Theme selector card
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            const GardenIcon(GIcon.apariencia, size: GIconSize.xs, color: GardenColors.primary),
-                            const SizedBox(width: 8),
-                            Text('Apariencia',
-                                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
-                          ]),
-                          const SizedBox(height: 12),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                              borderRadius: BorderRadius.circular(GardenRadius.md),
-                              border: Border.all(color: borderColor),
-                            ),
-                            child: Row(
-                              children: [
-                                _ThemeOptionBtn(icon: GIcon.dispositivo, label: 'Sistema',
-                                    selected: themeNotifier.mode == GardenThemeMode.system, isDark: isDark,
-                                    onTap: () => themeNotifier.setMode(GardenThemeMode.system)),
-                                _ThemeOptionDivider(isDark: isDark),
-                                _ThemeOptionBtn(icon: GIcon.modoClaro, label: 'Claro',
-                                    selected: themeNotifier.mode == GardenThemeMode.light, isDark: isDark,
-                                    onTap: () => themeNotifier.setMode(GardenThemeMode.light)),
-                                _ThemeOptionDivider(isDark: isDark),
-                                _ThemeOptionBtn(icon: GIcon.modoOscuro, label: 'Oscuro',
-                                    selected: themeNotifier.mode == GardenThemeMode.dark, isDark: isDark,
-                                    onTap: () => themeNotifier.setMode(GardenThemeMode.dark)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            themeNotifier.mode == GardenThemeMode.system
-                                ? 'Sigue la configuración de tu teléfono'
-                                : themeNotifier.mode == GardenThemeMode.dark
-                                    ? 'Modo oscuro activado'
-                                    : 'Modo claro activado',
-                            style: TextStyle(color: subtextColor, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Right: navigation tiles
-              Expanded(
-                flex: 60,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Mi cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                    const SizedBox(height: 8),
-                    if (WorkMode.available.length >= 2) ...[
-                      ModeSwitcherCard(isCompany: _caregiverProfile?['isCompany'] == true),
-                      const SizedBox(height: 14),
-                    ],
-                    if (_effectiveRole == 'CLIENT') ...[
-                      _profileTile(icon: GIcon.perfil, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
-                        final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
-                        if (result == true && mounted) _loadProfile();
-                      }),
-                      _profileTile(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
-                      _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
-                      _profileTile(icon: GIcon.favorito, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
-                      _profileTile(icon: GIcon.estrella, title: 'Mis calificaciones',
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
-                      _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
-                      _profileTile(icon: GIcon.veterinaria, title: 'Veterinarias cercanas',
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
-                      if (_role == 'CLIENT')
-                        _profileTile(icon: GIcon.donar, title: 'Conviérteme en cuidador',
-                            onTap: () => context.push('/become-caregiver')),
-                      if (_role == 'CLIENT') _joinTeamTile(),
-                    ],
-                    if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
-                      // Empleado de una empresa — solo operativo, nada de
-                      // billetera/precios/config del negocio (eso es del dueño).
-                      _profileTile(icon: GIcon.calendario, title: 'Mis reservas',
-                          onTap: () => context.push('/caregiver-staff/home')),
-                    ],
-                    if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
-                      _profileTile(icon: GIcon.antecedentes, title: 'Datos del cuidador',
-                          highlight: _isCaregiverDataIncomplete,
-                          onTap: () async {
-                            await _offerPhoneVerification();
-                            if (!mounted) return;
-                            await context.push('/caregiver/profile-data');
-                            await _refreshCaregiverProfile();
-                          }),
-                      _profileTile(icon: GIcon.editar, title: 'Editar perfil',
-                          onTap: () => context.push('/caregiver/edit-profile')),
-                      _profileTile(icon: GIcon.inicio, title: 'Mi panel',
-                          onTap: () => context.push('/caregiver/home')),
-                      _profileTile(icon: GIcon.mascotas, title: 'Mascotas',
-                          onTap: () => context.push('/caregiver/pets')),
-                      if (_caregiverProfile?['isCompany'] == true) ...[
-                        _profileTile(icon: GIcon.equipo, title: 'Mi equipo',
-                            onTap: () => context.push('/caregiver/staff')),
-                        _profileTile(icon: GIcon.inicio, title: 'Recepción',
-                            onTap: () => context.push('/caregiver/reception')),
-                      ],
-                      if (_caregiverProfile?['verified'] != true &&
-                          _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
-                          _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
-                        _profileTile(icon: GIcon.verificado, title: 'Verificación IA',
-                            onTap: () => context.push('/caregiver/verification')),
-                      _profileTile(icon: GIcon.disponibilidad, title: 'Mi disponibilidad',
-                          onTap: () => context.push('/caregiver/home')),
-                      _profileTile(icon: GIcon.capacitacion, title: 'Capacitaciones',
-                          highlight: _hasPendingTraining,
-                          onTap: () => context.push('/caregiver/trainings')),
-                      _profileTile(icon: GIcon.billetera, title: 'Mi billetera',
-                          onTap: () => context.push('/wallet')),
-                    ],
-                    if (_effectiveRole == 'ADMIN') ...[
-                      _profileTile(icon: GIcon.ajustes, title: 'Panel admin',
-                          onTap: () => context.push('/admin')),
-                    ],
-                    const SizedBox(height: 16),
-                    Text('Soporte', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                    const SizedBox(height: 8),
-                    _profileTile(
-                      icon: GIcon.ayuda,
-                      title: 'Centro de ayuda',
-                      onTap: () => context.push('/help-center'),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Legal', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                    const SizedBox(height: 8),
-                    _profileTile(icon: GIcon.legal, title: 'Términos y Condiciones',
-                        onTap: () => context.push('/terms')),
-                    _profileTile(icon: GIcon.seguridad, title: 'Política de Privacidad',
-                        onTap: () => context.push('/privacy')),
-                    const SizedBox(height: 16),
-                    Text('Privacidad y seguridad', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                    const SizedBox(height: 8),
-                    _profileTile(icon: GIcon.seguridad, title: 'Cambiar PIN',
-                        onTap: () => showChangePinDialog(context)),
-                    _profileTile(icon: GIcon.bloqueado, title: 'Usuarios bloqueados',
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
-                    const SizedBox(height: 16),
-                    Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
-                    const SizedBox(height: 8),
-                    _profileTile(icon: GIcon.notificaciones, title: 'Notificaciones',
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()))),
-                    const SizedBox(height: 8),
-                    // Logout button as a tile
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Material(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        child: InkWell(
-                          onTap: _logout,
-                          borderRadius: BorderRadius.circular(GardenRadius.md),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(GardenRadius.md),
-                              border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: GardenColors.error.withValues(alpha: 0.09),
-                                    borderRadius: BorderRadius.circular(GardenRadius.sm),
-                                  ),
-                                  child: const GardenIcon(GIcon.salir, size: GIconSize.sm, color: GardenColors.error),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Text('Cerrar sesión',
-                                      style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600, fontSize: 14)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Center(
-                      child: GestureDetector(
-                        onTap: _isDeletingAccount ? null : _deleteAccount,
-                        child: _isDeletingAccount
-                            ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
-                            : Text('Eliminar cuenta', style: TextStyle(
-                                color: GardenColors.error.withValues(alpha: 0.45),
-                                fontSize: 12, fontWeight: FontWeight.w400,
-                                decoration: TextDecoration.underline,
-                                decorationColor: GardenColors.error.withValues(alpha: 0.3))),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 40),
-      ],
-    );
-  }
-
-  Widget _buildAuthenticatedState() {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final user = _userData!;
-
-    String roleLabel = 'Usuario';
-    Color roleColor = GardenColors.primary;
-    if (_effectiveRole == 'CLIENT') {
-      roleLabel = _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota';
-      roleColor = GardenColors.success;
-    } else if (_effectiveRole == 'CAREGIVER') {
-      roleLabel = 'Cuidador';
-      roleColor = GardenColors.primary;
-    } else if (_effectiveRole == 'ADMIN') {
-      roleLabel = 'Administrador';
-      roleColor = GardenColors.info;
+    if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) {
+      // Empleado de una empresa: solo lo operativo (billetera, precios y
+      // configuración del negocio son del dueño).
+      return [
+        GardenSettingsGroup(title: 'Mi trabajo', children: [
+          GardenSettingsRow(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
+        ]),
+      ];
     }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Header card ───────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                GardenColors.primary.withValues(alpha: 0.07),
-                GardenColors.lime.withValues(alpha: 0.25),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(GardenRadius.xl),
-            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.12)),
-          ),
-          child: Row(
-            children: [
-              GardenAvatar(
-                imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
-                    ? _caregiverProfile!['profilePhoto'] as String
-                    : user['profilePicture'] as String?,
-                size: 72,
-                initials: '${user['firstName']} ${user['lastName']}',
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${user['firstName']} ${user['lastName']}',
-                        style: GardenText.h4.copyWith(color: textColor)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        GardenIcon(GIcon.correo, size: GIconSize.xs, color: subtextColor),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            user['email'] as String? ?? '',
-                            style: GardenText.bodySmall.copyWith(color: subtextColor),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        if (user['emailVerified'] == true)
-                          const GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: GardenColors.success)
-                        else
-                          GestureDetector(
-                            onTap: _sendVerificationEmail,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: GardenColors.warning.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(GardenRadius.full),
-                                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
-                              ),
-                              child: const Text('Verificar',
-                                style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: roleColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(GardenRadius.full),
-                        border: Border.all(color: roleColor.withValues(alpha: 0.25)),
-                      ),
-                      child: Text(roleLabel,
-                          style: TextStyle(color: roleColor, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 28),
-
-        // ── Banner: conversión CLIENT→CAREGIVER en progreso ──────────
-        if (_role == 'CAREGIVER' && _conversionInProgress) ...[
-          _buildConversionBanner(textColor, subtextColor),
-          const SizedBox(height: 20),
-        ],
-
-        _sectionLabel('Mi cuenta', textColor),
-        const SizedBox(height: 10),
-        if (WorkMode.available.length >= 2) ...[
-          ModeSwitcherCard(isCompany: _caregiverProfile?['isCompany'] == true),
-          const SizedBox(height: 14),
-        ],
-        
-        if (_effectiveRole == 'CLIENT') ...[
-          _profileTile(icon: GIcon.perfil, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
-            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
-            if (result == true && mounted) _loadProfile();
-          }),
-          _profileTile(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
-          _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
-          _profileTile(icon: GIcon.favorito, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
-          _profileTile(icon: GIcon.estrella, title: 'Mis calificaciones',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
-          _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
-          _profileTile(icon: GIcon.veterinaria, title: 'Veterinarias cercanas',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
-          // Solo para CLIENT permanente (no para CAREGIVER actuando como CLIENT)
-          if (_role == 'CLIENT')
-            _profileTile(
-              icon: GIcon.donar,
-              title: 'Conviérteme en cuidador',
-              onTap: () => context.push('/become-caregiver'),
-            ),
-          if (_role == 'CLIENT') _joinTeamTile(),
-        ],
-
-        if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
-          _profileTile(icon: GIcon.calendario, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
-        ],
-
-        if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
-          _profileTile(
+    if (_effectiveRole == 'CAREGIVER') {
+      final p = _caregiverProfile;
+      final isCompany = p?['isCompany'] == true;
+      final verified = p?['verified'] == true ||
+          p?['verificationStatus'] == 'VERIFIED' ||
+          p?['identityVerificationStatus'] == 'VERIFIED';
+      return [
+        GardenSettingsGroup(title: 'Mi trabajo', children: [
+          GardenSettingsRow(icon: GIcon.inicio, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
+          // Antes abría el panel en "Inicio", igual que "Mi panel".
+          GardenSettingsRow(
+              icon: GIcon.disponibilidad,
+              title: 'Mi disponibilidad',
+              onTap: () => context.push('/caregiver/home?tab=disponibilidad')),
+          GardenSettingsRow(icon: GIcon.mascotas, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
+          if (isCompany) ...[
+            GardenSettingsRow(icon: GIcon.equipo, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
+            GardenSettingsRow(icon: GIcon.inicio, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
+          ],
+          GardenSettingsRow(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+        ]),
+        GardenSettingsGroup(title: 'Mi perfil de cuidador', children: [
+          GardenSettingsRow(
             icon: GIcon.antecedentes,
             title: 'Datos del cuidador',
-            highlight: _isCaregiverDataIncomplete,
+            tone: _isCaregiverDataIncomplete ? GardenSettingsTone.attention : GardenSettingsTone.normal,
+            subtitle: _isCaregiverDataIncomplete ? 'Te faltan datos por completar' : null,
             onTap: () async {
+              // Antes solo la versión web ofrecía verificar el teléfono aquí.
+              await _offerPhoneVerification();
+              if (!mounted) return;
               await context.push('/caregiver/profile-data');
               await _refreshCaregiverProfile();
             },
           ),
-          _profileTile(icon: GIcon.editar, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
-          _profileTile(icon: GIcon.inicio, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
-          _profileTile(icon: GIcon.mascotas, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
-          if (_caregiverProfile?['isCompany'] == true) ...[
-            _profileTile(icon: GIcon.equipo, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
-            _profileTile(icon: GIcon.inicio, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
-          ],
-          if (_caregiverProfile?['verified'] != true &&
-              _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
-              _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
-            _profileTile(icon: GIcon.verificado, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
-          _profileTile(icon: GIcon.disponibilidad, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
-          _profileTile(icon: GIcon.capacitacion, title: 'Capacitaciones',
-              highlight: _hasPendingTraining, onTap: () => context.push('/caregiver/trainings')),
-          _profileTile(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
-        ],
+          GardenSettingsRow(
+              icon: GIcon.editar, title: 'Editar perfil público', onTap: () => context.push('/caregiver/edit-profile')),
+          if (!verified)
+            GardenSettingsRow(
+                icon: GIcon.verificado,
+                title: 'Verificar mi identidad',
+                tone: GardenSettingsTone.attention,
+                subtitle: 'Los dueños confían más en perfiles verificados',
+                onTap: () => context.push('/caregiver/verification')),
+          GardenSettingsRow(
+            icon: GIcon.capacitacion,
+            title: 'Capacitaciones',
+            tone: _hasPendingTraining ? GardenSettingsTone.attention : GardenSettingsTone.normal,
+            subtitle: _hasPendingTraining ? 'Complétala para aparecer en la búsqueda' : null,
+            onTap: () => context.push('/caregiver/trainings'),
+          ),
+        ]),
+      ];
+    }
+    if (_effectiveRole == 'ADMIN') {
+      return [
+        GardenSettingsGroup(title: 'Administración', children: [
+          GardenSettingsRow(icon: GIcon.ajustes, title: 'Panel admin', onTap: () => context.push('/admin')),
+        ]),
+      ];
+    }
+    return const [];
+  }
 
-        if (_effectiveRole == 'ADMIN') ...[
-          _profileTile(icon: GIcon.ajustes, title: 'Panel admin', onTap: () => context.push('/admin')),
-        ],
+  /// Lo que es igual para todos: preferencias, seguridad, ayuda y la cuenta.
+  List<Widget> _commonGroups() {
+    final user = _userData!;
+    final userId = user['id'] as String? ?? '';
+    final wallet = user['walletAddress'] as String? ?? (_caregiverProfile?['walletAddress'] as String?) ?? '';
+    final isDark = themeNotifier.isDark;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    Widget value(String v) => Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Text(v, style: TextStyle(color: sub, fontSize: 12)),
+        );
 
-        const SizedBox(height: 24),
-        _sectionLabel('Preferencias', textColor),
-        const SizedBox(height: 10),
-
-        // ── Selector de tema ─────────────────────────────────────────────────
+    return [
+      GardenSettingsGroup(title: 'Preferencias', children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-              borderRadius: BorderRadius.circular(GardenRadius.md),
-              border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withValues(alpha: 0.09),
-                        borderRadius: BorderRadius.circular(GardenRadius.sm),
-                      ),
-                      child: const GardenIcon(GIcon.apariencia, size: GIconSize.sm, color: GardenColors.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Text('Apariencia',
-                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Selector de 3 opciones
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                    borderRadius: BorderRadius.circular(GardenRadius.md),
-                    border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                  ),
-                  child: Row(
-                    children: [
-                      _ThemeOptionBtn(
-                        icon: GIcon.dispositivo,
-                        label: 'Sistema',
-                        selected: themeNotifier.mode == GardenThemeMode.system,
-                        isDark: isDark,
-                        onTap: () => themeNotifier.setMode(GardenThemeMode.system),
-                      ),
-                      _ThemeOptionDivider(isDark: isDark),
-                      _ThemeOptionBtn(
-                        icon: GIcon.modoClaro,
-                        label: 'Claro',
-                        selected: themeNotifier.mode == GardenThemeMode.light,
-                        isDark: isDark,
-                        onTap: () => themeNotifier.setMode(GardenThemeMode.light),
-                      ),
-                      _ThemeOptionDivider(isDark: isDark),
-                      _ThemeOptionBtn(
-                        icon: GIcon.modoOscuro,
-                        label: 'Oscuro',
-                        selected: themeNotifier.mode == GardenThemeMode.dark,
-                        isDark: isDark,
-                        onTap: () => themeNotifier.setMode(GardenThemeMode.dark),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  themeNotifier.mode == GardenThemeMode.system
-                      ? 'Sigue la configuración de tu teléfono'
-                      : themeNotifier.mode == GardenThemeMode.dark
-                          ? 'Modo oscuro activado'
-                          : 'Modo claro activado',
-                  style: TextStyle(
-                    color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
-                    fontSize: 11,
-                  ),
-                ),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Apariencia', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            GardenSegmented<GardenThemeMode>(
+              options: const [
+                (GardenThemeMode.system, GIcon.dispositivo, 'Sistema'),
+                (GardenThemeMode.light, GIcon.modoClaro, 'Claro'),
+                (GardenThemeMode.dark, GIcon.modoOscuro, 'Oscuro'),
               ],
+              selected: themeNotifier.mode,
+              onSelect: themeNotifier.setMode,
             ),
+          ]),
+        ),
+        // En celular decía "Próximamente" aunque la pantalla ya existía (web sí la abría).
+        GardenSettingsRow(
+            icon: GIcon.notificaciones, title: 'Notificaciones', onTap: () => _open(const NotificationSettingsScreen())),
+      ]),
+      GardenSettingsGroup(title: 'Privacidad y seguridad', children: [
+        GardenSettingsRow(icon: GIcon.seguridad, title: 'Cambiar PIN', onTap: () => showChangePinDialog(context)),
+        GardenSettingsRow(icon: GIcon.bloqueado, title: 'Usuarios bloqueados', onTap: () => _open(const BlockedUsersScreen())),
+      ]),
+      GardenSettingsGroup(title: 'Ayuda', children: [
+        GardenSettingsRow(icon: GIcon.ayuda, title: 'Centro de ayuda', onTap: () => context.push('/help-center')),
+        GardenSettingsRow(icon: GIcon.legal, title: 'Términos y condiciones', onTap: () => context.push('/terms')),
+        GardenSettingsRow(icon: GIcon.seguridad, title: 'Política de privacidad', onTap: () => context.push('/privacy')),
+      ]),
+      // Lo técnico, al final y para copiarlo si soporte lo pide.
+      GardenSettingsGroup(title: 'Datos de la cuenta', children: [
+        if (userId.length >= 8)
+          GardenSettingsRow(
+            icon: GIcon.huellaDigital,
+            title: 'ID de cuenta',
+            subtitle: 'Toca para copiarlo',
+            trailing: value('${userId.substring(0, 8)}…'),
+            onTap: () => _copy('ID de cuenta', userId),
           ),
-        ),
-
-        _profileTile(icon: GIcon.notificaciones, title: 'Notificaciones',
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
-
-        const SizedBox(height: 24),
-        _sectionLabel('Soporte', textColor),
-        const SizedBox(height: 10),
-        _profileTile(
-          icon: GIcon.ayuda,
-          title: 'Centro de ayuda',
-          onTap: () => context.push('/help-center'),
-        ),
-
-        const SizedBox(height: 24),
-        _sectionLabel('Legal', textColor),
-        const SizedBox(height: 10),
-        _profileTile(
-          icon: GIcon.legal,
-          title: 'Términos y Condiciones',
-          onTap: () => context.push('/terms'),
-        ),
-        const SizedBox(height: 8),
-        _profileTile(
-          icon: GIcon.seguridad,
-          title: 'Política de Privacidad',
-          onTap: () => context.push('/privacy'),
-        ),
-
-        const SizedBox(height: 24),
-        _sectionLabel('Privacidad y seguridad', textColor),
-        const SizedBox(height: 10),
-        _profileTile(icon: GIcon.seguridad, title: 'Cambiar PIN',
-            onTap: () => showChangePinDialog(context)),
-        const SizedBox(height: 8),
-        _profileTile(icon: GIcon.bloqueado, title: 'Usuarios bloqueados',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
-
-        const SizedBox(height: 24),
-        _sectionLabel('Cuenta', textColor),
-        const SizedBox(height: 10),
-        _buildAccountInfoTile(),
-        const SizedBox(height: 8),
-        const SizedBox(height: 28),
-        GardenButton(
-          label: 'Cerrar sesión',
-          outline: true,
-          color: GardenColors.error,
-          onPressed: _logout,
-        ),
-        const SizedBox(height: 20),
-        Center(
-          child: GestureDetector(
-            onTap: _isDeletingAccount ? null : _deleteAccount,
-            child: _isDeletingAccount
-                ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
-                : Text(
-                    'Eliminar cuenta',
-                    style: TextStyle(
-                      color: GardenColors.error.withValues(alpha: 0.45),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.underline,
-                      decorationColor: GardenColors.error.withValues(alpha: 0.3),
-                    ),
-                  ),
+        if (wallet.length >= 10)
+          GardenSettingsRow(
+            icon: GIcon.billetera,
+            title: 'Wallet blockchain',
+            subtitle: 'Toca para copiarla',
+            trailing: value('${wallet.substring(0, 6)}…${wallet.substring(wallet.length - 4)}'),
+            onTap: () => _copy('Wallet', wallet),
           ),
+      ]),
+      GardenSettingsGroup(children: [
+        GardenSettingsRow(icon: GIcon.salir, title: 'Cerrar sesión', tone: GardenSettingsTone.danger, onTap: _logout),
+      ]),
+      Center(
+        child: TextButton(
+          onPressed: _isDeletingAccount ? null : _deleteAccount,
+          child: _isDeletingAccount
+              ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
+              : Text('Eliminar mi cuenta',
+                  style: TextStyle(color: GardenColors.error.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600)),
         ),
-        const SizedBox(height: 40),
+      ),
+    ];
+  }
+
+  /// Una sola pantalla para celular y web: en pantallas anchas, lo del rol a
+  /// la izquierda y los ajustes a la derecha (antes eran dos copias del mismo
+  /// menú que se habían desincronizado).
+  Widget _buildAuthenticatedState({required bool wide}) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final top = <Widget>[
+      _header(),
+      const SizedBox(height: 18),
+      if (_role == 'CAREGIVER' && _conversionInProgress) ...[
+        _buildConversionBanner(textColor, subtextColor),
+        const SizedBox(height: 18),
       ],
+      if (WorkMode.available.length >= 2) ...[
+        ModeSwitcherCard(isCompany: _caregiverProfile?['isCompany'] == true),
+        const SizedBox(height: 18),
+      ],
+    ];
+    if (!wide) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ...top,
+        ..._roleGroups(),
+        ..._commonGroups(),
+        const SizedBox(height: 32),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ...top,
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _roleGroups())),
+        const SizedBox(width: 20),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _commonGroups())),
+      ]),
+      const SizedBox(height: 32),
+    ]);
+  }
+
+  Widget _buildUnauthenticatedState() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 40),
+            const Center(child: Brote(pose: BrotePose.hola, size: 120)),
+            const SizedBox(height: 16),
+            Text('Inicia sesión para ver tu perfil',
+                textAlign: TextAlign.center, style: GardenText.h4.copyWith(color: textColor, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text('Tus reservas, mascotas y ajustes, en un solo lugar.',
+                style: TextStyle(color: subtextColor, fontSize: 14), textAlign: TextAlign.center),
+            const SizedBox(height: 28),
+            GardenButton(label: 'Iniciar sesión', onPressed: () => context.push('/login')),
+            const SizedBox(height: 12),
+            GardenButton(label: 'Crear cuenta', outline: true, onPressed: () => context.push('/register')),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1468,11 +828,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   // El cambio entre dueño / cuidador / empleado vive en ModeSwitcherCard.
   // Esta fila es solo para quien aún no tiene otra identidad (dueño de mascota).
 
-  Widget _joinTeamTile() => _profileTile(
-        icon: GIcon.equipo,
-        title: 'Unirme a un equipo',
-        onTap: () => context.push('/caregiver-staff/join'),
-      );
 
   // ── Conversión CLIENT→CAREGIVER en progreso ─────────────────────────────────
 
@@ -1640,91 +995,4 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Widget _sectionLabel(String label, Color textColor) => Padding(
-    padding: const EdgeInsets.only(left: 2),
-    child: Text(
-      label,
-      style: GardenText.labelLarge.copyWith(
-        color: textColor,
-        fontSize: 13,
-        letterSpacing: 0.5,
-      ),
-    ),
-  );
-}
-
-// ── Widgets privados para el selector de tema ─────────────────────────────────
-
-class _ThemeOptionBtn extends StatelessWidget {
-  final GIcon icon;
-  final String label;
-  final bool selected;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _ThemeOptionBtn({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final unselectedColor =
-        isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (selected) return;
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? GardenColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(GardenRadius.sm),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GardenIcon(
-                icon,
-                size: GIconSize.sm,
-                state: selected ? GIconState.active : GIconState.idle,
-                color: selected ? Colors.white : unselectedColor,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? Colors.white : unselectedColor,
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ThemeOptionDivider extends StatelessWidget {
-  final bool isDark;
-  const _ThemeOptionDivider({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 28,
-      color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
-    );
-  }
 }

@@ -16,6 +16,7 @@ import 'design/garden_pets.dart';
 import 'design/garden_wallet.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
+import 'design/garden_settings.dart';
 import 'design/garden_status_pill.dart';
 import 'narrative/booking_story.dart';
 import 'narrative/chat_event.dart';
@@ -361,6 +362,41 @@ class _CatalogPageState extends State<_CatalogPage> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: const _ModeSwitcherDemo(),
+            ),
+          ]),
+          _Section('Mi perfil (encabezado y ajustes)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const GardenProfileHeader(
+                  name: 'Mariana Suárez',
+                  email: 'mariana@correo.com',
+                  emailVerified: false,
+                  roleLabel: 'Dueño de mascota',
+                  roleColor: GardenColors.success,
+                  since: 'En GARDEN desde mar 2026',
+                ),
+                const SizedBox(height: 18),
+                GardenSettingsGroup(title: 'Mi cuenta', children: [
+                  GardenSettingsRow(
+                      icon: GIcon.perfil,
+                      title: 'Mis datos',
+                      tone: GardenSettingsTone.attention,
+                      subtitle: 'Te faltan datos por completar',
+                      onTap: () {}),
+                  GardenSettingsRow(icon: GIcon.mascotas, title: 'Mis mascotas', onTap: () {}),
+                  GardenSettingsRow(icon: GIcon.billetera, title: 'Mi billetera', onTap: () {}),
+                ]),
+                GardenSegmented<int>(
+                  options: const [(0, GIcon.dispositivo, 'Sistema'), (1, GIcon.modoClaro, 'Claro'), (2, GIcon.modoOscuro, 'Oscuro')],
+                  selected: 0,
+                  onSelect: (_) {},
+                ),
+                const SizedBox(height: 18),
+                GardenSettingsGroup(children: [
+                  GardenSettingsRow(icon: GIcon.salir, title: 'Cerrar sesión', tone: GardenSettingsTone.danger, onTap: () {}),
+                ]),
+              ]),
             ),
           ]),
           _Section('Avatar de mascota', [

@@ -40,7 +40,9 @@ import '../../design/garden_depth.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
-  const CaregiverHomeScreen({super.key});
+  /// Pestaña con la que abre: 0 Inicio, 1 Disponibilidad, 2 Reservas.
+  final int initialTab;
+  const CaregiverHomeScreen({super.key, this.initialTab = 0});
 
   @override
   State<CaregiverHomeScreen> createState() => _CaregiverHomeScreenState();
@@ -62,7 +64,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   String _userName = 'Cuidador';
 
 
-  int _selectedTab = 0; // 0: Inicio, 1: Disponibilidad, 2: Reservas
+  late int _selectedTab = widget.initialTab; // 0: Inicio, 1: Disponibilidad, 2: Reservas
   bool _hasUnreadChats = false;
   Timer? _unreadChatsTimer;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
