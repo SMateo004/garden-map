@@ -15,6 +15,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_chat.dart';
 import '../../design/garden_depth.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -65,6 +66,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool get _isCaregiver => widget.role == 'CAREGIVER';
   String? get _status => (_booking?['status'] as String?) ?? widget.bookingStatus;
 
+  /// Mensajes que llegaron mientras se leía más arriba (píldora "nuevos").
+  int _unseen = 0;
+  int _lastCount = 0;
+
   // Bloqueo/reporte de chat
   String? _otherPersonId;
   bool _iBlockedThem = false;
@@ -78,6 +83,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _messageController.addListener(_onTyping);
+    _scrollController.addListener(_onScroll);
     _initChat();
   }
 
@@ -132,6 +139,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) return;
 
     _chatService!.markRead(widget.bookingId);
+    _lastCount = _chatService!.messages.length;
     setState(() => _initialized = true);
     _scrollToBottom();
   }
@@ -270,10 +278,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         initialDate: selectedDate ?? now.add(const Duration(days: 1)),
                         firstDate: now,
                         lastDate: now.add(const Duration(days: 60)),
-                        builder: (c, child) => Theme(
-                          data: Theme.of(c).copyWith(colorScheme: const ColorScheme.dark(primary: GardenColors.primary)),
-                          child: child!,
-                        ),
                       );
                       if (picked != null) setSheet(() => selectedDate = picked);
                     },
@@ -284,7 +288,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         const GardenIcon(GIcon.calendario, size: GIconSize.sm, color: GardenColors.primary),
                         const SizedBox(width: 10),
                         Text(
-                          selectedDate != null ? '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}' : 'Seleccionar fecha',
+                          selectedDate != null ? _longDate(selectedDate!) : 'Elegir fecha',
                           style: TextStyle(color: selectedDate != null ? textColor : subtextColor, fontSize: 14),
                         ),
                       ]),
@@ -297,10 +301,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       final picked = await showTimePicker(
                         context: ctx,
                         initialTime: selectedTime ?? const TimeOfDay(hour: 10, minute: 0),
-                        builder: (c, child) => Theme(
-                          data: Theme.of(c).copyWith(colorScheme: const ColorScheme.dark(primary: GardenColors.primary)),
-                          child: child!,
-                        ),
                       );
                       if (picked != null) setSheet(() => selectedTime = picked);
                     },
@@ -313,7 +313,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         Text(
                           selectedTime != null
                               ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
-                              : 'Seleccionar hora',
+                              : 'Elegir hora',
                           style: TextStyle(color: selectedTime != null ? textColor : subtextColor, fontSize: 14),
                         ),
                       ]),
@@ -456,37 +456,68 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     placeCtrl.dispose();
   }
 
+  /// "martes 7 de octubre" (antes: 7/10/2026).
+  static String _longDate(DateTime d) {
+    const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    return '${days[d.weekday - 1]} ${d.day} de ${months[d.month - 1]}';
+  }
+
   Widget _sheetToggleBtn(String label, bool active, VoidCallback onTap) {
+    // Antes usaba siempre los colores del modo oscuro (borde y texto).
+    final isDark = themeNotifier.isDark;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: GardenMotion.resolve(context, GardenMotion.quick),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: active ? GardenColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? GardenColors.primary : GardenColors.darkBorder),
+          border: Border.all(color: active ? GardenColors.primary : border),
         ),
-        child: Center(child: Text(label, style: TextStyle(color: active ? Colors.white : GardenColors.darkTextSecondary, fontWeight: FontWeight.w600, fontSize: 13))),
+        child: Center(child: Text(label, style: TextStyle(color: active ? Colors.white : sub, fontWeight: FontWeight.w700, fontSize: 13))),
       ),
     );
   }
 
+  bool get _nearBottom =>
+      !_scrollController.hasClients ||
+      _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 120;
+
+  /// Antes cada mensaje nuevo bajaba hasta el final aunque uno estuviera
+  /// leyendo más arriba. Ahora baja solo si ya estaba abajo o si lo mandó uno;
+  /// si no, aparece "N mensajes nuevos".
   void _onChatUpdate() {
-    if (mounted) {
-      setState(() {});
-      _scrollToBottom();
-    }
+    if (!mounted) return;
+    final msgs = _chatService?.messages ?? const <ChatMessage>[];
+    final added = msgs.length - _lastCount;
+    final mine = msgs.isNotEmpty && msgs.last.senderId == _currentUserId;
+    _lastCount = msgs.length;
+    setState(() {
+      if (added > 0 && !_nearBottom && !mine) _unseen += added;
+    });
+    if (added > 0 && (_nearBottom || mine)) _scrollToBottom();
   }
+
+  void _onScroll() {
+    if (_unseen > 0 && _nearBottom) setState(() => _unseen = 0);
+  }
+
+  void _onTyping() => setState(() {});
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: GardenMotion.resolve(context, GardenMotion.standard),
           curve: GardenMotion.enter,
         );
       }
+      if (_unseen > 0 && mounted) setState(() => _unseen = 0);
     });
   }
 
@@ -730,6 +761,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _messageController.removeListener(_onTyping);
+    _scrollController.removeListener(_onScroll);
     _chatService?.removeListener(_onChatUpdate);
     _chatService?.dispose();
     _messageController.dispose();
@@ -758,65 +791,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               icon: GardenIcon(GIcon.atras, color: textColor, semanticLabel: 'Volver'),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Row(
-              children: [
-                GardenAvatar(
-                  imageUrl: _otherPersonPhoto,
-                  size: 36,
-                  initials: widget.otherPersonName.isNotEmpty
-                    ? widget.otherPersonName[0] : 'U',
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.otherPersonName,
-                        style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                      Row(
-                        children: [
-                          Container(
-                            width: 7, height: 7,
-                            decoration: BoxDecoration(
-                              color: !_initialized
-                                  ? subtextColor
-                                  : (_chatService?.otherOnline ?? false)
-                                      ? GardenColors.success
-                                      : GardenColors.warning,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            !_initialized
-                                ? 'Cargando...'
-                                : (_chatService?.otherOnline ?? false)
-                                    ? 'En línea'
-                                    : 'Desconectado',
-                            style: TextStyle(color: subtextColor, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              if (_otherPersonId != null)
-                PopupMenuButton<String>(
-                  icon: GardenIcon(GIcon.masOpciones, color: textColor, semanticLabel: 'Más opciones'),
-                  onSelected: (value) {
-                    if (value == 'report') _showReportSheet();
-                    if (value == 'block') _confirmBlockUser();
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'report', child: Text('Reportar')),
-                    if (!_iBlockedThem)
-                      PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
-                  ],
-                ),
-            ],
+            titleSpacing: 0,
+            title: _headerTitle(textColor, subtextColor),
+            actions: [if (_otherPersonId != null) _moreMenu(textColor)],
           ),
           body: !_initialized
             ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
@@ -824,44 +801,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 constraints: const BoxConstraints(maxWidth: kIsWeb ? 780.0 : double.infinity),
                 child: Column(
                   children: [
-                    // Web compact header (replaces AppBar)
+                    // Web: mismo encabezado que en celular, sin AppBar.
                     if (kIsWeb)
                       Container(
-                        height: 52,
+                        height: 60,
                         decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            IconButton(icon: GardenIcon(GIcon.atras, color: textColor, size: GIconSize.sm, semanticLabel: 'Volver'), onPressed: () => Navigator.pop(context)),
-                            GardenAvatar(imageUrl: _otherPersonPhoto, size: 28, initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName[0] : 'U'),
-                            const SizedBox(width: 10),
-                            Expanded(child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(widget.otherPersonName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
-                                Row(children: [
-                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: (_chatService?.otherOnline ?? false) ? GardenColors.success : GardenColors.warning, shape: BoxShape.circle)),
-                                  const SizedBox(width: 4),
-                                  Text((_chatService?.otherOnline ?? false) ? 'En línea' : 'Desconectado', style: TextStyle(color: subtextColor, fontSize: 11)),
-                                ]),
-                              ],
-                            )),
-                            if (_otherPersonId != null)
-                              PopupMenuButton<String>(
-                                icon: GardenIcon(GIcon.masOpciones, color: textColor, size: GIconSize.sm, semanticLabel: 'Más opciones'),
-                                onSelected: (value) {
-                                  if (value == 'report') _showReportSheet();
-                                  if (value == 'block') _confirmBlockUser();
-                                },
-                                itemBuilder: (ctx) => [
-                                  const PopupMenuItem(value: 'report', child: Text('Reportar')),
-                                  if (!_iBlockedThem)
-                                    PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
-                                ],
-                              ),
-                          ],
-                        ),
+                        padding: const EdgeInsets.only(left: 4, right: 8),
+                        child: Row(children: [
+                          IconButton(
+                              icon: GardenIcon(GIcon.atras, color: textColor, semanticLabel: 'Volver'),
+                              onPressed: () => Navigator.pop(context)),
+                          Expanded(child: _headerTitle(textColor, subtextColor)),
+                          if (_otherPersonId != null) _moreMenu(textColor),
+                        ]),
                       ),
                     if (_booking != null) _buildContextStrip(surface, borderColor, textColor),
                     Expanded(child: Column(
@@ -914,20 +866,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          itemCount: _chatService!.messages.length,
-                          itemBuilder: (context, index) {
-                            final msg = _chatService!.messages[index];
-                            final isMe = msg.senderId == _currentUserId;
-                            return _buildMessageBubble(msg, isMe, textColor, subtextColor);
-                          },
-                        ),
+                      : Stack(children: [
+                          ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                            itemCount: _chatService!.messages.length,
+                            itemBuilder: (context, index) {
+                              final msgs = _chatService!.messages;
+                              final msg = msgs[index];
+                              final prev = index > 0 ? msgs[index - 1] : null;
+                              final next = index + 1 < msgs.length ? msgs[index + 1] : null;
+                              final newDay = prev == null || !_sameDay(prev.createdAt, msg.createdAt);
+                              // Último de una racha: el siguiente es de otra persona, de
+                              // sistema, de otro día o llega más de 5 min después.
+                              final last = next == null ||
+                                  next.isSystem ||
+                                  next.senderId != msg.senderId ||
+                                  !_sameDay(next.createdAt, msg.createdAt) ||
+                                  next.createdAt.difference(msg.createdAt).inMinutes >= 5;
+                              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                if (newDay) GardenChatDaySeparator(msg.createdAt),
+                                _buildMessageBubble(msg, msg.senderId == _currentUserId, textColor, subtextColor, last: last),
+                              ]);
+                            },
+                          ),
+                          if (_unseen > 0)
+                            Positioned(
+                              bottom: 12,
+                              left: 0,
+                              right: 0,
+                              child: Center(child: GardenNewMessagesPill(count: _unseen, onTap: _scrollToBottom)),
+                            ),
+                        ]),
                   ),
                   // Proponer M&G button (caregiver only, when no active M&G)
+                  // Estado actual de la reserva (antes usaba el que se pasó al abrir).
                   if (widget.role == 'CAREGIVER' &&
-                      (widget.bookingStatus == 'WAITING_CAREGIVER_APPROVAL' || widget.bookingStatus == 'CONFIRMED') &&
+                      (_status == 'WAITING_CAREGIVER_APPROVAL' || _status == 'CONFIRMED') &&
                       (_mg == null || _mg!['status'] == 'CANCELLED'))
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -982,34 +957,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       children: [
                         if (_quickReplies.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: SizedBox(
-                              height: 34,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _quickReplies.length,
-                                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                                itemBuilder: (_, i) {
-                                  final reply = _quickReplies[i];
-                                  return GestureDetector(
-                                    onTap: () => _sendQuickReply(reply),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: GardenColors.primary.withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
-                                      ),
-                                      child: Text(
-                                        reply,
-                                        style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: GardenQuickReplies(replies: _quickReplies, onTap: _sendQuickReply),
                           ),
                         Row(
                       children: [
@@ -1035,11 +984,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        GestureDetector(
-                          onTap: _sendMessage,
-                          child: const GardenClay(size: 46, color: GardenColors.primary, interactive: false, child: Center(
-                                child: GardenIcon(GIcon.enviar, color: Colors.white, state: GIconState.active,
-                                    semanticLabel: 'Enviar'))),
+                        // Apagado mientras no hay texto: antes parecía activo y no hacía nada.
+                        Semantics(
+                          button: true,
+                          enabled: _messageController.text.trim().isNotEmpty,
+                          label: 'Enviar',
+                          excludeSemantics: true,
+                          child: GestureDetector(
+                            onTap: _messageController.text.trim().isEmpty ? null : _sendMessage,
+                            child: AnimatedOpacity(
+                              duration: GardenMotion.resolve(context, GardenMotion.quick),
+                              opacity: _messageController.text.trim().isEmpty ? 0.45 : 1,
+                              child: const GardenClay(
+                                size: 46,
+                                color: GardenColors.primary,
+                                interactive: false,
+                                child: Center(child: GardenIcon(GIcon.enviar, color: Colors.white, state: GIconState.active)),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1055,6 +1018,62 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       },
     );
   }
+
+  static bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+  /// Foto con el punto de "en línea" encima, nombre y estado. El mismo en
+  /// celular (AppBar) y web (barra propia): antes eran dos copias.
+  Widget _headerTitle(Color textColor, Color subtextColor) {
+    final online = _initialized && (_chatService?.otherOnline ?? false);
+    return Row(children: [
+      Stack(clipBehavior: Clip.none, children: [
+        GardenAvatar(
+          imageUrl: _otherPersonPhoto,
+          size: 38,
+          initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName : 'U',
+        ),
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: AnimatedContainer(
+            duration: GardenMotion.resolve(context, GardenMotion.quick),
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: online ? GardenColors.success : subtextColor.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
+              border: Border.all(color: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface, width: 2),
+            ),
+          ),
+        ),
+      ]),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(widget.otherPersonName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
+          Text(
+            !_initialized ? 'Conectando…' : online ? 'En línea' : 'No está en línea ahora',
+            style: TextStyle(color: online ? GardenColors.success : subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _moreMenu(Color textColor) => PopupMenuButton<String>(
+        icon: GardenIcon(GIcon.masOpciones, color: textColor, semanticLabel: 'Más opciones'),
+        onSelected: (value) {
+          if (value == 'report') _showReportSheet();
+          if (value == 'block') _confirmBlockUser();
+        },
+        itemBuilder: (ctx) => [
+          const PopupMenuItem(value: 'report', child: Text('Reportar')),
+          if (!_iBlockedThem) PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
+        ],
+      );
 
   /// De quién y de qué habla este chat: la mascota con su anillo de estado y
   /// la frase de BookingStory. Toca para abrir el servicio.
@@ -1212,7 +1231,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage msg, bool isMe, Color textColor, Color subtextColor) {
+  Widget _buildMessageBubble(ChatMessage msg, bool isMe, Color textColor, Color subtextColor, {bool last = true}) {
     // Mensaje de sistema: ChatEvent decide icono y tono (nunca el emoji).
     if (msg.isSystem) {
       final event = ChatEvent.from(msg.message, eventType: msg.eventType);
@@ -1248,80 +1267,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
 
-    final isDark = themeNotifier.isDark;
-    final time = '${msg.createdAt.hour.toString().padLeft(2, '0')}:${msg.createdAt.minute.toString().padLeft(2, '0')}';
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isMe) ...[
-            GardenAvatar(
-              imageUrl: _otherPersonPhoto,
-              size: 28,
-              initials: msg.senderName.isNotEmpty ? msg.senderName[0] : 'U',
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  decoration: BoxDecoration(
-                    color: isMe
-                      ? GardenColors.primary
-                      : (isDark ? GardenColors.darkSurface : GardenColors.lightSurface),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMe ? 18 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 18),
-                    ),
-                    border: isMe ? null : Border.all(
-                      color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
-                    ),
-                    boxShadow: [BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    )],
-                  ),
-                  child: Text(
-                    msg.message,
-                    style: TextStyle(
-                      color: isMe ? Colors.white : textColor,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(time, style: TextStyle(color: subtextColor, fontSize: 10)),
-                    if (isMe) ...[
-                      const SizedBox(width: 4),
-                      GardenIcon(
-                        msg.read ? GIcon.leido : GIcon.enviado,
-                        size: GIconSize.xs,
-                        color: msg.read ? GardenColors.primary : subtextColor,
-                        semanticLabel: msg.read ? 'Leído' : 'Enviado',
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          if (isMe) const SizedBox(width: 4),
-        ],
-      ),
+    return GardenChatBubble(
+      text: msg.message,
+      isMe: isMe,
+      time: msg.createdAt,
+      read: msg.read,
+      last: last,
+      avatarUrl: _otherPersonPhoto,
+      initials: msg.senderName.isNotEmpty ? msg.senderName : widget.otherPersonName,
     );
   }
 }

@@ -60,8 +60,7 @@ class GardenServiceTile extends StatelessWidget {
               // Figura con volumen: la elegida toma el color del servicio y
               // flota; las demás quedan neutras (antes: ícono de línea plano).
               GardenClay(
-                size: 46,
-                float: selected,
+                size: 46,
                 interactive: false,
                 color: selected
                     ? Color.lerp(ink, Colors.white, isDark ? 0.0 : 0.12)!
@@ -121,10 +120,16 @@ class GardenShortcut extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Burbuja con volumen (antes: círculo plano con borde).
-                GardenClay(
-                  size: 50,
-                  color: isDark ? GardenColors.darkSurfaceElevated : bubble,
+                // Círculo plano con borde fino (el volumen hacía que pareciera un globo).
+                Container(
+                  width: 50,
+                  height: 50,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isDark ? GardenColors.darkSurfaceElevated : bubble,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                  ),
                   child: GardenClayIcon(icon,
                       size: GIconSize.lg, color: isDark ? GardenColors.primaryLight : GardenColors.primary),
                 ),

@@ -4,6 +4,7 @@ import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
 import 'design/garden_caregiver_card.dart';
 import 'design/garden_chain_proof.dart';
+import 'design/garden_chat.dart';
 import 'design/garden_depth.dart';
 import 'design/garden_live_hero.dart';
 import 'design/garden_story_progress.dart';
@@ -107,14 +108,14 @@ class _CatalogPageState extends State<_CatalogPage> {
             const SizedBox(height: 6),
             _Note('idle · active · live (en curso)', fg),
           ]),
-          _Section('Volumen (figuras y botones)', [
+          _Section('Fondos de íconos (planos) y botones con volumen', [
             Wrap(spacing: 16, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.center, children: [
               const GardenClay(color: Color(0xFFF1EEE4), child: GardenClayIcon(GIcon.veterinaria, color: GardenColors.primary)),
-              const GardenClay(color: Color(0xFF2FA83A), float: true, child: GardenClayIcon(GIcon.paseo, color: Colors.white)),
+              const GardenClay(color: Color(0xFF2FA83A), child: GardenClayIcon(GIcon.paseo, color: Colors.white)),
               const GardenClay(color: Color(0xFFFFB020), circle: false, child: GardenClayIcon(GIcon.guarderia, color: Colors.white)),
               SizedBox(width: 200, child: GardenButton(label: 'Botón con volumen', onPressed: () {})),
             ]),
-            _Note('Se inclinan con el cursor, se aprietan al tocarlas; la elegida flota. Respetan "reducir movimiento".', fg),
+            _Note('Los fondos de íconos son planos (con volumen parecían globos). El volumen queda en lo que se toca: el botón tiene canto y se hunde al presionarlo.', fg),
           ]),
           _Section('Iconos (idle / active)', [
             Wrap(spacing: 8, runSpacing: 8, children: [
@@ -445,6 +446,21 @@ class _CatalogPageState extends State<_CatalogPage> {
             Wrap(spacing: 16, runSpacing: 16, children: [
               for (final p in BrotePose.values) _Labeled(p.name, Brote(pose: p, size: 110)),
             ]),
+          ]),
+          _Section('Chat (día, burbujas agrupadas, ubicación, respuestas rápidas)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                GardenChatDaySeparator(DateTime.now()),
+                GardenChatBubble(text: 'Ya salimos al parque', isMe: false, time: DateTime(2026, 10, 7, 9, 2), last: false, initials: 'Andrea'),
+                GardenChatBubble(text: 'Tomó agua', isMe: false, time: DateTime(2026, 10, 7, 9, 4), initials: 'Andrea'),
+                GardenChatBubble(text: '¡Gracias! Te dejo la guía: https://gardenbo.com/ayuda', isMe: true, time: DateTime(2026, 10, 7, 9, 10), read: true),
+                GardenChatBubble(text: 'Ubicación del Meet & Greet: https://www.google.com/maps?q=-17.78,-63.18', isMe: false, time: DateTime(2026, 10, 7, 9, 12), initials: 'Andrea'),
+                GardenQuickReplies(replies: const ['¿Cómo está Toby?', '¿Me mandas una foto?'], onTap: (_) {}),
+                const SizedBox(height: 8),
+                Center(child: GardenNewMessagesPill(count: 2, onTap: () {})),
+              ]),
+            ),
           ]),
           _Section('Eventos del chat', [
             for (final raw in const [

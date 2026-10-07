@@ -106,8 +106,7 @@ class _Dot extends StatelessWidget {
       // Con volumen; el paso actual flota ("estás aquí").
       child: GardenClay(
         size: 36,
-        tint: bg,
-        float: step.state == StoryStepState.current,
+        tint: bg,
         interactive: false,
         child: Center(
           child: GardenIcon(icon,

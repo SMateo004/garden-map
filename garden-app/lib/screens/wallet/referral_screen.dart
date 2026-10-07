@@ -265,7 +265,6 @@ class _ReferralScreenState extends State<ReferralScreen> {
           const GardenClay(
             size: 60,
             color: GardenColors.lime,
-            float: true,
             interactive: false,
             child: GardenClayIcon(GIcon.regalo, color: GardenColors.forest, size: GIconSize.xl),
           ),
