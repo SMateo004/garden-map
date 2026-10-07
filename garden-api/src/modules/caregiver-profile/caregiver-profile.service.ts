@@ -24,6 +24,7 @@ import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper
 import { corregirCamposPerfil } from '../../agents/redaccion.agent.js';
 import { enqueueProfileSync, enqueueSafely } from '../../services/chain-registry.service.js';
 import { onCaregiverWelcome } from '../../services/notification.service.js';
+import { BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
 
@@ -658,6 +659,8 @@ export async function getMyAvailabilityForEdit(
 ): Promise<{
   defaultSchedule: Record<string, unknown> | null;
   dates: Record<string, { isAvailable: boolean; timeBlocks: Record<string, boolean> | null; reason?: string | null }>;
+  /** Feriados nacionales (ISO) — la app los usa en el calendario del cuidador en vez de su propia copia. */
+  holidays: string[];
 }> {
   const profile = await prisma.caregiverProfile.findUnique({
     where: { userId },
@@ -688,6 +691,7 @@ export async function getMyAvailabilityForEdit(
   return {
     defaultSchedule: profile.defaultAvailabilitySchedule as Record<string, unknown> | null,
     dates,
+    holidays: [...BOLIVIA_HOLIDAYS].sort(),
   };
 }
 

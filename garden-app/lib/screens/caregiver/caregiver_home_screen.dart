@@ -428,14 +428,20 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final weekendsEnabled = defaultSchedule['weekends'] as bool? ?? true;
     final holidaysEnabled = defaultSchedule['holidays'] as bool? ?? true;
 
-    // Feriados nacionales de Bolivia 2025-2026 (ISO)
-    const bolivianHolidays = {
-      '2025-01-01','2025-01-22','2025-02-24','2025-02-25','2025-04-18','2025-04-19',
-      '2025-05-01','2025-06-19','2025-06-21','2025-08-06','2025-10-12','2025-11-02',
-      '2025-12-25','2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03',
-      '2026-04-04','2026-05-01','2026-06-11','2026-06-21','2026-08-06','2026-10-12',
-      '2026-11-02','2026-12-25',
-    };
+    // Feriados nacionales de Bolivia: los manda el servidor (BOLIVIA_HOLIDAYS en
+    // garden-api/src/shared/availability-utils.ts, única fuente). La copia local
+    // es solo un respaldo para un servidor viejo que todavía no envía el campo.
+    final serverHolidays = (_availability?['holidays'] as List?)?.whereType<String>().toSet();
+    final bolivianHolidays = (serverHolidays != null && serverHolidays.isNotEmpty)
+        ? serverHolidays
+        : const {
+            '2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03','2026-04-04',
+            '2026-05-01','2026-06-04','2026-06-21','2026-08-06','2026-10-12','2026-11-02',
+            '2026-12-25',
+            '2027-01-01','2027-01-22','2027-02-08','2027-02-09','2027-03-26','2027-03-27',
+            '2027-05-01','2027-05-27','2027-06-21','2027-08-06','2027-10-12','2027-11-02',
+            '2027-12-25',
+          };
 
     // Generar los días necesarios (al menos 90, o más si el mes visible del
     // calendario cae más adelante que eso)

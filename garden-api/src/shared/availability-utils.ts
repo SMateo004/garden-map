@@ -9,13 +9,26 @@ import { TimeSlot } from '@prisma/client';
  * viceversa), dependiendo de qué endpoint se consultara. Cualquier código
  * que necesite esta lista debe importarla de aquí, nunca declarar su propia
  * copia.
+ *
+ * Fechas móviles (se validan contra la Pascua en tests/unit/holidays.test.ts): Carnaval = lunes y
+ * martes antes del Miércoles de Ceniza; Viernes y Sábado Santo; Corpus Christi = Pascua + 60.
+ * Se puede reservar hasta 30 días antes: agregar el año siguiente antes de fin de noviembre
+ * (la prueba avisa si la lista no cubre el año próximo). La app recibe esta lista en
+ * GET /api/caregiver/availability (campo holidays), no la copia.
  */
 export const BOLIVIA_HOLIDAYS = new Set([
-  '2025-01-01', '2025-01-22', '2025-02-24', '2025-02-25', '2025-04-18', '2025-04-19',
+  // 2025 (Carnaval corregido al 3-4 de marzo: la Pascua fue el 20 de abril)
+  '2025-01-01', '2025-01-22', '2025-03-03', '2025-03-04', '2025-04-18', '2025-04-19',
   '2025-05-01', '2025-06-19', '2025-06-21', '2025-08-06', '2025-10-12', '2025-11-02',
-  '2025-12-25', '2026-01-01', '2026-01-22', '2026-02-16', '2026-02-17', '2026-04-03',
-  '2026-04-04', '2026-05-01', '2026-06-11', '2026-06-21', '2026-08-06', '2026-10-12',
-  '2026-11-02', '2026-12-25',
+  '2025-12-25',
+  // 2026 (Corpus Christi corregido al 4 de junio: la Pascua fue el 5 de abril)
+  '2026-01-01', '2026-01-22', '2026-02-16', '2026-02-17', '2026-04-03', '2026-04-04',
+  '2026-05-01', '2026-06-04', '2026-06-21', '2026-08-06', '2026-10-12', '2026-11-02',
+  '2026-12-25',
+  // 2027 (Pascua el 28 de marzo; ningún feriado cae domingo, así que no hay traslados a lunes)
+  '2027-01-01', '2027-01-22', '2027-02-08', '2027-02-09', '2027-03-26', '2027-03-27',
+  '2027-05-01', '2027-05-27', '2027-06-21', '2027-08-06', '2027-10-12', '2027-11-02',
+  '2027-12-25',
 ]);
 
 export type DayType = 'HOLIDAY' | 'WEEKEND' | 'WEEKDAY';
