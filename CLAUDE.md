@@ -23,6 +23,12 @@ significa:
 - Para probar cosas usá las cuentas dedicadas de prueba (mismo password para las tres):
   `reviewer.admin@gardenbo.com` / `reviewer.cliente@gardenbo.com` / `reviewer.cuidador@gardenbo.com`
   — password `ReviewGarden2026!`.
+  `reviewer.cliente` es la cuenta que usan los revisores de Apple/Google para reservar: tiene que
+  quedar como **cliente** (rol CLIENT, perfil completo, mascota "Toby" con foto). Nunca inicies un
+  registro de cuidador con ella — en octubre 2026 uno quedó en borrador, le cambió el rol a CAREGIVER
+  y la cuenta dejó de poder reservar. Para probar como cliente, usa el cambio de modo
+  (`/auth/switch-role`) y devuélvelo al terminar. Nada de las cuentas `reviewer.*` se registra en la
+  blockchain (`shared/test-accounts.ts`).
 - Si creás cuentas o datos de prueba nuevos (no las `reviewer.*`), **limpialos vos mismo al
   terminar** — usuarios, bookings y wallet transactions sueltos quedan en producción para
   siempre si no los borrás. Ya pasó una vez en este proyecto (una auditoría dejó 6 cuentas
