@@ -9,7 +9,7 @@
 
 | Problema | Evidencia | Acción |
 |----------|-----------|--------|
-| **Columna `profilePhoto` inexistente en DB** | debug.log y combined.log: `The column caregiver_profiles.profilePhoto does not exist in the current database` | Ejecutar `npx prisma db push --force-reset --accept-data-loss` y `npx tsx prisma/seed.ts` en garden-api |
+| **Columna `profilePhoto` inexistente en DB** | debug.log y combined.log: `The column caregiver_profiles.profilePhoto does not exist in the current database` | Resuelto (histórico): hoy el schema se sincroniza con `prisma db push` al desplegar en Render |
 | **dist/ con agent log** | garden-api/dist/server.js, caregiver.controller.js, caregiver.service.js contienen `fetch('http://127.0.0.1:7242/...')` | `cd garden-api && npm run build` (el src/*.ts está limpio; dist es compilación antigua) |
 | **vite.config.js con agent log** | garden-web/vite.config.js líneas 15–27 tienen agent log | El fuente es vite.config.ts (limpio). Eliminar vite.config.js si es redundante, o limpiar el agent log |
 | **Sin carpeta migrations** | `prisma/migrations` no existe (0 archivos) | Usar `db push` para aplicar schema; no `migrate dev` |
@@ -108,7 +108,7 @@ El schema Prisma tiene `profilePhoto` en CaregiverProfile (línea 179); si la DB
 | Error | Causa | Fix aplicado |
 |-------|-------|--------------|
 | 500 en GET /api/caregivers (P2022, columna profilePhoto) | Columna no existía en DB | Migración add_all_image_columns; luego se eliminaron migraciones y se usó db push. |
-| 500 en GET /api/caregivers (tabla caregiver_profiles no existe) | DB inconsistente, migraciones corruptas | `rm -rf prisma/migrations` + `npx prisma db push --force-reset` + seed. |
+| 500 en GET /api/caregivers (tabla caregiver_profiles no existe) | DB inconsistente, migraciones corruptas | Resuelto (histórico) reconstruyendo una base local que ya no existe. |
 | 404 en placeholders (via.placeholder.com) | URL bloqueada o caída | getImageUrl usa placehold.co estable; acepta blob/data para previews. |
 | Fotos no se muestran | Upload no guardaba en dev; columnas faltantes; frontend src=undefined | Upsert de petPhoto en upload dev; getImageUrl; refetchOnMount en useClientMyProfile. |
 | Seed falla (tabla users no existe) | Seed corría antes de migraciones aplicadas | Seed desacoplado de reset; se ejecuta manualmente tras db push. |
@@ -136,24 +136,11 @@ El schema Prisma tiene `profilePhoto` en CaregiverProfile (línea 179); si la DB
 
 ## 4. Recomendaciones para estabilizar y optimizar
 
-### 4.1 Pasos exactos para limpiar DB y migraciones (flujo actual)
+### 4.1 Limpiar DB y migraciones
 
-```bash
-cd garden-api
-rm -rf prisma/migrations
-npx prisma db push --force-reset --accept-data-loss
-npx tsx prisma/seed.ts
-npm run dev
-```
+Ya no aplica: el procedimiento era para una base local que no existe.
 
-Verificar:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:3000/api/caregivers?page=1&limit=10"
-# Esperado: 200
-```
-
-Documentación: `garden-api/prisma/README-RESET-DB-LIMPIO.md`.
+> ⚠️ No hay base local ni staging: `garden-api/.env` apunta a la base de producción en Render. Nunca correr `prisma db push --force-reset` ni `prisma migrate reset` — borran todos los datos reales.
 
 ### 4.2 Actualizaciones (opcionales, no críticas para MVP)
 
@@ -187,7 +174,7 @@ Documentación: `garden-api/prisma/README-RESET-DB-LIMPIO.md`.
 
 ### 4.6 Inconsistencias en documentación (acciones sugeridas)
 
-- **README-RUN.md línea 46–49:** Quitar referencias a migraciones 20260217/20260218 (ya no existen). Indicar que el flujo de reset total es `db push --force-reset` según README-RESET-DB-LIMPIO.md.
+- **README-RUN.md línea 46–49:** Quitar referencias a migraciones 20260217/20260218 (ya no existen).
 - **README-RUN.md líneas 53, 62–68:** Corregir: el seed está configurado en package.json; `npx prisma db seed` funciona; `tsx prisma/seed.ts` es alternativa manual. El reset con migraciones ya no aplica (no hay migraciones); el reset total usa db push.
 
 ---
@@ -208,11 +195,6 @@ Documentación: `garden-api/prisma/README-RESET-DB-LIMPIO.md`.
 ## 6. Comandos de referencia rápida
 
 ```bash
-# Reset total DB (sin migraciones)
-cd garden-api && rm -rf prisma/migrations
-npx prisma db push --force-reset --accept-data-loss
-npx tsx prisma/seed.ts
-
 # Arranque
 cd garden-api && npm run dev
 cd garden-web && npm run dev

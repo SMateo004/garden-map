@@ -57,13 +57,11 @@ WHERE cp."petName" IS NOT NULL AND cp."petName" <> '';
 
 3. **Eliminar columnas antiguas** con una nueva migración o con un `ALTER TABLE` manual y luego marcar la migración como aplicada.
 
-### Opción C – Empezar desde cero (desarrollo)
+### Opción C – Empezar desde cero
 
-```bash
-npx prisma migrate reset
-```
+Ya no aplica: no hay base de desarrollo.
 
-Esto aplica todas las migraciones desde cero y ejecuta el seed. Los dueños creados por el seed no tienen mascotas en el modelo antiguo; tras la migración tendrás que registrar mascotas desde la app o ampliar el seed para crear registros en `Pet`.
+> ⚠️ No hay base local ni staging: `garden-api/.env` apunta a la base de producción en Render. Nunca correr `prisma db push --force-reset` ni `prisma migrate reset` — borran todos los datos reales.
 
 ## Coherencia con el proyecto
 

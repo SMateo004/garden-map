@@ -365,4 +365,3 @@ API_URL=https://garden-api-1ldd.onrender.com/api
 | Estado del MVP | `docs/ANALISIS-ESTADO-MVP-V2.md` | Qué está listo y qué falta |
 | Pagos Stripe | `garden-api/docs/PAYMENTS_STRIPE.md` | Webhooks + Payment Intent flow |
 | Schema perfil | `garden-api/docs/SCHEMA_PROFILES.md` | Detalle del modelo CaregiverProfile |
-| Reset DB | `garden-api/prisma/README-RESET-DB-LIMPIO.md` | Procedimiento de reset limpio |

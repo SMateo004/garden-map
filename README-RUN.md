@@ -50,17 +50,9 @@ npx prisma migrate dev
 
 **Pruebas exhaustivas de imágenes:** Ver [docs/PRUEBAS-IMAGENES.md](docs/PRUEBAS-IMAGENES.md) (5 casos: mascota, cuidador, CI, placeholder, refresh).
 
-**Reset sin seed:** [garden-api/prisma/README-RESET-SEED.md](garden-api/prisma/README-RESET-SEED.md). **Reset total (borrar migraciones y recrear DB desde schema):** si la tabla `caregiver_profiles` no existe o la DB está inconsistente, usa [garden-api/prisma/README-RESET-DB-LIMPIO.md](garden-api/prisma/README-RESET-DB-LIMPIO.md): `rm -rf prisma/migrations`, `npx prisma db push --force-reset --accept-data-loss`, luego seed y `npm run dev`.
+> ⚠️ No hay base local ni staging: `garden-api/.env` apunta a la base de producción en Render. Nunca correr `prisma db push --force-reset` ni `prisma migrate reset` — borran todos los datos reales.
 
-Si alguna migración falló antes (p. ej. `bookings_petId_fkey` uuid vs text), puedes resetear y reaplicar todo (borra la DB y vuelve a aplicar migraciones; seed solo si lo ejecutas a mano):
-
-```bash
-cd garden-api
-npx prisma migrate reset --force --skip-seed
-tsx prisma/seed.ts
-```
-
-**Seed (admin + 2 cuidadores de prueba):** Ejecutar a mano tras el reset (el seed automático está deshabilitado):
+**Seed (admin + 2 cuidadores de prueba):** solo para una base vacía y propia — contra la de producción crea cuentas con contraseña conocida:
 
 ```bash
 cd garden-api
