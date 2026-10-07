@@ -510,16 +510,10 @@ async function createBookingInTx(
         body.serviceType === ServiceType.GUARDERIA
           ? cfg.GUARDERIA_MIN_ADVANCE_HOURS
           : cfg.PASEO_MIN_ADVANCE_HOURS;
-      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
-      const singleDate = (body as any).walkDate as string | undefined;
-      const singleStartTime = (body as any).startTime as string | undefined;
-      const slotsToCheck = walkDays
-        ? walkDays.map((d) => ({ date: d.date, startTime: d.startTime }))
-        : singleDate
-        ? [{ date: singleDate, startTime: singleStartTime }]
-        : [];
-      for (const slot of slotsToCheck) {
-        const startMs = boliviaDateTimeToMs(slot.date, slot.startTime);
+      // Un día por reserva (varios días llegan acá uno a la vez, ver createDayGroup).
+      const walkDate = (body as any).walkDate as string | undefined;
+      if (walkDate) {
+        const startMs = boliviaDateTimeToMs(walkDate, (body as any).startTime as string | undefined);
         const hoursUntilStart = (startMs - now.getTime()) / (60 * 60 * 1000);
         if (hoursUntilStart < minAdvanceHoras) {
           throw new BookingValidationError(
@@ -541,18 +535,11 @@ async function createBookingInTx(
     // Solo aplica cuando hay una hora de inicio específica (startTime);
     // HOSPEDAJE no tiene hora exacta y ya queda cubierto arriba.
     if (body.serviceType !== ServiceType.HOSPEDAJE) {
-      const walkDaysForAdvance = (body as any).walkDays as Array<{ date: string; startTime?: string }> | undefined;
-      const singleDateForAdvance = (body as any).walkDate as string | undefined;
-      const singleStartTime = (body as any).startTime as string | undefined;
-      const slotsToCheck = walkDaysForAdvance
-        ? walkDaysForAdvance.map((d) => ({ date: d.date, startTime: d.startTime }))
-        : singleDateForAdvance
-        ? [{ date: singleDateForAdvance, startTime: singleStartTime }]
-        : [];
-
-      for (const slot of slotsToCheck) {
-        if (!slot.startTime) continue; // sin hora específica, no se puede evaluar con precisión
-        const startUtcMs = boliviaDateTimeToMs(slot.date, slot.startTime);
+      const walkDate = (body as any).walkDate as string | undefined;
+      const startTime = (body as any).startTime as string | undefined;
+      // Sin hora específica no se puede evaluar con precisión.
+      if (walkDate && startTime) {
+        const startUtcMs = boliviaDateTimeToMs(walkDate, startTime);
         const hoursUntilStart = (startUtcMs - now.getTime()) / (60 * 60 * 1000);
         if (hoursUntilStart < cfg.MIN_BOOKING_ADVANCE_HOURS) {
           throw new BookingValidationError(
@@ -744,8 +731,7 @@ async function createBookingInTx(
           endDate: new Date(body.endDate),
           totalDays,
         }
-        // PASEO y GUARDERIA: un día por reserva. Booking.walkDays queda solo
-        // en reservas de paseo viejas (antes de agruparse por día).
+        // PASEO y GUARDERIA: un día por reserva (varios días = un grupo, ver createDayGroup).
         : {
           walkDate: new Date((body as any).walkDate),
           timeSlot: (body as any).timeSlot,

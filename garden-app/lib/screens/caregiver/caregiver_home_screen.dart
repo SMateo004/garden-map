@@ -1121,17 +1121,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final net = _caregiverNetAmount(booking);
     final bookingId   = booking['id'] as String? ?? '';
 
-    // Multi-day paseo support
-    final rawWalkDaysPending = booking['walkDays'];
-    final walkDaysListPending = rawWalkDaysPending is List
-        ? rawWalkDaysPending.cast<Map<String, dynamic>>()
-        : <Map<String, dynamic>>[];
-    final isMultiDayPending = walkDaysListPending.isNotEmpty;
-
     String dateLabel = '';
-    if (isMultiDayPending) {
-      dateLabel = '${walkDaysListPending.length} días';
-    } else if (dateStr != null) {
+    if (dateStr != null) {
       try {
         final d = DateTime.parse(dateStr);
         final now = DateTime.now();
@@ -1216,14 +1207,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     _infoChip((GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label, GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
-                    if (!isMultiDayPending && startTime != null)
+                    if (startTime != null)
                       _infoChip(startTime, GIcon.reloj, subtextColor, borderColor),
                   ],
                 ),
-                if (isMultiDayPending) ...[
-                  const SizedBox(height: 10),
-                  _buildWalkDaysSchedule(walkDaysListPending, subtextColor, borderColor),
-                ],
               ],
             ),
           ),
@@ -1361,17 +1348,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final bookingId   = booking['id'] as String? ?? '';
     final net         = _caregiverNetAmount(booking);
 
-    // Multi-day paseo support
-    final rawWalkDays = booking['walkDays'];
-    final walkDaysList = rawWalkDays is List
-        ? rawWalkDays.cast<Map<String, dynamic>>()
-        : <Map<String, dynamic>>[];
-    final isMultiDay = walkDaysList.isNotEmpty;
-
     String dateLabel = '';
-    if (isMultiDay) {
-      dateLabel = '${walkDaysList.length} días';
-    } else if (dateStr != null) {
+    if (dateStr != null) {
       try {
         final d = DateTime.parse(dateStr);
         final now = DateTime.now();
@@ -1487,14 +1465,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     _infoChip((GardenService.fromApi(serviceType) ?? GardenService.hospedaje).label, GIcon.huella, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, GIcon.calendario, subtextColor, borderColor),
-                    if (!isMultiDay && startTime != null)
+                    if (startTime != null)
                       _infoChip(startTime, GIcon.reloj, subtextColor, borderColor),
                   ],
                 ),
-                if (isMultiDay) ...[
-                  const SizedBox(height: 10),
-                  _buildWalkDaysSchedule(walkDaysList, subtextColor, borderColor),
-                ],
               ],
             ),
           ),
@@ -1546,74 +1520,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           GardenIcon(icon, size: GIconSize.xs, color: subtextColor),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  /// Muestra los días y horarios de un paseo multi-día al cuidador
-  Widget _buildWalkDaysSchedule(
-    List<Map<String, dynamic>> walkDays,
-    Color subtextColor,
-    Color borderColor,
-  ) {
-    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: GardenColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const GardenIcon(GIcon.calendario, size: GIconSize.xs, color: GardenColors.primary),
-              const SizedBox(width: 5),
-              Text(
-                'Horario por día',
-                style: const TextStyle(
-                  color: GardenColors.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: walkDays.map((day) {
-              final dateStr = day['date'] as String? ?? '';
-              final time    = day['startTime'] as String?;
-              final slot    = day['timeSlot'] as String? ?? '';
-              String dayLabel = dateStr;
-              try {
-                final d = DateTime.parse(dateStr);
-                dayLabel = '${d.day} ${months[d.month - 1]}';
-              } catch (_) {}
-              final slotLabel = slot == 'MANANA' ? 'mañana' : slot == 'TARDE' ? 'tarde' : 'noche';
-              final label = time != null ? '$dayLabel · $time' : '$dayLabel · $slotLabel';
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: GardenColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: GardenColors.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
         ],
       ),
     );

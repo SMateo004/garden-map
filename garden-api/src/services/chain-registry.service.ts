@@ -369,7 +369,7 @@ function cancelReasonCode(b: { status: string; cancellationSource: string | null
 
 /** Fecha de inicio y fin del servicio, como en el detalle de la reserva. */
 function serviceWindow(b: {
-  startDate: Date | null; endDate: Date | null; walkDate: Date | null; walkDays: unknown;
+  startDate: Date | null; endDate: Date | null; walkDate: Date | null;
   startTime: string | null; duration: number | null; paidAt: Date | null; createdAt: Date;
 }): { start: Date; end: Date } {
   let start = b.startDate ?? b.walkDate ?? b.paidAt ?? b.createdAt;
@@ -381,10 +381,6 @@ function serviceWindow(b: {
     start = d;
   }
   let end = b.endDate ?? null;
-  if (!end && Array.isArray(b.walkDays) && b.walkDays.length > 0) {
-    const last = (b.walkDays as Array<{ date?: string }>)[b.walkDays.length - 1];
-    if (last?.date) end = new Date(last.date);
-  }
   if (!end && b.duration) end = new Date(start.getTime() + b.duration * 60_000);
   if (!end || end < start) end = start;
   return { start, end };
@@ -410,7 +406,7 @@ async function planFor(row: BlockchainRecord, ready: ChainReadiness): Promise<Pl
     where: { id: row.subjectId },
     select: {
       id: true, status: true, serviceType: true, totalAmount: true, paidAt: true, createdAt: true,
-      startDate: true, endDate: true, walkDate: true, walkDays: true, startTime: true, duration: true,
+      startDate: true, endDate: true, walkDate: true, startTime: true, duration: true,
       clientId: true, cancellationSource: true, refundAmount: true, refundStatus: true, createdByAdmin: true,
       client: { select: { email: true } },
       caregiver: { select: { userId: true, user: { select: { email: true } } } },

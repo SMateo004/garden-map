@@ -578,7 +578,6 @@ model Booking {
   timeSlot                   TimeSlot?
   startTime                  String?          @db.VarChar(5)
   duration                   Int?
-  walkDays                   Json?            @db.JsonB // multi-day paseo: [{ date, timeSlot, startTime? }]
   petId                      String?
   petCount                   Int              @default(1) // total mascotas en esta reserva (para chequeo de capacidad)
   petName                    String           @db.VarChar(200) // nombre(s) separados por coma

@@ -96,7 +96,7 @@ function booking(extra: Row = {}): Row {
   return {
     id: BID, status: 'CONFIRMED', serviceType: 'PASEO', totalAmount: 45.5, createdByAdmin: false,
     paidAt: new Date('2026-10-05T15:00:00Z'), createdAt: new Date('2026-10-05T14:00:00Z'),
-    startDate: null, endDate: null, walkDate: new Date('2026-10-06T00:00:00Z'), walkDays: null, startTime: '09:00', duration: 60,
+    startDate: null, endDate: null, walkDate: new Date('2026-10-06T00:00:00Z'), startTime: '09:00', duration: 60,
     clientId: 'client-user', cancellationSource: null, refundAmount: null, refundStatus: null,
     petName: 'Firulais',
     client: { email: 'dueno@example.com' },
