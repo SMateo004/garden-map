@@ -37,6 +37,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_service_clock.dart';
+import '../../design/garden_story_progress.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -976,7 +977,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         final status = _booking?['status'] ?? '';
         // En curso, dueño y cuidador tienen su propio encabezado con "volver":
         // antes se veían dos o tres salidas a la vez.
-        final immersive = status == 'IN_PROGRESS';
+        final immersive = status == 'IN_PROGRESS' || status == 'CONFIRMED';
 
         return Scaffold(
           backgroundColor: bg,
@@ -1080,6 +1081,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final serviceConfirmedLabel = isPaseo
         ? 'Paseo confirmado'
         : (isGuarderia ? 'Guardería confirmada' : 'Hospedaje confirmado');
+    final day = _serviceDayLabel();
+    // Hora exacta, o el turno en palabras (antes salía el código "MANANA").
+    final startTime = _booking?['startTime'] as String?;
+    final slot = switch (_booking?['timeSlot'] as String?) {
+      'MANANA' => 'De mañana',
+      'TARDE' => 'De tarde',
+      'NOCHE' => 'De noche',
+      _ => null,
+    };
+    final timeValue = startTime ?? slot ?? '—';
+    final timeCaption = startTime != null ? 'hora de inicio' : 'turno';
+    final ownerFirst = ((_booking?['clientName'] as String?) ?? 'el dueño').split(' ').first;
 
     return Scaffold(
       backgroundColor: bg,
@@ -1123,7 +1136,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               GestureDetector(
-                                onTap: () => Navigator.pop(context),
+                                onTap: _exitServiceScreen,
                                 child: Container(
                                   width: 40, height: 40,
                                   decoration: BoxDecoration(
@@ -1171,7 +1184,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                     size: GIconSize.sm, color: Colors.white, state: GIconState.active),
                                 const SizedBox(width: 6),
                                 Text(
-                                  serviceConfirmedLabel,
+                                  day == null ? serviceConfirmedLabel : '$serviceConfirmedLabel · $day',
                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ],
@@ -1210,10 +1223,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      _booking?['startTime'] ?? _booking?['timeSlot'] ?? '—',
-                                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                      timeValue,
+                                      style: TextStyle(color: Colors.white, fontSize: startTime != null ? 22 : 17, fontWeight: FontWeight.w900, letterSpacing: 0.3),
                                     ),
-                                    Text('hora de inicio',
+                                    Text(timeCaption,
                                       style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 10)),
                                   ],
                                 ),
@@ -1249,7 +1262,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         Row(
                           children: [
                             GardenAvatar(
-                              imageUrl: null,
+                              // La reserva ya trae la foto del dueño (antes se pasaba null).
+                              imageUrl: _booking?['clientPhoto'] as String?,
                               size: 56,
                               initials: (_booking?['clientName'] as String? ?? 'C')[0],
                             ),
@@ -1331,50 +1345,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 14),
                   ],
 
-                  // ── GPS (PASEO) ──────────────────────────────────────────────
-                  if (isPaseo) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: GardenColors.secondary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(GardenRadius.lg),
-                        border: Border.all(color: GardenColors.secondary.withValues(alpha: 0.22)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(9),
-                            decoration: BoxDecoration(
-                              color: GardenColors.secondary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(GardenRadius.sm),
-                            ),
-                            child: const GardenIcon(GIcon.mapa, size: GIconSize.sm, color: GardenColors.secondary),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Comparte tu GPS durante el paseo',
-                                  style: TextStyle(
-                                    color: isDark ? GardenColors.darkTextPrimary : GardenColors.secondary,
-                                    fontWeight: FontWeight.w700, fontSize: 13,
-                                  )),
-                                const SizedBox(height: 3),
-                                Text(
-                                  'Una vez iniciado, abre "Mapa GPS" en Acciones para que el dueño te vea en tiempo real.',
-                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                  // ── Paso a paso: en camino → llegué → iniciar ──────────────
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
+                      boxShadow: GardenShadows.card,
                     ),
-                    const SizedBox(height: 14),
-                  ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Paso a paso',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                        const SizedBox(height: 14),
+                        GardenStoryProgress(steps: _prepSteps(isPaseo, ownerFirst)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
-                  // ── Checklist ────────────────────────────────────────────────
+                  // ── Antes de iniciar (recordatorio, no tareas ya hechas) ──
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -1385,25 +1376,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: GardenColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(GardenRadius.sm),
-                              ),
-                              child: const GardenIcon(GIcon.lista, size: GIconSize.sm, color: GardenColors.primary),
-                            ),
-                            const SizedBox(width: 10),
-                            Text('Antes de iniciar',
-                              style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _checkItem('Confirma la identidad del dueño', textColor, subtextColor),
-                        _checkItem('Verifica el estado de la mascota', textColor, subtextColor),
-                        _checkItem('Revisa las necesidades especiales', textColor, subtextColor),
+                        Text('Antes de iniciar, revisa',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                        const SizedBox(height: 12),
+                        _checkItem('Que la persona que te entrega a ${_booking?['petName'] ?? 'la mascota'} sea $ownerFirst', textColor, subtextColor),
+                        _checkItem('Cómo está la mascota (heridas, ánimo, collar o correa)', textColor, subtextColor),
+                        _checkItem('Sus necesidades especiales, si tiene', textColor, subtextColor),
                       ],
                     ),
                   ),
@@ -1542,7 +1520,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 Text(
                   isBlocked && !isWebNonPro
                       ? blockReason
-                      : 'El pago en escrow se liberará al finalizar',
+                      : 'Tu ganancia de ${caregiverNetLabel(_booking)} se libera al terminar el servicio.',
                   style: TextStyle(color: subtextColor, fontSize: 11),
                   textAlign: TextAlign.center,
                   maxLines: 2,
@@ -1556,14 +1534,64 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  /// "hoy", "mañana", "sáb 11 oct" — el día del servicio.
+  String? _serviceDayLabel() {
+    final raw = (_booking?['walkDate'] ?? _booking?['startDate']) as String?;
+    final d = raw == null ? null : DateTime.tryParse(raw);
+    if (d == null) return null;
+    final day = DateTime(d.year, d.month, d.day);
+    final now = DateTime.now();
+    final diff = day.difference(DateTime(now.year, now.month, now.day)).inDays;
+    if (diff == 0) return 'hoy';
+    if (diff == 1) return 'mañana';
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${_wd[d.weekday - 1]} ${d.day} ${months[d.month - 1]}';
+  }
+
+  /// Pasos de la preparación del cuidador. Paseo: en camino → llegué →
+  /// iniciar; guardería y hospedaje: en camino → iniciar. "En camino" es
+  /// opcional: si marcó la llegada sin avisar, cuenta como hecho igual.
+  List<StoryStepItem> _prepSteps(bool isPaseo, String ownerFirst) {
+    String? at(String key) {
+      final d = DateTime.tryParse(_booking?[key] as String? ?? '');
+      return d == null ? null : 'A las ${_formatClockTime(d)}';
+    }
+
+    final arrived = isPaseo && _hasArrived;
+    final enRouteDone = _hasEnRoute || arrived;
+    return [
+      StoryStepItem(
+        GIcon.auto,
+        enRouteDone ? 'Le avisaste a $ownerFirst que ibas' : 'Avisa que vas en camino',
+        enRouteDone ? StoryStepState.done : StoryStepState.current,
+        detail: enRouteDone ? at('enRouteAt') : 'Opcional: $ownerFirst recibe un aviso.',
+      ),
+      if (isPaseo)
+        StoryStepItem(
+          GIcon.ubicacion,
+          arrived ? 'Llegaste' : 'Marca que llegaste',
+          arrived ? StoryStepState.done : (enRouteDone ? StoryStepState.current : StoryStepState.next),
+          detail: arrived ? at('arrivedAt') : 'Hace falta para poder iniciar el paseo.',
+        ),
+      StoryStepItem(
+        GIcon.iniciar,
+        isPaseo ? 'Inicia el paseo' : 'Inicia el servicio',
+        (isPaseo ? arrived : enRouteDone) ? StoryStepState.current : StoryStepState.next,
+        detail: isPaseo
+            ? 'Tu ubicación se comparte sola con $ownerFirst mientras dure. No cierres la app.'
+            : 'Desde ahí cuentan el tiempo y las fotos del servicio.',
+      ),
+    ];
+  }
+
   Widget _checkItem(String text, Color textColor, Color subtextColor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          GardenClay(size: 24, tint: GardenColors.success.withValues(alpha: 0.12), interactive: false, child: const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.success)),
+          GardenIcon(GIcon.casilla, size: GIconSize.sm, color: subtextColor),
           const SizedBox(width: 12),
-          Text(text, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
+          Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500, height: 1.35))),
         ],
       ),
     );
@@ -2248,6 +2276,21 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final String serviceLabel = isPaseo
         ? 'Paseo confirmado'
         : (isGuarderia ? 'Guardería confirmada' : 'Hospedaje confirmado');
+    final day = _serviceDayLabel();
+    final caregiverFirst = caregiverName.split(' ').first;
+    final startTime = _booking?['startTime'] as String?;
+    final slot = switch (_booking?['timeSlot'] as String?) {
+      'MANANA' => 'de mañana',
+      'TARDE' => 'de tarde',
+      'NOCHE' => 'de noche',
+      _ => null,
+    };
+    // "Hoy a las 9:00" / "Mañana, de tarde" (antes: "Tu cuidador ya está
+    // listo", aunque todavía no hubiera salido).
+    final when = [
+      if (day != null) day[0].toUpperCase() + day.substring(1),
+      if (startTime != null) 'a las $startTime' else if (slot != null) slot,
+    ].join(startTime != null ? ' ' : ', ');
 
     return Scaffold(
       backgroundColor: bg,
@@ -2286,7 +2329,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.pop(context),
+                            onTap: _exitServiceScreen,
                             child: Container(
                               width: 40, height: 40,
                               decoration: BoxDecoration(
@@ -2321,7 +2364,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Tu cuidador ya está listo',
+                            when.isEmpty ? 'Con $caregiverFirst' : '$when · con $caregiverFirst',
                             style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
                           ),
                         ],
@@ -2349,28 +2392,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 56, height: 56,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: borderColor, width: 2),
-                          ),
-                          child: ClipOval(
-                            child: caregiverPhoto != null && caregiverPhoto.isNotEmpty
-                                ? Image.network(
-                                    fixImageUrl(caregiverPhoto),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: GardenColors.primary.withValues(alpha: 0.1),
-                                      child: const GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
-                                    ),
-                                  )
-                                : Container(
-                                    color: GardenColors.primary.withValues(alpha: 0.1),
-                                    child: const GardenIcon(GIcon.perfil, size: GIconSize.lg, state: GIconState.active, color: GardenColors.primary),
-                                  ),
-                          ),
-                        ),
+                        GardenAvatar(imageUrl: caregiverPhoto, size: 56, initials: caregiverName),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
@@ -2383,12 +2405,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
                                   const SizedBox(width: 3),
                                   Text(
-                                    (caregiverRating as num).toStringAsFixed(1),
+                                    (caregiverRating as num).toStringAsFixed(1).replaceAll('.', ','),
                                     style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600),
                                   ),
                                 ])
                               else
-                                Text('Cuidador verificado', style: TextStyle(color: subtextColor, fontSize: 13)),
+                                Text('Nuevo en GARDEN', style: TextStyle(color: subtextColor, fontSize: 13)),
                             ],
                           ),
                         ),
@@ -2403,52 +2425,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   const SizedBox(height: 20),
 
-                  // Status card — 3 estados posibles antes de iniciar: esperando,
-                  // en camino (enRouteAt, los 3 tipos) o llegó (arrivedAt, solo Paseo).
-                  () {
-                    final Color statusColor;
-                    final String statusTitle;
-                    final String statusSubtitle;
-                    if (isPaseo && _hasArrived) {
-                      statusColor = GardenColors.success;
-                      statusTitle = '¡Tu cuidador llegó!';
-                      statusSubtitle = 'Está en tu domicilio y va a iniciar el paseo en breve.';
-                    } else if (_hasEnRoute) {
-                      statusColor = GardenColors.secondary;
-                      statusTitle = 'Tu cuidador va en camino';
-                      statusSubtitle = isPaseo
-                          ? 'Está en camino hacia tu domicilio. Recibirás una notificación cuando llegue.'
-                          : 'Está en camino hacia tu domicilio. Recibirás una notificación cuando inicie el servicio.';
-                    } else {
-                      statusColor = GardenColors.primary;
-                      statusTitle = 'Esperando inicio del servicio';
-                      statusSubtitle = 'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.';
-                    }
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.18)),
-                      ),
-                      child: Row(
-                        children: [
-                          _PulsingDot(color: statusColor),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(statusTitle, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 3),
-                                Text(statusSubtitle, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }(),
+                  // ── Paso a paso (lo mismo que ve el cuidador, del lado del dueño) ──
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
+                      boxShadow: GardenShadows.card,
+                    ),
+                    child: GardenStoryProgress(steps: _ownerWaitSteps(isPaseo, caregiverFirst, petName)),
+                  ),
 
                   const SizedBox(height: 20),
 
@@ -2471,7 +2457,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             (GIcon.foto, 'Tu cuidador subirá fotos durante el paseo.'),
                             (GIcon.notificaciones, 'Te avisamos cuando el paseo termine.'),
                           ] else ...[
-                            (GIcon.hospedaje, 'Tu mascota estará cuidada en un ambiente seguro.'),
+                            (GIcon.forService(_svc), 'Tu mascota estará cuidada en un ambiente seguro.'),
                             (GIcon.foto, 'Recibirás fotos y actualizaciones del servicio.'),
                             (GIcon.notificaciones, 'Te avisamos si hay cualquier novedad.'),
                           ],
@@ -2496,6 +2482,38 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ],
       ),
     );
+  }
+
+  List<StoryStepItem> _ownerWaitSteps(bool isPaseo, String caregiverFirst, String petName) {
+    String? at(String key) {
+      final d = DateTime.tryParse(_booking?[key] as String? ?? '');
+      return d == null ? null : 'A las ${_formatClockTime(d)}';
+    }
+
+    final arrived = isPaseo && _hasArrived;
+    final enRoute = _hasEnRoute || arrived;
+    return [
+      const StoryStepItem(GIcon.confirmado, 'Reserva confirmada', StoryStepState.done),
+      StoryStepItem(
+        GIcon.auto,
+        enRoute ? '$caregiverFirst salió hacia ti' : '$caregiverFirst te avisa cuando salga',
+        enRoute ? StoryStepState.done : StoryStepState.current,
+        detail: enRoute ? at('enRouteAt') : 'Te llega una notificación.',
+      ),
+      if (isPaseo)
+        StoryStepItem(
+          GIcon.ubicacion,
+          arrived ? '$caregiverFirst llegó' : 'Llega a buscar a $petName',
+          arrived ? StoryStepState.done : (enRoute ? StoryStepState.current : StoryStepState.next),
+          detail: arrived ? at('arrivedAt') : null,
+        ),
+      StoryStepItem(
+        GIcon.iniciar,
+        isPaseo ? 'Empieza el paseo' : 'Empieza el servicio',
+        (isPaseo ? arrived : enRoute) ? StoryStepState.current : StoryStepState.next,
+        detail: isPaseo ? 'Desde ahí lo sigues en el mapa y te llegan fotos.' : 'Desde ahí te llegan fotos y novedades.',
+      ),
+    ];
   }
 
   // --- VISTA: IN PROGRESS ---
