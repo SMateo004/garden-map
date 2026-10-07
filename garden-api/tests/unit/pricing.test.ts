@@ -9,6 +9,7 @@ import {
   caregiverNetOf,
   caregiverUnitFromPriced,
   getPricingConfig,
+  walk30BasePrice,
   getCommissionRate,
   getTaxRate,
   invalidatePricingConfig,
@@ -213,5 +214,30 @@ describe('getPricingConfig (lectura de AppSettings + overrides)', () => {
     expect(c.defaultCommissionPct).toBe(10);
     expect(c.configuredTaxRatePct).toBe(16);
     expect(c.serviceCommissionPct).toEqual({ HOSPEDAJE: 7.5 });
+  });
+});
+
+describe('walk30BasePrice (paseo de 30 min)', () => {
+  it('usa el precio que fijó el cuidador para 30 min, aunque no sea la mitad del de 60', () => {
+    expect(walk30BasePrice(30, 50)).toBe(30);
+    expect(walk30BasePrice(20, 50)).toBe(20);
+  });
+
+  it('sin precio de 30 min cargado (null o 0), cae a la mitad del de 60', () => {
+    expect(walk30BasePrice(null, 50)).toBe(25);
+    expect(walk30BasePrice(0, 45)).toBe(23);
+    expect(walk30BasePrice(undefined, '60')).toBe(30);
+  });
+
+  it('sin ningún precio de paseo devuelve null', () => {
+    expect(walk30BasePrice(null, null)).toBeNull();
+    expect(walk30BasePrice(0, 0)).toBeNull();
+  });
+
+  it('lo que ve el cliente en el perfil = lo que se cobra (misma regla + misma comisión)', () => {
+    const shown = Math.round(walk30BasePrice(30, 50)! * 1.19);
+    const charged = computeClientCharge(walk30BasePrice(30, 50)!, 0.19, 0).total;
+    expect(shown).toBe(36);
+    expect(charged).toBe(36);
   });
 });

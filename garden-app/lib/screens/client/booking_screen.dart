@@ -863,7 +863,7 @@ class _BookingScreenState extends State<BookingScreen> {
     } else if (_selectedService == 'PASEO') {
       final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (price60 == null) return null;
-      final unitPrice = _selectedDuration == 30 ? (price60 / 2).roundToDouble() : price60;
+      final unitPrice = _selectedDuration == 30 ? _walk30Price(price60).toDouble() : price60;
       if (_isMultiDay) {
         final numDays = _selectedDates.length;
         basePrice = numDays > 0 ? unitPrice * numDays * petMult : null;
@@ -910,6 +910,15 @@ class _BookingScreenState extends State<BookingScreen> {
         if (!_mgDate!.isBefore(earliest)) _mgDate = null;
       }
     });
+  }
+
+  /// Precio (con comisión) de un paseo de 30 min: el que manda el servidor en
+  /// pricePerWalk30 — el que fijó el cuidador, o la mitad del de 60 si no lo
+  /// cargó (walk30BasePrice en pricing.service.ts), igual que lo que se cobra.
+  /// Antes se calculaba siempre como la mitad del de 60 y no coincidía con el perfil.
+  int _walk30Price(double price60) {
+    final fromServer = (_caregiver?['pricePerWalk30'] as num?)?.round();
+    return (fromServer != null && fromServer > 0) ? fromServer : (price60 / 2).round();
   }
 
   Widget _buildDurationChip({
@@ -1303,7 +1312,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   const SizedBox(height: 12),
                   Builder(builder: (_) {
                     final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
-                    final price30 = price60 != null ? (price60 / 2).round() : null;
+                    final price30 = price60 != null ? _walk30Price(price60) : null;
                     final ratePerMin = price60 != null ? price60 / 60 : null;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

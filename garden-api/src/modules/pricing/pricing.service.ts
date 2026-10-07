@@ -193,6 +193,20 @@ export function caregiverUnitFromPriced(pricedUnit: number, commissionRate: numb
   return Math.round(pricedUnit / (1 + commissionRate));
 }
 
+/**
+ * Precio del cuidador (sin comisión) para un paseo de 30 minutos: el que él fijó en su perfil
+ * (pricePerWalk30) o, si no lo cargó, la mitad del de 60 minutos. Es la ÚNICA regla: la usan la
+ * reserva (lo que se cobra) y los listados/perfiles (lo que se muestra), así nunca divergen.
+ * Antes la reserva siempre cobraba la mitad del de 60 aunque el cuidador hubiera fijado otro
+ * precio, y el perfil mostraba el suyo.
+ */
+export function walk30BasePrice(pricePerWalk30: unknown, pricePerWalk60: unknown): number | null {
+  const p30 = Number(pricePerWalk30 ?? 0);
+  if (p30 > 0) return Math.round(p30);
+  const p60 = Number(pricePerWalk60 ?? 0);
+  return p60 > 0 ? Math.round(p60 / 2) : null;
+}
+
 /** Monto neto del cuidador de una reserva ya guardada: total − comisión − impuestos. */
 export function caregiverNetOf(b: {
   totalAmount: unknown;

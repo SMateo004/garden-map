@@ -3,7 +3,7 @@ import prisma from '../../config/database.js';
 import { BadRequestError } from '../../shared/errors.js';
 import type { PatchClientProfileBody } from './client-profile.validation.js';
 import logger from '../../shared/logger.js';
-import { getPricingConfig, resolveCommissionPct } from '../pricing/pricing.service.js';
+import { getPricingConfig, resolveCommissionPct, walk30BasePrice } from '../pricing/pricing.service.js';
 
 /**
  * GET /api/client/my-profile - Perfil del cliente con sus mascotas (Pet[]).
@@ -138,7 +138,7 @@ export async function getFavorites(userId: string) {
     rating: c.rating,
     reviewCount: c.reviewCount,
     pricePerDay: priced(c.pricePerDay, 'HOSPEDAJE', c.id),
-    pricePerWalk30: priced(c.pricePerWalk30, 'PASEO', c.id),
+    pricePerWalk30: priced(walk30BasePrice(c.pricePerWalk30, c.pricePerWalk60), 'PASEO', c.id),
     services: c.servicesOffered,
     verified: c.verified,
   }));

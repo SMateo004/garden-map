@@ -19,7 +19,7 @@ import { type PaseoSlot, parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/
 import { PHOTO_COUNT, MAX_BIO_CHARS } from './caregiver.validation.js';
 import logger from '../../shared/logger.js';
 import { blockchainService } from '../../services/blockchain.service.js';
-import { getPricingConfig, resolveCommissionPct, type PricedService } from '../pricing/pricing.service.js';
+import { getPricingConfig, resolveCommissionPct, walk30BasePrice, type PricedService } from '../pricing/pricing.service.js';
 
 const cache = getCache();
 
@@ -308,7 +308,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       rating: c.rating,
       reviewCount: c.reviewCount,
       pricePerDay: applyMarkup(c.pricePerDay, rateFor(c.id, 'HOSPEDAJE')),
-      pricePerWalk30: applyMarkup(c.pricePerWalk30, rateFor(c.id, 'PASEO')),
+      pricePerWalk30: applyMarkup(walk30BasePrice(c.pricePerWalk30, c.pricePerWalk60), rateFor(c.id, 'PASEO')),
       pricePerWalk60: applyMarkup(c.pricePerWalk60, rateFor(c.id, 'PASEO')),
       pricePerGuarderia: applyMarkup(c.pricePerGuarderia, rateFor(c.id, 'GUARDERIA')),
       guarderiaIncludeWalk: (c as any).guarderiaIncludeWalk ?? false,
@@ -584,7 +584,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     rating: profile.rating,
     reviewCount: profile.reviewCount,
     pricePerDay: applyMarkup(profile.pricePerDay, rateFor(profile.id, 'HOSPEDAJE')),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30, rateFor(profile.id, 'PASEO')),
+    pricePerWalk30: applyMarkup(walk30BasePrice(profile.pricePerWalk30, profile.pricePerWalk60), rateFor(profile.id, 'PASEO')),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, rateFor(profile.id, 'PASEO')),
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, rateFor(profile.id, 'GUARDERIA')),
     // Para que la app muestre el total con impuestos ANTES de pagar (los precios
@@ -1325,7 +1325,7 @@ function mapProfileToListItem(profile: any, rateFor: RateFor): CaregiverListItem
     rating: profile.rating,
     reviewCount: profile.reviewCount,
     pricePerDay: applyMarkup(profile.pricePerDay, rateFor(profile.id, 'HOSPEDAJE')),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30, rateFor(profile.id, 'PASEO')),
+    pricePerWalk30: applyMarkup(walk30BasePrice(profile.pricePerWalk30, profile.pricePerWalk60), rateFor(profile.id, 'PASEO')),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, rateFor(profile.id, 'PASEO')),
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, rateFor(profile.id, 'GUARDERIA')),
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,

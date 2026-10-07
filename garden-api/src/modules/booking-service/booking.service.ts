@@ -72,7 +72,7 @@ const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
 import { getNumericSetting } from '../../utils/settings-cache.js';
 import { termsGateWhere } from '../legal/caregiver-terms.service.js';
-import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf, getPricingConfig } from '../pricing/pricing.service.js';
+import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf, getPricingConfig, walk30BasePrice } from '../pricing/pricing.service.js';
 import { stripTaxFromUnpaidBooking } from '../pricing/taxes.service.js';
 
 /** Lee los parámetros del negocio desde AppSettings (con cache 30s). */
@@ -641,8 +641,9 @@ async function createBookingInTx(
         throw new BookingValidationError('El cuidador no tiene precio de paseo configurado', 'BOOKING_VALIDATION', 'caregiverId');
       }
 
-      // 30 min = mitad del precio de 60 min (sin campo separado en BD)
-      pricePerUnit = duration === 30 ? Math.round(p60 / 2) : p60;
+      // 30 min = el precio que fijó el cuidador para 30 min (o la mitad del de 60 si no lo cargó)
+      // — la misma regla que muestran los perfiles (walk30BasePrice).
+      pricePerUnit = duration === 30 ? walk30BasePrice(caregiver.pricePerWalk30, p60)! : p60;
       // Un paseo por reserva (varios días = una reserva por día); multi-mascota con descuento
       totalAmount = Math.round(pricePerUnit * petMultiplier);
     }
