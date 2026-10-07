@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/brote.dart';
+import '../design/garden_depth.dart';
 import '../design/garden_icons.dart';
 import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
@@ -80,13 +81,10 @@ class GardenEmptyState extends StatelessWidget {
 
     final Widget illustration = pose != null
         ? Brote(pose: pose, size: size)
-        : Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: GardenColors.primary.withValues(alpha: isDark ? 0.14 : 0.10),
-            ),
+        : GardenClay(
+            size: size,
+            tint: GardenColors.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+            interactive: false,
             child: Center(
               child: GardenIcon(
                 cfg.icon,

@@ -1,11 +1,19 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../design/garden_icons.dart';
+import '../../design/brote.dart';
+import '../../design/garden_caregiver_card.dart';
+import '../../design/garden_ratings.dart';
+import '../../design/garden_service.dart';
 
+/// Mis calificaciones (dueño): primero lo que falta calificar —con el plazo,
+/// porque pasado ese tiempo el pago se libera solo y ya no se puede—, después
+/// el resumen y las reseñas escritas con la respuesta del cuidador.
 class MyRatingsScreen extends StatefulWidget {
   const MyRatingsScreen({super.key});
   @override
@@ -14,17 +22,15 @@ class MyRatingsScreen extends StatefulWidget {
 
 class _MyRatingsScreenState extends State<MyRatingsScreen> {
   List<Map<String, dynamic>> _reviews = [];
+  List<Map<String, dynamic>> _pending = [];
   bool _isLoading = true;
-  String _token = '';
+  bool _failed = false;
+
+  /// Horas para calificar tras el servicio (setting público
+  /// autoReleasePaymentHoras, igual que en Mis reservas).
+  int _autoReleaseHoras = 24;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-
-  static const _serviceLabels = {
-    'HOSPEDAJE': 'Hospedaje',
-    'GUARDERIA': 'Guardería',
-    'PASEO': 'Paseo',
-    'ADIESTRAMIENTO': 'Adiestramiento',
-  };
 
   @override
   void initState() {
@@ -33,18 +39,67 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
   }
 
   Future<void> _load() async {
-    _token = AuthState.token;
-    try {
-      final res = await http.get(
-        Uri.parse('$_baseUrl/client/my-reviews'),
-        headers: {'Authorization': 'Bearer $_token'},
-      );
-      final data = jsonDecode(res.body);
-      if (data['success'] == true) {
-        setState(() => _reviews = (data['data'] as List).cast<Map<String, dynamic>>());
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _isLoading = false);
+    final headers = {'Authorization': 'Bearer ${AuthState.token}'};
+    var failed = false;
+    List<Map<String, dynamic>> reviews = _reviews;
+    List<Map<String, dynamic>> pending = _pending;
+    await Future.wait([
+      () async {
+        try {
+          final res = await http.get(Uri.parse('$_baseUrl/client/my-reviews'), headers: headers);
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) {
+            reviews = (data['data'] as List).cast<Map<String, dynamic>>();
+          } else {
+            failed = true;
+          }
+        } catch (_) {
+          // Antes un error de red mostraba "Aún no has calificado ningún
+          // servicio", como si no hubiera reseñas.
+          failed = true;
+        }
+      }(),
+      () async {
+        try {
+          final res = await http.get(Uri.parse('$_baseUrl/bookings/my'), headers: headers);
+          final data = jsonDecode(res.body);
+          if (data['success'] == true && data['data'] is List) {
+            // Mismo criterio que el botón "Calificar experiencia" de Mis reservas.
+            pending = (data['data'] as List)
+                .cast<Map<String, dynamic>>()
+                .where((b) => b['status'] == 'COMPLETED' && b['ownerRated'] != true && b['ownerRating'] == null)
+                .toList();
+          }
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          final res = await http.get(Uri.parse('$_baseUrl/settings'));
+          final d = (jsonDecode(res.body) as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+          final h = (d?['autoReleasePaymentHoras'] as num?)?.toInt();
+          if (h != null && h > 0) _autoReleaseHoras = h;
+        } catch (_) {}
+      }(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _reviews = reviews;
+      _pending = pending;
+      _failed = failed && reviews.isEmpty;
+      _isLoading = false;
+    });
+  }
+
+  DateTime? _deadline(Map<String, dynamic> b) {
+    final ended = DateTime.tryParse(b['serviceEndedAt'] as String? ?? '');
+    return ended?.add(Duration(hours: _autoReleaseHoras)).toLocal();
+  }
+
+  /// La única forma de calificar: la encuesta del resumen del servicio
+  /// (maneja la disputa si es < 3 y la propina si es ≥ 3).
+  Future<void> _rate(Map<String, dynamic> b) async {
+    await context.push('/service/${b['id']}', extra: {'role': 'CLIENT', 'token': AuthState.token});
+    if (mounted) _load();
   }
 
   @override
@@ -55,171 +110,123 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
         final isDark = themeNotifier.isDark;
         final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
         final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
-            title: const Text('Mis Calificaciones'),
+            title: const Text('Mis calificaciones'),
             backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
             foregroundColor: textColor,
             elevation: 0,
           ),
           body: _isLoading
               ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
-              : _reviews.isEmpty
-                  ? _buildEmpty(textColor, subtextColor)
-                  : RefreshIndicator(
-                      color: GardenColors.primary,
-                      onRefresh: _load,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _reviews.length,
-                        itemBuilder: (ctx, i) => _ReviewCard(
-                          review: _reviews[i],
-                          isDark: isDark,
-                          textColor: textColor,
-                          subtextColor: subtextColor,
-                          serviceLabels: _serviceLabels,
-                        ),
-                      ),
-                    ),
+              : RefreshIndicator(
+                  color: GardenColors.primary,
+                  onRefresh: _load,
+                  child: _body(isDark),
+                ),
         );
       },
     );
   }
 
-  Widget _buildEmpty(Color textColor, Color subtextColor) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 88, height: 88,
-            decoration: BoxDecoration(
-              color: GardenColors.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: GardenIcon(GIcon.estrella, size: GIconSize.xl, color: GardenColors.primary.withValues(alpha: 0.6)),
-          ),
-          const SizedBox(height: 18),
-          Text('Aún no has calificado ningún servicio',
-            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text('Cuando termines un servicio, tu reseña aparecerá aquí.',
-            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
-            textAlign: TextAlign.center),
-        ]),
-      ),
-    );
-  }
-}
+  Widget _body(bool isDark) {
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    if (_failed && _pending.isEmpty) {
+      return ListView(padding: const EdgeInsets.all(24), children: [
+        const SizedBox(height: 40),
+        GardenEmptyState(
+          type: GardenEmptyType.reviews,
+          brote: BrotePose.oops,
+          title: 'No pudimos cargar tus calificaciones',
+          subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
+          ctaLabel: 'Reintentar',
+          onCta: () {
+            setState(() => _isLoading = true);
+            _load();
+          },
+        ),
+      ]);
+    }
+    if (_reviews.isEmpty && _pending.isEmpty) {
+      return ListView(padding: const EdgeInsets.all(24), children: const [
+        SizedBox(height: 40),
+        GardenEmptyState(
+          type: GardenEmptyType.reviews,
+          brote: BrotePose.esperando,
+          title: 'Aún no calificaste ningún servicio',
+          subtitle: 'Cuando termine un servicio, podrás contar cómo te fue. Tu reseña ayuda a otros dueños a elegir.',
+        ),
+      ]);
+    }
 
-class _ReviewCard extends StatelessWidget {
-  final Map<String, dynamic> review;
-  final bool isDark;
-  final Color textColor;
-  final Color subtextColor;
-  final Map<String, String> serviceLabels;
+    final avg = _reviews.isEmpty
+        ? 0.0
+        : _reviews.map((r) => (r['rating'] as num?)?.toDouble() ?? 0).reduce((a, b) => a + b) / _reviews.length;
+    final answered = _reviews.where((r) => (r['caregiverResponse'] as String?)?.isNotEmpty == true).length;
 
-  const _ReviewCard({
-    required this.review,
-    required this.isDark,
-    required this.textColor,
-    required this.subtextColor,
-    required this.serviceLabels,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final caregiver = review['caregiver'] as Map<String, dynamic>?;
-    final caregiverUser = caregiver?['user'] as Map<String, dynamic>?;
-    final caregiverName = caregiverUser != null
-        ? '${caregiverUser['firstName']} ${caregiverUser['lastName']}'
-        : 'Cuidador';
-    final photoUrl = caregiver?['profilePhoto'] as String?;
-    final rating = (review['rating'] as num?)?.toInt() ?? 0;
-    final comment = review['comment'] as String?;
-    final serviceType = review['serviceType'] as String?;
-    final serviceLabel = serviceLabels[serviceType] ?? serviceType ?? '';
-    final createdAt = review['createdAt'] as String?;
-    final date = createdAt != null
-        ? _formatDate(DateTime.tryParse(createdAt))
-        : '';
-    final caregiverResponse = review['caregiverResponse'] as String?;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header: avatar + name + date
-          Row(children: [
-            GardenAvatar(
-              imageUrl: photoUrl,
-              size: 44,
-              initials: caregiverName.isNotEmpty ? caregiverName : '?',
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(caregiverName,
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-              const SizedBox(height: 2),
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(serviceLabel,
-                    style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (_pending.isNotEmpty) ...[
+                GardenRatingsSectionTitle(
+                  _pending.length == 1 ? 'Te falta calificar 1 servicio' : 'Tienes ${_pending.length} servicios por calificar',
                 ),
-                const SizedBox(width: 8),
-                Text(date, style: TextStyle(color: subtextColor, fontSize: 11)),
-              ]),
-            ])),
-          ]),
-          const SizedBox(height: 12),
-          // Stars
-          Row(children: List.generate(5, (i) => GardenIcon(GIcon.estrella, size: GIconSize.md, state: i < rating ? GIconState.active : GIconState.idle, color: i < rating ? GardenColors.star : subtextColor))),
-          if (comment != null && comment.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(comment, style: TextStyle(color: textColor, fontSize: 13, height: 1.5)),
-          ],
-          // Caregiver response
-          if (caregiverResponse != null && caregiverResponse.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
-              ),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const GardenIcon(GIcon.responder, size: GIconSize.sm, color: GardenColors.primary),
-                const SizedBox(width: 8),
-                Expanded(child: Text(caregiverResponse,
-                  style: TextStyle(color: textColor, fontSize: 12, fontStyle: FontStyle.italic, height: 1.4))),
-              ]),
-            ),
-          ],
-        ]),
-      ),
+                for (final b in _pending)
+                  GardenPendingRatingCard(
+                    caregiverName: b['caregiverName'] as String? ?? 'Tu cuidador',
+                    caregiverPhoto: b['caregiverPhoto'] as String?,
+                    petName: b['petName'] as String?,
+                    service: GardenService.fromApi(b['serviceType'] as String?),
+                    deadline: _deadline(b),
+                    onRate: () => _rate(b),
+                  ),
+                const SizedBox(height: 14),
+              ],
+              if (_reviews.isNotEmpty) ...[
+                GardenStatTiles(
+                  highlightFirst: true,
+                  tiles: [
+                    (avg.toStringAsFixed(1).replaceAll('.', ','), 'nota promedio'),
+                    ('${_reviews.length}', _reviews.length == 1 ? 'reseña' : 'reseñas'),
+                    ('$answered', 'con respuesta'),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const GardenRatingsSectionTitle('Lo que escribiste'),
+                for (final r in _reviews) _reviewCard(r),
+              ] else
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('Tus reseñas aparecerán aquí después de calificar.',
+                      textAlign: TextAlign.center, style: TextStyle(color: sub, fontSize: 13)),
+                ),
+            ]),
+          ),
+        ),
+      ],
     );
   }
 
-  String _formatDate(DateTime? dt) {
-    if (dt == null) return '';
-    return '${dt.day}/${dt.month}/${dt.year}';
+  Widget _reviewCard(Map<String, dynamic> r) {
+    final caregiver = r['caregiver'] as Map<String, dynamic>?;
+    final u = caregiver?['user'] as Map<String, dynamic>?;
+    final name = u != null ? '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim() : 'Cuidador';
+    final caregiverId = caregiver?['id'] as String?;
+    return GardenReviewCard(
+      caregiverName: name.isEmpty ? 'Cuidador' : name,
+      caregiverPhoto: caregiver?['profilePhoto'] as String?,
+      rating: (r['rating'] as num?)?.toInt() ?? 0,
+      comment: r['comment'] as String?,
+      service: GardenService.fromApi(r['serviceType'] as String?),
+      date: DateTime.tryParse(r['createdAt'] as String? ?? '')?.toLocal(),
+      response: r['caregiverResponse'] as String?,
+      onOpenCaregiver: caregiverId == null ? null : () => context.push('/caregiver/$caregiverId'),
+    );
   }
 }

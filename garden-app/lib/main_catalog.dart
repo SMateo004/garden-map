@@ -13,6 +13,7 @@ import 'design/garden_icons.dart';
 import 'design/garden_mode_switcher.dart';
 import 'design/garden_payment.dart';
 import 'design/garden_pets.dart';
+import 'design/garden_ratings.dart';
 import 'design/garden_wallet.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
@@ -396,6 +397,29 @@ class _CatalogPageState extends State<_CatalogPage> {
                 GardenSettingsGroup(children: [
                   GardenSettingsRow(icon: GIcon.salir, title: 'Cerrar sesión', tone: GardenSettingsTone.danger, onTap: () {}),
                 ]),
+              ]),
+            ),
+          ]),
+          _Section('Calificaciones (por calificar y reseña)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                GardenPendingRatingCard(
+                  caregiverName: 'Carla Méndez',
+                  petName: 'Luna',
+                  service: GardenService.guarderia,
+                  deadline: DateTime(2026, 10, 12, 18, 0),
+                  onRate: () {},
+                ),
+                GardenReviewCard(
+                  caregiverName: 'Andrea Rojas',
+                  rating: 5,
+                  comment: 'Toby volvió feliz y cansado.',
+                  service: GardenService.paseo,
+                  date: DateTime(2026, 9, 28),
+                  response: '¡Gracias! Cuando quieras otra vuelta.',
+                  onOpenCaregiver: () {},
+                ),
               ]),
             ),
           ]),
