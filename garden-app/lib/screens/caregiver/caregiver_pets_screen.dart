@@ -246,13 +246,9 @@ class _PetCard extends StatelessWidget {
             // Photo
             Container(
               width: 68, height: 68,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: GardenColors.lime,
               ),
               child: ClipOval(
                 child: photoUrl != null && photoUrl.isNotEmpty

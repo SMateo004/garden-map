@@ -117,7 +117,6 @@ class _BrotePainter extends CustomPainter {
   // Colores fijos del personaje (no cambian con el tema: es un personaje,
   // igual que el logo).
   static const _body = Color(0xFFD9EF9F);      // lima GARDEN
-  static const _bodyShade = Color(0xFFC3DE82);
   static const _leafA = Color(0xFF778C43);     // oliva
   static const _leafB = Color(0xFF58E262);     // verde vivo
   static const _ink = Color(0xFF1E2D0F);
@@ -172,26 +171,10 @@ class _BrotePainter extends CustomPainter {
       ..cubicTo(34, 90, 22, 84, 21, 70)
       ..cubicTo(20, 56, 28, 36, 50, 36)
       ..close();
-    // Volumen: luz arriba a la izquierda que se va oscureciendo hacia abajo.
-    canvas.drawPath(
-      body,
-      Paint()
-        ..shader = const RadialGradient(
-          center: Alignment(-0.35, -0.45),
-          radius: 0.95,
-          colors: [Color(0xFFF1FAD2), _body, _bodyShade],
-          stops: [0, 0.55, 1],
-        ).createShader(const Rect.fromLTWH(20, 36, 60, 54)),
-    );
-    // Sombra interna inferior y brillo, sin contorno.
-    canvas.save();
-    canvas.clipPath(body);
-    canvas.drawOval(const Rect.fromLTWH(14, 76, 72, 30), Paint()..color = _bodyShade.withValues(alpha: 0.85));
-    canvas.drawOval(
-      const Rect.fromLTWH(31, 42, 17, 10),
-      Paint()..color = Colors.white.withValues(alpha: 0.55)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
-    );
-    canvas.restore();
+    // Plano, de un solo color: sin brillo, degradado ni sombra interna (el
+    // estilo de GARDEN es plano; el relieve queda en botones y en los íconos
+    // de servicio).
+    canvas.drawPath(body, Paint()..color = _body);
   }
 
   void _leaf(Canvas canvas, Offset base, double angleDeg, double len, Color color) {

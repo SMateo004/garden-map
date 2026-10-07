@@ -3394,20 +3394,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 Container(
                   width: 96,
                   height: 96,
+                  // Plano y de un solo color: los fondos de íconos no llevan
+                  // degradado ni halo (parecían globos; ver garden_depth.dart).
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: gradientColors,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: gradientColors.first.withValues(alpha: 0.35),
-                        blurRadius: 28,
-                        spreadRadius: 4,
-                      ),
-                    ],
+                    color: gradientColors.first,
                   ),
                   child: Center(child: GardenIcon(statusIcon, color: Colors.white, size: GIconSize.hero, state: GIconState.active)),
                 ),

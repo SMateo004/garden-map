@@ -285,7 +285,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             height: 96,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: GardenGradients.fresh,
+              color: GardenColors.success,
             ),
             child: const GardenIcon(GIcon.hecho, size: GIconSize.hero, color: Colors.white),
           ),
