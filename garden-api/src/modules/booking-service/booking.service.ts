@@ -2581,6 +2581,39 @@ export async function cancelBooking(
     if (!booking.paidAt) {
       await cancelUnpaidGroupSiblings(tx, bookingId, cancellationReason ?? null, cancellationSource ?? null);
     }
+
+    // Pago combinado sin terminar (billetera + QR): initPayment ya descontó la
+    // parte de billetera y la guardó en walletPaymentAmount mientras el QR
+    // esperaba. Antes, cancelar acá (el cliente sale de la pantalla de pago o
+    // se le vence el QR en la app) cerraba la reserva con reembolso 0 y esa
+    // parte se perdía: qr-expiry.job.ts sí la devolvía, pero solo procesa
+    // reservas que siguen en PENDING_PAYMENT. Se devuelve en esta misma
+    // transacción — el updateMany de arriba ya garantiza que solo una
+    // cancelación concurrente llegue hasta acá — y se deja en 0 para que
+    // ningún otro camino la devuelva otra vez.
+    const unpaidWalletRefund = !booking.paidAt ? Number(booking.walletPaymentAmount ?? 0) : 0;
+    if (unpaidWalletRefund > 0) {
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
+      const refundedClient = await tx.user.update({
+        where: { id: clientId },
+        data: { balance: { increment: unpaidWalletRefund } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: clientId,
+          type: 'REFUND',
+          amount: unpaidWalletRefund,
+          balance: Number(refundedClient.balance),
+          description: `Devolución de billetera — pago sin completar (reserva ${bookingId.slice(0, 8)})`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      await tx.booking.update({ where: { id: bookingId }, data: { walletPaymentAmount: 0 } });
+      logger.info('cancelBooking: parte de billetera devuelta (pago sin completar)', { bookingId, unpaidWalletRefund });
+    }
+
     const updated = {
       ...booking,
       status: BookingStatus.CANCELLED,
@@ -2590,6 +2623,7 @@ export async function cancelBooking(
       cancellationReasonCode: cancellationReasonCode ?? null,
       refundAmount: new Prisma.Decimal(refundAmount),
       refundStatus,
+      ...(unpaidWalletRefund > 0 ? { walletPaymentAmount: new Prisma.Decimal(0) } : {}),
     };
 
     // ── Auto-refund to wallet — TODO refundAmount aprobado, sin importar el
@@ -2632,7 +2666,9 @@ export async function cancelBooking(
     if (cancellationSource === 'CLIENT_REQUEST' || !cancellationSource) {
       const baseMsg = refundAmount > 0
         ? `Se te devolverá Bs ${refundAmount.toFixed(2)}.${walletRefundNote}`
-        : 'No aplica reembolso según la política de cancelación.';
+        : unpaidWalletRefund > 0
+          ? `Te devolvimos los Bs ${unpaidWalletRefund.toFixed(2)} que habías puesto de tu billetera; ya están disponibles en tu billetera Garden.`
+          : 'No aplica reembolso según la política de cancelación.';
       await tx.notification.create({
         data: {
           bookingId: bookingId,
