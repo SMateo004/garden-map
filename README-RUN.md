@@ -52,18 +52,6 @@ npx prisma migrate dev
 
 > ⚠️ No hay base local ni staging: `garden-api/.env` apunta a la base de producción en Render. Nunca correr `prisma db push --force-reset` ni `prisma migrate reset` — borran todos los datos reales.
 
-**Seed (admin + 2 cuidadores de prueba):** solo para una base vacía y propia — contra la de producción crea cuentas con contraseña conocida:
-
-```bash
-cd garden-api
-tsx prisma/seed.ts
-```
-
-Contraseña de prueba para todos: `GardenSeed2024!`
-- Admin: `admin@garden.bo`
-- Cuidador DRAFT: `cuidador.draft@garden.bo`
-- Cuidador PENDING: `cuidador.pending@garden.bo`
-
 **Endpoints flujo cuidador:**
 - `POST /api/auth/caregiver/register` — Registro cuidador (full submit); status PENDING_REVIEW.
 - `POST /api/auth/login` — Login (opcional `?role=caregiver`).
