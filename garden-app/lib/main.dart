@@ -76,6 +76,7 @@ import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
 import 'services/analytics_service.dart';
 import 'services/presence_service.dart';
+import 'services/referral_invite.dart';
 import 'services/icon_schedule_service.dart';
 import 'utils/web_redirect.dart';
 import 'package:http/http.dart' as http;
@@ -325,6 +326,9 @@ final GoRouter _router = GoRouter(
       name: 'register',
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
+        // Enlace de invitación (gardenbo.com/register?ref=CODIGO): se guarda y
+        // se aplica solo cuando haya sesión (ver ReferralInvite).
+        ReferralInvite.remember(state.uri.queryParameters['ref']);
         return RegisterScreen(
           prefillFirstName: extra?['firstName'] as String?,
           prefillLastName: extra?['lastName'] as String?,
@@ -687,7 +691,7 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/referral',
       name: 'referral',
-      builder: (context, state) => const ReferralScreen(),
+      builder: (context, state) => ReferralScreen(initialCode: state.uri.queryParameters['code']),
     ),
     GoRoute(
       path: '/track/:bookingId/:token',

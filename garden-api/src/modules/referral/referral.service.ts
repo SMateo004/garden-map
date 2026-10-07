@@ -38,17 +38,21 @@ async function getOrCreateReferralCode(userId: string): Promise<string> {
 
 export async function getMyReferral(userId: string) {
   const code = await getOrCreateReferralCode(userId);
-  const [referredCount, rewardBS, me] = await Promise.all([
+  const [referredCount, rewardedCount, rewardBS, me] = await Promise.all([
     prisma.user.count({ where: { referredByUserId: userId } }),
+    // Invitados que ya completaron su primer servicio (bono pagado a ambos).
+    prisma.user.count({ where: { referredByUserId: userId, referralRewardGiven: true } }),
     getNumericSetting('referralRewardBS', 20),
-    prisma.user.findUnique({ where: { id: userId }, select: { referredByUserId: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { referredByUserId: true, referralRewardGiven: true } }),
   ]);
   // Solo se puede cargar un código ajeno si todavía no tiene uno propio
   // aplicado Y todavía no completó ningún servicio (anti-abuso retroactivo).
   const completedCount = await prisma.booking.count({ where: { clientId: userId, status: 'COMPLETED' } });
   const canApplyCode = !me?.referredByUserId && completedCount === 0;
+  // Si a este usuario lo invitaron: si su propio bono está pendiente o ya se pagó.
+  const myBonus = !me?.referredByUserId ? 'NONE' : me.referralRewardGiven ? 'REWARDED' : 'PENDING';
 
-  return { code, referredCount, rewardBS, canApplyCode };
+  return { code, referredCount, rewardedCount, rewardBS, canApplyCode, myBonus };
 }
 
 export async function applyReferralCode(userId: string, code: string) {

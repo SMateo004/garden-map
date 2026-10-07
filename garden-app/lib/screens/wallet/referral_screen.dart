@@ -3,18 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, Clipboard, ClipboardData;
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import '../../design/brote.dart';
+import '../../design/garden_caregiver_card.dart';
+import '../../design/garden_depth.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../services/referral_invite.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
-/// Programa de referidos — "Invitá y ganá" (gap de paridad internacional,
-/// ≈ referral programs de Uber/Airbnb). El bono se acredita recién cuando
-/// el referido completa su primer servicio real (ver
+/// Programa de referidos — "Invita y gana". El bono se acredita recién
+/// cuando el referido completa su primer servicio real (ver
 /// grantReferralRewardIfEligible en referral.service.ts) — no por solo
 /// registrarse, para evitar abuso.
 class ReferralScreen extends StatefulWidget {
-  const ReferralScreen({super.key});
+  /// Código que llegó por enlace (/referral?code=...), para cargarlo listo.
+  final String? initialCode;
+  const ReferralScreen({super.key, this.initialCode});
 
   @override
   State<ReferralScreen> createState() => _ReferralScreenState();
@@ -22,16 +28,23 @@ class ReferralScreen extends StatefulWidget {
 
 class _ReferralScreenState extends State<ReferralScreen> {
   bool _loading = true;
+  bool _failed = false;
   String? _code;
   int _referredCount = 0;
+  int _rewardedCount = 0;
   double _rewardBS = 20;
   bool _canApplyCode = false;
+
+  /// NONE | PENDING | REWARDED — el bono propio, si a este usuario lo invitaron.
+  String _myBonus = 'NONE';
   final TextEditingController _applyController = TextEditingController();
   bool _applying = false;
   String? _applyError;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   String get _token => AuthState.token;
+  String get _reward => 'Bs ${_rewardBS.toStringAsFixed(_rewardBS % 1 == 0 ? 0 : 2).replaceAll('.', ',')}';
+  String get _link => 'https://gardenbo.com/register?ref=$_code';
 
   @override
   void initState() {
@@ -46,30 +59,65 @@ class _ReferralScreenState extends State<ReferralScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
       final res = await http.get(Uri.parse('$_baseUrl/referral'), headers: {'Authorization': 'Bearer $_token'});
       final data = jsonDecode(res.body);
-      if (mounted && data['success'] == true) {
-        final d = data['data'] as Map<String, dynamic>;
-        setState(() {
-          _code = d['code'] as String?;
-          _referredCount = (d['referredCount'] as num?)?.toInt() ?? 0;
-          _rewardBS = (d['rewardBS'] as num?)?.toDouble() ?? 20;
-          _canApplyCode = d['canApplyCode'] == true;
-        });
-      }
+      if (data['success'] != true) throw Exception();
+      final d = data['data'] as Map<String, dynamic>;
+      final prefill = ReferralInvite.normalize(widget.initialCode) ?? await ReferralInvite.pending();
+      if (!mounted) return;
+      setState(() {
+        _code = d['code'] as String?;
+        _referredCount = (d['referredCount'] as num?)?.toInt() ?? 0;
+        _rewardedCount = (d['rewardedCount'] as num?)?.toInt() ?? 0;
+        _rewardBS = (d['rewardBS'] as num?)?.toDouble() ?? 20;
+        _canApplyCode = d['canApplyCode'] == true;
+        _myBonus = d['myBonus'] as String? ?? 'NONE';
+        if (_canApplyCode && prefill != null && _applyController.text.isEmpty) _applyController.text = prefill;
+      });
     } catch (_) {
-      // Sin red — la pantalla queda vacía, el usuario puede reintentar (pull no implementado, es simple).
+      // Antes: sin red quedaba "—" como código y "0 personas", sin aviso.
+      if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _applyCode() async {
-    final code = _applyController.text.trim();
-    if (code.isEmpty) return;
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 3)));
+  }
+
+  Future<void> _copy(String text, String what) async {
     HapticFeedback.selectionClick();
-    setState(() { _applying = true; _applyError = null; });
+    await Clipboard.setData(ClipboardData(text: text));
+    _toast('$what copiado');
+  }
+
+  Future<void> _shareWhatsApp() async {
+    HapticFeedback.selectionClick();
+    final text = Uri.encodeComponent(
+        'Te invito a GARDEN, para encontrar cuidadores de mascotas verificados en Santa Cruz. '
+        'Regístrate con este enlace y, cuando completes tu primer servicio, los dos ganamos $_reward: $_link '
+        '(mi código: $_code)');
+    await launchUrl(Uri.parse('https://wa.me/?text=$text'), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _applyCode() async {
+    final code = ReferralInvite.normalize(_applyController.text);
+    if (code == null) {
+      setState(() => _applyError = 'Revisa el código: son letras y números, sin espacios');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() {
+      _applying = true;
+      _applyError = null;
+    });
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/referral/apply'),
@@ -78,19 +126,18 @@ class _ReferralScreenState extends State<ReferralScreen> {
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
+        await ReferralInvite.clear();
         if (mounted) {
-          setState(() => _canApplyCode = false);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Código aplicado. Cuando completes tu primer servicio, los dos ganan el bono.'),
-            backgroundColor: GardenColors.success,
-            duration: Duration(seconds: 4),
-          ));
+          setState(() {
+            _canApplyCode = false;
+            _myBonus = 'PENDING';
+          });
         }
       } else if (mounted) {
         setState(() => _applyError = data['error']?['message'] ?? 'No se pudo aplicar el código');
       }
     } catch (e) {
-      if (mounted) setState(() => _applyError = 'Error de conexión');
+      if (mounted) setState(() => _applyError = 'Error de conexión. Intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _applying = false);
     }
@@ -105,138 +152,251 @@ class _ReferralScreenState extends State<ReferralScreen> {
         final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
         final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
         final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-        final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
             backgroundColor: surface,
+            foregroundColor: textColor,
             elevation: 0,
-            title: Text('Invitá y ganá', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+            title: Text('Invita y gana', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
           ),
           body: _loading
               ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft, end: Alignment.bottomRight,
-                            colors: [GardenColors.primary, GardenColors.forest],
+              : _failed
+                  ? ListView(padding: const EdgeInsets.all(24), children: [
+                      const SizedBox(height: 40),
+                      GardenEmptyState(
+                        type: GardenEmptyType.generic,
+                        brote: BrotePose.oops,
+                        title: 'No pudimos cargar tu código',
+                        subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
+                        ctaLabel: 'Reintentar',
+                        onCta: _load,
+                      ),
+                    ])
+                  : RefreshIndicator(
+                      color: GardenColors.primary,
+                      onRefresh: _load,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                        children: [
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                _hero(),
+                                const SizedBox(height: 16),
+                                _codeCard(isDark),
+                                if (_referredCount > 0) ...[
+                                  const SizedBox(height: 16),
+                                  GardenStatTiles(tiles: [
+                                    ('$_referredCount', _referredCount == 1 ? 'se unió' : 'se unieron'),
+                                    ('$_rewardedCount', _rewardedCount == 1 ? 'ya ganó contigo' : 'ya ganaron contigo'),
+                                  ]),
+                                  if (_referredCount > _rewardedCount) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      _referredCount - _rewardedCount == 1
+                                          ? '1 persona todavía no hizo su primer servicio. Cuando lo haga, ganas $_reward.'
+                                          : '${_referredCount - _rewardedCount} personas todavía no hicieron su primer servicio. Ganas $_reward por cada una cuando lo hagan.',
+                                      style: TextStyle(
+                                          color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                                          fontSize: 12.5,
+                                          height: 1.4),
+                                    ),
+                                  ],
+                                ],
+                                if (_myBonus == 'PENDING') ...[
+                                  const SizedBox(height: 16),
+                                  _myBonusCard(isDark),
+                                ],
+                                if (_canApplyCode) ...[
+                                  const SizedBox(height: 20),
+                                  _applyCard(isDark),
+                                ],
+                              ]),
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(GardenRadius.xl),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const GardenIcon(GIcon.regalo, size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
-                            const SizedBox(height: 10),
-                            Text('Invitá a un amigo y los dos ganan Bs ${_rewardBS.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800, height: 1.25)),
-                            const SizedBox(height: 6),
-                            const Text('El bono se acredita cuando tu invitado complete su primer servicio.',
-                                style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                          ],
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      Text('Tu código', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(_code ?? '—',
-                                  style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 4)),
-                            ),
-                            IconButton(
-                              icon: const GardenIcon(GIcon.copiar, color: GardenColors.primary, semanticLabel: 'Copiar código'),
-                              onPressed: _code == null ? null : () async {
-                                await Clipboard.setData(ClipboardData(text: _code!));
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                    content: Text('Código copiado'), backgroundColor: GardenColors.success,
-                                    duration: Duration(seconds: 2),
-                                  ));
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      GardenButton(
-                        label: 'Compartir por WhatsApp',
-                        gIcon: GIcon.chat,
-                        onPressed: _code == null ? null : () async {
-                          final text = Uri.encodeComponent(
-                              'Te invito a Garden: encuentra cuidadores de mascotas verificados en Santa Cruz. Usa mi código $_code al registrarte y los dos ganamos Bs ${_rewardBS.toStringAsFixed(0)}.');
-                          await launchUrl(Uri.parse('https://wa.me/?text=$text'), mode: LaunchMode.externalApplication);
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text('$_referredCount persona${_referredCount == 1 ? '' : 's'} ya se unieron con tu código',
-                          style: TextStyle(color: subtextColor, fontSize: 12.5)),
-
-                      if (_canApplyCode) ...[
-                        const SizedBox(height: 28),
-                        Divider(color: borderColor),
-                        const SizedBox(height: 20),
-                        Text('¿Alguien te invitó?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 4),
-                        Text('Carga su código antes de tu primer servicio para que los dos ganen.',
-                            style: TextStyle(color: subtextColor, fontSize: 12)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _applyController,
-                                textCapitalization: TextCapitalization.characters,
-                                style: TextStyle(color: textColor, fontSize: 14, letterSpacing: 2),
-                                decoration: InputDecoration(
-                                  hintText: 'CÓDIGO',
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  filled: true,
-                                  fillColor: surface,
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
-                                  errorText: _applyError,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            ElevatedButton(
-                              onPressed: _applying ? null : _applyCode,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: GardenColors.primary,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                              ),
-                              child: _applying
-                                  ? const SizedBox(width: 16, height: 16, child: GardenLoadingIndicator(size: 16, color: Colors.white))
-                                  : const Text('Aplicar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                    ),
         );
       },
+    );
+  }
+
+  /// Promesa y cómo funciona, en tres pasos.
+  Widget _hero() {
+    Widget step(int n, String text) => Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
+              child: Text('$n', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.35))),
+          ]),
+        );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [GardenColors.primary, GardenColors.forest],
+        ),
+        borderRadius: BorderRadius.circular(GardenRadius.xl),
+        boxShadow: [BoxShadow(color: GardenColors.forest.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Text('Invita a un amigo y los dos ganan $_reward',
+                style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
+          ),
+          const SizedBox(width: 12),
+          // Antes el regalo era verde sobre el degradado verde: no se veía.
+          const GardenClay(
+            size: 60,
+            color: GardenColors.lime,
+            float: true,
+            interactive: false,
+            child: GardenClayIcon(GIcon.regalo, color: GardenColors.forest, size: GIconSize.xl),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        step(1, 'Comparte tu enlace por WhatsApp.'),
+        step(2, 'Tu amigo se registra con él (el código se carga solo).'),
+        step(3, 'Cuando complete su primer servicio, $_reward para cada uno en la billetera.'),
+      ]),
+    );
+  }
+
+  Widget _codeCard(bool isDark) {
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final chip = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final code = _code ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.lg),
+        border: Border.all(color: border),
+        boxShadow: GardenShadows.card,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Tu código', style: TextStyle(color: sub, fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        // Cada letra en su casilla: se dicta y se lee sin confundirse.
+        Semantics(
+          label: 'Tu código: ${code.split('').join(' ')}. Toca para copiarlo',
+          button: true,
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: code.isEmpty ? null : () => _copy(code, 'Código'),
+            borderRadius: BorderRadius.circular(12),
+            child: Row(children: [
+              Expanded(
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final ch in code.split(''))
+                    Container(
+                      width: 36,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: chip, borderRadius: BorderRadius.circular(10)),
+                      child: Text(ch, style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900)),
+                    ),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              GardenIcon(GIcon.copiar, color: isDark ? GardenColors.primaryLight : GardenColors.primary),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 16),
+        GardenButton(label: 'Compartir por WhatsApp', gIcon: GIcon.chat, onPressed: code.isEmpty ? null : _shareWhatsApp),
+        const SizedBox(height: 10),
+        GardenButton(
+          label: 'Copiar enlace',
+          gIcon: GIcon.copiar,
+          outline: true,
+          onPressed: code.isEmpty ? null : () => _copy(_link, 'Enlace'),
+        ),
+      ]),
+    );
+  }
+
+  Widget _myBonusCard(bool isDark) {
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GardenColors.success.withValues(alpha: isDark ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(GardenRadius.lg),
+      ),
+      child: Row(children: [
+        GardenClay(
+          size: 40,
+          tint: GardenColors.success.withValues(alpha: 0.18),
+          interactive: false,
+          child: const GardenIcon(GIcon.regalo, color: GardenColors.success, state: GIconState.active),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text('Te invitaron: ganas $_reward cuando completes tu primer servicio.',
+              style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.35)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _applyCard(bool isDark) {
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.lg),
+        border: Border.all(color: border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('¿Alguien te invitó?', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text('Carga su código antes de tu primer servicio para que los dos ganen $_reward.',
+            style: TextStyle(color: sub, fontSize: 12.5, height: 1.4)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _applyController,
+          textCapitalization: TextCapitalization.characters,
+          style: TextStyle(color: text, fontSize: 16, letterSpacing: 3, fontWeight: FontWeight.w700),
+          onSubmitted: (_) => _applyCode(),
+          decoration: InputDecoration(
+            hintText: 'CÓDIGO',
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            filled: true,
+            fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            errorText: _applyError,
+            errorMaxLines: 2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        GardenButton(label: 'Aplicar código', outline: true, loading: _applying, onPressed: _applying ? null : _applyCode),
+      ]),
     );
   }
 }

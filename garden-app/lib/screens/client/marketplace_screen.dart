@@ -27,6 +27,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
 import '../../services/auth_state.dart';
+import '../../services/referral_invite.dart';
 import '../../utils/web_redirect.dart';
 import 'nearby_vets_screen.dart';
 
@@ -406,6 +407,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Future<void> _loadInitialData() async {
     await _loadToken();
+    // Si llegó por un enlace de invitación, se aplica el código apenas hay sesión.
+    ReferralInvite.applyPending(_baseUrl).then((msg) {
+      if (msg != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
+      }
+    });
     // Resolver la ciudad ANTES de pedir cuidadores — si no, la primera carga
     // se hace sin cityId y el backend cae al default (Santa Cruz), mostrando
     // por un instante (o directamente, si el usuario no scrollea) cuidadores
