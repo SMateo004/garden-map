@@ -44,6 +44,8 @@ const db = prisma as unknown as {
   user: { findUnique: jest.Mock };
   appSettings: { findUnique: jest.Mock };
 };
+/** Llamadas que tocan el impuesto de la reserva (las del NIT del grupo no cuentan). */
+const taxUpdates = () => db.booking.updateMany.mock.calls.filter((c) => c[0]?.data && 'taxAmount' in c[0].data);
 const qrForAmount = paymentQrAmountService.getPaymentQrImageUrlForAmount as jest.Mock;
 
 const BOOKING = {
@@ -85,7 +87,7 @@ it('impuestos en pausa: el QR se emite por 110 (sin el impuesto) y la reserva qu
   await initPayment('b1', 'client-1', 'qr');
 
   expect(qrForAmount).toHaveBeenCalledWith(110);
-  const fix = db.booking.updateMany.mock.calls[0][0];
+  const fix = taxUpdates()[0]![0];
   expect(Number(fix.data.totalAmount)).toBe(110);
   expect(Number(fix.data.taxAmount)).toBe(0);
 });
@@ -95,14 +97,14 @@ it('impuestos aprobados (con SIP): el banco recibe el total con impuesto y no se
   setSettings({ taxesEnabled: true });
   await initPayment('b1', 'client-1', 'qr');
   expect((sipService.generateQr as jest.Mock).mock.calls[0][1]).toBe(128);
-  expect(db.booking.updateMany).not.toHaveBeenCalled();
+  expect(taxUpdates()).toHaveLength(0);
 });
 
 it('aprobados con SIP apagado: el QR provisional se busca por 128 (el switch basta)', async () => {
   setSettings({ taxesEnabled: true });
   await initPayment('b1', 'client-1', 'qr');
   expect(qrForAmount).toHaveBeenCalledWith(128);
-  expect(db.booking.updateMany).not.toHaveBeenCalled();
+  expect(taxUpdates()).toHaveLength(0);
 });
 
 it('SIP encendido pero impuestos sin aprobar: el banco recibe 110', async () => {
@@ -110,4 +112,14 @@ it('SIP encendido pero impuestos sin aprobar: el banco recibe 110', async () => 
   setSettings({});
   await initPayment('b1', 'client-1', 'qr');
   expect((sipService.generateQr as jest.Mock).mock.calls[0][1]).toBe(110);
+});
+
+it('varios días (un solo pago): en pausa se quita el impuesto de cada día antes de sumar', async () => {
+  setSettings({});
+  const lead = { ...BOOKING, bookingGroupId: 'g1' };
+  db.booking.findFirst.mockResolvedValue(lead);
+  (db.booking as unknown as { findMany: jest.Mock }).findMany = jest.fn().mockResolvedValue([{ id: 'b2', totalAmount: 128 }]);
+  await initPayment('b1', 'client-1', 'qr');
+  expect(taxUpdates()).toHaveLength(2); // la líder y el otro día
+  expect(qrForAmount).toHaveBeenCalledWith(220); // 110 + 110, no 128 + 128
 });
