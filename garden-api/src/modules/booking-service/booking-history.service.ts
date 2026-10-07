@@ -83,6 +83,7 @@ const CANCEL_SOURCE_LABELS: Record<string, string> = {
   ADMIN: 'soporte',
   QR_ABANDONED: 'el sistema (QR sin pagar)',
   PAYMENT_TIMEOUT: 'el sistema (pago vencido)',
+  MG_INCOMPATIBLE: 'el cuidador (incompatibilidad en el Meet & Greet)',
 };
 
 const EVENT_TITLES: Record<string, string> = {

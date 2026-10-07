@@ -361,7 +361,8 @@ function cancelReasonCode(b: { status: string; cancellationSource: string | null
   if (s.startsWith('ADMIN')) return CANCEL_REASON_CODE.ADMIN;
   if (s === 'NO_SHOW') return CANCEL_REASON_CODE.NO_SHOW;
   if (s === 'CLIENT') return CANCEL_REASON_CODE.CLIENT;
-  if (s.startsWith('CAREGIVER')) return CANCEL_REASON_CODE.CAREGIVER;
+  // Incompatibilidad en el Meet & Greet: la decide el cuidador.
+  if (s.startsWith('CAREGIVER') || s === 'MG_INCOMPATIBLE') return CANCEL_REASON_CODE.CAREGIVER;
   if (s === 'QR_ABANDONED' || s === 'PAYMENT_TIMEOUT') return CANCEL_REASON_CODE.PAYMENT_TIMEOUT;
   if (s) return CANCEL_REASON_CODE.SYSTEM;
   return CANCEL_REASON_CODE.UNSPECIFIED;

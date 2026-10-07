@@ -2,6 +2,7 @@ import prisma from '../../config/database.js';
 import { AppError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { getIO } from '../../services/socket.service.js';
+import { enqueueBookingCancel, enqueueSafely } from '../../services/chain-registry.service.js';
 
 /** Tipos de mensaje de sistema que entiende la app (narrative/chat_event.dart). */
 type SystemEventType = 'MG_PROPOSED' | 'MG_CONFIRMED' | 'MG_COMPATIBLE' | 'MG_INCOMPATIBLE' | 'MG_CANCELLED';
@@ -280,33 +281,93 @@ export async function complete(bookingId: string, caregiverUserIdParam: string, 
     throw new AppError('Solo el cuidador puede completar el Meet & Greet', 403, 'FORBIDDEN');
   }
 
-  const mg = await prisma.meetAndGreet.update({
-    where: { bookingId },
-    data: {
-      status: 'COMPLETED',
-      caregiverNotes: body.caregiverNotes,
-      approved: body.approved,
-    },
-  });
-
-  logger.info('[MG] complete() → COMPLETED', { bookingId, approved: body.approved });
-
-  if (!body.approved) {
-    await prisma.booking.update({
-      where: { id: bookingId },
+  // Cierre del M&G + (si hay incompatibilidad) cancelación y reembolso, todo en
+  // una sola transacción. Antes la rama de incompatibilidad cancelaba la
+  // reserva pero nunca devolvía el dinero que el cliente YA pagó (el M&G solo
+  // se puede proponer en WAITING_CAREGIVER_APPROVAL, ver propose()), aunque el
+  // mensaje le prometía "reembolso completo". Decisión de producto: 100%
+  // automático a la billetera, sin revisión de admin — mismo patrón que
+  // rejectBooking() y caregiver-accept-expiry.job.ts (no es culpa del cliente).
+  const { mg, refundAmount } = await prisma.$transaction(async (tx) => {
+    // Claim atómico: un doble envío de "completar" no puede cerrar el M&G (ni
+    // reembolsar) dos veces.
+    const mgClaim = await tx.meetAndGreet.updateMany({
+      where: { bookingId, status: 'ACCEPTED' },
       data: {
-        status: 'CANCELLED',
-        cancellationReason: 'Incompatibilidad detectada en Meet & Greet',
+        status: 'COMPLETED',
+        caregiverNotes: body.caregiverNotes,
+        approved: body.approved,
       },
     });
+    if (mgClaim.count === 0) {
+      throw new AppError('Este Meet & Greet ya fue completado', 409, 'CONFLICT');
+    }
+
+    let refund = 0;
+    if (!body.approved) {
+      const refundable = booking.paidAt ? Number(booking.totalAmount) : 0;
+      // Guard de estado: si el cliente canceló (o el cuidador aceptó) en el
+      // medio, no se cancela ni se reembolsa otra vez — se revierte todo.
+      // PENDING_MG = Meet & Greet antes de pagar: se cancela sin reembolso (no hubo pago).
+      const cancelled = await tx.booking.updateMany({
+        where: { id: bookingId, status: { in: ['WAITING_CAREGIVER_APPROVAL', 'PENDING_MG'] } },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancellationReason: 'Incompatibilidad detectada en Meet & Greet',
+          cancellationSource: 'MG_INCOMPATIBLE',
+          ...(refundable > 0 ? { refundStatus: 'APPROVED', refundAmount: refundable } : {}),
+        },
+      });
+      if (cancelled.count === 0) {
+        throw new AppError('La reserva ya no está esperando la decisión del cuidador', 409, 'CONFLICT');
+      }
+
+      if (refundable > 0) {
+        const updatedClient = await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: refundable } },
+          select: { balance: true },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.clientId,
+            type: 'REFUND',
+            amount: refundable,
+            balance: Number(updatedClient.balance),
+            description: `Reembolso — incompatibilidad en Meet & Greet (${bookingId.slice(0, 8)})`,
+            bookingId,
+            status: 'COMPLETED',
+          },
+        });
+        await tx.booking.update({ where: { id: bookingId }, data: { walletPaymentAmount: 0 } });
+        refund = refundable;
+      }
+    }
+
+    const updatedMg = await tx.meetAndGreet.findUnique({ where: { bookingId } });
+    return { mg: updatedMg!, refundAmount: refund };
+  });
+
+  logger.info('[MG] complete() → COMPLETED', { bookingId, approved: body.approved, refundAmount });
+  // Reserva pagada cancelada: igual que las demás cancelaciones, queda en el registro on-chain
+  // (la cola la salta si no hubo pago o si es de una cuenta de prueba).
+  if (!body.approved && booking.paidAt) enqueueSafely('CANCEL', () => enqueueBookingCancel(bookingId));
+
+  if (!body.approved) {
     await sendNotif(
       booking.clientId,
       'Meet & Greet: incompatibilidad',
-      'El cuidador detectó incompatibilidad. Tu reserva fue cancelada y recibirás reembolso completo.', bookingId
+      refundAmount > 0
+        ? `El cuidador detectó incompatibilidad. Tu reserva fue cancelada y ya te devolvimos Bs ${refundAmount.toFixed(2)} a tu billetera Garden.`
+        : 'El cuidador detectó incompatibilidad. Tu reserva fue cancelada.',
+      bookingId
     );
     await sendSystemChatMessage(
       bookingId, caregiverUserIdParam,
-      '❌ Meet & Greet finalizado · El cuidador detectó incompatibilidad. La reserva fue cancelada con reembolso completo.',
+      refundAmount > 0
+        ? '❌ Meet & Greet finalizado · El cuidador detectó incompatibilidad. La reserva fue cancelada con reembolso completo.'
+        : '❌ Meet & Greet finalizado · El cuidador detectó incompatibilidad. La reserva fue cancelada.',
       'MG_INCOMPATIBLE',
     );
   } else {
