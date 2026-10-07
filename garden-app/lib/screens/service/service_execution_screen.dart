@@ -35,6 +35,7 @@ import '../../services/garden_live_activity.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
 import '../../design/garden_depth.dart';
+import '../../design/garden_service_clock.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -795,11 +796,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   /// del dueño (punto 2) y para bloquear "Resolver emergencia" cuando el
   /// tiempo ya se agotó con una emergencia sin resolver (punto 4).
   bool get _isPaidServiceTimeUp {
+    final deadline = _paidDeadline;
+    return deadline != null && DateTime.now().isAfter(deadline);
+  }
+
+  /// Cuándo se cumple el tiempo pagado: inicio + duración total pagada
+  /// (reserva + extensiones) + lo pausado por emergencias. La misma cuenta
+  /// gatea "Marcar servicio como terminado" y alimenta "Vuelve a las…" del
+  /// dueño, así lo que se muestra y lo que se permite nunca se contradicen.
+  DateTime? get _paidDeadline {
     final bk = _booking;
-    if (bk == null) return false;
+    if (bk == null) return null;
     final startedAtStr = bk['serviceStartedAt'] as String?;
     final startTime = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
-    if (startTime == null) return false;
+    if (startTime == null) return null;
 
     final totalPaidMin = _computeTotalPaidDurationMinutes();
     final totalPausedMin = (bk['totalPausedMinutes'] as num?)?.toInt() ?? 0;
@@ -807,8 +817,127 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final pausedAt = pausedAtStr != null ? DateTime.tryParse(pausedAtStr) : null;
     final activePauseMin = pausedAt != null ? DateTime.now().difference(pausedAt).inMinutes : 0;
 
-    final deadline = startTime.add(Duration(minutes: totalPaidMin + totalPausedMin + activePauseMin));
-    return DateTime.now().isAfter(deadline);
+    return startTime.add(Duration(minutes: totalPaidMin + totalPausedMin + activePauseMin)).toLocal();
+  }
+
+  /// "37 min", "1 h 20" — tiempo que falta, para el centro del anillo.
+  static (String, String) _remainingParts(Duration d) {
+    final m = d.inMinutes;
+    if (m >= 60 * 24) return ('${(m / (60 * 24)).floor()}', d.inDays == 1 ? 'día' : 'días');
+    if (m >= 60) {
+      final h = m ~/ 60;
+      final r = m % 60;
+      return (r == 0 ? '$h' : '$h:${r.toString().padLeft(2, '0')}', 'h');
+    }
+    return ('${m < 1 ? 1 : m}', 'min');
+  }
+
+  static const _wd = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+  /// "hoy a las 10:05", "mañana a las 9:00", "el sáb 11 a las 10:00".
+  String _whenLabel(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = day.difference(today).inDays;
+    final at = 'a las ${_formatClockTime(d)}';
+    if (diff == 0) return at;
+    if (diff == 1) return 'mañana $at';
+    return 'el ${_wd[d.weekday - 1]} ${d.day} $at';
+  }
+
+  /// Tarjeta "cuánto falta": cuándo vuelve (dueño) o cuándo termina (cuidador).
+  Widget _buildClientClock() {
+    final deadline = _paidDeadline;
+    final startedAt = DateTime.tryParse(_booking?['serviceStartedAt'] as String? ?? '')?.toLocal();
+    final totalPaidMin = _computeTotalPaidDurationMinutes();
+    final service = _svc;
+    final pet = (_booking?['petName'] as String?)?.trim();
+    final petName = pet == null || pet.isEmpty ? 'Tu mascota' : pet;
+    final now = DateTime.now();
+    final remaining = deadline?.difference(now) ?? Duration(minutes: totalPaidMin - _elapsed.inMinutes);
+    final done = remaining.isNegative || remaining.inSeconds == 0;
+    final progress = totalPaidMin > 0 && startedAt != null
+        ? (now.difference(startedAt).inMinutes / (deadline!.difference(startedAt).inMinutes.clamp(1, 1 << 30))).clamp(0.0, 1.0)
+        : 0.0;
+    final (value, unit) = done ? ('0', 'min') : _remainingParts(remaining);
+
+    final isHospedaje = service == GardenService.hospedaje;
+    final isGuarderia = service == GardenService.guarderia;
+    final String title;
+    if (done) {
+      title = 'Se cumplió el tiempo';
+    } else if (deadline == null) {
+      title = 'En curso';
+    } else if (isHospedaje) {
+      title = 'Termina ${_whenLabel(deadline)}';
+    } else if (isGuarderia) {
+      title = 'Recogida ${_whenLabel(deadline)}';
+    } else if (widget.role == 'CAREGIVER') {
+      title = 'Termina ${_whenLabel(deadline)}';
+    } else {
+      title = '$petName vuelve ${_whenLabel(deadline)}';
+    }
+    final nights = (_booking?['totalDays'] as num?)?.toInt();
+    // El encabezado ya dice "Día 2 de 3": acá va lo contratado.
+    final contracted = isHospedaje
+        ? (nights == null ? 'Hospedaje' : '$nights ${nights == 1 ? 'noche contratada' : 'noches contratadas'}')
+        : totalPaidMin >= 60
+            ? '${totalPaidMin ~/ 60} h${totalPaidMin % 60 == 0 ? '' : ' ${totalPaidMin % 60} min'} contratados'
+            : '$totalPaidMin min contratados';
+    final subtitle = done
+        ? (widget.role == 'CAREGIVER'
+            ? 'Sube tus fotos finales y desliza para terminar.'
+            : _booking?['clientMarkedEndAt'] == null
+                ? 'Ya puedes marcar el servicio como terminado.'
+                : 'Esperando las fotos finales del cuidador.')
+        : startedAt != null
+            ? 'Empezó ${_whenLabel(startedAt)} · $contracted'
+            : contracted;
+
+    Widget? action;
+    final caregiver = widget.role == 'CAREGIVER';
+    if (caregiver) {
+      // El cuidador no amplía ni marca: termina con el deslizador de abajo.
+    } else if (!done && (service == GardenService.paseo || isHospedaje)) {
+      action = OutlinedButton.icon(
+        onPressed: _loadingExtension ? null : (isHospedaje ? _showExtendHospedajeSheet : _showExtendTimeSheet),
+        icon: _loadingExtension
+            ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
+            : GardenIcon(isHospedaje ? GIcon.modoOscuro : GIcon.alarma, size: GIconSize.sm, inheritColor: true),
+        label: Text(
+          isHospedaje
+              ? 'Agregar noches'
+              : _allowedExtensionMinutes == 0
+                  ? 'Ampliar el paseo'
+                  : 'Ampliar el paseo (hasta $_allowedExtensionMinutes min)',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: GardenColors.primary,
+          side: const BorderSide(color: GardenColors.primary),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+          minimumSize: const Size(double.infinity, 46),
+        ),
+      );
+    } else if (done && _booking?['clientMarkedEndAt'] == null) {
+      action = GardenButton(
+        label: 'Marcar servicio como terminado',
+        gIcon: GIcon.confirmado,
+        loading: _markingEnd,
+        onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
+      );
+    }
+
+    return GardenServiceClock(
+      service: service,
+      progress: done ? 1 : progress,
+      value: value,
+      unit: done ? 'listo' : (isHospedaje && unit == 'días' ? unit : 'faltan $unit'),
+      title: title,
+      subtitle: subtitle,
+      action: action,
+    );
   }
 
   /// Botón de "volver"/"cerrar" de la pantalla — usa `context.pop()` cuando
@@ -844,10 +973,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         }
 
         final status = _booking?['status'] ?? '';
+        // En curso, dueño y cuidador tienen su propio encabezado con "volver":
+        // antes se veían dos o tres salidas a la vez.
+        final immersive = status == 'IN_PROGRESS';
 
         return Scaffold(
           backgroundColor: bg,
-          appBar: kIsWeb ? null : AppBar(
+          appBar: kIsWeb || immersive ? null : AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
             leading: IconButton(
@@ -861,6 +993,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           ),
           body: kIsWeb
               ? Column(children: [
+                  if (!immersive)
                   Container(
                     height: 52,
                     decoration: BoxDecoration(
@@ -2381,19 +2514,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final serviceType = _booking?['serviceType'] as String? ?? 'PASEO';
     final isPaseo = serviceType == 'PASEO';
-    final isHospedaje = serviceType == 'HOSPEDAJE';
     final isGuarderia = serviceType == 'GUARDERIA';
-    // ── Acento visual por tipo de servicio ──────────────────────────────────
-    // Cada servicio ancla su propio color de acento dentro de la paleta
-    // GARDEN ya existente (nunca un color nuevo) — sutil, no un rediseño:
-    //   PASEO      → forest (verde bosque) — aire libre / caminata
-    //   HOSPEDAJE  → orange (naranja cálido) — hogar acogedor / noches
-    //   GUARDERIA  → info (azul brillante) — día soleado / guardería
-    // Antes HOSPEDAJE y GUARDERIA compartían el mismo tratamiento visual
-    // (incluso un tono café fuera de paleta, 0xFF8C5200) — ahora cada uno
-    // tiene su propio anclaje coherente con la marca.
-    final serviceAccent = _svc.ink(isDark);
-    final serviceTypeLabel = isPaseo ? 'Paseo' : (isHospedaje ? 'Hospedaje' : 'Guardería');
     final timerStr = (isPaseo || isGuarderia)
         ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
         : _buildHospedajeDayLabel();
@@ -2409,7 +2530,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           SliverToBoxAdapter(
             child: Stack(
               children: [
-                GardenLiveHero(
+                SizedBox(
+                  width: double.infinity,
+                  child: GardenLiveHero(
                   booking: _booking ?? const {},
                   caregiverView: widget.role != 'CLIENT',
                   petPhotoUrl: _booking?['petPhoto'] as String?,
@@ -2419,35 +2542,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ? (_booking!['gpsDistance'] as num).toDouble() / 1000
                       : null
                       : null,
-                ),
-                // Nav buttons
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 10, left: 12,
-                  child: GestureDetector(
-                    onTap: () {
-                      if (widget.role == 'CLIENT') {
-                        context.go('/my-bookings-tab');
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.28),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                      ),
-                      child: const Center(
-                          child: GardenIcon(GIcon.atras, color: Colors.white, semanticLabel: 'Volver')),
-                    ),
                   ),
                 ),
-                if (widget.role == 'CLIENT')
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 10, right: 12,
+                // Volver (antes había además una X que llevaba al marketplace
+                // en medio del servicio, y la barra de arriba con otra X).
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 10, left: 12,
+                  child: Semantics(
+                    button: true,
+                    label: 'Volver',
+                    excludeSemantics: true,
                     child: GestureDetector(
-                      onTap: () => context.go('/marketplace'),
+                      onTap: _exitServiceScreen,
                       child: Container(
                         width: 40, height: 40,
                         decoration: BoxDecoration(
@@ -2455,11 +2561,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                         ),
-                        child: const Center(
-                            child: GardenIcon(GIcon.cerrar, color: Colors.white, semanticLabel: 'Cerrar')),
+                        child: const Center(child: GardenIcon(GIcon.atras, color: Colors.white)),
                       ),
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -2475,9 +2581,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: GardenColors.warning.withValues(alpha: 0.08),
+                        color: GardenColors.error.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(GardenRadius.lg),
-                        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
+                        border: Border.all(color: GardenColors.error.withValues(alpha: 0.35)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2485,18 +2591,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           Container(
                             padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
-                              color: GardenColors.warning.withValues(alpha: 0.15),
+                              color: GardenColors.error.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(GardenRadius.sm),
                             ),
-                            child: const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.warning),
+                            child: const GardenIcon(GIcon.advertencia, size: GIconSize.sm, color: GardenColors.error),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Incidente reportado',
-                                  style: TextStyle(color: GardenColors.warning, fontSize: 13, fontWeight: FontWeight.w700)),
+                                const Text('El cuidador reportó un incidente',
+                                  style: TextStyle(color: GardenColors.error, fontSize: 13, fontWeight: FontWeight.w700)),
                                 const SizedBox(height: 3),
                                 Text(
                                   incidents.last['description']?.toString() ?? '',
@@ -2530,196 +2636,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 14),
                   ],
 
-                  // ── Trip card: cuidador + mascota unificados ────────────────
-                  // Antes eran dos cajas separadas con bordes propios — mismo
-                  // peso visual para info del cuidador y de la mascota, sin
-                  // ninguna jerarquía clara. Unificadas en una sola tarjeta con
-                  // sombra suave (menos "cajas apiladas", más estilo
-                  // Airbnb/Uber: una fila principal tappable + un divisor fino
-                  // + una fila secundaria de detalle).
-                  Container(
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(GardenRadius.xl),
-                      boxShadow: GardenShadows.card,
-                    ),
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _showServiceInfoSheet,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                GardenAvatar(
-                                  imageUrl: _booking?['caregiverPhoto'] as String?,
-                                  size: 52,
-                                  initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _booking?['caregiverName'] as String? ?? 'Cuidador',
-                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            _booking?['caregiverRating'] != null
-                                                ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1)} · Tu cuidador'
-                                                : 'Nuevo · Tu cuidador',
-                                            style: TextStyle(color: subtextColor, fontSize: 12),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: GardenColors.success.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(GardenRadius.full),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _PulsingDot(size: 6, color: GardenColors.success),
-                                      SizedBox(width: 5),
-                                      Text('Activo',
-                                        style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Divider(height: 1, thickness: 1, color: borderColor, indent: 16, endIndent: 16),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-                          child: Row(
-                            children: [
-                              const GardenIcon(GIcon.huella, state: GIconState.active),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: RichText(
-                                  text: TextSpan(
-                                    style: TextStyle(color: subtextColor, fontSize: 12.5),
-                                    children: [
-                                      TextSpan(
-                                        text: _booking?['petName'] as String? ?? '—',
-                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
-                                      ),
-                                      if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
-                                        TextSpan(text: ' · ${_booking!['petBreed']}'),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.polygon),
-                              const SizedBox(width: 4),
-                              const Text('Pago en escrow',
-                                style: TextStyle(color: GardenColors.polygon, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ── Progreso del servicio (barra de tiempo por tipo) ────────
-                  // Mismo concepto de "estado del viaje" estilo Airbnb, pero el
-                  // dato que llena la barra cambia según el servicio: minutos
-                  // transcurridos/pagados en Paseo, ventana de horario en
-                  // Guardería (mismo día), noche actual/total en Hospedaje.
-                  // Usa _computeTotalPaidDurationMinutes(), la misma fuente que
-                  // ya gatea "marcar como terminado" — el progreso mostrado
-                  // siempre coincide con la lógica real de fin de servicio
-                  // (incluye extensiones ya aprobadas).
-                  Builder(builder: (context) {
-                    final elapsedMin = _elapsed.inMinutes;
-                    final totalPaidMin = _computeTotalPaidDurationMinutes();
-                    final progress = totalPaidMin > 0
-                        ? (elapsedMin / totalPaidMin).clamp(0.0, 1.0)
-                        : 0.0;
-
-                    String progressLabel;
-                    String progressCaption;
-                    if (isHospedaje) {
-                      progressLabel = _buildHospedajeDayLabel();
-                      progressCaption = '${(progress * 100).round()}% de la estadía completada';
-                    } else if (isGuarderia) {
-                      final startedAtStr = _booking?['serviceStartedAt'] as String?;
-                      final startedAt = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
-                      if (startedAt != null) {
-                        final pickupEstimate = startedAt.add(Duration(minutes: totalPaidMin));
-                        progressLabel = 'Desde las ${_formatClockTime(startedAt)}';
-                        progressCaption = 'Recogida estimada ${_formatClockTime(pickupEstimate)}';
-                      } else {
-                        progressLabel = 'En guardería';
-                        progressCaption = '$elapsedMin min transcurridos';
-                      }
-                    } else {
-                      progressLabel = '$elapsedMin min de $totalPaidMin min';
-                      progressCaption = '${(progress * 100).round()}% del paseo completado';
-                    }
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 24),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: serviceAccent.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(GardenRadius.xl),
-                        border: Border.all(color: serviceAccent.withValues(alpha: 0.18)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              GardenIcon(GIcon.forService(_svc), size: GIconSize.md, state: GIconState.active),
-                              const SizedBox(width: 8),
-                              Text(
-                                serviceTypeLabel.toUpperCase(),
-                                style: TextStyle(color: serviceAccent, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                              ),
-                              const Spacer(),
-                              Text(
-                                progressLabel,
-                                style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w700),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(GardenRadius.full),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 6,
-                              backgroundColor: serviceAccent.withValues(alpha: 0.12),
-                              valueColor: AlwaysStoppedAnimation<Color>(serviceAccent),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(progressCaption, style: TextStyle(color: subtextColor, fontSize: 11.5)),
-                        ],
-                      ),
-                    );
-                  }),
+                  // ── Cuánto falta y cuándo vuelve (antes: barra que repetía el cronómetro) ──
+                  _buildClientClock(),
+                  const SizedBox(height: 20),
 
                   // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
-                  if (_booking?['serviceType'] == 'PASEO' || _booking?['serviceType'] == 'HOSPEDAJE')
-                    _sectionHeader('Seguimiento en vivo', GIcon.enVivo, textColor, subtextColor),
                   if (_booking?['serviceType'] == 'PASEO') ...[
                     // ── Card GPS en vivo ──────────────────────────────────────
                     GestureDetector(
@@ -2795,43 +2716,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             const GardenIcon(GIcon.siguiente, size: GIconSize.md, color: Colors.white),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _loadingExtension ? null : _showExtendTimeSheet,
-                      icon: _loadingExtension
-                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
-                          : const GardenIcon(GIcon.alarma, size: GIconSize.sm, inheritColor: true),
-                      label: Text(
-                        _allowedExtensionMinutes == 0
-                            ? 'Ampliar tiempo del paseo'
-                            : 'Ampliar tiempo (hasta $_allowedExtensionMinutes min)',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-
-                  // ── Extensión de hospedaje ───────────────────────────────────
-                  if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
-                    OutlinedButton.icon(
-                      onPressed: _loadingExtension ? null : _showExtendHospedajeSheet,
-                      icon: _loadingExtension
-                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
-                          : const GardenIcon(GIcon.modoOscuro, size: GIconSize.sm, state: GIconState.active, inheritColor: true),
-                      label: const Text('Agregar noches al hospedaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
-                        minimumSize: const Size(double.infinity, 48),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -2962,47 +2846,115 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
-                  // ── Marcar servicio como terminado (dueño) ──────────────────
-                  // Al final de la columna (prioridad más baja) — gateado por
-                  // tiempo: solo aparece cuando el tiempo total pagado
-                  // (reserva + extensiones) ya se cumplió, antes de eso no
-                  // tiene sentido que el dueño lo marque como terminado.
-                  if (_booking?['clientMarkedEndAt'] == null && !_isPaidServiceTimeUp) ...[
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: [
-                          GardenIcon(GIcon.reloj, size: GIconSize.sm, color: subtextColor),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Podrás marcar el servicio como terminado cuando se cumpla el tiempo contratado.',
-                              style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                  // ── Quién la cuida (antes iba arriba de todo, antes que la mascota) ──
+                  // ── Trip card: cuidador + mascota unificados ────────────────
+                  // Antes eran dos cajas separadas con bordes propios — mismo
+                  // peso visual para info del cuidador y de la mascota, sin
+                  // ninguna jerarquía clara. Unificadas en una sola tarjeta con
+                  // sombra suave (menos "cajas apiladas", más estilo
+                  // Airbnb/Uber: una fila principal tappable + un divisor fino
+                  // + una fila secundaria de detalle).
+                  Container(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
+                      boxShadow: GardenShadows.card,
+                    ),
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: _showServiceInfoSheet,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                GardenAvatar(
+                                  imageUrl: _booking?['caregiverPhoto'] as String?,
+                                  size: 52,
+                                  initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _booking?['caregiverName'] as String? ?? 'Cuidador',
+                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _booking?['caregiverRating'] != null
+                                                ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1).replaceAll('.', ',')} · Tu cuidador'
+                                                : 'Nuevo · Tu cuidador',
+                                            style: TextStyle(color: subtextColor, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.success.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(GardenRadius.full),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _PulsingDot(size: 6, color: GardenColors.success),
+                                      SizedBox(width: 5),
+                                      Text('Activo',
+                                        style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        Divider(height: 1, thickness: 1, color: borderColor, indent: 16, endIndent: 16),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                          child: Row(
+                            children: [
+                              const GardenIcon(GIcon.huella, state: GIconState.active),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(color: subtextColor, fontSize: 12.5),
+                                    children: [
+                                      TextSpan(
+                                        text: _booking?['petName'] as String? ?? '—',
+                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+                                      ),
+                                      if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
+                                        TextSpan(text: ' · ${_booking!['petBreed']}'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const GardenIcon(GIcon.protegido, size: GIconSize.xs, color: GardenColors.polygon),
+                              const SizedBox(width: 4),
+                              const Text('Pago protegido',
+                                style: TextStyle(color: GardenColors.polygon, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ] else if (_booking?['clientMarkedEndAt'] == null) ...[
-                    OutlinedButton.icon(
-                      onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
-                      icon: _markingEnd
-                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.success)
-                          : const GardenIcon(GIcon.confirmado, size: GIconSize.sm, inheritColor: true),
-                      label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.success,
-                        side: const BorderSide(color: GardenColors.success),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                    ),
-                  ] else ...[
+                  ),
+                  const SizedBox(height: 24),
+
+                  if (_booking?['clientMarkedEndAt'] != null) ...[
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -3128,7 +3080,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     Row(
                       children: [
                         GestureDetector(
-                          onTap: () => Navigator.pop(context),
+                          onTap: _exitServiceScreen,
                           child: Container(
                             width: 40, height: 40,
                             decoration: BoxDecoration(
@@ -3323,62 +3275,134 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                     const SizedBox(height: 14),
                   ],
-                  // ── Progreso fotos (barra compacta arriba) ──────────────
+                  // ── Cuándo termina (antes el cuidador no lo veía) ──
+                  _buildClientClock(),
+                  const SizedBox(height: 16),
+
+                  // ── Fotos: requisito, botones y lo enviado en una sola tarjeta ──
+                  // Antes eran tres lugares: la barra "1 / 2", los botones Foto y
+                  // Video dentro de "Acciones" y la tira de fotos al final.
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: BorderRadius.circular(GardenRadius.lg),
-                      border: Border.all(color: isPhotoMet
-                          ? GardenColors.success.withValues(alpha: 0.3)
-                          : borderColor),
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
+                      boxShadow: GardenShadows.card,
+                      border: Border.all(color: isPhotoMet ? GardenColors.success.withValues(alpha: 0.35) : Colors.transparent),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('Fotos del servicio',
-                                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-                                  Text(
-                                    '$photoCount / $minPhotos',
-                                    style: TextStyle(
-                                      color: isPhotoMet ? GardenColors.success : GardenColors.warning,
-                                      fontWeight: FontWeight.w800, fontSize: 13,
-                                    ),
-                                  ),
-                                ],
+                        Row(
+                          children: [
+                            Text('Fotos del servicio',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                            const Spacer(),
+                            Text(
+                              '$photoCount de $minPhotos',
+                              style: TextStyle(
+                                color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                                fontWeight: FontWeight.w900, fontSize: 13,
                               ),
-                              const SizedBox(height: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(GardenRadius.full),
-                                child: LinearProgressIndicator(
-                                  value: photoProgress,
-                                  minHeight: 5,
-                                  backgroundColor: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
-                                  valueColor: AlwaysStoppedAnimation(
-                                    isPhotoMet ? GardenColors.success : GardenColors.warning,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                isPhotoMet
-                                    ? 'Requisito cumplido — puedes finalizar'
-                                    : 'Faltan ${minPhotos - photoCount} foto${minPhotos - photoCount > 1 ? 's' : ''} para finalizar',
-                                style: TextStyle(
-                                  color: isPhotoMet ? GardenColors.success : subtextColor,
-                                  fontSize: 11,
-                                  fontWeight: isPhotoMet ? FontWeight.w600 : FontWeight.w400,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(GardenRadius.full),
+                          child: LinearProgressIndicator(
+                            value: photoProgress,
+                            minHeight: 6,
+                            backgroundColor: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+                            valueColor: AlwaysStoppedAnimation(isPhotoMet ? GardenColors.success : GardenColors.warning),
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isPhotoMet
+                              ? 'Listo: ya puedes terminar cuando corresponda'
+                              : 'Faltan ${minPhotos - photoCount} foto${minPhotos - photoCount > 1 ? 's' : ''} para poder terminar. El dueño las ve al instante.',
+                          style: TextStyle(
+                            color: isPhotoMet ? GardenColors.success : subtextColor,
+                            fontSize: 12, height: 1.35,
+                            fontWeight: isPhotoMet ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GardenButton(
+                                label: _isSendingPhoto ? 'Enviando…' : 'Tomar foto',
+                                gIcon: GIcon.foto,
+                                height: 48,
+                                loading: _isSendingPhoto,
+                                onPressed: _isSendingPhoto ? null : _sendServicePhoto,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: GardenButton(
+                                label: _isSendingVideo ? 'Enviando…' : 'Video',
+                                gIcon: GIcon.video,
+                                outline: true,
+                                height: 48,
+                                loading: _isSendingVideo,
+                                onPressed: _isSendingVideo ? null : _sendServiceVideo,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_serviceEvents.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                        SizedBox(
+                          height: 110,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _serviceEvents.length,
+                            itemBuilder: (_, i) {
+                              final e = _serviceEvents[_serviceEvents.length - 1 - i];
+                              final url = _eventMediaUrl(e) ?? '';
+                              if (url.isEmpty) return const SizedBox();
+                              return GestureDetector(
+                                onTap: () => _openEventMedia(e),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 10),
+                                  width: 110,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(GardenRadius.lg),
+                                    boxShadow: GardenShadows.card,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(GardenRadius.lg),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        _eventMediaPreview(e, height: 110),
+                                        Positioned(
+                                          bottom: 0, left: 0, right: 0,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.bottomCenter,
+                                                end: Alignment.topCenter,
+                                                colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
+                                              ),
+                                            ),
+                                            child: Text(_formatEventTime(e['timestamp'] as String? ?? ''),
+                                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -3388,39 +3412,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   _buildQuickNotes(textColor, subtextColor, surface, borderColor),
                   const SizedBox(height: 20),
 
-                  // ── Grid de acciones ─────────────────────────────────────
-                  Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
-                  const SizedBox(height: 12),
-                  // Row 1: Foto + Video
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _ActionTile(
-                          icon: GIcon.foto,
-                          label: _isSendingPhoto ? 'Enviando...' : 'Foto',
-                          sublabel: 'Obligatorio',
-                          color: GardenColors.primary,
-                          onTap: _isSendingPhoto ? () {} : _sendServicePhoto,
-                          isDark: isDark,
-                          loading: _isSendingPhoto,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _ActionTile(
-                          icon: GIcon.video,
-                          label: _isSendingVideo ? 'Enviando...' : 'Video',
-                          sublabel: 'Opcional',
-                          color: GardenColors.info,
-                          onTap: _isSendingVideo ? () {} : _sendServiceVideo,
-                          isDark: isDark,
-                          loading: _isSendingVideo,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Row 2: Chat + Emergencia
+                  // ── Chat, mapa y emergencia ──────────────────────────────
                   Row(
                     children: [
                       Expanded(
@@ -3441,29 +3433,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           isDark: isDark,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _ActionTile(
-                          icon: GIcon.emergencia,
-                          label: 'Emergencia',
-                          sublabel: 'Reportar',
-                          color: GardenColors.error,
-                          onTap: _showReportDialog,
-                          isDark: isDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Row 3: Mapa GPS (solo PASEO)
-                  if (isPaseo) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
+                      if (isPaseo) ...[
+                        const SizedBox(width: 10),
                         Expanded(
                           child: _ActionTile(
                             icon: GIcon.mapa,
-                            label: 'Mapa GPS',
-                            sublabel: 'Compartir ruta',
+                            label: 'Mapa',
+                            sublabel: 'Tu ruta',
                             color: GardenColors.secondary,
                             onTap: () => Navigator.push(context, MaterialPageRoute(
                               builder: (_) => GpsTrackingScreen(
@@ -3478,101 +3454,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  const SizedBox(height: 6),
-
-                  // ── Botón deslizante: Finalizar servicio ─────────────────
-                  // No se puede finalizar mientras haya una emergencia activa sin
-                  // resolver (_isServicePaused) — hay que resolverla primero.
-                  // Movido a después del bloque de Acciones (pedido explícito) para
-                  // que el cuidador no lo toque por error antes de revisar las acciones.
-                  SlideToConfirmButton(
-                    label: _isServicePaused
-                        ? 'Resuelve la emergencia activa primero'
-                        : isPhotoMet
-                            ? (isPaseo
-                                ? 'Desliza cuando ${_booking?['petName'] ?? 'la mascota'} esté en casa'
-                                : 'Desliza para terminar el servicio')
-                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
-                    color: _isServicePaused
-                        ? GardenColors.error
-                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
-                    icon: Icons.check_circle_rounded,
-                    height: 58,
-                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ActionTile(
+                          icon: GIcon.emergencia,
+                          label: 'Emergencia',
+                          sublabel: 'Reportar',
+                          color: GardenColors.error,
+                          onTap: _showReportDialog,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-
-                  // ── Fotos enviadas ───────────────────────────────────────
-                  if (_serviceEvents.isNotEmpty) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Fotos enviadas',
-                          style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: GardenColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(GardenRadius.full),
-                          ),
-                          child: Text('${_serviceEvents.length}',
-                            style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 110,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _serviceEvents.length,
-                        itemBuilder: (_, i) {
-                          final e = _serviceEvents[_serviceEvents.length - 1 - i];
-                          final url = _eventMediaUrl(e) ?? '';
-                          if (url.isEmpty) return const SizedBox();
-                          return GestureDetector(
-                            onTap: () => _openEventMedia(e),
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 10),
-                              width: 110,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(GardenRadius.lg),
-                                boxShadow: GardenShadows.card,
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(GardenRadius.lg),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    _eventMediaPreview(e, height: 110),
-                                    Positioned(
-                                      bottom: 0, left: 0, right: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.bottomCenter,
-                                            end: Alignment.topCenter,
-                                            colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
-                                          ),
-                                        ),
-                                        child: Text(_formatEventTime(e['timestamp'] as String? ?? ''),
-                                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
 
                   // ── Incidentes reportados ────────────────────────────────
                   Builder(builder: (_) {
@@ -3687,6 +3582,28 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ],
                     );
                   }),
+                  const SizedBox(height: 20),
+                  // ── Botón deslizante: Finalizar servicio ─────────────────
+                  // No se puede finalizar mientras haya una emergencia activa sin
+                  // resolver (_isServicePaused) — hay que resolverla primero.
+                  // Movido a después del bloque de Acciones (pedido explícito) para
+                  // que el cuidador no lo toque por error antes de revisar las acciones.
+                  SlideToConfirmButton(
+                    label: _isServicePaused
+                        ? 'Resuelve la emergencia activa primero'
+                        : isPhotoMet
+                            ? (isPaseo
+                                ? 'Desliza cuando ${_booking?['petName'] ?? 'la mascota'} esté en casa'
+                                : 'Desliza para terminar el servicio')
+                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
+                    color: _isServicePaused
+                        ? GardenColors.error
+                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
+                    icon: Icons.check_circle_rounded,
+                    height: 58,
+                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
+                  ),
+
                 ],
               ),
             ),
@@ -6520,7 +6437,6 @@ class _ActionTile extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final bool isDark;
-  final bool loading;
   const _ActionTile({
     required this.icon,
     required this.label,
@@ -6528,7 +6444,6 @@ class _ActionTile extends StatelessWidget {
     required this.color,
     required this.onTap,
     required this.isDark,
-    this.loading = false,
   });
   @override
   Widget build(BuildContext context) {
@@ -6536,9 +6451,9 @@ class _ActionTile extends StatelessWidget {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     return GestureDetector(
-      onTap: loading ? null : onTap,
+      onTap: onTap,
       child: AnimatedOpacity(
-        opacity: loading ? 0.65 : 1.0,
+        opacity: 1.0,
         duration: const Duration(milliseconds: 150),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -6552,12 +6467,7 @@ class _ActionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              GardenClay(size: 40, tint: color.withValues(alpha: 0.11), circle: false, radius: GardenRadius.md, interactive: false, child: loading
-                    ? Padding(
-                        padding: const EdgeInsets.all(9),
-                        child: GardenLoadingIndicator(color: color),
-                      )
-                    : Center(child: GardenIcon(icon, color: color, state: GIconState.active))),
+              GardenClay(size: 40, tint: color.withValues(alpha: 0.11), circle: false, radius: GardenRadius.md, interactive: false, child: Center(child: GardenIcon(icon, color: color, state: GIconState.active))),
               const SizedBox(height: 10),
               Text(label,
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),

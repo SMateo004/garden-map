@@ -18,6 +18,7 @@ import 'design/garden_ratings.dart';
 import 'design/garden_wallet.dart';
 import 'design/garden_pet_avatar.dart';
 import 'design/garden_service.dart';
+import 'design/garden_service_clock.dart';
 import 'design/garden_settings.dart';
 import 'design/garden_status_pill.dart';
 import 'narrative/booking_story.dart';
@@ -171,6 +172,30 @@ class _CatalogPageState extends State<_CatalogPage> {
                     ),
                   ),
                 ),
+          ]),
+          _Section('Cuánto falta (servicio en vivo, dueño)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: const Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                GardenServiceClock(
+                  service: GardenService.paseo,
+                  progress: 0.4,
+                  value: '36',
+                  unit: 'faltan min',
+                  title: 'Toby vuelve a las 10:05',
+                  subtitle: 'Empezó a las 9:05 · 1 h contratados',
+                ),
+                SizedBox(height: 12),
+                GardenServiceClock(
+                  service: GardenService.guarderia,
+                  progress: 1,
+                  value: '0',
+                  unit: 'listo',
+                  title: 'Se cumplió el tiempo',
+                  subtitle: 'Ya puedes marcar el servicio como terminado.',
+                ),
+              ]),
+            ),
           ]),
           _Section('Sellos de confianza (perfil del cuidador)', [
             ConstrainedBox(

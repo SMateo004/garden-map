@@ -12,6 +12,9 @@ import 'garden_service.dart';
 //
 //   idle    → trazo en color de texto secundario
 //   active  → color del servicio + relleno suave (duotono)
+//   relieve → activo y de 20 px o más: sombra proyectada suave abajo a la
+//             derecha y un canto más oscuro debajo, como un sello en relieve.
+//             Nada de degradados ni brillos (eso los hacía parecer globos).
 //   live    → bucle mientras el servicio está en curso:
 //               paseo: huellas que aparecen en secuencia
 //               guardería: rayos del sol girando lento
@@ -115,6 +118,8 @@ class _GardenServiceIconState extends State<GardenServiceIcon>
                 duotone: active,
                 live: widget.live && _loop.isAnimating,
                 t: _loop.value,
+                depth: active && widget.size >= 20,
+                isDark: isDark,
               ),
             ),
           ),
@@ -130,6 +135,8 @@ class _ServicePainter extends CustomPainter {
   final bool duotone;
   final bool live;
   final double t;
+  final bool depth;
+  final bool isDark;
 
   _ServicePainter({
     required this.service,
@@ -137,26 +144,63 @@ class _ServicePainter extends CustomPainter {
     required this.duotone,
     required this.live,
     required this.t,
-  });
+    this.depth = false,
+    this.isDark = false,
+  }) : _c = ink;
+
+  /// Color y desenfoque de la pasada que se está pintando (sombra, canto o
+  /// el ícono en sí): el mismo dibujo se pinta hasta tres veces.
+  Color _c;
+  MaskFilter? _blur;
+  bool _edgePass = false;
 
   static const _stroke = 3.0;
   static const _soft = 0.28;
 
   Paint get _line => Paint()
-    ..color = ink
+    ..color = _c
+    ..maskFilter = _blur
     ..style = PaintingStyle.stroke
     ..strokeWidth = _stroke
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round;
 
+  // En el canto no van los rellenos suaves del duotono: se verían como una
+  // mancha oscura debajo.
   Paint _fill([double opacity = 1]) => Paint()
-    ..color = ink.withValues(alpha: ink.a * opacity)
+    ..color = _c.withValues(alpha: _c.a * (_edgePass && opacity < 1 ? 0 : opacity))
+    ..maskFilter = _blur
     ..style = PaintingStyle.fill;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.width / 48, size.height / 48);
+    if (depth) {
+      // 1) Sombra proyectada: luz arriba a la izquierda.
+      _c = Colors.black.withValues(alpha: isDark ? 0.45 : 0.22);
+      _blur = const MaskFilter.blur(BlurStyle.normal, 2.2);
+      canvas.save();
+      canvas.translate(1.6, 3.4);
+      _shape(canvas);
+      canvas.restore();
+      // 2) Canto: el mismo dibujo más oscuro, apenas abajo.
+      _c = Color.lerp(ink, Colors.black, isDark ? 0.55 : 0.38)!;
+      _blur = null;
+      _edgePass = true;
+      canvas.save();
+      canvas.translate(0, 1.7);
+      _shape(canvas);
+      canvas.restore();
+      _edgePass = false;
+    }
+    _c = ink;
+    _blur = null;
+    _shape(canvas);
+    canvas.restore();
+  }
+
+  void _shape(Canvas canvas) {
     switch (service) {
       case GardenService.paseo:
         _paintWalk(canvas);
@@ -165,7 +209,6 @@ class _ServicePainter extends CustomPainter {
       case GardenService.hospedaje:
         _paintNight(canvas);
     }
-    canvas.restore();
   }
 
   // Huella: almohadilla + cuatro dedos.
@@ -189,7 +232,9 @@ class _ServicePainter extends CustomPainter {
         ..moveTo(4, 46)
         ..quadraticBezierTo(20, 36, 24, 26)
         ..quadraticBezierTo(29, 15, 45, 5);
-      final dot = Paint()..color = ink.withValues(alpha: ink.a * 0.35);
+      final dot = Paint()
+        ..color = _c.withValues(alpha: _edgePass ? 0 : _c.a * 0.35)
+        ..maskFilter = _blur;
       for (final m in trail.computeMetrics()) {
         for (double d = 2; d < m.length; d += 5.5) {
           final pos = m.getTangentForOffset(d)?.position;
@@ -286,7 +331,8 @@ class _ServicePainter extends CustomPainter {
     final opacity = phase < 0.4 ? phase / 0.4 : (1 - (phase - 0.4) / 0.6);
     final o = origin + Offset(3 * phase, -5 * phase);
     final p = Paint()
-      ..color = ink.withValues(alpha: ink.a * opacity.clamp(0.0, 1.0))
+      ..color = _c.withValues(alpha: _c.a * opacity.clamp(0.0, 1.0))
+      ..maskFilter = _blur
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -307,5 +353,7 @@ class _ServicePainter extends CustomPainter {
       old.ink != ink ||
       old.duotone != duotone ||
       old.live != live ||
+      old.depth != depth ||
+      old.isDark != isDark ||
       old.service != service;
 }
