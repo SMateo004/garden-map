@@ -1,11 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import '../design/garden_icons.dart';
-import '../theme/garden_theme.dart';
 import '../design/garden_depth.dart';
+import '../design/garden_icons.dart';
+import '../design/garden_wallet.dart' show GardenFilterPills;
+import '../narrative/booking_story.dart';
+import '../narrative/notification_kind.dart';
+import '../services/auth_state.dart';
+import '../theme/garden_motion.dart';
+import '../theme/garden_theme.dart';
+import 'garden_empty_state.dart';
 
 /// Notificación individual tal como la devuelve el backend.
 class AppNotification {
@@ -44,13 +51,50 @@ class AppNotification {
       );
 }
 
+/// A dónde lleva una notificación según su tema y quién la mira. Las
+/// notificaciones no traen el id de la reserva (Notification no tiene esa
+/// columna), así que se lleva a la lista correspondiente.
+({String label, String route})? notificationDestination(String type) {
+  final kind = NotificationKind.of(type);
+  final role = AuthState.effectiveRole;
+  final staff = AuthState.isCaregiverStaff;
+  if (role == 'ADMIN' && (kind.topic == NotificationTopic.problem || kind.topic == NotificationTopic.account)) {
+    return (label: 'Abrir panel admin', route: '/admin');
+  }
+  String bookings() => role == 'CAREGIVER'
+      ? (staff ? '/caregiver-staff/home' : '/caregiver/home?tab=reservas')
+      : '/my-bookings';
+  switch (type) {
+    case 'CAREGIVER_WELCOME':
+      return (label: 'Ver la guía del cuidador', route: '/guia-cuidador');
+    case 'TRAINING_REMINDER':
+      return (label: 'Ir a capacitaciones', route: '/caregiver/trainings');
+    case 'ZONE_NOW_AVAILABLE':
+      return (label: 'Buscar cuidadores', route: '/marketplace');
+  }
+  switch (kind.topic) {
+    case NotificationTopic.booking:
+    case NotificationTopic.service:
+    case NotificationTopic.problem:
+      return (label: 'Ver mis reservas', route: bookings());
+    case NotificationTopic.money:
+      return staff ? null : (label: 'Ir a mi billetera', route: '/wallet');
+    case NotificationTopic.review:
+    case NotificationTopic.chat:
+    case NotificationTopic.account:
+    case NotificationTopic.news:
+      return null;
+  }
+}
+
 // ─────────────────────────────────────────────
-// Buzón: botón campana reutilizable
+// Campana con contador
 // ─────────────────────────────────────────────
 
 class NotificationBell extends StatefulWidget {
   final String token;
   final String baseUrl;
+
   /// Si se pasa, se ejecuta cuando cambió el unread count (para que el padre actualice su UI).
   final ValueChanged<int>? onUnreadChanged;
 
@@ -66,9 +110,12 @@ class NotificationBell extends StatefulWidget {
 }
 
 class _NotificationBellState extends State<NotificationBell> {
-  List<AppNotification> _notifications = [];
-  int _unreadCount = 0;
+  /// La hoja abierta escucha esto: si llega algo nuevo mientras está abierta,
+  /// aparece (antes la hoja mostraba una copia fija del momento de abrirla).
+  final _items = ValueNotifier<List<AppNotification>>(const []);
   Timer? _timer;
+
+  int get _unread => _items.value.where((n) => !n.read).length;
 
   @override
   void initState() {
@@ -80,7 +127,15 @@ class _NotificationBellState extends State<NotificationBell> {
   @override
   void dispose() {
     _timer?.cancel();
+    _items.dispose();
     super.dispose();
+  }
+
+  void _set(List<AppNotification> list) {
+    final before = _unread;
+    _items.value = list;
+    if (mounted) setState(() {});
+    if (before != _unread) widget.onUnreadChanged?.call(_unread);
   }
 
   Future<void> _load() async {
@@ -92,61 +147,51 @@ class _NotificationBellState extends State<NotificationBell> {
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (data['success'] == true) {
-          final list = (data['data'] as List)
-              .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
-              .toList();
-          if (mounted) {
-            setState(() {
-              _notifications = list;
-              _unreadCount = list.where((n) => !n.read).length;
-            });
-            widget.onUnreadChanged?.call(_unreadCount);
-          }
+        if (data['success'] == true && mounted) {
+          _set((data['data'] as List).map((e) => AppNotification.fromJson(e as Map<String, dynamic>)).toList());
+          widget.onUnreadChanged?.call(_unread);
         }
       }
     } catch (_) {}
   }
 
+  /// Se marca al instante; si el servidor falla, se recarga lo real (antes
+  /// un error de red al marcar tiraba una excepción sin manejar).
   Future<void> _markRead(String id) async {
-    await http.patch(
-      Uri.parse('${widget.baseUrl}/notifications/$id/read'),
-      headers: {'Authorization': 'Bearer ${widget.token}'},
-    );
-    if (mounted) {
-      setState(() {
-        _notifications = _notifications
-            .map((n) => n.id == id ? n.copyWith(read: true) : n)
-            .toList();
-        _unreadCount = _notifications.where((n) => !n.read).length;
-      });
-      widget.onUnreadChanged?.call(_unreadCount);
+    _set(_items.value.map((n) => n.id == id ? n.copyWith(read: true) : n).toList());
+    try {
+      final r = await http.patch(
+        Uri.parse('${widget.baseUrl}/notifications/$id/read'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (r.statusCode != 200) unawaited(_load());
+    } catch (_) {
+      unawaited(_load());
     }
   }
 
   Future<void> _markAllRead() async {
-    await http.patch(
-      Uri.parse('${widget.baseUrl}/notifications/read-all'),
-      headers: {'Authorization': 'Bearer ${widget.token}'},
-    );
-    if (mounted) {
-      setState(() {
-        _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
-        _unreadCount = 0;
-      });
-      widget.onUnreadChanged?.call(0);
+    _set(_items.value.map((n) => n.copyWith(read: true)).toList());
+    try {
+      final r = await http.patch(
+        Uri.parse('${widget.baseUrl}/notifications/read-all'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (r.statusCode != 200) unawaited(_load());
+    } catch (_) {
+      unawaited(_load());
     }
   }
 
   void _openSheet() {
+    HapticFeedback.selectionClick();
+    _load();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _NotificationsSheet(
-        notifications: _notifications,
-        token: widget.token,
-        baseUrl: widget.baseUrl,
+        items: _items,
         onMarkRead: _markRead,
         onMarkAllRead: _markAllRead,
         onRefresh: _load,
@@ -158,34 +203,44 @@ class _NotificationBellState extends State<NotificationBell> {
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final iconColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final unread = _unread;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          icon: GardenIcon(GIcon.notificaciones, color: iconColor, size: GIconSize.lg),
-          tooltip: 'Notificaciones',
+          icon: GardenIcon(GIcon.notificaciones,
+              color: unread > 0 ? (isDark ? GardenColors.primaryLight : GardenColors.primary) : iconColor,
+              state: unread > 0 ? GIconState.active : GIconState.idle,
+              size: GIconSize.lg),
+          tooltip: unread > 0 ? 'Notificaciones ($unread sin leer)' : 'Notificaciones',
           onPressed: _openSheet,
         ),
-        if (_unreadCount > 0)
+        if (unread > 0)
           Positioned(
-            right: 6,
-            top: 6,
+            right: 4,
+            top: 4,
             child: IgnorePointer(
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: const BoxDecoration(
-                  color: GardenColors.error,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _unreadCount > 9 ? '9+' : '$_unreadCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+              // Aparece con un pequeño salto cuando cambia el número.
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey(unread),
+                tween: Tween(begin: 0.6, end: 1),
+                duration: GardenMotion.resolve(context, GardenMotion.standard),
+                curve: GardenMotion.pop,
+                builder: (_, s, child) => Transform.scale(scale: s, child: child),
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 18),
+                  height: 18,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: GardenColors.error,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, height: 1),
                   ),
                 ),
               ),
@@ -197,21 +252,17 @@ class _NotificationBellState extends State<NotificationBell> {
 }
 
 // ─────────────────────────────────────────────
-// Hoja de buzón (bottom sheet)
+// Hoja de notificaciones
 // ─────────────────────────────────────────────
 
 class _NotificationsSheet extends StatefulWidget {
-  final List<AppNotification> notifications;
-  final String token;
-  final String baseUrl;
+  final ValueNotifier<List<AppNotification>> items;
   final Future<void> Function(String id) onMarkRead;
   final Future<void> Function() onMarkAllRead;
   final Future<void> Function() onRefresh;
 
   const _NotificationsSheet({
-    required this.notifications,
-    required this.token,
-    required this.baseUrl,
+    required this.items,
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onRefresh,
@@ -222,40 +273,30 @@ class _NotificationsSheet extends StatefulWidget {
 }
 
 class _NotificationsSheetState extends State<_NotificationsSheet> {
-  late List<AppNotification> _notifs;
+  bool _onlyUnread = false;
+  String? _expanded;
 
-  @override
-  void initState() {
-    super.initState();
-    _notifs = List.from(widget.notifications);
+  void _tap(AppNotification n) {
+    HapticFeedback.selectionClick();
+    if (!n.read) widget.onMarkRead(n.id);
+    setState(() => _expanded = _expanded == n.id ? null : n.id);
   }
 
-  int get _unread => _notifs.where((n) => !n.read).length;
-
-  Future<void> _markRead(String id) async {
-    await widget.onMarkRead(id);
-    if (mounted) {
-      setState(() {
-        _notifs = _notifs.map((n) => n.id == id ? n.copyWith(read: true) : n).toList();
-      });
-    }
+  void _go(String route) {
+    Navigator.of(context).pop();
+    context.push(route);
   }
 
-  Future<void> _markAll() async {
-    await widget.onMarkAllRead();
-    if (mounted) {
-      setState(() {
-        _notifs = _notifs.map((n) => n.copyWith(read: true)).toList();
-      });
-    }
-  }
-
-  void _openDetail(AppNotification notif) {
-    if (!notif.read) _markRead(notif.id);
-    showDialog(
-      context: context,
-      builder: (_) => _NotificationDetailDialog(notif: notif),
-    );
+  /// Hoy / Ayer / Esta semana / Antes.
+  static String _group(DateTime? d, DateTime now) {
+    if (d == null) return 'Antes';
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(day).inDays;
+    if (diff <= 0) return 'Hoy';
+    if (diff == 1) return 'Ayer';
+    if (diff < 7) return 'Esta semana';
+    return 'Antes';
   }
 
   @override
@@ -267,430 +308,251 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.78,
+      height: MediaQuery.of(context).size.height * 0.82,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: GardenColors.primary.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, -4))],
       ),
-      child: Column(
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: borderColor,
-              borderRadius: BorderRadius.circular(2),
+      child: ValueListenableBuilder<List<AppNotification>>(
+        valueListenable: widget.items,
+        builder: (context, all, _) {
+          final unread = all.where((n) => !n.read).length;
+          final list = _onlyUnread ? all.where((n) => !n.read || n.id == _expanded).toList() : all;
+          final now = DateTime.now();
+          final rows = <Widget>[];
+          String? last;
+          for (final n in list) {
+            final g = _group(DateTime.tryParse(n.createdAt)?.toLocal(), now);
+            if (g != last) {
+              rows.add(Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+                child: Text(g.toUpperCase(),
+                    style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.9)),
+              ));
+              last = g;
+            }
+            final dest = notificationDestination(n.type);
+            rows.add(_NotificationRow(
+              notif: n,
+              expanded: _expanded == n.id,
+              onTap: () => _tap(n),
+              actionLabel: dest?.label,
+              onAction: dest == null ? null : () => _go(dest.route),
+            ));
+          }
+
+          return Column(children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
             ),
-          ),
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 8, 12),
-            child: Row(
-              children: [
-                GardenClay(size: 36, tint: GardenColors.primary.withValues(alpha: 0.10), circle: false, radius: 10, interactive: false, child: const GardenIcon(GIcon.notificaciones, color: GardenColors.primary, state: GIconState.active)),
-                const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 12, 4),
+              child: Row(children: [
                 Expanded(
-                  child: Text(
-                    'Buzón',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Notificaciones', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text(unread == 0 ? 'Estás al día' : unread == 1 ? '1 sin leer' : '$unread sin leer',
+                        style: TextStyle(color: subtextColor, fontSize: 13)),
+                  ]),
+                ),
+                if (unread > 0)
+                  TextButton(
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      widget.onMarkAllRead();
+                    },
+                    child: Text('Marcar todo como leído',
+                        style: TextStyle(
+                            color: isDark ? GardenColors.primaryLight : GardenColors.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700)),
+                  ),
+              ]),
+            ),
+            if (all.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: GardenFilterPills<bool>(
+                    options: [(false, 'Todas'), (true, unread > 0 ? 'Sin leer ($unread)' : 'Sin leer')],
+                    selected: _onlyUnread,
+                    onSelect: (v) => setState(() => _onlyUnread = v),
                   ),
                 ),
-                if (_unread > 0)
-                  TextButton(
-                    onPressed: _markAll,
-                    child: const Text(
-                      'Marcar todo leído',
-                      style: TextStyle(
-                        color: GardenColors.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
+            Expanded(
+              child: RefreshIndicator(
+                color: GardenColors.primary,
+                onRefresh: widget.onRefresh,
+                child: list.isEmpty
+                    ? ListView(children: [
+                        const SizedBox(height: 40),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: _onlyUnread
+                              ? const GardenEmptyState(
+                                  type: GardenEmptyType.notifications,
+                                  compact: true,
+                                  title: 'Leíste todo',
+                                  subtitle: 'No tienes notificaciones sin leer.',
+                                )
+                              : const GardenEmptyState(
+                                  type: GardenEmptyType.notifications,
+                                  title: 'Todo tranquilo por aquí',
+                                  subtitle: 'Cuando haya novedades de tus reservas, pagos o mensajes, aparecerán aquí.',
+                                ),
+                        ),
+                      ])
+                    : ListView(padding: const EdgeInsets.only(bottom: 24), children: rows),
+              ),
             ),
-          ),
-          Divider(height: 1, color: borderColor),
-          // Lista
-          Expanded(
-            child: _notifs.isEmpty
-                ? _EmptyNotifications(textColor: textColor, subtextColor: subtextColor)
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _notifs.length,
-                    itemBuilder: (ctx, i) {
-                      final n = _notifs[i];
-                      return _NotificationRow(
-                        notif: n,
-                        borderColor: borderColor,
-                        textColor: textColor,
-                        subtextColor: subtextColor,
-                        onTap: () => _openDetail(n),
-                      );
-                    },
-                  ),
-          ),
-        ],
+          ]);
+        },
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────
-// Fila de notificación en la lista
+// Fila: se abre ahí mismo con el texto completo y a dónde ir
 // ─────────────────────────────────────────────
 
 class _NotificationRow extends StatelessWidget {
   final AppNotification notif;
-  final Color borderColor;
-  final Color textColor;
-  final Color subtextColor;
+  final bool expanded;
   final VoidCallback onTap;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _NotificationRow({
     required this.notif,
-    required this.borderColor,
-    required this.textColor,
-    required this.subtextColor,
+    required this.expanded,
     required this.onTap,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isUnread = !notif.read;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isUnread
-              ? GardenColors.primary.withValues(alpha: 0.06)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isUnread
-                ? GardenColors.primary.withValues(alpha: 0.22)
-                : borderColor,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Ícono tipo
-            GardenClay(size: 42, tint: _typeColor(notif.type).withValues(alpha: 0.12), circle: false, radius: 12, interactive: false, child: GardenIcon(
-                _typeIcon(notif.type),
-                color: _typeColor(notif.type),
-                state: GIconState.active,
-              )),
-            const SizedBox(width: 12),
-            // Contenido
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notif.title,
-                          style: TextStyle(
-                            color: textColor,
-                            fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      if (isUnread)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: GardenColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    notif.message,
-                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _relativeTime(notif.createdAt),
-                    style: TextStyle(
-                      color: subtextColor.withValues(alpha: 0.65),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: subtextColor.withValues(alpha: 0.4)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Mismos iconos que el resto de la app para cada momento de la reserva.
-  static GIcon _typeIcon(String type) {
-    switch (type) {
-      case 'NEW_BOOKING': return GIcon.reservas;
-      case 'BOOKING_ACCEPTED': return GIcon.confirmado;
-      case 'BOOKING_REJECTED': return GIcon.cancelado;
-      case 'BOOKING_CANCELLED': return GIcon.cancelado;
-      case 'PAYMENT_RECEIVED': return GIcon.billetera;
-      case 'REVIEW_RECEIVED': return GIcon.estrella;
-      case 'SERVICE_STARTED': return GIcon.enVivo;
-      case 'SERVICE_COMPLETED': return GIcon.terminado;
-      case 'CHAT_MESSAGE': return GIcon.chat;
-      case 'SYSTEM': return GIcon.ayuda;
-      case 'PROFILE_APPROVED': return GIcon.verificado;
-      case 'PROFILE_REJECTED': return GIcon.conflicto;
-      case 'WALLET_RECHARGE': return GIcon.billetera;
-      case 'DISPUTE': return GIcon.enRevision;
-      case 'CAREGIVER_WELCOME': return GIcon.huella;
-      default: return GIcon.notificaciones;
-    }
-  }
-
-  static Color _typeColor(String type) {
-    switch (type) {
-      case 'NEW_BOOKING': return GardenColors.primary;
-      case 'BOOKING_ACCEPTED': return GardenColors.success;
-      case 'BOOKING_REJECTED': return GardenColors.error;
-      case 'BOOKING_CANCELLED': return GardenColors.warning;
-      case 'PAYMENT_RECEIVED': return GardenColors.accent;
-      case 'REVIEW_RECEIVED': return GardenColors.warning;
-      case 'SERVICE_STARTED': return GardenColors.accent;
-      case 'SERVICE_COMPLETED': return GardenColors.success;
-      case 'CHAT_MESSAGE': return GardenColors.primary;
-      case 'SYSTEM': return GardenColors.lightTextSecondary;
-      case 'PROFILE_APPROVED': return GardenColors.success;
-      case 'PROFILE_REJECTED': return GardenColors.error;
-      case 'WALLET_RECHARGE': return GardenColors.accent;
-      case 'DISPUTE': return GardenColors.warning;
-      case 'CAREGIVER_WELCOME': return GardenColors.success;
-      default: return GardenColors.primary;
-    }
-  }
-
-  static String _relativeTime(String isoString) {
-    if (isoString.isEmpty) return '';
-    try {
-      final dt = DateTime.parse(isoString).toLocal();
-      final diff = DateTime.now().difference(dt);
-      if (diff.inSeconds < 60) return 'Ahora mismo';
-      if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-      if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
-      if (diff.inDays == 1) return 'Ayer';
-      if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
-      return '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {
-      return '';
-    }
-  }
-}
-
-// ─────────────────────────────────────────────
-// Diálogo de detalle de notificación
-// ─────────────────────────────────────────────
-
-class _NotificationDetailDialog extends StatelessWidget {
-  final AppNotification notif;
-
-  const _NotificationDetailDialog({required this.notif});
-
-  @override
-  Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final iconColor = _NotificationRow._typeColor(notif.type);
-    final iconData = _NotificationRow._typeIcon(notif.type);
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final kind = NotificationKind.of(notif.type);
+    final colors = StoryColors.of(kind.tone, isDark: isDark);
+    final unread = !notif.read;
+    final date = DateTime.tryParse(notif.createdAt)?.toLocal();
+    final d = GardenMotion.resolve(context, GardenMotion.standard);
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: GlassBox(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Cabecera con color de tipo
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Row(
-                children: [
-                  GardenClay(size: 48, tint: iconColor.withValues(alpha: 0.15), circle: false, radius: 14, interactive: false, child: GardenIcon(iconData, color: iconColor, size: GIconSize.lg, state: GIconState.active)),
-                  const SizedBox(width: 14),
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      label: '${unread ? 'Sin leer. ' : ''}${NotificationKind.clean(notif.title)}',
+      child: InkWell(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: d,
+          curve: GardenMotion.enter,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          padding: const EdgeInsets.fromLTRB(10, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: unread
+                ? (isDark ? GardenColors.primary.withValues(alpha: 0.14) : GardenColors.primary.withValues(alpha: 0.06))
+                : expanded
+                    ? (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GardenClay(
+              size: 42,
+              circle: false,
+              radius: 13,
+              interactive: false,
+              tint: colors.ink.withValues(alpha: 0.14),
+              child: GardenIcon(kind.icon, color: colors.ink, state: GIconState.active),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: Text(
-                      notif.title,
+                      NotificationKind.clean(notif.title),
                       style: TextStyle(
-                        color: textColor,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        height: 1.3,
-                      ),
+                          color: text, fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 14, height: 1.3),
                     ),
                   ),
-                ],
-              ),
-            ),
-            // Cuerpo del mensaje
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-              child: Text(
-                notif.message,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 15,
-                  height: 1.6,
-                ),
-              ),
-            ),
-            // Timestamp
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _formatFull(notif.createdAt),
-                  style: TextStyle(
-                    color: subtextColor.withValues(alpha: 0.7),
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-            Divider(height: 1, color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-            // Botones de acción
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  if (notif.type == 'CAREGIVER_WELCOME') ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: GardenColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const GardenIcon(GIcon.guia, size: GIconSize.sm, inheritColor: true),
-                        label: const Text('Ver guía completa', style: TextStyle(fontWeight: FontWeight.w700)),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          context.push('/guia-cuidador');
-                        },
+                  const SizedBox(width: 8),
+                  Text(_relativeTime(date), style: TextStyle(color: sub, fontSize: 11, fontWeight: FontWeight.w600)),
+                  if (unread) ...[
+                    const SizedBox(width: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
                       ),
                     ),
-                    const SizedBox(height: 10),
                   ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 3),
+                AnimatedSize(
+                  duration: d,
+                  curve: GardenMotion.enter,
+                  alignment: Alignment.topCenter,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                      NotificationKind.clean(notif.message),
+                      style: TextStyle(color: expanded ? text : sub, fontSize: 13, height: 1.45),
+                      maxLines: expanded ? null : 2,
+                      overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
+                    if (expanded) ...[
+                      if (date != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_fullDate(date), style: TextStyle(color: sub, fontSize: 12)),
+                      ],
+                      if (onAction != null) ...[
+                        const SizedBox(height: 12),
+                        GardenButton(label: actionLabel!, height: 44, onPressed: onAction),
+                      ],
+                    ],
+                  ]),
+                ),
+              ]),
             ),
-          ],
+          ]),
         ),
       ),
     );
   }
 
-  static String _formatFull(String isoString) {
-    if (isoString.isEmpty) return '';
-    try {
-      final dt = DateTime.parse(isoString).toLocal();
-      const months = [
-        '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-      ];
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '${dt.day} de ${months[dt.month]} de ${dt.year}, $h:$m';
-    } catch (_) {
-      return '';
-    }
+  static String _relativeTime(DateTime? dt) {
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'ahora';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min';
+    if (diff.inHours < 24) return '${diff.inHours} h';
+    if (diff.inDays == 1) return 'ayer';
+    if (diff.inDays < 7) return '${diff.inDays} d';
+    const m = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${dt.day} ${m[dt.month - 1]}';
   }
-}
 
-// ─────────────────────────────────────────────
-// Estado vacío
-// ─────────────────────────────────────────────
-
-class _EmptyNotifications extends StatelessWidget {
-  final Color textColor;
-  final Color subtextColor;
-
-  const _EmptyNotifications({required this.textColor, required this.subtextColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GardenClay(size: 72, tint: GardenColors.primary.withValues(alpha: 0.08), interactive: false, child: const GardenIcon(GIcon.notificaciones, size: GIconSize.xl, color: GardenColors.primary)),
-            const SizedBox(height: 16),
-            Text(
-              'Todo tranquilo por aquí',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Cuando recibas mensajes o actualizaciones de tus reservas, aparecerán aquí.',
-              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
+  static String _fullDate(DateTime dt) {
+    const months = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} de ${months[dt.month - 1]} de ${dt.year}, $h:$m';
   }
 }

@@ -5,7 +5,10 @@ import '../../theme/garden_theme.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_settings.dart';
+import '../../widgets/garden_empty_state.dart';
 
 /// Preferencias de notificación push/email — no afectan el historial in-app
 /// (siempre queda), solo si se interrumpe al usuario. Lo transaccional (pago,
@@ -95,10 +98,14 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    Widget toggle(bool value, ValueChanged<bool> onChanged) => Switch(
+          value: value,
+          onChanged: _saving ? null : onChanged,
+          activeThumbColor: GardenColors.primary,
+        );
 
     return Scaffold(
       backgroundColor: bg,
@@ -111,109 +118,82 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       body: _loading
           ? const Center(child: GardenLoadingIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text(_error!, style: TextStyle(color: subtextColor), textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      TextButton(onPressed: _load, child: const Text('Reintentar')),
-                    ]),
+              ? ListView(padding: const EdgeInsets.all(24), children: [
+                  const SizedBox(height: 40),
+                  GardenEmptyState(
+                    type: GardenEmptyType.notifications,
+                    brote: BrotePose.oops,
+                    title: 'No pudimos cargar tus preferencias',
+                    subtitle: _error!,
+                    ctaLabel: 'Reintentar',
+                    onCta: _load,
                   ),
-                )
+                ])
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
-                      child: Text(
-                        'Los avisos de pagos, reservas y reembolsos siempre te llegan — acá controlas el resto.',
-                        style: TextStyle(color: subtextColor, fontSize: 13),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          // Lo que no se puede apagar, a la vista y con candado:
+                          // antes era una frase gris arriba de todo.
+                          const GardenSettingsGroup(title: 'Siempre activas', children: [
+                            GardenSettingsRow(
+                              icon: GIcon.pagoProtegido,
+                              title: 'Reservas, pagos y reembolsos',
+                              subtitle: 'Son importantes para tu dinero y tus servicios',
+                              onTap: null,
+                              trailing: GardenIcon(GIcon.seguridad, size: GIconSize.sm),
+                            ),
+                          ]),
+                          GardenSettingsGroup(title: 'Puedes elegir', children: [
+                            GardenSettingsRow(
+                              icon: GIcon.alarma,
+                              title: 'Recordatorios',
+                              subtitle: 'Capacitaciones pendientes y servicios por calificar',
+                              onTap: () => _update('notifyReminders', !_notifyReminders),
+                              trailing: toggle(_notifyReminders, (v) => _update('notifyReminders', v)),
+                            ),
+                            GardenSettingsRow(
+                              icon: GIcon.anuncio,
+                              title: 'Promociones y novedades',
+                              subtitle: 'Nueva cobertura en tu zona y anuncios de GARDEN',
+                              onTap: () => _update('notifyPromotions', !_notifyPromotions),
+                              trailing: toggle(_notifyPromotions, (v) => _update('notifyPromotions', v)),
+                            ),
+                          ]),
+                          GardenSettingsGroup(title: 'Privacidad', children: [
+                            GardenSettingsRow(
+                              icon: GIcon.estadisticas,
+                              title: 'Ayúdanos a mejorar',
+                              subtitle: 'Datos anónimos de uso (pantallas y tiempos). Nunca incluyen tus datos personales.',
+                              onTap: () async {
+                                await Analytics.instance.setEnabled(!Analytics.instance.enabled);
+                                if (mounted) setState(() {});
+                              },
+                              trailing: Switch(
+                                value: Analytics.instance.enabled,
+                                activeThumbColor: GardenColors.primary,
+                                onChanged: (v) async {
+                                  await Analytics.instance.setEnabled(v);
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            ),
+                          ]),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              'Estas opciones cambian solo los avisos al teléfono y al correo. Todo queda igual en tus notificaciones dentro de la app.',
+                              style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                        ]),
                       ),
-                    ),
-                    _toggleTile(
-                      surface: surface,
-                      borderColor: borderColor,
-                      textColor: textColor,
-                      subtextColor: subtextColor,
-                      icon: GIcon.alarma,
-                      title: 'Recordatorios',
-                      subtitle: 'Capacitaciones pendientes, calificaciones sin completar.',
-                      value: _notifyReminders,
-                      onChanged: (v) => _update('notifyReminders', v),
-                    ),
-                    const SizedBox(height: 12),
-                    _toggleTile(
-                      surface: surface,
-                      borderColor: borderColor,
-                      textColor: textColor,
-                      subtextColor: subtextColor,
-                      icon: GIcon.anuncio,
-                      title: 'Promociones y novedades',
-                      subtitle: 'Nueva cobertura en tu zona, anuncios de Garden.',
-                      value: _notifyPromotions,
-                      onChanged: (v) => _update('notifyPromotions', v),
-                    ),
-                    const SizedBox(height: 12),
-                    _toggleTile(
-                      surface: surface,
-                      borderColor: borderColor,
-                      textColor: textColor,
-                      subtextColor: subtextColor,
-                      icon: GIcon.estadisticas,
-                      title: 'Ayúdanos a mejorar',
-                      subtitle: 'Datos anónimos de uso (pantallas y tiempos) para mejorar la app. Nunca incluyen tus datos personales.',
-                      value: Analytics.instance.enabled,
-                      onChanged: (v) async {
-                        await Analytics.instance.setEnabled(v);
-                        if (mounted) setState(() {});
-                      },
                     ),
                   ],
                 ),
-    );
-  }
-
-  Widget _toggleTile({
-    required Color surface,
-    required Color borderColor,
-    required Color textColor,
-    required Color subtextColor,
-    required GIcon icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(GardenRadius.md),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          GardenIcon(icon, size: GIconSize.md, color: GardenColors.primary),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 12)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Switch(
-            value: value,
-            onChanged: _saving ? null : onChanged,
-            activeThumbColor: GardenColors.primary,
-          ),
-        ],
-      ),
     );
   }
 }

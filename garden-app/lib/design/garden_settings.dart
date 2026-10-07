@@ -172,7 +172,8 @@ class _GardenSettingsRowState extends State<GardenSettingsRow> {
       label: widget.subtitle == null ? widget.title : '${widget.title}. ${widget.subtitle}',
       excludeSemantics: true,
       child: Opacity(
-        opacity: enabled ? 1 : 0.5,
+        // Sin acción pero con algo a la derecha (ej. un candado) es informativa, no deshabilitada.
+        opacity: enabled || widget.trailing != null ? 1 : 0.5,
         child: InkWell(
           onTap: enabled
               ? () {
