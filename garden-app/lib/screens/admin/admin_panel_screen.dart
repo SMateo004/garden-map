@@ -2718,22 +2718,58 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               const SizedBox(height: 10),
               _idBadge('ID', p['id'].toString().toUpperCase().substring(0, 8)),
               const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: GardenColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(children: [
-                  const GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: GardenColors.error),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(
-                    'Sin comprobante adjunto — verifica el pago con el cliente por otro medio antes de aprobar.',
-                    style: TextStyle(color: GardenColors.error, fontSize: 10.5, fontWeight: FontWeight.w600),
-                  )),
-                ]),
-              ),
+              Builder(builder: (_) {
+                // Pago declarado por el cliente ("Ya realicé el pago") o aprobado solo porque
+                // nadie lo revisó dentro de la vigencia del código (payment-review.job.ts).
+                final autoApproved = p['paymentAutoApprovedAt'] != null;
+                final declared = p['paymentDeclaredAt'] != null;
+                final deadline = DateTime.tryParse(p['qrExpiresAt']?.toString() ?? '')?.toLocal();
+                String hhmm(DateTime d) =>
+                    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                final (Color tone, String text) = autoApproved
+                    ? (GardenColors.warning,
+                        'Se aprobó sola: el cliente avisó que pagó y nadie lo revisó a tiempo. '
+                            'Verifica si el depósito llegó. Si no llegó, se descuenta de su billetera.')
+                    : declared
+                        ? (GardenColors.info,
+                            'El cliente avisó que ya pagó.${deadline != null ? ' Si nadie lo revisa antes de las ${hhmm(deadline)}, la reserva se aprueba sola.' : ''}')
+                        : (GardenColors.error,
+                            'Sin comprobante adjunto — verifica el pago con el cliente por otro medio antes de aprobar.');
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(children: [
+                    GardenIcon(GIcon.advertencia, size: GIconSize.xs, color: tone),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(
+                      text,
+                      style: TextStyle(color: tone, fontSize: 10.5, fontWeight: FontWeight.w600),
+                    )),
+                  ]),
+                );
+              }),
               const SizedBox(height: 12),
+              if (p['paymentAutoApprovedAt'] != null)
+                Row(children: [
+                  Expanded(child: GardenButton(
+                    label: 'Llegó',
+                    gIcon: GIcon.hecho,
+                    height: 40,
+                    color: GardenColors.success,
+                    onPressed: () => _reviewAutoApprovedPayment(p, 'CONFIRMED'))),
+                  const SizedBox(width: 10),
+                  Expanded(child: GardenButton(
+                    label: 'No llegó',
+                    gIcon: GIcon.cerrar,
+                    height: 40,
+                    color: GardenColors.error,
+                    outline: true,
+                    onPressed: () => _reviewAutoApprovedPayment(p, 'NOT_RECEIVED'))),
+                ])
+              else
               Row(children: [
                 Expanded(child: GardenButton(
                   label: 'Aprobar pago',
@@ -3410,6 +3446,62 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     } catch (e) {
       if (!mounted) return;
       GardenErrorDialog.show(context, e.toString());
+    }
+  }
+
+  /// Verificación posterior de un pago que se aprobó solo (POST /admin/bookings/:id/payment-review).
+  /// "No llegó" descuenta de la billetera del cliente lo que debía llegar por QR y le avisa
+  /// que tiene un pago pendiente; la reserva sigue su curso.
+  Future<void> _reviewAutoApprovedPayment(Map<String, dynamic> p, String outcome) async {
+    final bookingId = p['id'] as String;
+    if (outcome == 'NOT_RECEIVED') {
+      final total = double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0;
+      final wallet = double.tryParse(p['walletPaymentAmount']?.toString() ?? '0') ?? 0;
+      final donation = double.tryParse(p['donationAmount']?.toString() ?? '0') ?? 0;
+      final charge = (total - wallet + donation).clamp(0, double.infinity);
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('¿El pago no llegó?'),
+          content: Text(
+            'Se descontarán Bs ${charge.toStringAsFixed(2)} de la billetera del cliente (puede quedar en negativo y '
+            'se cobrará en su próximo pago) y le avisaremos que tiene un pago pendiente. La reserva no se cancela.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+              child: const Text('Sí, no llegó'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/payment-review'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'outcome': outcome}),
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        await _loadPayments();
+        if (!mounted) return;
+        if (outcome == 'CONFIRMED') {
+          GardenSnackBar.success(context, 'Pago verificado.');
+        } else {
+          final charged = (data['data']?['chargedAmount'] as num?)?.toDouble() ?? 0;
+          GardenSnackBar.warning(context,
+              'Se descontaron Bs ${charged.toStringAsFixed(2)} de la billetera del cliente y se le avisó.');
+        }
+      } else {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo registrar la verificación');
+      }
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString());
     }
   }
 

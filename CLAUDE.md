@@ -130,6 +130,13 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
   `modules/pricing/commission-allocation.service.ts`): plan versionado de % por destino (sueldos,
   mantenimiento, activos, fondo de garantía de Bs 2.000 por caso, otros, inversores) que suma 100,
   más gastos reales por destino. Es contabilidad de gestión: no toca `User.balance`.
+- **"Ya realicé el pago" (desde 2026-10-07):** el cliente declara su pago
+  (`POST /bookings/:id/payment/declared`) → `PAYMENT_PENDING_APPROVAL`, y ya no se cancela por QR
+  vencido. Si ningún admin lo aprueba/rechaza antes de `qrExpiresAt`, `payment-review.job.ts` la
+  aprueba sola (`paymentAutoApprovedAt`). Después el admin verifica (`POST /admin/bookings/:id/payment-review`):
+  `NOT_RECEIVED` descuenta de `User.balance` lo que debía llegar por QR (puede quedar negativo =
+  deuda, se cobra en el próximo pago) y avisa al cliente. Ese descuento SOLO aplica a reservas
+  aprobadas automáticamente; rechazar dentro de la ventana usa `rejectPayment` (sin cargo).
 - SIP (pago QR bancario boliviano) — código completo en `src/services/sip.service.ts`, gateado
   por `SIP_ENABLED`. Mientras estén vacías las credenciales del banco, el sistema cae a un QR
   placeholder local (solo en dev) o bloquea el pago con alerta a admins (en producción). No es un

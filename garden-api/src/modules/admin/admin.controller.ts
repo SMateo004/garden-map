@@ -16,6 +16,10 @@ import * as paymentQrAmountService from '../../services/payment-qr-amount.servic
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
+import { z } from 'zod';
+import { reviewAutoApprovedPayment as reviewAutoApprovedPaymentService } from '../payment-service/payment-review.service.js';
+
+const paymentReviewBodySchema = z.object({ outcome: z.enum(['CONFIRMED', 'NOT_RECEIVED']) });
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
@@ -220,6 +224,27 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
   const adminId = req.user!.userId;
   const result = await adminService.rejectPayment(bookingId, adminId);
   auditLog({ userId: adminId, action: 'PAYMENT_REJECTED', entity: 'Booking', entityId: bookingId, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/**
+ * POST /api/admin/bookings/:id/payment-review { outcome: 'CONFIRMED' | 'NOT_RECEIVED' }
+ * Verificación posterior de un pago aprobado automáticamente (payment-review.service.ts).
+ * NOT_RECEIVED descuenta lo que debía llegar de la billetera del cliente y le avisa.
+ */
+export const reviewAutoApprovedPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const adminId = req.user!.userId;
+  const { outcome } = paymentReviewBodySchema.parse(req.body);
+  const result = await reviewAutoApprovedPaymentService(bookingId, adminId, outcome);
+  auditLog({
+    userId: adminId,
+    action: outcome === 'CONFIRMED' ? 'PAYMENT_REVIEW_CONFIRMED' : 'PAYMENT_REVIEW_NOT_RECEIVED',
+    entity: 'Booking',
+    entityId: bookingId,
+    details: { chargedAmount: result.chargedAmount, clientBalance: result.clientBalance },
+    ip: req.ip,
+  });
   res.json({ success: true, data: result });
 });
 

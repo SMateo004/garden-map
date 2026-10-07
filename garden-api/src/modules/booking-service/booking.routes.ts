@@ -85,6 +85,17 @@ router.post(
   bookingController.initPayment
 );
 
+/**
+ * POST /api/bookings/:id/payment/declared — el cliente avisa "ya pagué": la reserva pasa a
+ * revisión del admin y el QR deja de vencer (ver declarePaymentMade). Solo cliente titular.
+ */
+router.post(
+  '/:id/payment/declared',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.declarePaymentMade
+);
+
 /** POST /api/bookings/:id/resolve-slot-conflict — cliente elige nueva hora tras SLOT_CONFLICT. Solo cliente titular. */
 router.post(
   '/:id/resolve-slot-conflict',

@@ -57,7 +57,7 @@ async function buildKnowledgeBase(): Promise<string> {
 # PAGOS
 - Precio final: el precio que ve el cliente en la app ya incluye el servicio de Garden (varía según el servicio y el cuidador/empresa; NO des un porcentaje ni lo desgloses). En el detalle de pago se suman los impuestos de ley (IVA + IT, ${taxRatePct}% sobre el precio mostrado) y ese es el total a pagar. El cuidador recibe íntegro el precio que él mismo fijó.
 - El pago se libera al cuidador de inmediato si el cliente confirma que el servicio terminó bien, o automático a las ${autoReleaseHoras}h de finalizado el servicio si el cliente no confirma ni abre disputa.
-- QR bancario: válido ${qrValidityMinutes} minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante).
+- QR bancario: válido ${qrValidityMinutes} minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante). Si el cliente ya pagó, debe tocar "Ya realicé el pago": la reserva queda en verificación y no se cancela; si el equipo no alcanza a verificarlo antes de que venza el código, la reserva sigue igual y se revisa después — si en esa revisión el pago no llegó, el monto se descuenta de su Billetera Garden (puede quedar saldo pendiente que se cobra en su próximo pago).
 - Billetera Garden: saldo interno, se acumula sobre todo por reembolsos. Se puede combinar con QR si no cubre el total.
 - Donaciones a hogares de mascotas: voluntarias (Bs 5/10/20/personalizado hasta Bs 500), 0% comisión, 100% va al refugio.
 

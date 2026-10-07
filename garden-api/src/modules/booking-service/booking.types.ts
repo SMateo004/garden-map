@@ -7,6 +7,8 @@ export interface BookingCreateResult {
   totalAmount: string;
   pricePerUnit: string;
   commissionAmount: string;
+  /** El cliente avisó "ya pagué" (declarePaymentMade); null si no. */
+  paymentDeclaredAt?: string | null;
   /** Impuestos (IVA + IT) ya incluidos en totalAmount — el detalle de pago los muestra aparte. */
   taxAmount: string;
   /** % de impuestos aplicado a esta reserva (derivado de la propia reserva). */
@@ -166,6 +168,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     totalAmount: String(b.totalAmount),
     pricePerUnit: String(b.pricePerUnit),
     commissionAmount: String(b.commissionAmount),
+    paymentDeclaredAt: b.paymentDeclaredAt ? new Date(b.paymentDeclaredAt).toISOString() : null,
     taxAmount: String(b.taxAmount ?? 0),
     taxRatePct: derivedTaxRatePct(b),
     qrId: b.qrId,

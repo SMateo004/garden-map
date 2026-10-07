@@ -52,6 +52,7 @@ import { iniciarJobWalkExpiry } from './jobs/walk-expiry.job.js';
 import { iniciarJobAgentHeartbeat } from './jobs/agent-heartbeat.job.js';
 import { iniciarJobServiceReminders } from './jobs/service-reminders.job.js';
 import { iniciarJobQrExpiry } from './jobs/qr-expiry.job.js';
+import { iniciarJobPaymentReview } from './jobs/payment-review.job.js';
 import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
@@ -198,6 +199,9 @@ async function start() {
         { key: 'platformCommissionPct',    value: '10'    },
         { key: 'montoMinimoRetiro',        value: '50'    },
         { key: 'qrValidityMinutes',        value: '15'    },
+        // Horas que un pago sin verificar (declarado o aprobado automáticamente) puede esperar antes de
+        // volver a avisar a los admins. Nunca cancela — ver payment-review.job.ts.
+        { key: 'paymentReviewAlertHoras',  value: '12'    },
         { key: 'autoReleasePaymentHoras',  value: '24'    },
         { key: 'onHoldSlaHoras',           value: '72'    }, // ← faltaba seed
         // Horas para que el cuidador acepte una reserva antes de cancelarse
@@ -255,6 +259,7 @@ async function start() {
     iniciarJobAgentHeartbeat();
     iniciarJobServiceReminders();
     iniciarJobQrExpiry();
+    iniciarJobPaymentReview();
     iniciarJobMgExpiry();
     iniciarJobSlotConflictExpiry();
     iniciarJobChatRetention();

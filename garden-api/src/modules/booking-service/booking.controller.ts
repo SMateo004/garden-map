@@ -293,6 +293,12 @@ export const initPayment = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 });
 
+/** POST /api/bookings/:id/payment/declared — el cliente avisa que ya pagó (ver booking.service). */
+export const declarePaymentMade = asyncHandler(async (req: Request, res: Response) => {
+  const result = await bookingService.declarePaymentMade(req.params.id!, req.user!.userId);
+  res.json({ success: true, data: result });
+});
+
 /**
  * POST /api/bookings/:id/request-cancellation
  * Cuidador cancela la reserva (flujo automático).

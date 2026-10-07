@@ -793,6 +793,9 @@ export async function getPaymentsPending(
       // PENDING_PAYMENT solo si tiene qrId activo (QR generado pero no aprobado aún)
       // Si qrId es null, el pago fue rechazado y el cliente debe reiniciar el flujo
       { status: BookingStatus.PENDING_PAYMENT, qrId: { not: null } },
+      // Aprobada automáticamente (nadie revisó el pago declarado a tiempo) y sin verificar:
+      // el admin confirma que llegó o la marca como no recibida (payment-review.service.ts).
+      { paymentAutoApprovedAt: { not: null }, paymentReviewedAt: null },
     ],
   };
   const skip = (page - 1) * limit;
@@ -815,6 +818,10 @@ export async function getPaymentsPending(
 
   const items: PendingPaymentItem[] = bookings.map((b) => ({
     id: b.id,
+    status: b.status,
+    paymentDeclaredAt: b.paymentDeclaredAt?.toISOString() ?? null,
+    paymentAutoApprovedAt: b.paymentAutoApprovedAt?.toISOString() ?? null,
+    qrExpiresAt: b.qrExpiresAt?.toISOString() ?? null,
     clientId: b.clientId,
     caregiverId: b.caregiverId,
     serviceType: b.serviceType,
@@ -874,6 +881,8 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
         qrId: null,
         qrImageUrl: null,
         qrExpiresAt: null,
+        // Rechazado dentro de la ventana: el aviso "ya pagué" deja de valer (no se aprueba solo).
+        paymentDeclaredAt: null,
         ...(walletContrib > 0 ? { walletPaymentAmount: 0 } : {}),
       },
     });

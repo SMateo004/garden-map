@@ -107,6 +107,7 @@ export const ALLOWED_SETTING_KEYS = [
   // para lo mismo y precios desactualizados.
   'montoMinimoRetiro',
   'qrValidityMinutes',
+  'paymentReviewAlertHoras',
   'autoReleasePaymentHoras',
   'onHoldSlaHoras',
   'caregiverAcceptWindowHoras',

@@ -1,6 +1,14 @@
 /** Item devuelto por GET /api/admin/payments-pending */
 export interface PendingPaymentItem {
   id: string;
+  /** PENDING_PAYMENT (QR vigente, sin aviso) o PAYMENT_PENDING_APPROVAL (en revisión). */
+  status: string;
+  /** Cuándo el cliente tocó "Ya realicé el pago" (null si no lo hizo). */
+  paymentDeclaredAt: string | null;
+  /** Se aprobó sola porque nadie revisó el pago declarado a tiempo: falta verificarlo. */
+  paymentAutoApprovedAt: string | null;
+  /** Fin de la ventana: si el pago está declarado y nadie lo revisa antes, se aprueba solo. */
+  qrExpiresAt: string | null;
   clientId: string;
   caregiverId: string;
   serviceType: string;

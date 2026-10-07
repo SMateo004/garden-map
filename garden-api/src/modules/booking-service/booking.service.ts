@@ -2022,6 +2022,122 @@ export async function initPayment(
 }
 
 /**
+ * El cliente avisa "ya pagué" (botón "Ya realicé el pago" de la pantalla de pago).
+ *
+ * Sin la pasarela del banco nada detecta un pago por QR automáticamente: antes, si el admin
+ * no lo aprobaba dentro de la vigencia del QR (15 min), qr-expiry.job.ts cancelaba la
+ * reserva como "QR sin pagar" aunque el cliente SÍ hubiera pagado, y el dinero quedaba sin
+ * reserva. Ahora la reserva pasa a PAYMENT_PENDING_APPROVAL: el vencimiento del QR deja de
+ * cancelarla (qr-expiry solo mira PENDING_PAYMENT), el horario del cuidador sigue reservado y
+ * los admins reciben aviso. Si un admin la aprueba o rechaza dentro de la vigencia del QR,
+ * rige eso. Si nadie la revisa a tiempo, payment-review.job.ts la aprueba sola y queda para
+ * verificación posterior; si entonces el dinero no llegó, se descuenta de la billetera del
+ * cliente (payment-review.service.ts).
+ *
+ * Idempotente: declarar dos veces no duplica avisos.
+ */
+export async function declarePaymentMade(
+  bookingId: string,
+  clientId: string
+): Promise<{ status: BookingStatus; paymentDeclaredAt: string | null; alreadyDeclared: boolean }> {
+  // Guardería de varios días: el pago (y el QR) vive en la reserva líder del grupo.
+  bookingId = await resolvePaymentLeadId(bookingId, clientId);
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true, status: true, qrId: true, paidAt: true, caregiverId: true, paymentDeclaredAt: true,
+        bookingGroupId: true, totalAmount: true, walletPaymentAmount: true, donationAmount: true,
+      },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+
+    if (booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL) {
+      return { status: booking.status, paymentDeclaredAt: booking.paymentDeclaredAt, alreadyDeclared: true };
+    }
+    if (booking.paidAt) {
+      // Ya confirmado (banco o admin): nada que declarar.
+      return { status: booking.status, paymentDeclaredAt: booking.paymentDeclaredAt, alreadyDeclared: true };
+    }
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BookingValidationError(
+        'Esta reserva ya fue cancelada. Si hiciste el pago, escríbenos desde Soporte con tu comprobante y lo resolvemos.'
+      );
+    }
+    if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+      throw new BookingValidationError('Esta reserva no está esperando un pago.');
+    }
+    if (!booking.qrId) {
+      throw new BookingValidationError('Todavía no generaste el código de pago de esta reserva.');
+    }
+
+    // Los demás días sin pagar del grupo se pagaron con este mismo QR: pasan a verificación
+    // junto con la líder (si no, el vencimiento del QR los cancelaría por separado).
+    const siblings = booking.bookingGroupId
+      ? await tx.booking.findMany({
+          where: {
+            bookingGroupId: booking.bookingGroupId,
+            clientId,
+            id: { not: bookingId },
+            status: BookingStatus.PENDING_PAYMENT,
+            paidAt: null,
+          },
+          select: { id: true, totalAmount: true },
+        })
+      : [];
+    const groupTotal = [booking, ...siblings].reduce((s, m) => s + Number(m.totalAmount), 0);
+    const expectedByQr = Math.max(
+      0,
+      Math.round((groupTotal - Number(booking.walletPaymentAmount ?? 0) + Number(booking.donationAmount ?? 0)) * 100) / 100
+    );
+
+    const now = new Date();
+    // Guard atómico: si el job de vencimiento la canceló en este mismo instante, no se toca.
+    const updated = await tx.booking.updateMany({
+      where: { id: bookingId, status: BookingStatus.PENDING_PAYMENT, paidAt: null },
+      data: {
+        status: BookingStatus.PAYMENT_PENDING_APPROVAL,
+        paymentDeclaredAt: now,
+        paymentExpectedAmount: new Prisma.Decimal(expectedByQr),
+        // Reinicia la ventana de "Aprobar pago (con contraseña)" desde que el cliente avisó.
+        paymentApprovalRequestedAt: now,
+        paymentReviewAlertedAt: null,
+      },
+    });
+    if (updated.count === 0) {
+      throw new BookingValidationError(
+        'Tu código de pago venció justo ahora. Si hiciste el pago, escríbenos desde Soporte con tu comprobante.'
+      );
+    }
+    if (siblings.length > 0) {
+      await tx.booking.updateMany({
+        where: { id: { in: siblings.map((s) => s.id) }, status: BookingStatus.PENDING_PAYMENT, paidAt: null },
+        data: { status: BookingStatus.PAYMENT_PENDING_APPROVAL, paymentApprovalRequestedAt: now },
+      });
+    }
+    await tx.adminNotification.create({
+      data: { type: ADMIN_NOTIFICATION_PAYMENT_APPROVAL, caregiverId: booking.caregiverId, bookingId },
+    });
+    return { status: BookingStatus.PAYMENT_PENDING_APPROVAL, paymentDeclaredAt: now, alreadyDeclared: false };
+  });
+
+  if (!result.alreadyDeclared) {
+    logger.info('[PAGO] El cliente declaró haber pagado — en revisión del admin', { bookingId, clientId });
+    track(clientId, 'payment_declared', { bookingId });
+    sendPushToAdmins(
+      '💳 Pago declarado por el cliente',
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: el cliente dice que ya pagó. Verifica el depósito y aprueba o rechaza.`
+    ).catch(() => {});
+  }
+  return {
+    status: result.status,
+    paymentDeclaredAt: result.paymentDeclaredAt ? new Date(result.paymentDeclaredAt).toISOString() : null,
+    alreadyDeclared: result.alreadyDeclared,
+  };
+}
+
+/**
  * Cuidador cancela la reserva de forma automática. 
  * Estado → CANCELLED. Se notifica al dueño (cliente) con el motivo y política de devolución.
  */
@@ -2399,6 +2515,31 @@ export async function cancelBooking(
     }
     if (booking.status === BookingStatus.REJECTED_BY_CAREGIVER) {
       throw new BookingValidationError('Esta reserva ya fue rechazada por el cuidador y reembolsada — no se puede cancelar de nuevo.');
+    }
+    // El cliente declaró que pagó y un admin lo está verificando: cancelar ahora la cerraría
+    // con reembolso 0 (paidAt sigue null) aunque el dinero sí haya llegado — justo el caso
+    // que declarePaymentMade() vino a evitar. Tampoco puede cancelarla un "QR vencido".
+    const declaredInGroup =
+      booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL &&
+      !booking.paymentDeclaredAt &&
+      !!booking.bookingGroupId &&
+      (await tx.booking.count({
+        where: {
+          bookingGroupId: booking.bookingGroupId,
+          status: BookingStatus.PAYMENT_PENDING_APPROVAL,
+          paymentDeclaredAt: { not: null },
+        },
+      })) > 0;
+    if (booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL && (booking.paymentDeclaredAt || declaredInGroup)) {
+      throw new BookingValidationError(
+        'Estamos verificando tu pago. Podrás cancelar cuando termine la revisión; si necesitas ayuda, escríbenos desde Soporte.'
+      );
+    }
+    if (
+      (cancellationSource === 'QR_ABANDONED' || cancellationSource === 'PAYMENT_TIMEOUT') &&
+      booking.status !== BookingStatus.PENDING_PAYMENT
+    ) {
+      throw new BookingValidationError('Esta reserva ya no está esperando el pago por QR.');
     }
 
     const now = new Date();

@@ -374,7 +374,15 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
  * Marca la reserva como CONFIRMED y registra paidAt.
  */
 export async function verifyPaymentManual(
-  bookingId: string
+  bookingId: string,
+  opts: {
+    /**
+     * Aprobación automática (payment-review.job.ts): el cliente declaró que pagó y ningún
+     * admin lo revisó dentro de la vigencia del QR. Solo aplica a reservas en
+     * PAYMENT_PENDING_APPROVAL con paymentDeclaredAt; queda marcada para verificación posterior.
+     */
+    autoApproved?: boolean;
+  } = {}
 ): Promise<{ bookingId: string; status: string }> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -403,16 +411,20 @@ export async function verifyPaymentManual(
   // dispatchOnChainWithRetry (tx on-chain duplicada) y la notificación push al
   // cliente. El estado final (status/paidAt) ya era idempotente por sí solo, pero
   // los efectos secundarios no lo eran. Mismo patrón atómico que sus hermanos.
+  const now = new Date();
   const { updateResult, groupIds } = await prisma.$transaction(async (tx) => {
     const updateResult = await tx.booking.updateMany({
-      where: {
-        id: bookingId,
-        status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
-        paidAt: null,
-      },
+      where: opts.autoApproved
+        ? { id: bookingId, status: BookingStatus.PAYMENT_PENDING_APPROVAL, paymentDeclaredAt: { not: null }, paidAt: null }
+        : {
+            id: bookingId,
+            status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
+            paidAt: null,
+          },
       data: {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-        paidAt: new Date(),
+        paidAt: now,
+        ...(opts.autoApproved ? { paymentAutoApprovedAt: now, paymentReviewAlertedAt: null } : {}),
       },
     });
     const groupIds = updateResult.count === 1 ? await markGroupSiblingsPaid(tx, bookingId) : [];
@@ -433,10 +445,15 @@ export async function verifyPaymentManual(
     }).catch((err) => logger.error('Donation record creation failed', { bookingId, err }));
   }
 
-  logger.info('Pago aprobado manualmente por admin; esperando aprobación cuidador', { bookingId });
+  logger.info(
+    opts.autoApproved
+      ? 'Pago declarado aprobado automáticamente (sin revisión dentro de la ventana); esperando aprobación cuidador'
+      : 'Pago aprobado manualmente por admin; esperando aprobación cuidador',
+    { bookingId }
+  );
   track(booking.clientId, 'payment_completed', {
     bookingId,
-    method: 'manual_admin',
+    method: opts.autoApproved ? 'declared_auto_approved' : 'manual_admin',
     amount: Number(booking.totalAmount),
   });
   notificationService.onBookingWaitingApproval(bookingId).catch((err) => {
@@ -472,7 +489,9 @@ export async function verifyPaymentBySipCallback(
     return { bookingId: alias, status: 'EXTENSION_CONFIRMED' };
   }
 
-  if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+  // PAYMENT_PENDING_APPROVAL: el cliente tocó "Ya realicé el pago" antes de que llegara la
+  // confirmación del banco (declarePaymentMade) — el banco la confirma igual.
+  if (booking.status !== BookingStatus.PENDING_PAYMENT && booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL) {
     // Race condition: QR expiró y nuestro job lo canceló (QR_ABANDONED) justo antes
     // de que el banco terminara de procesar un escaneo iniciado milisegundos antes.
     // Respondemos "0000" (éxito) para que SIP NO reintente el callback indefinidamente.
@@ -489,6 +508,14 @@ export async function verifyPaymentBySipCallback(
 
     // Idempotencia: si ya fue procesado correctamente, respondemos OK sin error
     if (booking.paidAt) {
+      // Aprobada automáticamente sin verificar: la confirmación del banco ES la verificación.
+      if (booking.paymentAutoApprovedAt && !booking.paymentReviewedAt) {
+        await prisma.booking.updateMany({
+          where: { id: booking.id, paymentReviewedAt: null },
+          data: { paymentReviewedAt: new Date(), paymentReviewOutcome: 'CONFIRMED', paymentReviewedBy: null },
+        });
+        logger.info('[SIP callback] Pago aprobado automáticamente confirmado por el banco', { bookingId: booking.id });
+      }
       logger.info('[SIP callback] Pago ya procesado previamente', { bookingId: booking.id });
       return { bookingId: booking.id, status: booking.status };
     }
@@ -497,8 +524,13 @@ export async function verifyPaymentBySipCallback(
   }
 
   const { updateResult, groupIds } = await prisma.$transaction(async (tx) => {
+    // PAYMENT_PENDING_APPROVAL: el cliente ya declaró su pago (declarePaymentMade).
     const updateResult = await tx.booking.updateMany({
-      where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
+      where: {
+        id: booking.id,
+        status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
+        paidAt: null,
+      },
       data: {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
         paidAt: new Date(),

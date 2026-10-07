@@ -107,6 +107,9 @@ router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
 /** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual. */
 router.post('/bookings/:id/approve-payment', adminController.approvePayment);
 
+/** POST /api/admin/bookings/:id/payment-review — verificar después un pago aprobado automáticamente. */
+router.post('/bookings/:id/payment-review', adminController.reviewAutoApprovedPayment);
+
 /** POST /api/admin/bookings/:id/approve-payment-secure — igual, con contraseña + ventana 24h. */
 router.post('/bookings/:id/approve-payment-secure', adminController.approvePaymentSecure);
 

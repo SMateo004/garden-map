@@ -79,6 +79,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // (ej. transferencia bancaria fuera de la app) en vez de quedar bloqueado.
   bool _sipUnavailable = false;
   bool _manualRequested = false;
+  /// El cliente tocó "Ya realicé el pago" y confirmó: la reserva quedó en verificación y el
+  /// QR ya no vence (si nadie la revisa a tiempo, el servidor la aprueba sola).
+  bool _paymentDeclared = false;
   bool _requestingManual = false;
   bool _isCheckingNow = false; // feedback when user presses the button
   bool _isSavingQr = false;
@@ -508,6 +511,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final existingQrId = bk['qrId'];
         final qrExpiresAtStr = bk['qrExpiresAt'];
 
+        if (status == 'PAYMENT_PENDING_APPROVAL') {
+          setState(() {
+            _manualRequested = true;
+            _paymentDeclared = bk['paymentDeclaredAt'] != null;
+          });
+          _pollTimer?.cancel();
+          _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
+          return;
+        }
+
         if (status == 'PENDING_PAYMENT' &&
             existingQrId != null &&
             qrExpiresAtStr != null) {
@@ -780,6 +793,68 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  /// "Ya realicé el pago": pide confirmación y avisa al servidor. La reserva pasa a
+  /// verificación y deja de vencer con el QR. Si ningún admin la revisa antes de que venza
+  /// el código, se aprueba sola; si después se comprueba que el pago no llegó, el monto se
+  /// descuenta de la billetera — por eso se le explica antes de confirmar.
+  Future<void> _declarePayment() async {
+    if (_bookingId == null || _paymentDeclared) return;
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('¿Ya hiciste el pago?',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+        content: Text(
+          'Avisaremos a nuestro equipo para verificarlo y tu reserva no se cancelará mientras tanto. '
+          'Si no alcanzamos a verificarlo antes de que venza el código, tu reserva continúa igual y lo revisamos después.\n\n'
+          'Si en esa revisión el pago no llegó, el monto se descontará de tu billetera de GARDEN.',
+          style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Todavía no', style: TextStyle(color: subtextColor)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white),
+            child: const Text('Sí, ya pagué'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$_bookingId/payment/declared'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        // El QR ya no vence: se detiene el reloj y se sigue consultando el estado.
+        _stopPolling();
+        setState(() {
+          _paymentDeclared = true;
+          _manualRequested = true;
+        });
+        _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
+      } else {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No pudimos registrar tu aviso de pago.');
+      }
+    } catch (_) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No pudimos conectar para avisar tu pago. Revisa tu internet e intenta de nuevo.');
+      }
+    }
+  }
+
   // ── Polling ─────────────────────────────────────────────────────────────────
 
   /// Starts polling for a freshly generated QR. Reads expiry from the API response.
@@ -832,7 +907,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _onQrExpired() async {
-    if (!mounted || _paymentConfirmed) return;
+    if (!mounted || _paymentConfirmed || _paymentDeclared) return;
     _stopPolling();
     await _cancelBooking();
     // El booking ya fue cancelado por el cliente — el job del servidor lo habrá hecho
@@ -1932,6 +2007,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       HapticFeedback.selectionClick();
                       setState(() => _isCheckingNow = true);
                       await _checkPaymentStatus();
+                      // Sin confirmación automática todavía: el cliente avisa que ya pagó.
+                      if (mounted && !_paymentConfirmed && !_paymentRejected) await _declarePayment();
                       if (mounted) setState(() => _isCheckingNow = false);
                     },
             ),
@@ -2627,7 +2704,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   textAlign: TextAlign.center),
               const SizedBox(height: 16),
               Text(
-                'Enviamos tu solicitud a un administrador de GARDEN. Te avisaremos apenas se confirme tu pago — no cierres ni canceles la reserva mientras tanto.',
+                _paymentDeclared
+                    ? 'Recibimos tu aviso de pago y un administrador de GARDEN lo está verificando. Tu reserva no se cancelará: '
+                        'si no alcanzamos a verificarlo antes de que venza el código, continúa igual y lo revisamos después.'
+                    : 'Enviamos tu solicitud a un administrador de GARDEN. Te avisaremos apenas se confirme tu pago — no cierres ni canceles la reserva mientras tanto.',
                 style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
                 textAlign: TextAlign.center,
               ),

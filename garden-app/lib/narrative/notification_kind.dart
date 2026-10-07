@@ -51,6 +51,7 @@ class NotificationKind {
     'EARNING': NotificationKind(NotificationTopic.money, GIcon.billetera, StoryTone.good),
     'OVERTIME_EARNING': NotificationKind(NotificationTopic.money, GIcon.billetera, StoryTone.good),
     'OVERTIME_FEE': NotificationKind(NotificationTopic.money, GIcon.reloj, StoryTone.waiting),
+    'PAYMENT_NOT_RECEIVED': NotificationKind(NotificationTopic.money, GIcon.advertencia, StoryTone.waiting),
     'TIP': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),
     'TIP_RECEIVED': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),
     'GIFT': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),

@@ -634,6 +634,25 @@ model Booking {
   /// arranca la ventana de 24h en la que el admin puede usar "Aprobar pago"
   /// desde el detalle de la reserva (control de casos especiales).
   paymentApprovalRequestedAt DateTime?
+  /// El cliente avisó "ya pagué" desde la app (declarePaymentMade): la reserva pasa a
+  /// PAYMENT_PENDING_APPROVAL y ya no se cancela por QR vencido.
+  paymentDeclaredAt          DateTime?
+  /// El admin no revisó el pago declarado dentro de la vigencia del QR y la reserva se aprobó
+  /// sola (payment-auto-approve.job.ts). Queda pendiente de verificación posterior.
+  paymentAutoApprovedAt      DateTime?
+  /// Verificación posterior de un pago aprobado automáticamente (o confirmación del banco).
+  paymentReviewedAt          DateTime?
+  /// 'CONFIRMED' (el dinero llegó) | 'NOT_RECEIVED' (no llegó: se descontó de la billetera).
+  paymentReviewOutcome       String?          @db.VarChar(20)
+  /// Admin que verificó (null si lo confirmó el banco).
+  paymentReviewedBy          String?
+  /// Lo que debía llegar por QR al declarar el pago (todos los días del grupo − billetera +
+  /// donación). Es lo que se descuenta si después el pago resulta no recibido.
+  paymentExpectedAmount      Decimal?         @db.Decimal(10, 2)
+  /// Monto descontado de la billetera del cliente cuando el pago no llegó.
+  paymentChargedBackAmount   Decimal?         @db.Decimal(10, 2)
+  /// Último aviso a los admins de que un pago sigue sin verificar (payment-auto-approve.job.ts).
+  paymentReviewAlertedAt     DateTime?
   sipQrId                    String? // idQr returned by SIP after generating QR
   sipTransaccionId           String? // idTransaccion returned by SIP
   paidAt                     DateTime?
