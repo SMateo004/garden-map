@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:safe": "npm run db:push && npm run dev",
-    "dev:local": "tsx --env-file=.env.local watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "start:safe": "npm run db:push && npm run start",
@@ -20,9 +19,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push",
-    "db:reset": "prisma db push --force-reset --accept-data-loss && prisma generate && prisma db seed",
-    "db:push:local": "cross-env DATABASE_URL=postgresql://garden_local:garden_local@localhost:5433/garden_local prisma db push",
-    "db:seed:local": "cross-env DATABASE_URL=postgresql://garden_local:garden_local@localhost:5433/garden_local prisma db seed"
+    "db:reset": "prisma db push --force-reset --accept-data-loss && prisma generate && prisma db seed"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
