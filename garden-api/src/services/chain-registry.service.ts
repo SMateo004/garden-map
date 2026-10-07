@@ -3,6 +3,7 @@ import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { sendPushToAdmins } from './firebase.service.js';
 import { caregiverNetOf } from '../modules/pricing/pricing.service.js';
+import { isTestAccountEmail } from '../shared/test-accounts.js';
 import {
   blockchainService,
   ChainRevertError,
@@ -391,6 +392,8 @@ function serviceWindow(b: {
 
 async function planFor(row: BlockchainRecord, ready: ChainReadiness): Promise<Plan> {
   if (row.subjectType === 'USER') {
+    const user = await prisma.user.findUnique({ where: { id: row.subjectId }, select: { email: true } });
+    if (isTestAccountEmail(user?.email)) return { action: 'skip', reason: 'Cuenta de prueba (reviewer.*): no se registra' };
     if (!ready.profilesAddress) return { action: 'skip', reason: 'GardenProfiles no configurado (BLOCKCHAIN_PROFILES_ADDRESS)' };
     if (!ready.profilesOk) return { action: 'wait', reason: 'GardenProfiles desactualizado o el wallet no es su recorder', minutes: 60 };
     const p = (row.payload ?? {}) as { role?: string; verified?: boolean };
@@ -409,12 +412,17 @@ async function planFor(row: BlockchainRecord, ready: ChainReadiness): Promise<Pl
       id: true, status: true, serviceType: true, totalAmount: true, paidAt: true, createdAt: true,
       startDate: true, endDate: true, walkDate: true, walkDays: true, startTime: true, duration: true,
       clientId: true, cancellationSource: true, refundAmount: true, refundStatus: true, createdByAdmin: true,
-      caregiver: { select: { userId: true } },
+      client: { select: { email: true } },
+      caregiver: { select: { userId: true, user: { select: { email: true } } } },
     },
   });
   if (!booking) return { action: 'skip', reason: 'La reserva ya no existe' };
   if (!booking.paidAt) return { action: 'skip', reason: 'Reserva sin pago: no se registra' };
   if (booking.createdByAdmin) return { action: 'skip', reason: 'Reserva de prueba creada por un admin: no se registra' };
+  // Cuentas de prueba de las tiendas / pruebas en vivo: nada de ellas queda en la red principal.
+  if (isTestAccountEmail(booking.client?.email) || isTestAccountEmail(booking.caregiver?.user?.email)) {
+    return { action: 'skip', reason: 'Reserva de una cuenta de prueba (reviewer.*): no se registra' };
+  }
   const since = recordsSince();
   if (booking.paidAt < since) return { action: 'skip', reason: `Pagada antes del ${since.toISOString()}: fuera del registro on-chain` };
   const id16 = uuidToBytes16(booking.id);

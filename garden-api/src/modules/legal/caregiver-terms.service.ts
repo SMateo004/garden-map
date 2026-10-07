@@ -18,6 +18,11 @@ import prisma from '../../config/database.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
 import { NotFoundError } from '../../shared/errors.js';
 import type { Prisma } from '@prisma/client';
+import {
+  isTestAccountEmail,
+  TEST_EMAIL_PREFIX as EXEMPT_EMAIL_PREFIX,
+  TEST_EMAIL_DOMAIN as EXEMPT_EMAIL_DOMAIN,
+} from '../../shared/test-accounts.js';
 
 /** Versión del texto vigente. Al cambiar los textos legales: subir esto y CAREGIVER_TERMS_EFFECTIVE_AT. */
 export const CAREGIVER_TERMS_VERSION = '2026-10-05';
@@ -41,12 +46,8 @@ export type TermsSource = 'REGISTRATION' | 'PERIODIC';
  * que el cuidador de prueba no desaparezca del marketplace en plena revisión. No se puede falsear: registrar
  * un correo @gardenbo.com exige verificarlo por código en ese buzón.
  */
-const EXEMPT_EMAIL_PREFIX = 'reviewer.';
-const EXEMPT_EMAIL_DOMAIN = '@gardenbo.com';
-
 export function isTermsExemptEmail(email: string | null | undefined): boolean {
-  const e = (email ?? '').trim().toLowerCase();
-  return e.startsWith(EXEMPT_EMAIL_PREFIX) && e.endsWith(EXEMPT_EMAIL_DOMAIN) && e.length > EXEMPT_EMAIL_PREFIX.length + EXEMPT_EMAIL_DOMAIN.length;
+  return isTestAccountEmail(email);
 }
 
 export interface TermsStatus {

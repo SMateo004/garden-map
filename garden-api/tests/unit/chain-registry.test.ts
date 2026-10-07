@@ -55,6 +55,8 @@ jest.mock('../../src/config/database', () => {
       update: jest.fn(async ({ where, data }: Row) => Object.assign(store.bookings[where.id]!, data)),
     },
     adminNotification: { create: jest.fn(async ({ data }: Row) => { store.notifications.push(data); return data; }) },
+    // Correo por usuario: las cuentas de prueba (reviewer.*@gardenbo.com) no van a la cadena.
+    user: { findUnique: jest.fn(async ({ where }: Row) => ({ email: `${where.id}@example.com` })) },
   };
   return { __esModule: true, default: db, prisma: db };
 });
@@ -82,6 +84,7 @@ import {
   enqueueDisputeResolution,
   getBookingChainProof,
   processQueue,
+  enqueueProfileSync,
   disputeAmounts,
 } from '../../src/services/chain-registry.service';
 import { ChainRevertError, GasTooHighError } from '../../src/services/blockchain.service';
@@ -95,7 +98,9 @@ function booking(extra: Row = {}): Row {
     paidAt: new Date('2026-10-05T15:00:00Z'), createdAt: new Date('2026-10-05T14:00:00Z'),
     startDate: null, endDate: null, walkDate: new Date('2026-10-06T00:00:00Z'), walkDays: null, startTime: '09:00', duration: 60,
     clientId: 'client-user', cancellationSource: null, refundAmount: null, refundStatus: null,
-    petName: 'Firulais', caregiver: { userId: 'caregiver-user' },
+    petName: 'Firulais',
+    client: { email: 'dueno@example.com' },
+    caregiver: { userId: 'caregiver-user', user: { email: 'cuidador@example.com' } },
     ...extra,
   };
 }
@@ -153,6 +158,38 @@ describe('processQueue', () => {
     await enqueueBookingCreate(other);
     await processQueue();
     expect(store.records[1]!.status).toBe('SKIPPED');
+    expect(mockChain.send).not.toHaveBeenCalled();
+  });
+
+  it('no registra nada de las cuentas de prueba reviewer.* (cliente o cuidador)', async () => {
+    const asClient = '00000000-0000-4000-8000-000000000002';
+    const asCaregiver = '00000000-0000-4000-8000-000000000003';
+    store.bookings[asClient] = booking({ id: asClient, client: { email: 'Reviewer.Cliente@gardenbo.com' } });
+    store.bookings[asCaregiver] = booking({
+      id: asCaregiver,
+      caregiver: { userId: 'caregiver-user', user: { email: 'reviewer.cuidador@gardenbo.com' } },
+    });
+    await enqueueBookingCreate(asClient);
+    await enqueueBookingCreate(asCaregiver);
+    await processQueue();
+    expect(store.records.map((r) => r.status)).toEqual(['SKIPPED', 'SKIPPED']);
+    expect(store.records[0]!.lastError).toMatch(/cuenta de prueba/i);
+    expect(mockChain.send).not.toHaveBeenCalled();
+  });
+
+  it('un correo parecido pero de otro dominio sí se registra', async () => {
+    store.bookings[BID] = booking({ client: { email: 'reviewer.cliente@gmail.com' } });
+    await enqueueBookingCreate(BID);
+    await processQueue();
+    expect(store.records[0]!.status).toBe('CONFIRMED');
+  });
+
+  it('tampoco sincroniza el perfil de una cuenta de prueba', async () => {
+    const db = jest.requireMock('../../src/config/database').default as { user: { findUnique: jest.Mock } };
+    db.user.findUnique.mockResolvedValueOnce({ email: 'reviewer.cuidador@gardenbo.com' });
+    await enqueueProfileSync('caregiver-user', 'CAREGIVER', true);
+    await processQueue();
+    expect(store.records[0]!.status).toBe('SKIPPED');
     expect(mockChain.send).not.toHaveBeenCalled();
   });
 
