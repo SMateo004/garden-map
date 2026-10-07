@@ -38,6 +38,11 @@ import {
   PRICED_SERVICES,
 } from '../pricing/pricing.service.js';
 import { getAllocationReport } from '../pricing/commission-allocation.service.js';
+import {
+  afterGroupSiblingsPaid,
+  markGroupSiblingsPaid,
+  revertGroupSiblingsToPending,
+} from '../booking-service/booking-group.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -872,6 +877,8 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
         ...(walletContrib > 0 ? { walletPaymentAmount: 0 } : {}),
       },
     });
+    // Guardería de varios días: los demás días esperaban esta misma aprobación.
+    await revertGroupSiblingsToPending(tx, bookingId);
 
     // 2. Si el cliente había pagado con billetera, reembolsar
     if (walletContrib > 0) {
@@ -967,11 +974,12 @@ export async function approvePaymentSecure(
     select: { userId: true },
   });
 
-  await prisma.$transaction(async (tx) => {
+  const groupIds = await prisma.$transaction(async (tx) => {
     await tx.booking.update({
       where: { id: bookingId },
       data: { status: BookingStatus.WAITING_CAREGIVER_APPROVAL, paidAt: new Date() },
     });
+    const groupIds = await markGroupSiblingsPaid(tx, bookingId);
     await tx.adminAction.create({
       data: {
         adminId,
@@ -991,6 +999,7 @@ export async function approvePaymentSecure(
         },
       });
     }
+    return groupIds;
   });
 
   if (caregiverProfile) {
@@ -1002,6 +1011,7 @@ export async function approvePaymentSecure(
   }
 
   enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
+  afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
   logger.info('Admin: pago aprobado (secure, con contraseña)', { bookingId, adminId });
   return { id: bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
 }

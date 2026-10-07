@@ -1,4 +1,5 @@
 import type { Booking, ServiceType } from '@prisma/client';
+import type { BookingGroupSummary } from './booking-group.service.js';
 
 export interface BookingCreateResult {
   id: string;
@@ -134,6 +135,10 @@ export interface BookingCreateResult {
   }>;
   /** Servicios extra contratados (snapshot al reservar). Solo presente si hay. */
   extras?: Array<{ name: string; pricePerDay: number; totalPrice: number }>;
+  /** Guardería de varios días: id compartido por todos los días (null en reservas sueltas). */
+  bookingGroupId?: string | null;
+  /** Resumen del grupo — solo en el detalle de una reserva y al crearla. */
+  group?: BookingGroupSummary;
 }
 
 /** Misma lógica usada en generateQR() (booking.service.ts) al construir la
@@ -221,6 +226,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     donationAmount: Number(b.donationAmount ?? 0),
     serviceReport: b.serviceReport ?? null,
+    bookingGroupId: b.bookingGroupId ?? null,
   };
 
   // Servicios extra contratados (snapshot al reservar) — el cuidador/empresa

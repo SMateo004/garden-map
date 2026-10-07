@@ -17,6 +17,7 @@ import prisma from '../config/database.js';
 import * as sipService from '../services/sip.service.js';
 import { env } from '../config/env.js';
 import logger from '../shared/logger.js';
+import { cancelUnpaidGroupSiblings } from '../modules/booking-service/booking-group.service.js';
 
 export function iniciarJobQrExpiry() {
     cron.schedule('* * * * *', async () => {
@@ -101,6 +102,10 @@ async function _expirarQr(
                 refundStatus: RefundStatus.REJECTED,
             },
         });
+
+        // Guardería de varios días: el QR cobraba todos los días del grupo, así
+        // que los demás días sin pagar (sin QR propio) vencen con este.
+        await cancelUnpaidGroupSiblings(tx, booking.id, 'QR de pago expirado sin pago confirmado', 'QR_ABANDONED');
 
         // Si el cliente había usado billetera (pago mixto), reembolsar automáticamente
         if (walletPaid > 0) {

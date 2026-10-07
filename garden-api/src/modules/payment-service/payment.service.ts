@@ -10,6 +10,7 @@ import * as notificationService from '../../services/notification.service.js';
 import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { confirmExtensionQrBySip } from '../booking-service/booking.service.js';
+import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
 
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
@@ -37,6 +38,11 @@ export async function createCheckoutSession(
   }
   if (booking.paidAt) {
     throw new BadRequestError('Esta reserva ya fue pagada');
+  }
+  // Checkout de Stripe cobra una sola reserva — una guardería de varios días
+  // se paga con QR o billetera (initPayment cobra todos los días juntos).
+  if (booking.bookingGroupId) {
+    throw new BadRequestError('Las reservas de varios días se pagan con QR o con tu billetera Garden.');
   }
 
   const totalBs = Number(booking.totalAmount);
@@ -193,18 +199,24 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
   }
 
   // Atomic status transition: only updates if still PENDING_PAYMENT (prevents race condition double-confirm)
-  const updateResult = await prisma.booking.updateMany({
-    where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
-    data: {
-      status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-      paidAt: new Date(),
-    },
+  // — junto con los demás días si es una guardería de varios días (un solo QR).
+  const { updateResult, groupIds } = await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.booking.updateMany({
+      where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
+      data: {
+        status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+        paidAt: new Date(),
+      },
+    });
+    const groupIds = updateResult.count === 1 ? await markGroupSiblingsPaid(tx, booking.id) : [];
+    return { updateResult, groupIds };
   });
 
   if (updateResult.count === 0) {
     // Another concurrent request already processed this QR
     throw new BadRequestError('Esta reserva ya fue pagada o el estado cambió. Actualiza la app.');
   }
+  afterGroupSiblingsPaid(groupIds, booking.clientId, 'qr');
 
   logger.info('Booking waiting for caregiver approval via QR verify', { bookingId: booking.id, qrId });
   track(booking.clientId, 'payment_completed', {
@@ -391,21 +403,26 @@ export async function verifyPaymentManual(
   // dispatchOnChainWithRetry (tx on-chain duplicada) y la notificación push al
   // cliente. El estado final (status/paidAt) ya era idempotente por sí solo, pero
   // los efectos secundarios no lo eran. Mismo patrón atómico que sus hermanos.
-  const updateResult = await prisma.booking.updateMany({
-    where: {
-      id: bookingId,
-      status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
-      paidAt: null,
-    },
-    data: {
-      status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-      paidAt: new Date(),
-    },
+  const { updateResult, groupIds } = await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.booking.updateMany({
+      where: {
+        id: bookingId,
+        status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] },
+        paidAt: null,
+      },
+      data: {
+        status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+        paidAt: new Date(),
+      },
+    });
+    const groupIds = updateResult.count === 1 ? await markGroupSiblingsPaid(tx, bookingId) : [];
+    return { updateResult, groupIds };
   });
 
   if (updateResult.count === 0) {
     throw new BadRequestError('Esta reserva ya fue procesada por otra solicitud. Actualiza la página.');
   }
+  afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
 
   // Si el dueño eligió donar, registrar la donación (ignorar si ya existe por doble-tap)
   if (booking.donationAmount && Number(booking.donationAmount) > 0) {
@@ -479,18 +496,23 @@ export async function verifyPaymentBySipCallback(
     throw new BadRequestError(`La reserva no está en estado esperado (estado: ${booking.status})`);
   }
 
-  const updateResult = await prisma.booking.updateMany({
-    where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
-    data: {
-      status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-      paidAt: new Date(),
-    },
+  const { updateResult, groupIds } = await prisma.$transaction(async (tx) => {
+    const updateResult = await tx.booking.updateMany({
+      where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
+      data: {
+        status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+        paidAt: new Date(),
+      },
+    });
+    const groupIds = updateResult.count === 1 ? await markGroupSiblingsPaid(tx, booking.id) : [];
+    return { updateResult, groupIds };
   });
 
   if (updateResult.count === 0) {
     logger.info('[SIP callback] Pago ya procesado por solicitud concurrente', { bookingId: booking.id });
     return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
   }
+  afterGroupSiblingsPaid(groupIds, booking.clientId, 'sip_qr');
 
   logger.info('[SIP callback] Pago confirmado — reserva esperando aprobación cuidador', { bookingId: booking.id, alias });
   track(booking.clientId, 'payment_completed', {

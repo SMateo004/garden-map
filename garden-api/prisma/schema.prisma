@@ -590,6 +590,11 @@ model Booking {
   /// recurrentes, referencia a esa serie — null en reservas normales.
   recurringSeriesId          String?
   recurringSeries            RecurringBookingSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+  /// Guardería de varios días: una reserva normal por día, todas con el mismo
+  /// id de grupo — se crean y se pagan juntas (un solo QR/pago, ver
+  /// booking-group.service.ts) y después cada día sigue su propio ciclo
+  /// (aceptación, inicio, cierre, cancelación, disputa). Null en reservas sueltas.
+  bookingGroupId             String?
   /// NIT ingresado por el cliente al momento de pagar ESTA reserva (snapshot,
   /// no sigue cambios posteriores a ClientProfile.nit). "0" cuando el
   /// cliente no cargó ninguno — igual se emite factura con ese valor.
@@ -749,6 +754,7 @@ model Booking {
   @@index([paidAt])
   @@index([petId])
   @@index([recurringSeriesId])
+  @@index([bookingGroupId])
   @@map("bookings")
 }
 

@@ -29,6 +29,22 @@ void main() {
           'del 07/10 al 08/10 · 1 noche');
     });
 
+    test('guardería de varios días: los días del grupo, sin los cancelados', () {
+      final group = {
+        'size': 3,
+        'days': [
+          {'date': '2026-10-14', 'status': 'PENDING_PAYMENT'},
+          {'date': '2026-10-15', 'status': 'CANCELLED'},
+          {'date': '2026-10-17', 'status': 'PENDING_PAYMENT'},
+        ],
+      };
+      expect(paymentWhenLabel({'serviceType': 'GUARDERIA', 'walkDate': '2026-10-14', 'startTime': '08:00', 'group': group}, now: now),
+          '2 días · 14/10 · 17/10');
+      final walkDays = [for (final d in [14, 15, 16, 17, 20]) {'date': '2026-10-$d'}];
+      expect(paymentWhenLabel({'serviceType': 'GUARDERIA', 'walkDays': walkDays}, now: now),
+          '5 días · del 14/10 al 20/10');
+    });
+
     test('sin fecha no inventa nada', () {
       expect(paymentWhenLabel({'serviceType': 'PASEO'}, now: now), isNull);
     });

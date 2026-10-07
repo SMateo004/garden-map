@@ -165,12 +165,23 @@ class _BookingScreenState extends State<BookingScreen> {
         return days > 0 ? days : 1;
       }
       return 1;
-    } else if (_selectedService == 'PASEO' && _isMultiDay) {
+    } else if (_isMultiDayMode) {
       return _selectedDates.isNotEmpty ? _selectedDates.length : 1;
     }
-    // PASEO de un solo día y GUARDERIA: 1
+    // PASEO y GUARDERIA de un solo día: 1
     return 1;
   }
+
+  /// "Varios días" activo en un servicio que lo admite (paseo o guardería).
+  bool get _isMultiDayMode =>
+      _isMultiDay && (_selectedService == 'PASEO' || _selectedService == 'GUARDERIA');
+
+  /// Guardería de varios días: el backend crea una reserva por día y se pagan juntas.
+  bool get _isGuarderiaMultiDay => _isMultiDay && _selectedService == 'GUARDERIA';
+
+  /// Una guardería de varios días no admite Meet & Greet (se coordina en una
+  /// reserva de un día) — si el cuidador lo exige, solo se ofrece "1 día".
+  bool get _guarderiaMultiDayAllowed => _caregiver?['requireMeetAndGreet'] != true;
 
   /// Total acumulado de los extras seleccionados (pricePerDay × días).
   double get _extraServicesTotal {
@@ -188,7 +199,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// Start date of the booking (first selected date or single-day date)
   DateTime? get _bookingStartDate {
-    if (_selectedService == 'PASEO' && _isMultiDay && _selectedDates.isNotEmpty) {
+    if (_isMultiDayMode && _selectedDates.isNotEmpty) {
       return _selectedDates.reduce((a, b) => a.isBefore(b) ? a : b);
     }
     return _selectedDate;
@@ -198,7 +209,7 @@ class _BookingScreenState extends State<BookingScreen> {
   /// configured after this, since it must be scheduled before the service).
   bool get _hasServiceDateSelected {
     if (_selectedService == null) return false;
-    if (_selectedService == 'PASEO' && _isMultiDay) return _selectedDates.isNotEmpty;
+    if (_isMultiDayMode) return _selectedDates.isNotEmpty;
     return _bookingStartDate != null;
   }
 
@@ -482,37 +493,31 @@ class _BookingScreenState extends State<BookingScreen> {
       if (_petIncompatibilityReason(pet) != null) return false;
     }
     if (_selectedService == null) return false;
-    final isMultiDayPaseo = _selectedService == 'PASEO' && _isMultiDay;
-    if (!isMultiDayPaseo && _selectedDate == null) return false;
+    // Varios días (paseo o guardería) usa _selectedDates, no _selectedDate.
+    if (_isMultiDayMode) {
+      if (_selectedDates.isEmpty) return false;
+      if (_multiDayTimeSlot == null) return false;
+      if (_multiDaySameTime) {
+        if (_multiDaySharedTime == null) return false;
+        for (final d in _selectedDates) {
+          if (!_isStartTimeFarEnough(d, _multiDaySharedTime)) return false;
+        }
+      } else {
+        for (final d in _selectedDates) {
+          final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+          final t = _perDayTimes[ds];
+          if (t == null) return false;
+          if (!_isStartTimeFarEnough(d, t)) return false;
+        }
+      }
+      return true;
+    }
+    if (_selectedDate == null) return false;
 
-    if (_selectedService == 'GUARDERIA') {
+    if (_selectedService == 'GUARDERIA' || _selectedService == 'PASEO') {
       if (_selectedTimeSlot == null) return false;
       if (_selectedStartTime == null) return false;
       if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) return false;
-    }
-
-    if (_selectedService == 'PASEO') {
-      if (_isMultiDay) {
-        if (_selectedDates.isEmpty) return false;
-        if (_multiDayTimeSlot == null) return false;
-        if (_multiDaySameTime) {
-          if (_multiDaySharedTime == null) return false;
-          for (final d in _selectedDates) {
-            if (!_isStartTimeFarEnough(d, _multiDaySharedTime)) return false;
-          }
-        } else {
-          for (final d in _selectedDates) {
-            final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-            final t = _perDayTimes[ds];
-            if (t == null) return false;
-            if (!_isStartTimeFarEnough(d, t)) return false;
-          }
-        }
-      } else {
-        if (_selectedTimeSlot == null) return false;
-        if (_selectedStartTime == null) return false;
-        if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) return false;
-      }
     }
 
     if (_selectedService == 'HOSPEDAJE' && _endDate == null) return false;
@@ -529,13 +534,12 @@ class _BookingScreenState extends State<BookingScreen> {
       _showError('Selecciona un tipo de servicio');
       return;
     }
-    // Multi-day PASEO uses _selectedDates, not _selectedDate — skip the single-date check
-    final isMultiDayPaseo = _selectedService == 'PASEO' && _isMultiDay;
-    if (!isMultiDayPaseo && _selectedDate == null) {
+    // Varios días (paseo o guardería) usa _selectedDates, no _selectedDate.
+    if (!_isMultiDayMode && _selectedDate == null) {
       _showError('Selecciona una fecha');
       return;
     }
-    if (_selectedService == 'GUARDERIA') {
+    if (_selectedService == 'GUARDERIA' && !_isMultiDay) {
       if (_selectedTimeSlot == null) {
         _showError('Selecciona un horario (Mañana o Tarde)');
         return;
@@ -549,19 +553,19 @@ class _BookingScreenState extends State<BookingScreen> {
         return;
       }
     }
-    if (_selectedService == 'PASEO') {
-      if (_isMultiDay) {
+    if (_isMultiDayMode || _selectedService == 'PASEO') {
+      if (_isMultiDayMode) {
         if (_selectedDates.isEmpty) {
           _showError('Selecciona al menos un día');
           return;
         }
         if (_multiDayTimeSlot == null) {
-          _showError('Selecciona un horario para los paseos');
+          _showError(_isGuarderiaMultiDay ? 'Selecciona un turno (Mañana o Tarde)' : 'Selecciona un horario para los paseos');
           return;
         }
         if (_multiDaySameTime) {
           if (_multiDaySharedTime == null) {
-            _showError('Selecciona una hora para los paseos');
+            _showError(_isGuarderiaMultiDay ? 'Selecciona una hora de inicio' : 'Selecciona una hora para los paseos');
             return;
           }
           for (final d in _selectedDates) {
@@ -610,7 +614,23 @@ class _BookingScreenState extends State<BookingScreen> {
     // Build the body but DON'T call the API yet.
     // The booking is created only when the user generates the QR in PaymentScreen.
     final Map<String, dynamic> body;
-    if (_selectedService == 'GUARDERIA') {
+    if (_selectedService == 'GUARDERIA' && _isMultiDay) {
+      // Varios días: el backend crea una guardería por día y se pagan juntas.
+      body = {
+        'serviceType': 'GUARDERIA',
+        'caregiverId': widget.caregiverId,
+        'petIds': _selectedPetIds,
+        'duration': _guarderiaSelectedDuration,
+        'walkDays': _selectedDates.map((d) {
+          final ds = d.toIso8601String().split('T')[0];
+          return {
+            'date': ds,
+            'timeSlot': _multiDayTimeSlot,
+            'startTime': _multiDaySameTime ? _multiDaySharedTime : _perDayTimes[ds],
+          };
+        }).toList(),
+      };
+    } else if (_selectedService == 'GUARDERIA') {
       body = {
         'serviceType': 'GUARDERIA',
         'caregiverId': widget.caregiverId,
@@ -785,7 +805,23 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   /// Impuesto y total como los calcula pricing.service.ts (montos enteros).
+  /// Guardería de varios días: el backend cobra cada día como su propia
+  /// reserva (impuesto redondeado por día), así que se calcula un día y se
+  /// multiplica — si no, el total podía diferir en 1 Bs del que se paga.
   ({int subtotal, int? tax, int total}) _priceBreakdown(double price) {
+    final days = _isGuarderiaMultiDay ? _selectedDates.length : 1;
+    if (days > 1) {
+      final perDay = _dayPriceBreakdown(price / days);
+      return (
+        subtotal: perDay.subtotal * days,
+        tax: perDay.tax == null ? null : perDay.tax! * days,
+        total: perDay.total * days,
+      );
+    }
+    return _dayPriceBreakdown(price);
+  }
+
+  ({int subtotal, int? tax, int total}) _dayPriceBreakdown(double price) {
     final subtotal = price.round();
     final rate = _taxRate;
     if (rate == null) return (subtotal: subtotal, tax: null, total: subtotal);
@@ -798,11 +834,17 @@ class _BookingScreenState extends State<BookingScreen> {
     final petMult = _petPriceMultiplier;
     double? basePrice;
     if (_selectedService == 'GUARDERIA') {
-      if (_selectedDate == null || _selectedTimeSlot == null) return null;
       final pricePerGuarderia = (_caregiver!['pricePerGuarderia'] as num?)?.toDouble()
           ?? (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (pricePerGuarderia == null || pricePerGuarderia <= 0) return null;
-      basePrice = pricePerGuarderia * (_guarderiaSelectedDuration / 60) * petMult;
+      final perDay = pricePerGuarderia * (_guarderiaSelectedDuration / 60) * petMult;
+      if (_isMultiDay) {
+        if (_selectedDates.isEmpty) return null;
+        basePrice = perDay * _selectedDates.length;
+      } else {
+        if (_selectedDate == null || _selectedTimeSlot == null) return null;
+        basePrice = perDay;
+      }
     } else if (_selectedService == 'PASEO') {
       final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (price60 == null) return null;
@@ -1636,6 +1678,12 @@ class _BookingScreenState extends State<BookingScreen> {
                             _selectedTimeSlot = null;
                             _selectedStartTime = null;
                             _includeMG = false; _mgDate = null;
+                            // Varios días: otra duración cambia qué días y horas
+                            // entran — se sueltan los días que ya no tienen lugar.
+                            _selectedDates.removeWhere((d) => _guarderiaHasNoTimeAvailable(
+                                '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}'));
+                            _multiDaySharedTime = null;
+                            _perDayTimes = {};
                           }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
@@ -1667,9 +1715,72 @@ class _BookingScreenState extends State<BookingScreen> {
                   Divider(color: borderColor),
                   const SizedBox(height: 24),
 
-                  // ── Guardería: fecha ──
-                  Text('Fecha', style: GardenText.h4.copyWith(color: textColor)),
-                  const SizedBox(height: 12),
+                  // ── Guardería: fecha (un día o varios) ──
+                  Row(
+                    children: [
+                      Text('¿Cuándo?', style: GardenText.h4.copyWith(color: textColor)),
+                      const Spacer(),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildDayModeTab('1 día', !_isMultiDay, () {
+                              setState(() {
+                                _isMultiDay = false;
+                                _selectedDate = null;
+                                _selectedDates.clear();
+                                _multiDayTimeSlot = null;
+                                _multiDaySharedTime = null;
+                                _perDayTimes = {};
+                                _availableSlots = [];
+                                _selectedTimeSlot = null;
+                                _selectedStartTime = null;
+                              });
+                            }),
+                            _buildDayModeTab('Varios días', _isMultiDay, () {
+                              if (!_guarderiaMultiDayAllowed) {
+                                GardenSnackBar.warning(context,
+                                    'Este cuidador pide un Meet & Greet antes de cada reserva, así que por ahora solo puedes reservar un día a la vez.');
+                                return;
+                              }
+                              setState(() {
+                                _isMultiDay = true;
+                                _selectedDate = null;
+                                _selectedTimeSlot = null;
+                                _selectedStartTime = null;
+                                _availableSlots = [];
+                                _includeMG = false; _mgDate = null;
+                              });
+                              _refreshMultiDayDataIfStale();
+                            }),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (_isMultiDay) ...[
+                    // ── Varios días: una guardería por día, se pagan juntas ──
+                    _buildMultiDayCalendar(textColor, subtextColor, borderColor, surface),
+                    if (_selectedDates.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text('Turno para todos los días', style: GardenText.h4.copyWith(color: textColor)),
+                      const SizedBox(height: 4),
+                      Text('Cada día es su propia reserva: el cuidador confirma cada uno y puedes cancelar un día sin perder los demás.',
+                          style: TextStyle(color: subtextColor, fontSize: 12)),
+                      const SizedBox(height: 12),
+                      _buildMultiDaySlotSelector(textColor, subtextColor),
+                      if (_multiDayTimeSlot != null) ...[
+                        const SizedBox(height: 24),
+                        _buildMultiDayTimePicker(textColor, subtextColor, borderColor, surface),
+                      ],
+                    ],
+                  ] else ...[
                   if (_loadingMultiDayData)
                     const SizedBox(height: 72, child: Center(child: GardenLoadingIndicator()))
                   else SizedBox(
@@ -1859,6 +1970,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       })).toList(),
                     ],
                   ],
+                  ], // fin guardería de un día
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
                   Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
@@ -1994,7 +2106,10 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
 
                 // ── Meet & Greet opcional ───────────────────────────────
-                _buildMeetAndGreetSection(surface, textColor, subtextColor, borderColor),
+                // (no en guardería de varios días: el M&G se coordina en una
+                // reserva de un solo día, ver createBooking en el backend)
+                if (!_isGuarderiaMultiDay)
+                  _buildMeetAndGreetSection(surface, textColor, subtextColor, borderColor),
 
                 const SizedBox(height: 24),
 
@@ -2216,7 +2331,8 @@ class _BookingScreenState extends State<BookingScreen> {
             final bool isUnavailable = _blockedDates.contains(ds) ||
                 (_multiDaySlotsByDate.containsKey(ds) &&
                  _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true)) ||
-                (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
+                (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds)) ||
+                (_selectedService == 'GUARDERIA' && _guarderiaHasNoTimeAvailable(ds));
 
             return GestureDetector(
               onTap: isUnavailable ? null : () async {
@@ -2313,11 +2429,15 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// Selector de horario compartido para modo multi-día
   Widget _buildMultiDaySlotSelector(Color textColor, Color subtextColor) {
-    const slots = [
+    const allSlots = [
       {'key': 'MANANA', 'label': 'Mañana', 'icon': GIcon.modoClaro},
       {'key': 'TARDE',  'label': 'Tarde',  'icon': GIcon.tarde},
       {'key': 'NOCHE',  'label': 'Noche',  'icon': GIcon.modoOscuro},
     ];
+    // Guardería solo tiene turnos de mañana y tarde.
+    final slots = _selectedService == 'GUARDERIA'
+        ? allSlots.where((s) => s['key'] != 'NOCHE').toList()
+        : allSlots;
     return Row(
       children: slots.map((s) {
         final isSelected = _multiDayTimeSlot == s['key'];
@@ -2532,6 +2652,7 @@ class _BookingScreenState extends State<BookingScreen> {
   /// ¿Choca este horario con alguna reserva existente?
   /// dateStr=null → chequea en CUALQUIER fecha seleccionada (modo "misma hora")
   bool _isMultiDayTimeConflicting(String time, String? dateStr) {
+    if (_selectedService == 'GUARDERIA') return _isGuarderiaMultiDayTimeConflicting(time, dateStr);
     if (_multiDayRangeBookings.isEmpty) return false;
     final parts    = time.split(':');
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
@@ -2562,6 +2683,36 @@ class _BookingScreenState extends State<BookingScreen> {
     return false;
   }
 
+  /// Guardería de varios días: misma regla de cupo que una guardería de un día
+  /// (_guarderiaHasNoTimeAvailable) — mascotas de otras guarderías que se
+  /// cruzan en horario + hospedajes de ese día (pool compartido), contra el
+  /// máximo del cuidador. dateStr=null → la hora tiene que servir en TODOS
+  /// los días elegidos.
+  bool _isGuarderiaMultiDayTimeConflicting(String time, String? dateStr) {
+    final parts = time.split(':');
+    final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    final newEnd = newStart + _guarderiaSelectedDuration + 30; // +30 min descanso
+    final dates = dateStr != null
+        ? [dateStr]
+        : _selectedDates
+            .map((d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}')
+            .toList();
+    final pendingPets = _selectedPetIds.isNotEmpty ? _selectedPetIds.length : 1;
+    for (final ds in dates) {
+      int occupiedPets = _hospedajePetsByDate[ds] ?? 0;
+      for (final b in _multiDayRangeBookings) {
+        if (b['date'] != ds || b['startTime'] == null) continue;
+        if (b['serviceType'] != null && b['serviceType'] != 'GUARDERIA') continue;
+        final bs = (b['startTime'] as String).split(':');
+        final bStart = int.parse(bs[0]) * 60 + int.parse(bs[1]);
+        final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
+        if (newStart < bEnd && newEnd > bStart) occupiedPets += (b['petCount'] as int? ?? 1);
+      }
+      if (occupiedPets + pendingPets > _caregiverMaxPetsGuarderia) return true;
+    }
+    return false;
+  }
+
   /// Chips de hora para multi-día.
   /// dateStr=null → hora compartida para todos (usa intersección de rangos)
   /// dateStr≠null → hora individual para esa fecha (usa rango de esa fecha)
@@ -2575,6 +2726,8 @@ class _BookingScreenState extends State<BookingScreen> {
     final startHour  = int.parse(startParts[0]);
     final startMin   = int.parse(startParts[1]);
     final endHour    = int.parse(endParts[0]);
+    final endMins    = endHour * 60 + int.parse(endParts[1]);
+    final isGuarderia = _selectedService == 'GUARDERIA';
 
     // Sin intersección válida
     if (startHour >= endHour && startHour != 0) {
@@ -2594,8 +2747,12 @@ class _BookingScreenState extends State<BookingScreen> {
     for (int h = startHour; h <= endHour; h++) {
       for (int m = 0; m < 60; m += 30) {
         if (h == startHour && m < startMin) continue;
-        final totalEnd = h * 60 + m + _selectedDuration + 30;
-        if (totalEnd <= endHour * 60) {
+        // Guardería: igual que en un solo día, el servicio tiene que caber
+        // dentro del turno (el descanso puede caer fuera). Paseo: con descanso.
+        final fits = isGuarderia
+            ? h * 60 + m + _guarderiaSelectedDuration <= endMins
+            : h * 60 + m + _selectedDuration + 30 <= endHour * 60;
+        if (fits) {
           timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
         }
       }
@@ -2681,12 +2838,14 @@ class _BookingScreenState extends State<BookingScreen> {
       children: [
         Row(
           children: [
-            Text('Hora del paseo', style: GardenText.h4.copyWith(color: textColor)),
+            Text(_selectedService == 'GUARDERIA' ? 'Hora de inicio' : 'Hora del paseo',
+                style: GardenText.h4.copyWith(color: textColor)),
             const Spacer(),
-            const Text(
-              '* 30 min de descanso incluidos',
-              style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w500),
-            ),
+            if (_selectedService != 'GUARDERIA')
+              const Text(
+                '* 30 min de descanso incluidos',
+                style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w500),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -3477,7 +3636,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
     // Texto de fecha para el resumen
     String fechaText;
-    if (_selectedService == 'PASEO' && _isMultiDay) {
+    if (_isMultiDayMode) {
       fechaText = '${_selectedDates.length} día${_selectedDates.length == 1 ? '' : 's'}';
     } else if (_selectedService == 'HOSPEDAJE' && _endDate != null && _selectedDate != null) {
       fechaText = '${formatDate(_selectedDate!)} → ${formatDate(_endDate!)}';
@@ -3515,18 +3674,20 @@ class _BookingScreenState extends State<BookingScreen> {
           if (_selectedService == 'PASEO')
             _summaryRow(GIcon.cronometro, 'Duración', '$_selectedDuration min'),
           if (_selectedService == 'GUARDERIA') ...[
-            _summaryRow(GIcon.cronometro, 'Duración', '${_guarderiaSelectedDuration ~/ 60}h'),
-            if (_selectedTimeSlot != null)
+            _summaryRow(GIcon.cronometro, 'Duración', '${_guarderiaSelectedDuration ~/ 60}h${_isMultiDay ? ' por día' : ''}'),
+            if (!_isMultiDay && _selectedTimeSlot != null)
               _summaryRow(GIcon.reloj, 'Horario', _selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'),
+            if (!_isMultiDay && _selectedStartTime != null)
+              _summaryRow(GIcon.reloj, 'Hora', _selectedStartTime!),
           ],
           if (fechaText.isNotEmpty)
-            _summaryRow(GIcon.calendario, _isMultiDay ? 'Días' : 'Fecha', fechaText),
-          if (_selectedService == 'PASEO' && _isMultiDay && _multiDayTimeSlot != null)
+            _summaryRow(GIcon.calendario, _isMultiDayMode ? 'Días' : 'Fecha', fechaText),
+          if (_isMultiDayMode && _multiDayTimeSlot != null)
             _summaryRow(GIcon.reloj, 'Horario',
                 _multiDayTimeSlot == 'MANANA' ? 'Mañana' : _multiDayTimeSlot == 'TARDE' ? 'Tarde' : 'Noche'),
-          if (_selectedService == 'PASEO' && _isMultiDay && _multiDaySameTime && _multiDaySharedTime != null)
+          if (_isMultiDayMode && _multiDaySameTime && _multiDaySharedTime != null)
             _summaryRow(GIcon.reloj, 'Hora', _multiDaySharedTime!),
-          if (_selectedService == 'PASEO' && _isMultiDay && !_multiDaySameTime && _perDayTimes.isNotEmpty)
+          if (_isMultiDayMode && !_multiDaySameTime && _perDayTimes.isNotEmpty)
             _summaryRow(GIcon.reloj, 'Horas',
                 _selectedDates.map((d) {
                   final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

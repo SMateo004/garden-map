@@ -45,6 +45,11 @@ import { bookingToResponse } from './booking.types.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 import { grantReferralRewardIfEligible } from '../referral/referral.service.js';
+import {
+  cancelUnpaidGroupSiblings,
+  getGroupSummary,
+  resolvePaymentLeadId,
+} from './booking-group.service.js';
 
 /** Helper: HH:mm strings to minutes since midnight. */
 function timeToMins(t: string | null | undefined): number {
@@ -232,9 +237,67 @@ export async function createBooking(
   body: CreateBookingBody,
   mgData?: MgDataInput
 ): Promise<BookingCreateResult> {
+  // Guardería de varios días → una reserva por día (ver booking-group.service.ts).
+  const guarderiaDays = body.serviceType === ServiceType.GUARDERIA
+    ? (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined
+    : undefined;
+  if (guarderiaDays && guarderiaDays.length > 0) {
+    const { walkDays: _days, ...singleBody } = body as any;
+    if (guarderiaDays.length === 1) {
+      const [day] = guarderiaDays;
+      body = { ...singleBody, walkDate: day!.date, timeSlot: day!.timeSlot, startTime: day!.startTime } as CreateBookingBody;
+    } else {
+      if (mgData) {
+        throw new BookingValidationError(
+          'El Meet & Greet se coordina en una reserva de un solo día. Reserva primero un día con Meet & Greet y después los demás.',
+          'BOOKING_VALIDATION',
+          'walkDays'
+        );
+      }
+      return createGuarderiaGroup(clientId, singleBody, guarderiaDays);
+    }
+  }
+
   // Leer configuración dinámica fuera de la transacción
   const cfg = await getBookingSettings();
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => createBookingInTx(tx, cfg, clientId, body, mgData), { timeout: 15000 });
+}
+
+/**
+ * Guardería de varios días: crea una reserva normal por día, todas en la misma
+ * transacción (si un día no tiene disponibilidad, no se crea ninguno) y con el
+ * mismo bookingGroupId. Cada día pasa por exactamente la misma validación y
+ * cálculo de precio que una guardería suelta. Devuelve el primer día con el
+ * resumen del grupo — el pago se hace sobre ese (ver initPayment).
+ */
+async function createGuarderiaGroup(
+  clientId: string,
+  baseBody: Omit<CreateBookingBody, 'walkDays'>,
+  days: Array<{ date: string; timeSlot: string; startTime?: string }>
+): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
+  const bookingGroupId = crypto.randomUUID();
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  const created = await prisma.$transaction(async (tx) => {
+    const results: BookingCreateResult[] = [];
+    for (const day of sorted) {
+      const dayBody = { ...baseBody, walkDate: day.date, timeSlot: day.timeSlot, startTime: day.startTime } as CreateBookingBody;
+      results.push(await createBookingInTx(tx, cfg, clientId, dayBody, undefined, bookingGroupId));
+    }
+    return results;
+  }, { timeout: 60000 });
+  logger.info('Guardería de varios días creada', { bookingGroupId, clientId, days: created.length });
+  return { ...created[0]!, group: (await getGroupSummary(prisma, bookingGroupId)) ?? undefined };
+}
+
+async function createBookingInTx(
+  tx: Prisma.TransactionClient,
+  cfg: Awaited<ReturnType<typeof getBookingSettings>>,
+  clientId: string,
+  body: CreateBookingBody,
+  mgData?: MgDataInput,
+  bookingGroupId?: string
+): Promise<BookingCreateResult> {
     const clientProfile = await tx.clientProfile.findUnique({
       where: { userId: clientId },
       include: {
@@ -689,6 +752,7 @@ export async function createBooking(
       petAge: pet.age ?? null,
       petSize: pet.size ?? undefined,
       specialNeeds: pet.specialNeeds ?? null,
+      ...(bookingGroupId ? { bookingGroupId } : {}),
       ...(body.serviceType === ServiceType.HOSPEDAJE
         ? {
           startDate: new Date(body.startDate),
@@ -809,7 +873,6 @@ export async function createBooking(
     });
 
     return bookingToResponse(booking);
-  }, { timeout: 15000 });
 }
 
 /**
@@ -1569,7 +1632,15 @@ export async function initPayment(
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
 }> {
   const cfg = await getBookingSettings();
+  // Guardería de varios días: se paga siempre sobre el primer día sin pagar
+  // del grupo, sin importar desde cuál se abrió el pago (un solo QR por grupo).
+  bookingId = await resolvePaymentLeadId(bookingId, clientId);
   const result = await prisma.$transaction(async (tx) => {
+    // Bloquea la reserva antes de leer su estado — sin esto, dos pagos casi
+    // simultáneos de la misma reserva (doble tap en "Pagar con billetera")
+    // leían ambos PENDING_PAYMENT y, aunque el lock del usuario de más abajo
+    // los serializa, el segundo descontaba la billetera otra vez.
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
       select: {
@@ -1579,6 +1650,7 @@ export async function initPayment(
         totalAmount: true,
         commissionAmount: true,
         serviceType: true,
+        bookingGroupId: true,
       },
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
@@ -1587,6 +1659,28 @@ export async function initPayment(
         'Solo se puede iniciar pago en reservas pendientes de pago'
       );
     }
+
+    // Días que se pagan con este pago: la reserva sola, o todos los días sin
+    // pagar de su grupo (la líder primero). Cada día conserva su propio monto;
+    // el cobro es la suma.
+    let members: Array<{ id: string; totalAmount: Prisma.Decimal }> = [{ id: booking.id, totalAmount: booking.totalAmount }];
+    if (booking.bookingGroupId) {
+      await tx.$queryRaw`SELECT id FROM "bookings" WHERE "bookingGroupId" = ${booking.bookingGroupId} FOR UPDATE`;
+      const siblings = await tx.booking.findMany({
+        where: {
+          bookingGroupId: booking.bookingGroupId,
+          clientId,
+          id: { not: booking.id },
+          status: BookingStatus.PENDING_PAYMENT,
+          paidAt: null,
+        },
+        orderBy: [{ walkDate: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, totalAmount: true },
+      });
+      members = [...members, ...siblings];
+    }
+    const memberIds = members.map((m) => m.id);
+    const isGroup = members.length > 1;
 
     // ── NIT para la factura de esta reserva ───────────────────────────────
     // Snapshot en la propia reserva (no sigue cambios futuros al default del
@@ -1597,8 +1691,8 @@ export async function initPayment(
     // próximo servicio — un envío vacío NO borra ese default ya guardado.
     const trimmedNit = nit?.trim();
     const trimmedRazonSocial = nitRazonSocial?.trim();
-    await tx.booking.update({
-      where: { id: bookingId },
+    await tx.booking.updateMany({
+      where: { id: { in: memberIds } },
       data: {
         nit: trimmedNit || '0',
         nitRazonSocial: trimmedRazonSocial || null,
@@ -1614,7 +1708,7 @@ export async function initPayment(
       });
     }
 
-    const totalAmount = Number(booking.totalAmount);
+    const totalAmount = members.reduce((s, m) => s + Number(m.totalAmount), 0);
     // Tope de seguridad (debe coincidir con el límite del frontend en
     // payment_screen.dart): sin esto, un request directo al API (bypaseando
     // la UI) podía donar cualquier monto sin límite, incluyendo typos como
@@ -1677,38 +1771,51 @@ export async function initPayment(
       return balanceAfterDonation;
     };
 
-    // ── PAGO COMPLETO CON BILLETERA ────────────────────────────────────────────
-    if (method === 'wallet') {
-      const { balance, available } = await _getAvailableBalance();
-      // Incluir deuda previa en el total a cobrar por billetera
-      const totalCharge = totalAmount + effectiveDonation + debtAmount;
-      if (available < totalCharge) {
-        throw new BookingValidationError(
-          `Saldo disponible insuficiente. Disponible: Bs ${available.toFixed(2)}, total: Bs ${totalCharge.toFixed(2)}${effectiveDonation > 0 ? ` (incluye Bs ${effectiveDonation.toFixed(2)} de donación)` : ''}${debtAmount > 0 ? ` + Bs ${debtAmount.toFixed(2)} de deuda previa` : ''}.`
-        );
+    // ── Helper: pago completo con billetera ───────────────────────────────────
+    // Un movimiento PAYMENT por día (cada reserva con su propio monto, igual que
+    // si se hubiera pagado sola), luego la deuda previa y la donación, que van
+    // en la reserva líder. Para una reserva suelta deja exactamente los mismos
+    // registros que antes.
+    const _payFullWithWallet = async () => {
+      const paidAt = new Date();
+      for (const m of members) {
+        const memberAmount = Number(m.totalAmount);
+        const updated = await tx.user.update({
+          where: { id: clientId },
+          data: { balance: { decrement: memberAmount } },
+          select: { balance: true },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: clientId,
+            type: 'PAYMENT',
+            amount: memberAmount,
+            balance: Number(updated.balance),
+            description: `Pago con billetera — reserva ${m.id.slice(0, 8)}`,
+            bookingId: m.id,
+            status: 'COMPLETED',
+          },
+        });
+        await tx.booking.update({
+          where: { id: m.id },
+          data: {
+            status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+            paidAt,
+            walletPaymentAmount: memberAmount,
+            ...(m.id === bookingId
+              ? { donationAmount: effectiveDonation > 0 ? effectiveDonation : null, debtRecoveryAmount: debtAmount }
+              : {}),
+          },
+        });
       }
-      void balance; // used only for reference; decrement is atomic
-
-      // Wallet completo: también recupera deuda
-      const totalDecrement = totalAmount + debtAmount;
-      const updatedWallet = await tx.user.update({
-        where: { id: clientId },
-        data: { balance: { decrement: totalDecrement } },
-        select: { balance: true },
-      });
-      const balanceAfterService = Number(updatedWallet.balance);
-      await tx.walletTransaction.create({
-        data: {
-          userId: clientId,
-          type: 'PAYMENT',
-          amount: totalAmount,
-          balance: balanceAfterService + debtAmount, // snapshot pre-deuda
-          description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
-          bookingId,
-          status: 'COMPLETED',
-        },
-      });
+      let balanceAfterService: number;
       if (debtAmount > 0) {
+        const updatedDebt = await tx.user.update({
+          where: { id: clientId },
+          data: { balance: { decrement: debtAmount } },
+          select: { balance: true },
+        });
+        balanceAfterService = Number(updatedDebt.balance);
         await tx.walletTransaction.create({
           data: {
             userId: clientId,
@@ -1720,21 +1827,28 @@ export async function initPayment(
             status: 'COMPLETED',
           },
         });
+      } else {
+        const current = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
+        balanceAfterService = Number(current?.balance ?? 0);
       }
       // Descontar donación (si aplica) y registrarla
       await _recordDonation(balanceAfterService);
+    };
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-          paidAt: new Date(),
-          walletPaymentAmount: totalAmount,
-          donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
-          debtRecoveryAmount: debtAmount,
-        },
-      });
-      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, effectiveDonation, debtAmount });
+    // ── PAGO COMPLETO CON BILLETERA ────────────────────────────────────────────
+    if (method === 'wallet') {
+      const { available } = await _getAvailableBalance();
+      // Incluir deuda previa en el total a cobrar por billetera
+      const totalCharge = totalAmount + effectiveDonation + debtAmount;
+      if (available < totalCharge) {
+        throw new BookingValidationError(
+          `Saldo disponible insuficiente. Disponible: Bs ${available.toFixed(2)}, total: Bs ${totalCharge.toFixed(2)}${effectiveDonation > 0 ? ` (incluye Bs ${effectiveDonation.toFixed(2)} de donación)` : ''}${debtAmount > 0 ? ` + Bs ${debtAmount.toFixed(2)} de deuda previa` : ''}.`
+        );
+      }
+
+      // Wallet completo: también recupera deuda
+      await _payFullWithWallet();
+      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, effectiveDonation, debtAmount, days: members.length });
       return {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
         paidWithWallet: true,
@@ -1759,49 +1873,7 @@ export async function initPayment(
 
       // Si la billetera cubre el total del servicio + donación + deuda → pago completo por billetera
       if (effectiveWalletContribution >= totalAmount && available >= totalAmount + effectiveDonation + debtAmount) {
-        const totalDecrementFull = totalAmount + debtAmount;
-        const updatedWalletFull = await tx.user.update({
-          where: { id: clientId },
-          data: { balance: { decrement: totalDecrementFull } },
-          select: { balance: true },
-        });
-        const balanceAfterService = Number(updatedWalletFull.balance);
-        await tx.walletTransaction.create({
-          data: {
-            userId: clientId,
-            type: 'PAYMENT',
-            amount: totalAmount,
-            balance: balanceAfterService + debtAmount,
-            description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
-            bookingId,
-            status: 'COMPLETED',
-          },
-        });
-        if (debtAmount > 0) {
-          await tx.walletTransaction.create({
-            data: {
-              userId: clientId,
-              type: 'DEBT_RECOVERY',
-              amount: debtAmount,
-              balance: balanceAfterService,
-              description: `Recuperación de deuda por tiempo extra — reserva ${bookingId.slice(0, 8)}`,
-              bookingId,
-              status: 'COMPLETED',
-            },
-          });
-        }
-        await _recordDonation(balanceAfterService);
-
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
-            paidAt: new Date(),
-            walletPaymentAmount: totalAmount,
-            donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
-            debtRecoveryAmount: debtAmount,
-          },
-        });
+        await _payFullWithWallet();
         return {
           status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
           paidWithWallet: true,
@@ -1810,7 +1882,14 @@ export async function initPayment(
         };
       }
 
-      // Parcial: descontar porción de billetera, QR para el resto + donación + deuda
+      // Parcial: descontar porción de billetera, QR para el resto + donación + deuda.
+      // No disponible para varios días: la parte de billetera no tiene un día
+      // al que pertenecer para reembolsos y cancelaciones por día.
+      if (isGroup) {
+        throw new BookingValidationError(
+          'En una reserva de varios días paga todo con tu billetera o todo con QR.'
+        );
+      }
       const updatedWalletPartial = await tx.user.update({
         where: { id: clientId },
         data: { balance: { decrement: effectiveWalletContribution } },
@@ -1900,6 +1979,14 @@ export async function initPayment(
         paymentApprovalRequestedAt: new Date(),
       },
     });
+    if (isGroup) {
+      // Los demás días esperan la misma aprobación — al aprobar o rechazar
+      // cualquiera, se mueven todos juntos (booking-group.service.ts).
+      await tx.booking.updateMany({
+        where: { id: { in: memberIds.filter((id) => id !== bookingId) } },
+        data: { status: BookingStatus.PAYMENT_PENDING_APPROVAL, paymentApprovalRequestedAt: new Date() },
+      });
+    }
     await tx.adminNotification.create({
       data: {
         type: ADMIN_NOTIFICATION_PAYMENT_APPROVAL,
@@ -2389,6 +2476,12 @@ export async function cancelBooking(
       // Ya fue cancelada por otra llamada concurrente — no se repite el
       // reembolso ni la notificación.
       throw new BookingValidationError('La reserva ya está cancelada');
+    }
+    // Guardería de varios días todavía sin pagar: se compró junta, se cae
+    // junta (salir del pago, QR vencido). Días ya pagados no se tocan — cada
+    // uno se cancela por separado con su propio reembolso.
+    if (!booking.paidAt) {
+      await cancelUnpaidGroupSiblings(tx, bookingId, cancellationReason ?? null, cancellationSource ?? null);
     }
     const updated = {
       ...booking,
@@ -3492,7 +3585,11 @@ export async function getBookingById(
     throw new ForbiddenError('No tienes acceso a esta reserva');
   }
 
-  return bookingToResponse(booking);
+  const response = bookingToResponse(booking);
+  if (booking.bookingGroupId) {
+    response.group = (await getGroupSummary(prisma, booking.bookingGroupId)) ?? undefined;
+  }
+  return response;
 }
 
 /**

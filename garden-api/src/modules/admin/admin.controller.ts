@@ -18,6 +18,7 @@ import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
+import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
 
 const paymentQrUpload = multer({
   storage: multer.memoryStorage(),
@@ -241,7 +242,8 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   });
 
   // Atomic: update booking + create audit log + create DB notification
-  await prisma.$transaction(async (tx) => {
+  // (+ los demás días si es una guardería de varios días pagada en conjunto)
+  const groupIds = await prisma.$transaction(async (tx) => {
     await tx.booking.update({
       where: { id },
       data: {
@@ -249,6 +251,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
         paidAt: new Date(),
       },
     });
+    const groupIds = await markGroupSiblingsPaid(tx, id);
 
     // Audit trail — every admin payment action must be logged
     await tx.adminAction.create({
@@ -271,6 +274,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
         },
       });
     }
+    return groupIds;
   });
 
   // Push notification (best-effort, outside transaction)
@@ -284,6 +288,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   }
 
   enqueueSafely('CREATE', () => enqueueBookingCreate(id));
+  afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
   auditLog({ userId: adminId, action: 'PAYMENT_APPROVED', entity: 'Booking', entityId: id, ip: req.ip });
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });

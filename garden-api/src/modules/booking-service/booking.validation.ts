@@ -97,26 +97,57 @@ export const paseoSchema = z
     }
   );
 
-/** Schema completo para guardería (igual que paseo single-day pero con duración fija). */
-export const guarderiaSchema = z.object({
-  serviceType: z.literal('GUARDERIA'),
-  caregiverId: z.string().uuid('caregiverId inválido'),
-  petIds: z.array(z.string().uuid('petId inválido')).min(1, 'Debes seleccionar al menos una mascota').max(3, 'Máximo 3 mascotas por reserva'),
-  walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD'),
-  timeSlot: z.enum(['MANANA', 'TARDE'], {
-    errorMap: () => ({ message: 'timeSlot debe ser MANANA o TARDE' }),
-  }),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
-  duration: z.coerce
-    .number()
-    .int()
-    .refine((n) => [180, 240, 360, 480, 600].includes(n), {
-      message: 'Duración debe ser 180, 240, 360, 480 o 600 minutos',
-    }),
-  // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
-  // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
-  extraServiceIds: z.array(z.string()).optional(),
+const guarderiaTimeSlotSchema = z.enum(['MANANA', 'TARDE'], {
+  errorMap: () => ({ message: 'timeSlot debe ser MANANA o TARDE' }),
 });
+
+/** Un día de una guardería de varios días — cada uno se vuelve su propia reserva. */
+const guarderiaDaySchema = z.object({
+  date: z.string().regex(dateOnlyRegex, 'date: formato YYYY-MM-DD'),
+  timeSlot: guarderiaTimeSlotSchema,
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
+});
+
+/**
+ * Schema completo para guardería. Dos modos:
+ * - Un día: walkDate + timeSlot.
+ * - Varios días: walkDays — se crea UNA reserva por día (mismo bookingGroupId)
+ *   y se pagan juntas; ver createGuarderiaGroup en booking.service.ts.
+ */
+export const guarderiaSchema = z
+  .object({
+    serviceType: z.literal('GUARDERIA'),
+    caregiverId: z.string().uuid('caregiverId inválido'),
+    petIds: z.array(z.string().uuid('petId inválido')).min(1, 'Debes seleccionar al menos una mascota').max(3, 'Máximo 3 mascotas por reserva'),
+    walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD').optional(),
+    timeSlot: guarderiaTimeSlotSchema.optional(),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
+    duration: z.coerce
+      .number()
+      .int()
+      .refine((n) => [180, 240, 360, 480, 600].includes(n), {
+        message: 'Duración debe ser 180, 240, 360, 480 o 600 minutos',
+      }),
+    walkDays: z
+      .array(guarderiaDaySchema)
+      .min(1, 'Elige al menos un día')
+      .max(30, 'Máximo 30 días por reserva')
+      .optional(),
+    // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
+    // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
+    extraServiceIds: z.array(z.string()).optional(),
+  })
+  .refine(
+    (data) => (!!data.walkDate && !!data.timeSlot) || (!!data.walkDays && data.walkDays.length > 0),
+    {
+      message: 'Debes elegir una fecha y un turno, o varios días',
+      path: ['walkDate'],
+    }
+  )
+  .refine(
+    (data) => !data.walkDays || new Set(data.walkDays.map((d) => d.date)).size === data.walkDays.length,
+    { message: 'No puedes repetir el mismo día', path: ['walkDays'] }
+  );
 
 /** Schema for optional M&G data attached at booking creation. */
 export const mgDataSchema = z.object({

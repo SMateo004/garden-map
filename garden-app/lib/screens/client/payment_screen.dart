@@ -338,8 +338,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
         final d = data['data'] as Map<String, dynamic>;
+        // Varios días: el descuento se aplica sobre el primer día, así que se
+        // relee la reserva para tener el total del grupo ya recalculado.
+        Map<String, dynamic>? refreshed;
+        if (_isGroup) {
+          final bkRes = await http.get(Uri.parse('$_baseUrl/bookings/$_bookingId'),
+              headers: {'Authorization': 'Bearer $_clientToken'});
+          final bkData = jsonDecode(bkRes.body);
+          if (bkData['success'] == true) refreshed = bkData['data'] as Map<String, dynamic>;
+        }
+        if (!mounted) return;
         setState(() {
-          _booking = {...?_booking, 'totalAmount': d['totalAmount'], 'promoCode': code};
+          _booking = refreshed ?? {...?_booking, 'totalAmount': d['totalAmount'], 'promoCode': code};
           _promoDiscountApplied = (d['discountAmount'] as num?)?.toDouble();
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -463,7 +473,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       final bookingData = jsonDecode(results[0].body);
       if (bookingData['success'] == true) {
-        final bk = bookingData['data'] as Map<String, dynamic>;
+        var bk = bookingData['data'] as Map<String, dynamic>;
+        // Guardería de varios días abierta desde otro día que no es el primero:
+        // el pago (QR, sondeo, promo) siempre va sobre la reserva líder.
+        final leadId = (bk['group'] as Map?)?['leadId'] as String?;
+        if (leadId != null && leadId != _bookingId && bk['status'] == 'PENDING_PAYMENT') {
+          final leadRes = await http.get(Uri.parse('$_baseUrl/bookings/$leadId'),
+              headers: {'Authorization': 'Bearer $_clientToken'});
+          final leadData = jsonDecode(leadRes.body);
+          if (leadData['success'] == true) {
+            _bookingId = leadId;
+            bk = leadData['data'] as Map<String, dynamic>;
+          }
+        }
         setState(() => _booking = bk);
 
         // ── Redirigir si ya hay un conflicto de horario detectado ────────────
@@ -540,7 +562,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Computed ────────────────────────────────────────────────────────────────
 
+  /// Guardería de varios días: una reserva por día que se pagan juntas (el
+  /// backend manda el resumen en `group` y siempre cobra sobre `leadId`).
+  Map<String, dynamic>? get _group {
+    final g = _booking?['group'];
+    return (g is Map<String, dynamic> && ((g['size'] as num?) ?? 0) > 1) ? g : null;
+  }
+
+  bool get _isGroup => _group != null;
+
+  /// Monto del grupo: lo que falta pagar mientras está pendiente; después, la
+  /// suma de los días (para el comprobante).
+  double? _groupAmount(String pendingKey, String totalKey) {
+    final g = _group;
+    if (g == null) return null;
+    final raw = _booking?['status'] == 'PENDING_PAYMENT' ? g[pendingKey] : g[totalKey];
+    return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+  }
+
   double get _serviceAmount {
+    final groupAmount = _groupAmount('pendingAmount', 'totalAmount');
+    if (groupAmount != null) return groupAmount;
     final raw = _booking?['totalAmount'] ?? _booking?['totalPrice'];
     return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
   }
@@ -553,6 +595,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // Garden va dentro del precio del servicio y no se menciona. Nunca se
   // hardcodea un %.
   double get _taxAmount {
+    final groupTax = _groupAmount('pendingTaxAmount', 'taxAmount');
+    if (groupTax != null) return groupTax;
     final raw = _booking?['taxAmount'];
     return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
   }
@@ -570,6 +614,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   bool get _walletCoversAll => _useWallet && _totalAmount > 0 && _walletBalance >= _totalAmount;
+
+  /// Varios días: la billetera solo se puede usar si paga todo (el backend no
+  /// acepta billetera + QR combinados porque esa parte no tendría un día al
+  /// que pertenecer para reembolsos por día).
+  bool get _walletUsable => _walletBalance > 0 && (!_isGroup || _walletBalance >= _totalAmount);
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
   double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
 
@@ -627,6 +676,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final razonSocial = _razonSocialCtrl.text.trim();
 
       Map<String, dynamic> body;
+      if (_isGroup && _useWallet && !_walletCoversAll) {
+        // Ej.: la donación subió el total por encima del saldo después de
+        // activar la billetera — en varios días no hay pago combinado.
+        throw Exception('En una reserva de varios días paga todo con tu billetera o todo con QR. Desactiva la billetera para pagar por QR.');
+      }
       if (_walletCoversAll) {
         body = {'method': 'wallet', if (_donationAmount > 0) 'donationAmount': _donationAmount};
       } else if (_useWallet && _walletBalance > 0) {
@@ -1955,9 +2009,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // el usuario sepa que la opción existe.
           if (_walletLoaded) ...[
             Opacity(
-              opacity: _walletBalance > 0 ? 1.0 : 0.45,
+              opacity: _walletUsable ? 1.0 : 0.45,
               child: AbsorbPointer(
-                absorbing: _walletBalance <= 0,
+                absorbing: !_walletUsable,
                 child: GestureDetector(
                   onTap: () {
                     HapticFeedback.selectionClick();
@@ -1986,9 +2040,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   style: TextStyle(
                                       color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
                               Text(
-                                  _walletBalance > 0
-                                      ? 'Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}'
-                                      : 'Sin saldo disponible',
+                                  _walletBalance <= 0
+                                      ? 'Sin saldo disponible'
+                                      : !_walletUsable
+                                          ? 'Saldo Bs ${_walletBalance.toStringAsFixed(2)} · para varios días tiene que cubrir el total'
+                                          : 'Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}',
                                   style: TextStyle(
                                       color: _useWallet ? GardenColors.primary : subtextColor,
                                       fontSize: 11.5,
@@ -2000,7 +2056,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           scale: 0.85,
                           child: Switch(
                             value: _useWallet,
-                            onChanged: _walletBalance > 0
+                            onChanged: _walletUsable
                                 ? (v) {
                                     HapticFeedback.selectionClick();
                                     setState(() => _useWallet = v);
@@ -2365,13 +2421,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 10),
                       _detailRow('Servicio', svc?.label ?? 'Servicio', textColor, subtextColor),
                       const SizedBox(height: 10),
-                      _detailRow('Cuándo', when ?? (_booking!['walkDate'] ?? _booking!['startDate'] ?? '—'),
+                      _detailRow('Cuándo',
+                          _isGroup
+                              ? (paymentWhenLabel(_booking!) ?? '—')
+                              : when ?? (_booking!['walkDate'] ?? _booking!['startDate'] ?? '—'),
                           textColor, subtextColor),
                       const SizedBox(height: 14),
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 14),
                       _detailRow('Total pagado',
-                          'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}',
+                          _isGroup
+                              ? 'Bs ${_serviceAmount.toStringAsFixed(2)}'
+                              : 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}',
                           GardenColors.primary, subtextColor,
                           isBoldValue: true),
                       if (_walletContributionUsed > 0) ...[

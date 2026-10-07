@@ -35,6 +35,19 @@ String? paymentWhenLabel(Map<String, dynamic> b, {DateTime? now}) {
 
   String dm(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
+  // Varios días: guardería en grupo (resumen `group` del backend, sin los
+  // días cancelados) o el pedido todavía sin crear (`walkDays`).
+  // "3 días · 14/10 · 15/10 · 17/10"; con más de 4, "6 días · del 14/10 al 22/10".
+  final group = b['group'];
+  final rawDays = group is Map && ((group['size'] as num?) ?? 0) > 1
+      ? (group['days'] as List? ?? const []).whereType<Map>().where((d) => d['status'] != 'CANCELLED')
+      : (b['walkDays'] as List? ?? const []).whereType<Map>();
+  final days = rawDays.map((d) => day(d['date'])).whereType<DateTime>().toList()..sort();
+  if (days.length > 1) {
+    final shown = days.length <= 4 ? days.map(dm).join(' · ') : 'del ${dm(days.first)} al ${dm(days.last)}';
+    return '${days.length} días · $shown';
+  }
+
   if (b['serviceType'] == 'HOSPEDAJE') {
     final from = day(b['startDate']);
     final to = day(b['endDate']);
