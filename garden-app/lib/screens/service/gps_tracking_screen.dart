@@ -14,6 +14,7 @@ import '../../services/gps_tracking_session.dart';
 import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/analytics_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -50,6 +51,16 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   Timer? _pollTimer;       // HTTP polling fallback para el cliente
   double _distanceMeters = 0;
 
+  /// Hora de la última posición recibida (timestamp del punto, o la hora de
+  /// llegada si no trae). Antes el encabezado decía "GPS activo" siempre,
+  /// aunque no llegara nada hace diez minutos.
+  DateTime? _lastFixAt;
+  Timer? _freshnessTicker;
+
+  /// El mapa sigue a la mascota hasta que uno lo mueve con el dedo; antes
+  /// cada punto nuevo lo recentraba y peleaba con el gesto.
+  bool _follow = true;
+
   // Cuántos puntos de GpsTrackingSession.instance.track ya copiamos a
   // _track — nos deja hacer merge incremental (append-only) sin pisar el
   // historial cargado por _loadTrackHistory().
@@ -70,6 +81,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     // pantalla se abre con Navigator.push, así que el observer de rutas no
     // la ve: se registra acá.
     Analytics.instance.track('map_open', props: {'role': widget.role});
+    _freshnessTicker = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) setState(() {});
+    });
     _loadTrackHistory();
     if (_isCaregiver) {
       _startGpsFromSession();
@@ -110,8 +124,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               _currentPos = latest;
               _distanceMeters = _haversineTotal(_track);
             }
+            _lastFixAt = _fixTime(raw.last) ?? _lastFixAt;
           });
-          try { _mapController.move(latest, _mapController.camera.zoom); } catch (_) {}
+          _moveTo(latest);
         }
       } catch (e) {
         debugPrint('GPS: polling error: $e');
@@ -130,6 +145,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     }
     _socketWatchdog?.cancel();
     _pollTimer?.cancel();
+    _freshnessTicker?.cancel();
     _socket?.disconnect();
     _socket?.dispose();
     super.dispose();
@@ -153,10 +169,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             _track.addAll(pts);
             _currentPos = pts.last;
             _distanceMeters = _haversineTotal(_track);
+            _lastFixAt = _fixTime(raw.last) ?? _lastFixAt;
           });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            try { _mapController.move(pts.last, 16); } catch (_) {}
-          });
+          WidgetsBinding.instance.addPostFrameCallback((_) => _moveTo(pts.last, 16));
         }
       }
     } catch (e) {
@@ -189,14 +204,13 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         _track.addAll(session.track.sublist(_sessionTrackSynced));
         _sessionTrackSynced = session.track.length;
       }
+      if (session.currentPos != null && session.currentPos != _currentPos) _lastFixAt = DateTime.now();
       _currentPos = session.currentPos ?? _currentPos;
       _distanceMeters = _haversineTotal(_track);
       _gpsBlocked = session.permissionDenied;
     });
     final pos = _currentPos;
-    if (pos != null) {
-      try { _mapController.move(pos, _mapController.camera.zoom); } catch (_) {}
-    }
+    if (pos != null) _moveTo(pos);
   }
 
   // ── CLIENTE: recibe GPS via Socket.io ────────────────────────────────────
@@ -252,8 +266,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             _track.add(pt);
             _currentPos = pt;
             _distanceMeters = _haversineTotal(_track);
+            _lastFixAt = _fixTime(map) ?? DateTime.now();
           });
-          try { _mapController.move(pt, _mapController.camera.zoom); } catch (_) {}
+          _moveTo(pt);
         } catch (e) {
           debugPrint('GPS: socket parse error: $e');
         }
@@ -262,6 +277,36 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     } catch (e) {
       debugPrint('GPS: socket error: $e');
     }
+  }
+
+  static DateTime? _fixTime(dynamic p) {
+    final ts = p is Map ? p['timestamp'] as String? : null;
+    return ts == null ? null : DateTime.tryParse(ts)?.toLocal();
+  }
+
+  void _moveTo(LatLng pos, [double? zoom]) {
+    if (!_follow) return;
+    try {
+      _mapController.move(pos, zoom ?? _mapController.camera.zoom);
+    } catch (_) {}
+  }
+
+  void _recenter() {
+    HapticFeedback.selectionClick();
+    setState(() => _follow = true);
+    final pos = _currentPos;
+    if (pos != null) _moveTo(pos, 16);
+  }
+
+  /// null = todavía sin señal.
+  Duration? get _sinceFix => _lastFixAt == null ? null : DateTime.now().difference(_lastFixAt!);
+  bool get _isFresh => (_sinceFix?.inSeconds ?? 1 << 30) < 90;
+
+  String _agoLabel(Duration d) {
+    if (d.inSeconds < 15) return 'ahora';
+    if (d.inSeconds < 60) return 'hace ${d.inSeconds} s';
+    if (d.inMinutes < 60) return 'hace ${d.inMinutes} min';
+    return 'hace ${d.inHours} h';
   }
 
   // ── Haversine ─────────────────────────────────────────────────────────────
@@ -282,7 +327,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   }
 
   String _fmtDist(double m) =>
-      m < 1000 ? '${m.toStringAsFixed(0)} m' : '${(m / 1000).toStringAsFixed(2)} km';
+      m < 1000 ? '${m.toStringAsFixed(0)} m' : '${(m / 1000).toStringAsFixed(2).replaceAll('.', ',')} km';
 
   // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
@@ -319,11 +364,44 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 child: _buildHeader(context),
               ),
 
-              // ── Bottom card ────────────────────────────────────────────
+              // ── Bottom card + "Centrar en …" ───────────────────────────
               Positioned(
                 bottom: 0, left: 0, right: 0,
-                child: _buildBottomCard(
-                  context, surface, textColor, subtextColor, borderColor,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
+                      child: !_follow && _currentPos != null && !_gpsBlocked
+                          ? Padding(
+                              key: const ValueKey('recenter'),
+                              padding: const EdgeInsets.only(right: 16, bottom: 12),
+                              child: Material(
+                                color: surface,
+                                elevation: 4,
+                                borderRadius: BorderRadius.circular(999),
+                                child: InkWell(
+                                  onTap: _recenter,
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                      GardenIcon(GIcon.miUbicacion, size: GIconSize.sm, color: GardenService.paseo.ink(isDark)),
+                                      const SizedBox(width: 8),
+                                      Text(_isCaregiver ? 'Centrar en mí' : 'Centrar en ${widget.petName}',
+                                          style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w800)),
+                                    ]),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(key: ValueKey('none')),
+                    ),
+                    _buildBottomCard(
+                      context, surface, textColor, subtextColor, borderColor,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -422,22 +500,25 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               ),
             ),
           ],
-          // Badge activo
+          // Estado de la señal: en vivo, atrasada o esperando.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: _sinceFix != null && !_isFresh ? GardenColors.warning.withValues(alpha: 0.9) : Colors.white24,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const _PulsingDotSmall(active: true),
+                _PulsingDotSmall(active: _isFresh),
                 const SizedBox(width: 5),
-                const Text(
-                  'GPS activo',
-                  style: TextStyle(
-                      color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                Text(
+                  _sinceFix == null
+                      ? 'Esperando señal'
+                      : _isFresh
+                          ? 'En vivo'
+                          : 'Señal de ${_agoLabel(_sinceFix!)}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -577,10 +658,10 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 subtextColor: subtextColor,
               ),
               _StatChip(
-                icon: GIcon.paseo,
-                label: widget.petName,
-                value: _isCaregiver ? 'Paseando' : 'En paseo',
-                color: GardenService.paseo.ink(themeNotifier.isDark),
+                icon: GIcon.reloj,
+                label: 'Última señal',
+                value: _sinceFix == null ? '—' : _agoLabel(_sinceFix!),
+                color: _sinceFix != null && !_isFresh ? GardenColors.warning : GardenService.paseo.ink(themeNotifier.isDark),
                 textColor: textColor,
                 subtextColor: subtextColor,
               ),
@@ -596,7 +677,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'El mapa se actualiza automáticamente cuando el cuidador se mueve.',
+                    _sinceFix != null && !_isFresh
+                        ? 'No llega la ubicación hace un rato: puede ser la señal del celular del cuidador. Escríbele por el chat si te preocupa.'
+                        : 'El mapa se actualiza solo cuando el cuidador se mueve.',
                     style: TextStyle(color: subtextColor, fontSize: 11),
                   ),
                 ),
@@ -619,6 +702,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         initialZoom: _track.isEmpty ? 13 : 16,
         minZoom: 10,
         maxZoom: 19,
+        onPositionChanged: (_, hasGesture) {
+          if (hasGesture && _follow) setState(() => _follow = false);
+        },
       ),
       children: [
         TileLayer(
@@ -761,17 +847,6 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     return [for (var k = 0; k < count; k++) inner[(k * step).floor()]];
   }
 
-  Widget _darkTile(BuildContext context, Widget child, TileImage tile) =>
-      ColorFiltered(
-        colorFilter: const ColorFilter.matrix([
-          -0.2126, -0.7152, -0.0722, 0, 255,
-          -0.2126, -0.7152, -0.0722, 0, 255,
-          -0.2126, -0.7152, -0.0722, 0, 255,
-          0, 0, 0, 1, 0,
-        ]),
-        child: child,
-      );
-
   /// Overlay reasegurante mientras esperamos la primera posición GPS del
   /// cuidador — evita que el dueño vea un mapa vacío y piense que la
   /// pantalla se congeló o que perdió al cuidador.
@@ -834,7 +909,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                 const SizedBox(height: 12),
                 Text(
                   _isCaregiver
-                      ? 'Necesitamos tu ubicación para compartirla con el dueño. Permite el acceso al GPS en tu navegador.'
+                      ? 'Necesitamos tu ubicación para compartirla con el dueño. Permite el acceso a la ubicación en la configuración.'
                       : 'No se pudo obtener la ubicación del cuidador.',
                   style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
                   textAlign: TextAlign.center,
