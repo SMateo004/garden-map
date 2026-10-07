@@ -221,14 +221,22 @@ export const CANCELLATION_REASON_CODES = [
 ] as const;
 export type CancellationReasonCode = (typeof CANCELLATION_REASON_CODES)[number];
 
-/** POST /api/bookings/:id/cancel — motivo estructurado obligatorio. */
+/**
+ * POST /api/bookings/:id/cancel — motivo estructurado obligatorio cuando cancela el cliente.
+ * Las cancelaciones que hace la app sola (QR vencido o el cliente sale de la pantalla de pago:
+ * source QR_ABANDONED / PAYMENT_TIMEOUT) no traen motivo — antes se rechazaban siempre con 400 y
+ * la reserva quedaba bloqueando el horario hasta que la cancelaba el job de vencimiento.
+ * booking.service solo acepta esos orígenes sobre reservas todavía PENDING_PAYMENT.
+ */
 export const cancelBookingBodySchema = z
   .object({
-    reasonCode: z.enum(CANCELLATION_REASON_CODES, {
-      required_error: 'Debes indicar el motivo de la cancelación',
-    }),
+    reasonCode: z.enum(CANCELLATION_REASON_CODES).optional(),
     reason: z.string().max(2000).optional(),
     source: z.enum(['CLIENT_REQUEST', 'QR_ABANDONED', 'PAYMENT_TIMEOUT']).optional(),
+  })
+  .refine((data) => data.source === 'QR_ABANDONED' || data.source === 'PAYMENT_TIMEOUT' || !!data.reasonCode, {
+    message: 'Debes indicar el motivo de la cancelación',
+    path: ['reasonCode'],
   })
   .refine((data) => data.reasonCode !== 'OTRO' || !!data.reason?.trim(), {
     message: 'Debes describir el motivo cuando seleccionas "Otro"',
