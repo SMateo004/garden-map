@@ -1,7 +1,8 @@
 /**
  * Crea (o restablece la contraseña de) el usuario ADMIN en producción.
  * Ejecutar: npx tsx scripts/create-admin.ts
- * Usa DATABASE_URL y ADMIN_PASSWORD del entorno.
+ * Usa DATABASE_URL, ADMIN_EMAIL y ADMIN_PASSWORD del entorno — los dos últimos son
+ * obligatorios: antes caía a una contraseña por defecto publicada en el repo (público).
  */
 
 import { PrismaClient, UserRole } from '@prisma/client';
@@ -12,12 +13,13 @@ dotenv.config();
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
 
-const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    ?? 'admin@garden.bo';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'GardenSeed2024!';
+const ADMIN_EMAIL    = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 async function main() {
-  if (!process.env.ADMIN_PASSWORD) {
-    console.warn('⚠️  ADMIN_PASSWORD no está definido — usando contraseña por defecto (solo para desarrollo).');
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12) {
+    console.error('Define ADMIN_EMAIL y ADMIN_PASSWORD (mínimo 12 caracteres). No hay valores por defecto.');
+    process.exit(1);
   }
 
   const hash = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);

@@ -17,7 +17,6 @@
     "load-test:register": "tsx scripts/load-test-caregiver-register.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push"
   },
   "dependencies": {
@@ -79,9 +78,6 @@
     "ts-jest": "^29.2.5",
     "tsx": "^4.21.0",
     "typescript": "^5.6.3"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": ">=18.0.0"

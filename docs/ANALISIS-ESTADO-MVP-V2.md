@@ -57,7 +57,7 @@ El schema Prisma tiene `profilePhoto` en CaregiverProfile (línea 179); si la DB
 | Tablas | ✅ OK | Tras `db push --force-reset`: users, caregiver_profiles, client_profiles, pets, bookings, availability, reviews, admin_actions, admin_notifications |
 | Migraciones | ❌ Eliminadas | Se eliminó `prisma/migrations`; el schema se aplica con `npx prisma db push` (sin historial de migraciones) |
 | Columnas de imágenes | ✅ OK | En schema: profilePhoto, photos (String[]), petPhoto, photoUrl (Pet), ciAnversoUrl, ciReversoUrl, qrImageUrl (Booking) |
-| Seed | ✅ Configurado | package.json tiene `"prisma": { "seed": "tsx prisma/seed.ts" }`; crea admin + 2 cuidadores |
+| Seed | Eliminado | Se quitó del repo (la base es la de producción) |
 
 ### 1.4 Cloudinary
 
@@ -175,7 +175,6 @@ Ya no aplica: el procedimiento era para una base local que no existe.
 ### 4.6 Inconsistencias en documentación (acciones sugeridas)
 
 - **README-RUN.md línea 46–49:** Quitar referencias a migraciones 20260217/20260218 (ya no existen).
-- **README-RUN.md líneas 53, 62–68:** Corregir: el seed está configurado en package.json; `npx prisma db seed` funciona; `tsx prisma/seed.ts` es alternativa manual. El reset con migraciones ya no aplica (no hay migraciones); el reset total usa db push.
 
 ---
 

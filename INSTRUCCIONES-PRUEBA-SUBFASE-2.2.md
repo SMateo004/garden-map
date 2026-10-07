@@ -5,24 +5,11 @@
 1. **Base de datos**: PostgreSQL corriendo (Docker o local)
 2. **Backend**: API corriendo en `http://localhost:3000`
 3. **Frontend**: Aplicación React corriendo en `http://localhost:5173` (o puerto configurado)
-4. **Usuarios de prueba**: Creados con `npm run seed` en el backend
+4. **Usuarios de prueba**: cuentas propias de prueba (no hay seed)
 
 ## Usuarios de Prueba Disponibles
 
-- **Cliente**: Crea un usuario desde el frontend o usa:
-  - Email: `cliente@test.com`
-  - Password: `GardenSeed2024!`
-  - Role: `CLIENT`
-
-- **Cuidador APPROVED**: 
-  - Email: `cuidador.approved@garden.bo` (crear manualmente o aprobar uno pendiente)
-  - Password: `GardenSeed2024!`
-  - Status: `APPROVED`
-
-- **Admin**:
-  - Email: `admin@garden.bo`
-  - Password: `GardenSeed2024!`
-  - Role: `ADMIN`
+Sin cuentas de prueba publicadas: el seed se eliminó (la base es la de producción en Render). Usa un cliente, un cuidador APPROVED y un admin propios.
 
 ---
 
@@ -80,7 +67,7 @@
 
 1. En la página de detalle del cuidador, haz clic en "Reservar"
 2. Si no estás autenticado, serás redirigido al login
-3. Inicia sesión como cliente (`cliente@test.com`)
+3. Inicia sesión como cliente
 4. En la página de reserva (`/reservar/:id`):
    - Selecciona el tipo de servicio (Hospedaje o Paseo)
    - **Para Hospedaje**:

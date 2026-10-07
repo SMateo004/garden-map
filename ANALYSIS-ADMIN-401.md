@@ -20,7 +20,7 @@
 
 | Check | Result |
 |-------|--------|
-| Admin en DB | Seed crea `admin@garden.bo` con `role: UserRole.ADMIN` |
+| Admin en DB | Una cuenta con `role: UserRole.ADMIN` |
 | roleFilter en login | Admin usa `login(..., false)` → no se envía `?role=caregiver` |
 | requireRole('ADMIN') | Admin routes usan `authMiddleware` + `requireRole('ADMIN')` → devuelve **403** si el rol no es ADMIN, no 401 |
 
@@ -56,8 +56,8 @@ Si el 401 ocurre **al hacer login** (POST /api/auth/login):
 
 - El único 401 en login viene de `auth.service.login`: usuario no encontrado o contraseña incorrecta.
 - Posibles causas:
-  1. Seed no ejecutado → no existe `admin@garden.bo`
-  2. Contraseña incorrecta (la correcta es `GardenSeed2024!`)
+  1. No existe la cuenta admin
+  2. Contraseña incorrecta
 
 Si el 401 ocurre **después de iniciar sesión** (por ejemplo, en GET /api/auth/me o en rutas admin):
 
@@ -68,11 +68,8 @@ Si el 401 ocurre **después de iniciar sesión** (por ejemplo, en GET /api/auth/
 
 ## Fix mínimo
 
-1. **Asegurar que existe el admin y la contraseña es correcta:**
-   ```bash
-   cd garden-api && npx prisma db seed
-   ```
-   Credenciales: `admin@garden.bo` / `GardenSeed2024!`
+1. **Asegurar que existe el admin y la contraseña es correcta** (`scripts/create-admin.ts`
+   con `ADMIN_EMAIL` y `ADMIN_PASSWORD` explícitos).
 
 2. **Comprobar que el login admin NO usa role filter:**
    - `AdminAuthPage.tsx:33` usa `login(data.email, data.password, false)` → correcto.

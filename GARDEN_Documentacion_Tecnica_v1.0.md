@@ -1203,46 +1203,10 @@ npx prisma migrate dev --name init
 # Generar Prisma Client
 npx prisma generate
 
-# Seed inicial (opcional: crear admin user)
-npx prisma db seed
 ```
 
-**Seed script (`prisma/seed.ts`):**
-```typescript
-import { PrismaClient, UserRole } from '@prisma/client';
-import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
-
-async function main() {
-  // Crear admin user
-  const adminPassword = await bcrypt.hash('AdminGarden2026!', 12);
-  
-  await prisma.user.upsert({
-    where: { email: 'admin@garden.bo' },
-    update: {},
-    create: {
-      email: 'admin@garden.bo',
-      passwordHash: adminPassword,
-      role: UserRole.ADMIN,
-      firstName: 'Admin',
-      lastName: 'GARDEN',
-      phone: '+59170000000',
-    },
-  });
-
-  console.log('✅ Admin user created');
-}
-
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
-```
+**Admin inicial:** `garden-api/scripts/create-admin.ts`, con `ADMIN_EMAIL` y `ADMIN_PASSWORD`
+explícitos (sin valores por defecto).
 
 ---
 

@@ -9,7 +9,6 @@ Integración backend + frontend para el flujo: **botón "Soy cuidador" → auth 
 ### Backend (garden-api)
 
 - **prisma/schema.prisma** — Ya incluye: `CaregiverStatus`, `AdminNotification`, campos 15 pasos (bio, bioDetail, zone, spaceType, spaceDescription, termsAccepted, etc.), índices `status`, `userId`.
-- **prisma/seed.ts** — 1 admin (`admin@garden.bo`), 2 cuidadores (DRAFT + PENDING_REVIEW). Contraseña: `GardenSeed2024!`.
 - **modules/caregiver-profile/** — PATCH profile (parcial, 403 si APPROVED), POST submit (validación obligatorios, PENDING_REVIEW, AdminNotification), GET my-profile.
 - **modules/admin/** — GET caregivers/pending (paginación), PATCH caregivers/:id/review (approve/reject/request_revision), validación Zod, tipos en admin.types.ts.
 - **tests/unit/admin.service.test.ts** — Actualizado para `listPendingCaregivers(page, limit)` y filtro por status.
@@ -24,8 +23,7 @@ Integración backend + frontend para el flujo: **botón "Soy cuidador" → auth 
 
 ### Raíz (garden-mvp)
 
-- **package.json** — Scripts: `setup:db`, `setup:db:dev`, `start:api`, `start:web`, `start:full`, `test:flow`, `test:api`, `test:web`, `verification`.
-- **scripts/verification-flow.js** — Login cuidador → my-profile → login admin → GET pending → PATCH approve → GET /api/caregivers. Ejecutar con API en marcha: `BASE_URL=http://localhost:3000 node scripts/verification-flow.js`.
+- **package.json** — Scripts: `start:api`, `test:api`.
 - **README-RUN.md** — Instrucciones de DB, seed, endpoints, flujo "Soy cuidador", scripts.
 
 ## Cómo ejecutar todo
@@ -38,24 +36,12 @@ Integración backend + frontend para el flujo: **botón "Soy cuidador" → auth 
 2. **Variables**
    - `garden-api/.env` con `DATABASE_URL`, `JWT_SECRET`, `CLOUDINARY_*` (ver `garden-api/.env.example`).
 
-3. **Migraciones y seed**
-   - Primera vez (crea carpeta migrations):
-     ```bash
-     cd garden-api && npx prisma migrate dev --name init && npx prisma db seed
-     ```
-   - O desde raíz (si ya existen migraciones):
-     ```bash
-     npm run setup:db
-     ```
+3. **Schema**
+   - Render lo sincroniza con `prisma db push` al desplegar. Sin cuentas de prueba publicadas: el seed se eliminó (la base es la de producción en Render).
 
 4. **Servidores**
    - Terminal 1: `cd garden-api && npm run dev` → API en :3000.
    - Terminal 2: `cd garden-web && npm run dev` → Frontend en :5173.
-
-5. **Verificación**
-   ```bash
-   BASE_URL=http://localhost:3000 node scripts/verification-flow.js
-   ```
 
 6. **Tests**
    - Backend: `cd garden-api && npm run test:unit` (60 tests).

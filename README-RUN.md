@@ -89,19 +89,13 @@ El frontend apunta a la API con `VITE_API_URL=http://localhost:3000` (archivo `g
 
 Abre en el navegador: **http://localhost:5173/**
 
-**Login admin:** **http://localhost:5173/admin/auth** (mismo usuario/contraseña del seed: `admin@garden.bo` / `GardenSeed2024!`).
+**Login admin:** **http://localhost:5173/admin/auth**.
 
 ## Scripts desde la raíz (garden-mvp)
 
 Con `package.json` en la raíz:
 
 ```bash
-# Migrar + seed (requiere Postgres y DATABASE_URL en garden-api/.env)
-npm run setup:db
-
-# Verificación del flujo (API debe estar corriendo en :3000)
-BASE_URL=http://localhost:3000 node scripts/verification-flow.js
-
 # Tests
 npm run test:api    # Jest en garden-api
 npm run test:web    # Vitest en garden-web
@@ -112,7 +106,7 @@ npm run test:web    # Vitest en garden-web
 1. En la web (localhost:5173), clic en **"Soy cuidador →"** → navega a `/caregiver/auth`.
 2. Pestaña **Registrarme** → **Comenzar registro** → wizard de 10 pasos (guardado en localStorage; condicional: paso hogar solo si Hospedaje).
 3. Al enviar: registro completo (User + CaregiverProfile) con status PENDING_REVIEW, o si ya eres cuidador: POST `/api/caregiver/submit`.
-4. Admin: login con `admin@garden.bo` / `GardenSeed2024!`; GET pending, PATCH review (approve/reject/request_revision).
+4. Admin: login con una cuenta admin; GET pending, PATCH review (approve/reject/request_revision).
 5. Listado público (`/api/caregivers` y página Cuidadores): solo perfiles **verified/APPROVED**; min 4 fotos.
 
 ## Resumen de enlaces

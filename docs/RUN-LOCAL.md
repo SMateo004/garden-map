@@ -37,15 +37,6 @@ Comprueba cada ítem antes de arrancar.
     cd garden-api
     npx prisma migrate deploy
     ```
-  - Desde la raíz, `npm run setup:db` hace `migrate deploy` + seed; si es la primera vez y no hay migraciones, ejecuta antes a mano `migrate dev --name init` dentro de `garden-api`.
-
-### Seed
-
-- [ ] **¿Seed ejecutado?** (admin + 2 cuidadores de prueba)
-  ```bash
-  cd garden-api
-  npx prisma db seed
-  ```
 
 ### Dependencias
 
@@ -86,7 +77,6 @@ cd garden-api
 npm install
 npx prisma generate
 npx prisma migrate dev --name init
-npx prisma db seed
 cd ..
 ```
 
@@ -98,12 +88,11 @@ cd garden-api
 npm install
 npx prisma generate
 npx prisma migrate dev --name init
-npx prisma db seed
 cd ..
 ```
 
 - Si `prisma migrate dev` dice que no hay migraciones pendientes pero la carpeta `prisma/migrations` está vacía, el comando anterior crea la primera migración.
-- Si ya tienes migraciones aplicadas, en lugar de `migrate dev` puedes usar `npx prisma migrate deploy` y luego `npx prisma db seed`.
+- Si ya tienes migraciones aplicadas, en lugar de `migrate dev` puedes usar `npx prisma migrate deploy`.
 
 ---
 
@@ -143,21 +132,7 @@ Salida esperada:
 
 ### Paso 5 (opcional): Verificación automática del flujo
 
-Con la **API corriendo** en el puerto 3000:
-
-**Mac/Linux:**
-
-```bash
-BASE_URL=http://localhost:3000 node scripts/verification-flow.js
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$env:BASE_URL="http://localhost:3000"; node scripts/verification-flow.js
-```
-
-Salida esperada: mensajes tipo `OK: Login cuidador`, `OK: GET my-profile`, `OK: Login admin`, etc., y al final `Tests passed: X/Y` y “Flujo verificado sin errores” si todo va bien.
+El script `scripts/verification-flow.js` se eliminó (usaba las credenciales del seed).
 
 ---
 
@@ -194,8 +169,7 @@ Salida esperada: mensajes tipo `OK: Login cuidador`, `OK: GET my-profile`, `OK: 
    - Cerrar sesión si estabas logueado.  
    - Ir de nuevo a **http://localhost:5173/caregiver/auth**.  
    - Pestaña **“Iniciar sesión”**.  
-   - Email: **admin@garden.bo**  
-   - Contraseña: **GardenSeed2024!**  
+   - Con una cuenta admin.  
    - Iniciar sesión.
 
 5. **Panel admin**  
@@ -273,20 +247,16 @@ Si cambias el puerto del backend, en `garden-web` el proxy de Vite apunta a `htt
 - **API health:** http://localhost:3000/health  
 - **Panel admin (logueado como admin):** http://localhost:5173/admin/caregivers/pending  
 
-### Credenciales de prueba (seed)
+### Credenciales de prueba
 
-| Rol       | Email                     | Contraseña      |
-|----------|----------------------------|-----------------|
-| Admin    | admin@garden.bo            | GardenSeed2024! |
-| Cuidador (draft)   | cuidador.draft@garden.bo   | GardenSeed2024! |
-| Cuidador (pending) | cuidador.pending@garden.bo | GardenSeed2024! |
+Sin cuentas de prueba publicadas: el seed se eliminó (la base es la de producción en Render).
 
 ### Qué deberías ver en pantalla
 
 1. **Inicio:** Listado de cuidadores (vacío o con los aprobados). Navbar: “Cuidadores”, “Soy cuidador →”.
 2. **Clic “Soy cuidador”:** Página de login/registro cuidador (/caregiver/auth).
 3. **Registro completo:** Wizard 10 pasos, luego mensaje de éxito y dashboard cuidador.
-4. **Login admin:** Tras iniciar sesión con admin@garden.bo, en navbar: “Panel admin”.
+4. **Login admin:** Tras iniciar sesión con una cuenta admin, en navbar: “Panel admin”.
 5. **Panel admin:** Lista de solicitudes con botones Aprobar / Rechazar / Pedir revisión.
 6. **Tras aprobar:** Esa solicitud deja de aparecer en pending; el cuidador aparece en el listado público.
 

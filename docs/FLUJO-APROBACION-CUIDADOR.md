@@ -6,13 +6,7 @@ Este documento describe el flujo integrado: cuidador envía solicitud → admin 
 
 ## Credenciales de prueba
 
-Tras ejecutar `npx prisma db seed` en `garden-api`:
-
-| Rol | Email | Contraseña |
-|-----|--------|------------|
-| **Admin** | `admin@garden.bo` | `GardenSeed2024!` |
-| **Cuidador (pendiente de revisión)** | `cuidador.pending@garden.bo` | `GardenSeed2024!` |
-| **Cuidador (borrador)** | `cuidador.draft@garden.bo` | `GardenSeed2024!` |
+Sin cuentas de prueba publicadas: el seed se eliminó (la base es la de producción en Render). Usa un admin y un cuidador de prueba propios.
 
 - **Login admin:** http://localhost:5173/admin/auth  
 - **Login cuidador:** http://localhost:5173/caregiver/auth  
@@ -35,7 +29,6 @@ Tras ejecutar `npx prisma db seed` en `garden-api`:
 - Base de datos levantada (`docker compose up -d` desde la raíz).
 - API corriendo: `cd garden-api && npm run dev`
 - Frontend corriendo: `cd garden-web && npm run dev`
-- Seed ejecutado: `cd garden-api && npx prisma db seed`
 
 ---
 
@@ -43,11 +36,11 @@ Tras ejecutar `npx prisma db seed` en `garden-api`:
 
 1. **Admin**
    - Ir a http://localhost:5173/admin/auth  
-   - Iniciar sesión: `admin@garden.bo` / `GardenSeed2024!`  
+   - Iniciar sesión con la cuenta admin.  
    - Serás redirigido a **Solicitudes de cuidadores** (`/admin/caregivers/pending`).
 
 2. **Listado pendientes**
-   - Deberías ver al menos a **Carlos López** (`cuidador.pending@garden.bo`) con estado `PENDING_REVIEW`.  
+   - Deberías ver al menos un cuidador con estado `PENDING_REVIEW`.  
    - Clic en el botón verde **Revisar**.
 
 3. **Página de revisión**
@@ -63,7 +56,7 @@ Tras ejecutar `npx prisma db seed` en `garden-api`:
 
 5. **Vista cuidador (dashboard)**
    - Cerrar sesión de admin (o usar otra ventana/incógnito).  
-   - Ir a http://localhost:5173/caregiver/auth e iniciar sesión con `cuidador.pending@garden.bo` / `GardenSeed2024!`.  
+   - Ir a http://localhost:5173/caregiver/auth e iniciar sesión con ese cuidador.  
    - Ir al dashboard (`/caregiver/dashboard`).  
    - Debe mostrarse **solo**: “¡Felicidades! Tu perfil ha sido verificado y ya está visible en GARDEN.”  
    - **No** debe aparecer mensaje de “pendiente de verificación”.
@@ -73,7 +66,7 @@ Tras ejecutar `npx prisma db seed` en `garden-api`:
 ### Prueba 2: Admin rechaza → cuidador intenta de nuevo
 
 1. **Tener un cuidador en PENDING_REVIEW**  
-   - Si ya aprobaste al de prueba, puedes crear uno nuevo completando el wizard con otro email o volver a ejecutar el seed (el cuidador `cuidador.pending@garden.bo` vuelve a `PENDING_REVIEW`).
+   - Si ya aprobaste al de prueba, puedes crear uno nuevo completando el wizard con otro email.
 
 2. **Admin**
    - Login en http://localhost:5173/admin/auth  
@@ -141,5 +134,5 @@ En la terminal del backend (`garden-api`) deberías ver logs como:
 
 ## Archivos relevantes del flujo
 
-- **Backend:** `garden-api/src/modules/admin/` (service, controller, routes), `garden-api/src/modules/caregiver-profile/caregiver-profile.service.ts` (submit + logging), `garden-api/prisma/seed.ts`.
+- **Backend:** `garden-api/src/modules/admin/` (service, controller, routes), `garden-api/src/modules/caregiver-profile/caregiver-profile.service.ts` (submit + logging).
 - **Frontend:** `garden-web/src/pages/caregiver/CaregiverDashboard.tsx`, `garden-web/src/pages/caregiver/RegisterWizard.tsx`, `garden-web/src/pages/admin/AdminPendingPage.tsx`, `garden-web/src/pages/admin/AdminCaregiverReviewPage.tsx`, `garden-web/src/App.tsx` (rutas).

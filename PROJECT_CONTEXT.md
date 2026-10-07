@@ -81,7 +81,6 @@ garden-mvp/
 │   ├── prisma/
 │   │   ├── schema.prisma        # Esquema completo (~700 líneas)
 │   │   ├── migrations/          # 8 migraciones secuenciales
-│   │   └── seed.ts              # Datos de prueba
 │   └── hardhat-garden/          # Entorno Hardhat para deploy de contratos
 │
 ├── garden-app/                  # App móvil Flutter
