@@ -99,6 +99,12 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
   `getTaxRate()` (editables en Admin > Comisiones); la comisión nunca se muestra al cliente.
   Admin > Comisiones es el **único** lugar donde se edita (Técnica ya no puede: `platformCommissionPct`
   salió de `ALLOWED_SETTING_KEYS`); Finanzas solo la lee. Nada de `× 1.1` / `0.10` fijos.
+- **Impuestos EN PAUSA (desde 2026-10-07):** el 16 % (IVA+IT) solo se cobra si el admin lo aprueba
+  con el switch de Admin > Comisiones / Finanzas (setting `taxesEnabled`) — es la ÚNICA condición,
+  no depende de `SIP_ENABLED` ni de otra variable de entorno. Mientras no lo apruebe la tasa
+  efectiva es 0 (`getPricingConfig().taxRatePct`; la configurada está en `configuredTaxRatePct`), las
+  reservas impagas pierden el impuesto (`taxes.service.ts`) y la app no menciona impuestos
+  (`TaxesState` lee `taxesActive` de `/api/settings`; Términos sección 6 vía `tax-clauses.ts`).
 - **Distribución de la comisión** (Admin > Comisiones > Distribución,
   `modules/pricing/commission-allocation.service.ts`): plan versionado de % por destino (sueldos,
   mantenimiento, activos, fondo de garantía de Bs 2.000 por caso, otros, inversores) que suma 100,

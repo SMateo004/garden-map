@@ -14,10 +14,17 @@
  *   >  comisión global por defecto (AppSettings platformCommissionPct, 10).
  * Todo se edita desde Admin (ver admin.pricing.*). Todos los montos son enteros en Bs,
  * como el resto del sistema (los QR por monto exacto se indexan por boliviano).
+ *
+ * IMPUESTOS EN PAUSA (desde 2026-10-07): el impuesto solo se cobra si el admin lo aprobó
+ * con el interruptor de Admin > Comisiones / Finanzas (AppSettings taxesEnabled). Es la ÚNICA
+ * condición — no depende de SIP_ENABLED ni de ninguna otra variable de entorno. Mientras no
+ * esté aprobado, la tasa EFECTIVA es 0: no se suma impuesto, no se guarda taxAmount y la app
+ * no los menciona. `taxRatePct` de PricingConfig es siempre la efectiva; la tasa configurada
+ * (16) queda en `configuredTaxRatePct` para cuando se apruebe.
  */
 import prisma from '../../config/database.js';
 import logger from '../../shared/logger.js';
-import { getNumericSetting, invalidateSetting } from '../../utils/settings-cache.js';
+import { getBoolSetting, getNumericSetting, invalidateSetting } from '../../utils/settings-cache.js';
 
 export type PricedService = 'PASEO' | 'GUARDERIA' | 'HOSPEDAJE';
 export const PRICED_SERVICES: readonly PricedService[] = ['PASEO', 'GUARDERIA', 'HOSPEDAJE'];
@@ -31,6 +38,8 @@ export const MAX_TAX_RATE_PCT = 50;
 /** AppSettings keys. */
 export const SETTING_DEFAULT_COMMISSION = 'platformCommissionPct';
 export const SETTING_TAX_RATE = 'taxRatePct';
+/** Interruptor del admin para cobrar impuestos. Ausente = apagado. */
+export const SETTING_TAXES_ENABLED = 'taxesEnabled';
 export const SETTING_SERVICE_COMMISSION: Record<PricedService, string> = {
   PASEO: 'commissionPctPaseo',
   GUARDERIA: 'commissionPctGuarderia',
@@ -42,7 +51,14 @@ export interface PricingConfig {
   /** Solo los servicios con comisión propia; el resto cae a defaultCommissionPct. */
   serviceCommissionPct: Partial<Record<PricedService, number>>;
   overrides: Map<string, Partial<Record<OverrideScope, number>>>;
+  /** Tasa EFECTIVA que se cobra hoy: 0 mientras los impuestos estén en pausa. */
   taxRatePct: number;
+  /** Tasa configurada en Admin > Comisiones (IVA+IT), aplicada solo cuando taxesActive. */
+  configuredTaxRatePct: number;
+  /** El admin aprobó cobrar impuestos (el switch). */
+  taxesEnabled: boolean;
+  /** Se cobran hoy — igual a taxesEnabled; si es false no se cobra ni se menciona impuesto. */
+  taxesActive: boolean;
 }
 
 const TTL_MS = 15_000;
@@ -52,6 +68,7 @@ export function invalidatePricingConfig(): void {
   _cache = null;
   invalidateSetting(SETTING_DEFAULT_COMMISSION);
   invalidateSetting(SETTING_TAX_RATE);
+  invalidateSetting(SETTING_TAXES_ENABLED);
   for (const k of Object.values(SETTING_SERVICE_COMMISSION)) invalidateSetting(k);
 }
 
@@ -80,9 +97,11 @@ export async function getPricingConfig(): Promise<PricingConfig> {
   if (_cache && Date.now() - _cache.ts < TTL_MS) return _cache.cfg;
 
   let overridesFailed = false;
-  const [defaultRaw, taxRaw, paseo, guarderia, hospedaje, rows] = await Promise.all([
+  const [defaultRaw, taxRaw, taxesEnabled, paseo, guarderia, hospedaje, rows] = await Promise.all([
     getNumericSetting(SETTING_DEFAULT_COMMISSION, DEFAULT_COMMISSION_PCT),
     getNumericSetting(SETTING_TAX_RATE, DEFAULT_TAX_RATE_PCT),
+    // Si la lectura falla, getBoolSetting devuelve el default (false): ante la duda NO se cobra impuesto.
+    getBoolSetting(SETTING_TAXES_ENABLED, false),
     optionalPct(SETTING_SERVICE_COMMISSION.PASEO, MAX_COMMISSION_PCT),
     optionalPct(SETTING_SERVICE_COMMISSION.GUARDERIA, MAX_COMMISSION_PCT),
     optionalPct(SETTING_SERVICE_COMMISSION.HOSPEDAJE, MAX_COMMISSION_PCT),
@@ -105,12 +124,17 @@ export async function getPricingConfig(): Promise<PricingConfig> {
     overrides.set(r.caregiverId, entry);
   }
 
+  const configuredTaxRatePct = taxRaw >= 0 && taxRaw <= MAX_TAX_RATE_PCT ? taxRaw : DEFAULT_TAX_RATE_PCT;
+  const taxesActive = taxesEnabled;
   const cfg: PricingConfig = {
     defaultCommissionPct:
       defaultRaw >= 0 && defaultRaw <= MAX_COMMISSION_PCT ? defaultRaw : DEFAULT_COMMISSION_PCT,
     serviceCommissionPct,
     overrides,
-    taxRatePct: taxRaw >= 0 && taxRaw <= MAX_TAX_RATE_PCT ? taxRaw : DEFAULT_TAX_RATE_PCT,
+    taxRatePct: taxesActive ? configuredTaxRatePct : 0,
+    configuredTaxRatePct,
+    taxesEnabled,
+    taxesActive,
   };
   if (!overridesFailed) _cache = { cfg, ts: Date.now() };
   return cfg;
@@ -139,7 +163,7 @@ export async function getCommissionRate(serviceType: string, caregiverId?: strin
   return resolveCommissionPct(cfg, serviceType, caregiverId) / 100;
 }
 
-/** Tasa de impuestos como fracción (0.16 = 16 %). */
+/** Tasa de impuestos EFECTIVA como fracción (0.16 = 16 %; 0 mientras estén en pausa). */
 export async function getTaxRate(): Promise<number> {
   return (await getPricingConfig()).taxRatePct / 100;
 }

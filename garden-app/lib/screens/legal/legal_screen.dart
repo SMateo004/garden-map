@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../services/taxes_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../design/garden_icons.dart';
 
@@ -224,10 +226,10 @@ class TermsOfServiceScreen extends StatelessWidget {
     return LegalScreen(
       title: 'Términos y Condiciones',
       lastUpdated: 'Octubre 2026',
-      sections: const [
+      sections: [
 
         // ── 1. QUIÉNES SOMOS ─────────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '1. Quiénes somos y qué es Garden',
           'Garden Bolivia ("Garden", "la Plataforma", "nosotros") es una plataforma tecnológica de intermediación que conecta a dueños de mascotas ("Clientes" o "Dueños") con personas que ofrecen servicios de cuidado de animales domésticos ("Cuidadores") en Santa Cruz de la Sierra, Bolivia.\n\n'
           'Garden NO es una empresa de cuidado de mascotas ni empleadora de cuidadores. Actuamos exclusivamente como intermediario tecnológico que facilita el encuentro entre oferta y demanda, procesa pagos de forma segura y ofrece herramientas de comunicación y seguimiento del servicio. Los Cuidadores participan de forma voluntaria e independiente, sin ninguna relación laboral con Garden (ver sección 30).\n\n'
@@ -235,7 +237,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 2. DEFINICIONES ──────────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '2. Definiciones clave',
           '• CLIENTE / DUEÑO: persona natural mayor de 18 años que usa Garden para contratar servicios de cuidado para su mascota.\n\n'
           '• CUIDADOR: persona natural mayor de 18 años, verificada por Garden, que ofrece servicios de cuidado de mascotas a través de la Plataforma. Los Cuidadores participan de forma VOLUNTARIA y como prestadores de servicios independientes: NO son empleados, dependientes ni trabajadores de Garden y entre ellos y Garden no existe relación laboral de ningún tipo (ver sección 30).\n\n'
@@ -248,7 +250,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 3. REQUISITOS DE REGISTRO ────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '3. Requisitos para registrarse',
           'TODOS LOS USUARIOS:\n'
           '• Ser persona natural mayor de 18 años.\n'
@@ -267,7 +269,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 4. ESPECIES Y ANIMALES APTOS PARA LA PLATAFORMA ──────────────────
-        _LegalSection(
+        const _LegalSection(
           '4. Especies y animales aptos para la Plataforma',
           'Garden está diseñada para el cuidado de mascotas domésticas comunes: principalmente perros y gatos, y en menor medida aves y roedores pequeños de tenencia doméstica legal en Bolivia.\n\n'
           'QUEDA EXPRESAMENTE PROHIBIDO registrar o solicitar servicios para:\n'
@@ -278,7 +280,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 5. SERVICIOS DISPONIBLES ─────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '5. Servicios disponibles en la Plataforma',
           'HOSPEDAJE: La mascota pernocta en el domicilio del Cuidador. El Cuidador asume responsabilidad de custodia plena durante todo el período contratado, incluyendo alimentación, acceso a agua, ejercicio básico y atención en caso de emergencia.\n\n'
           'GUARDERÍA DIURNA: La mascota permanece en el domicilio del Cuidador durante el día (máx. 12 horas). Mismo nivel de responsabilidad que el hospedaje.\n\n'
@@ -289,6 +291,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         // ── 6. COMISIONES Y PRECIOS ──────────────────────────────────────────
         _LegalSection(
           '6. Comisiones, precios y estructura de pagos',
+          TaxesState.terms(
           'PRECIOS: Los Cuidadores establecen libremente sus tarifas en Bolivianos (Bs.). El precio que publica el Cuidador es el monto íntegro que recibirá por el servicio.\n\n'
           'TARIFA DE PLATAFORMA: Garden suma al precio establecido por el Cuidador una tarifa de plataforma que varía según el servicio y el Cuidador o empresa. Está incluida en el precio que el Cliente ve en la app, la paga el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
           'EJEMPLO (los porcentajes pueden variar): si el Cuidador cobra Bs. 100 por un servicio, el Cliente ve un precio de Bs. 110 (precio del Cuidador + tarifa de plataforma) y al pagar se suman los impuestos de ley (16%: Bs. 18), para un total de Bs. 128. El Cuidador recibe íntegramente sus Bs. 100.\n\n'
@@ -302,10 +305,11 @@ class TermsOfServiceScreen extends StatelessWidget {
           'VERIFICACIÓN DEL PAGO: Mientras Garden completa la integración directa con el sistema bancario (QR interbancario SIP), la confirmación de que un pago fue efectivamente transferido puede realizarse mediante revisión manual por parte del equipo de Garden, en lugar de una confirmación automática instantánea del banco. Esto no cambia el monto que pagas ni tus derechos de reembolso — solo el tiempo que puede tomar la confirmación mientras esta integración esté en curso.\n\n'
           'IVA E IMPUESTOS: Los impuestos de ley (IVA 13% e IT 3%, 16% en total) se muestran por separado en el detalle de pago y se suman al precio del servicio; no se descuentan al Cuidador. Garden emite las facturas electrónicas que correspondan al amparo de la Ley N° 812 (Factura Electrónica) y las disposiciones del Servicio de Impuestos Nacionales (SIN).\n\n'
           'PROPINAS: Los Clientes pueden dejar propinas voluntarias al finalizar el servicio. Las propinas van íntegramente al Cuidador (0% de comisión sobre propinas).',
+          ),
         ),
 
         // ── 7. CANCELACIONES Y REEMBOLSOS ────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '7. Política de cancelación y reembolsos',
           'HOSPEDAJE Y GUARDERÍA:\n'
           '• Cancelación con más de 48 horas de anticipación: reembolso del 100% (menos un cargo administrativo fijo de Bs. 10).\n'
@@ -322,7 +326,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 8. QUÉ PUEDE HACER UN DUEÑO DE MASCOTA ──────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '8. Derechos y obligaciones del Dueño de mascota',
           'El Dueño de mascota PUEDE:\n\n'
           'Buscar y comparar perfiles de cuidadores verificados con reseñas reales.\n'
@@ -339,7 +343,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 9. QUÉ NO PUEDE HACER UN DUEÑO DE MASCOTA ───────────────────────
-        _LegalSection(
+        const _LegalSection(
           '9. Prohibiciones para el Dueño de mascota',
           'El Dueño de mascota NO PUEDE:\n\n'
           'Acordar pagos directos con el Cuidador para evadir la Plataforma ni la comisión de Garden. Esto constituye incumplimiento grave y puede resultar en suspensión permanente de ambas cuentas.\n\n'
@@ -355,7 +359,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 10. QUÉ PUEDE HACER UN CUIDADOR ──────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '10. Derechos y facultades del Cuidador',
           'El Cuidador PUEDE:\n\n'
           'Establecer sus propios precios, horarios y disponibilidad libremente.\n'
@@ -372,7 +376,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 11. QUÉ NO PUEDE HACER UN CUIDADOR ──────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '11. Prohibiciones para el Cuidador',
           'El Cuidador NO PUEDE:\n\n'
           'Solicitar o aceptar pagos fuera de la Plataforma para servicios originados en Garden.\n'
@@ -389,7 +393,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 12. RESPONSABILIDAD: MASCOTA LASTIMADA O FALLECIDA ───────────────
-        _LegalSection(
+        const _LegalSection(
           '12. ¿Qué pasa si la mascota se lastima, enferma o fallece?',
           'La seguridad y bienestar de la mascota es responsabilidad EXCLUSIVA del Cuidador durante todo el período en que la mascota esté bajo su custodia, y los daños se le presumen imputables salvo que pruebe una causa de exoneración (ver sección 31).\n\n'
           'OBLIGACIÓN ÚNICA DEL CUIDADOR ANTE UNA EMERGENCIA:\n'
@@ -417,7 +421,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 13. MASCOTA EXTRAVIADA ────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '13. ¿Qué pasa si la mascota se extravía durante el servicio?',
           'Si la mascota se escapa o se pierde durante un paseo, hospedaje o guardería, el Cuidador debe actuar de inmediato:\n\n'
           '1. Buscar activamente en la zona durante al menos 30 minutos antes de suspender la búsqueda inicial.\n'
@@ -428,7 +432,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 14. DAÑO A TERCEROS, OTRAS MASCOTAS Y PROPIEDAD ──────────────────
-        _LegalSection(
+        const _LegalSection(
           '14. Daño causado por la mascota a terceros, a otras mascotas o a la propiedad',
           'DAÑO A LA PROPIEDAD DEL CUIDADOR: Si la mascota del Cliente causa daños materiales al domicilio o pertenencias del Cuidador (muebles, pisos, objetos), el Cliente es responsable conforme al Art. 990 del Código Civil Boliviano (el dueño de un animal responde por los daños que este cause). El Cuidador debe documentar el daño con fotos y, de ser posible, comparar con fotos previas al servicio, además de facturas de reparación o reemplazo, y notificar a Garden dentro de las 24 horas siguientes para mediar la disputa — hasta un tope de Bs. 3.000 por incidente, sujeto a verificación.\n\n'
           'PELEAS ENTRE MASCOTAS EN GUARDERÍA U HOSPEDAJE: Si la mascota de un Cliente se pelea con la de otro Cliente, o con una mascota propia del Cuidador, dentro del mismo espacio: el Cuidador tiene el deber de evaluar la compatibilidad de los animales antes de mezclarlos y de separarlos ante la primera señal de tensión. Si no tomó esta precaución razonable, se aplica el marco de negligencia de la Sección 12. Si el altercado ocurre pese a medidas razonables de precaución, se trata como un accidente fortuito y puede acceder al Fondo de Garantía según corresponda.\n\n'
@@ -437,7 +441,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 15. RESPONSABILIDAD: CUIDADOR LASTIMADO ──────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '15. ¿Qué pasa si el Cuidador se lastima?',
           'Los Cuidadores participan de forma voluntaria y son prestadores de servicios independientes, NO empleados de Garden (ver sección 30). Por lo tanto, Garden no está obligada a proveer seguro de accidentes laborales, seguro de salud ni aportes a la seguridad social.\n\n'
           'HERIDA O MORDIDA POR LA MASCOTA DEL CLIENTE:\n'
@@ -454,7 +458,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 16. RETENCIÓN INDEBIDA Y ABANDONO DE MASCOTAS ────────────────────
-        _LegalSection(
+        const _LegalSection(
           '16. Retención indebida y abandono de mascotas',
           'RETENCIÓN INDEBIDA POR EL CUIDADOR: No devolver a la mascota al finalizar el servicio acordado, sin una causa justificada y documentada (por ejemplo, una emergencia veterinaria en curso reportada oportunamente), constituye retención no autorizada y puede configurar el delito de apropiación indebida conforme al Código Penal Boliviano. Ante esta situación, Garden suspenderá inmediatamente la cuenta del Cuidador, orientará al Cliente sobre cómo interponer una denuncia policial, y proporcionará a la autoridad competente todos los registros disponibles (chat, GPS, fotos, dirección registrada del Cuidador).\n\n'
           'BOTÓN SOS DEL DUEÑO: Además del "Reportar incidente" que puede usar el Cuidador (Sección 12), el Dueño cuenta con un botón de alerta ("SOS") visible durante cualquier servicio activo, pensado justamente para los casos en que el Cuidador sea la parte cuestionada. Al reportarlo, el equipo de Garden recibe una alerta urgente de forma inmediata y confidencial — por diseño, el Cuidador nunca es notificado de que se reportó un SOS, ni mientras está abierto ni al resolverse. Solo un administrador de Garden puede cerrar esta alerta; el Cuidador no tiene forma de autorresolverla.\n\n'
@@ -463,7 +467,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 17. CONTACTO DE EMERGENCIA OBLIGATORIO ───────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '17. Contacto de emergencia obligatorio',
           'Todo Cuidador debe registrar exactamente 3 contactos de emergencia (nombre y teléfono de familiares o personas de confianza) como último paso de su registro, antes de que su perfil pueda activarse — sin importar qué servicios ofrezca.\n\n'
           'Si el Cuidador no puede ser contactado (no responde al chat, llamadas o notificaciones de la app) durante más de 12 horas mientras tiene una mascota bajo su custodia, Garden contactará a los contactos de emergencia registrados y, de ser necesario, a las autoridades locales, para verificar el bienestar del Cuidador y de la mascota.\n\n'
@@ -471,7 +475,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 18. PROCESO DE DISPUTAS ──────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '18. Proceso de resolución de disputas',
           'Garden ofrece un sistema de mediación interno antes de recurrir a instancias judiciales.\n\n'
           'PASO 1 — APERTURA DE DISPUTA:\n'
@@ -489,7 +493,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 19. SMART CONTRACTS Y BLOCKCHAIN ────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '19. Registro en blockchain (red principal de Polygon)',
           'Desde el 4 de octubre de 2026, Garden registra cada Reserva pagada en la red principal de Polygon (Polygon PoS), una blockchain pública. Lo hacen dos smart contracts de Garden con el código publicado y verificado en polygonscan.com. No custodian dinero: los pagos se procesan fuera de la blockchain.\n\n'
           'QUÉ SE REGISTRA:\n'
@@ -510,7 +514,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 20. VERIFICACIÓN DE IDENTIDAD ────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '20. Verificación de identidad de Cuidadores',
           'Todos los Cuidadores pasan por un proceso de verificación de identidad mediante inteligencia artificial antes de poder ofrecer servicios en la Plataforma:\n\n'
           '1. Fotografía del Carnet de Identidad (CI) boliviano (anverso y reverso).\n'
@@ -521,7 +525,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 21. ALCANCE GEOGRÁFICO DEL SERVICIO ─────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '21. Alcance del servicio',
           'Garden opera actualmente en Santa Cruz de la Sierra, Bolivia. Los servicios están disponibles únicamente dentro del área metropolitana de Santa Cruz (Plan 3000, Equipetrol, Urubó, Los Lotes, Palmasola y zonas aledañas).\n\n'
           'Servicios que implican traslado de mascota (paseo, hospedaje): el Cuidador no puede transportar la mascota fuera del perímetro de Santa Cruz de la Sierra sin autorización escrita del Cliente.\n\n'
@@ -529,7 +533,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 22. BIENESTAR ANIMAL ─────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '22. Política de bienestar animal',
           'Garden está comprometida con el bienestar de los animales. Todo usuario de la Plataforma acepta lo siguiente:\n\n'
           '• Queda expresamente prohibido el maltrato físico, psicológico o por negligencia de cualquier animal, bajo pena de suspensión inmediata y denuncia ante las autoridades competentes.\n\n'
@@ -543,7 +547,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 23. SEGUROS RECOMENDADOS ─────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '23. Seguros recomendados',
           'Bolivia no cuenta actualmente con un seguro obligatorio específico para servicios de cuidado de mascotas. Sin embargo, Garden recomienda encarecidamente:\n\n'
           'PARA DUEÑOS DE MASCOTAS:\n'
@@ -556,7 +560,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 24. CONDUCTA PROHIBIDA GENERAL ───────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '24. Conducta prohibida y sanciones',
           'Está terminantemente prohibido para TODOS los usuarios:\n\n'
           'Acordar o realizar transacciones económicas fuera de la Plataforma por servicios originados en Garden (circunvención de plataforma). Primera infracción: suspensión de 90 días. Segunda infracción: suspensión permanente.\n\n'
@@ -572,7 +576,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 25. PRIVACIDAD Y DATOS ───────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '25. Privacidad y protección de datos',
           'El tratamiento de tus datos personales se rige por la Política de Privacidad de Garden, disponible en la app y en garden.bo/privacidad.\n\n'
           'Garden cumple con los principios de protección de datos establecidos en la Constitución Política del Estado Plurinacional de Bolivia (Art. 130 — Habeas Data) y la Ley N° 164 de Telecomunicaciones.\n\n'
@@ -582,7 +586,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 26. PROPIEDAD INTELECTUAL ────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '26. Propiedad intelectual e imagen de los usuarios',
           'Todo el contenido de Garden (nombre comercial, logotipo, diseño de interfaz, código fuente, algoritmos, base de datos de cuidadores) es propiedad exclusiva de Garden Bolivia y está protegido por la Ley N° 1322 de Derechos de Autor de Bolivia y los tratados internacionales suscritos por Bolivia (Convenio de Berna, ADPIC/TRIPS).\n\n'
           'Queda prohibido reproducir, distribuir, modificar, hacer ingeniería inversa o crear obras derivadas de cualquier elemento de Garden sin autorización escrita previa.\n\n'
@@ -592,7 +596,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 27. LIMITACIÓN DE RESPONSABILIDAD DE GARDEN ─────────────────────
-        _LegalSection(
+        const _LegalSection(
           '27. Limitación de responsabilidad y exención de demandas',
           'Garden actúa exclusivamente como intermediario tecnológico y NO es parte del contrato de servicio entre Cliente y Cuidador. Los Cuidadores son prestadores de servicios independientes, no empleados, agentes ni representantes de Garden.\n\n'
           'EXENCIÓN EXPRESA DE RESPONSABILIDAD POR CONDUCTA DE CUIDADORES:\n'
@@ -612,7 +616,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 28. MODIFICACIONES ───────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '28. Modificaciones a estos Términos',
           'Garden puede actualizar estos Términos y Condiciones en cualquier momento. Los cambios significativos serán notificados:\n\n'
           '• Por correo electrónico al email registrado en la cuenta, con al menos 15 días de anticipación.\n'
@@ -623,7 +627,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 29. LEY APLICABLE ────────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '29. Ley aplicable y jurisdicción',
           'Estos Términos y Condiciones se rigen por las leyes de la República Plurinacional de Bolivia, incluyendo pero no limitado a:\n\n'
           '• Código Civil Boliviano (D.L. N° 12760): contratos, responsabilidad civil, obligaciones.\n'
@@ -636,7 +640,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           'Para cualquier controversia no resuelta mediante el proceso interno de Garden (Sección 18), las partes se someten expresamente a la jurisdicción de los Juzgados y Tribunales competentes de la ciudad de Santa Cruz de la Sierra, Bolivia, renunciando a cualquier otro fuero que pudiera corresponderles.',
         ),
 
-        _LegalSection(
+        const _LegalSection(
           '30. Naturaleza voluntaria e independiente del Cuidador — sin relación laboral',
           'El Cuidador participa en Garden de forma estrictamente VOLUNTARIA, por iniciativa propia y como PRESTADOR DE SERVICIOS INDEPENDIENTE. Garden no lo contrata ni le ofrece un cargo, puesto, empleo ni función dentro de la empresa. La inscripción, aprobación o permanencia en la Plataforma no crea relación laboral, de dependencia, de subordinación, de mandato, de agencia, de sociedad, de franquicia ni de representación entre el Cuidador y Garden.\n\n'
           'En consecuencia, y entre otras cosas:\n\n'
@@ -650,7 +654,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           'El Cuidador declara y reconoce que no es ni será trabajador de Garden, que su relación con la Plataforma es la descrita en esta sección y que las personas que lo asistan (solo permitido con autorización, ver sección 11) tampoco son empleadas de Garden. Que Garden dé por terminada la participación de un Cuidador conforme a estos Términos no constituye un despido.',
         ),
 
-        _LegalSection(
+        const _LegalSection(
           '31. Responsabilidad integral del Cuidador sobre la mascota e indemnidad',
           'Desde que el Cuidador recibe a la mascota (o la retira del domicilio del Dueño) hasta que la devuelve al Dueño o a quien este designe, la mascota queda bajo su CUSTODIA EXCLUSIVA. Durante ese tiempo el Cuidador asume, frente al Dueño y frente a Garden, la máxima responsabilidad que la ley permita por la vida, salud, integridad, seguridad y paradero de la mascota, y por los daños que esta cause a terceros, a otras mascotas y a bienes.\n\n'
           '1. RESPONSABILIDAD PRESUMIDA. Toda lesión, enfermedad, pérdida, fuga o muerte de la mascota ocurrida durante la custodia se presume imputable al Cuidador. Para liberarse debe probar, con evidencia documentada (fotos, GPS, chat, reportes veterinarios), alguna de estas causas: (a) una condición preexistente, una vacuna omitida o un dato relevante no declarado o falseado por el Dueño; (b) un hecho del Dueño o de un tercero ajeno a su control que no pudo evitar actuando con la debida diligencia; (c) fuerza mayor imprevisible e irresistible, habiendo cumplido de inmediato el procedimiento de emergencia de la sección 12; (d) muerte natural por edad avanzada o enfermedad terminal conocida.\n\n'
@@ -662,7 +666,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           '7. PRUEBA. El Cuidador acepta que los registros de la Plataforma (reserva, pagos, GPS, fotos, chat, calificaciones y registro en blockchain) se usen como prueba en cualquier reclamo.',
         ),
 
-        _LegalSection(
+        const _LegalSection(
           '32. Aceptación periódica de estos Términos por el Cuidador (cada 2 meses)',
           'Estos Términos, la Política de Privacidad y el Contrato de Cuidador deben ser aceptados de nuevo por el Cuidador CADA 2 MESES (60 días), contados desde su última aceptación, HAYA O NO prestado servicios en ese período y tenga o no reservas. Además, cada vez que Garden publique una versión nueva, el Cuidador debe aceptarla en la app dentro del plazo de 7 días que se le indique.\n\n'
           'CÓMO SE ACEPTA: desde la app, leyendo el texto vigente completo. Garden envía avisos en la app y notificaciones antes del vencimiento y mientras la aceptación esté pendiente.\n\n'
@@ -670,7 +674,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           'SI LA ACEPTACIÓN VENCE: el perfil deja de mostrarse en el marketplace y el Cuidador no puede recibir reservas nuevas hasta que acepte; vuelve a aparecer en cuanto lo haga. Las reservas ya confirmadas o en curso se atienden hasta su finalización bajo los términos que aceptó, y los pagos ya generados no se pierden. No aceptar no genera una sanción, pero el Cuidador puede dejar de usar Garden y solicitar la baja de su cuenta en cualquier momento.',
         ),
 
-        _LegalSection(
+        const _LegalSection(
           '33. Declaraciones y responsabilidades adicionales del Dueño de mascota',
           'Además de lo dispuesto en las secciones 8 y 9, el Dueño reconoce y acepta que:\n\n'
           '1. ELECCIÓN LIBRE E INFORMADA. Elige por su cuenta al Cuidador (perfil, reseñas, Meet & Greet). Garden no recomienda ni garantiza a ningún Cuidador; las calificaciones y la verificación de identidad no garantizan su conducta futura.\n\n'
@@ -684,7 +688,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         ),
 
         // ── 34. CONTACTO ─────────────────────────────────────────────────────
-        _LegalSection(
+        const _LegalSection(
           '34. Contacto y soporte',
           'Para consultas, reportes o ejercicio de derechos:\n\n'
           'Email: contactogardenbo@gmail.com\n'

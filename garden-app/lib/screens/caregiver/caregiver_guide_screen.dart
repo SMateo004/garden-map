@@ -163,7 +163,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                   Text('Tú fijas tus propios precios', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Defines cuánto cobrar por cada servicio desde el paso de Precio en tu configuración. El servicio de GARDEN y los impuestos los paga el cliente aparte: tú recibes íntegro el precio que fijas.',
+                                    'Defines cuánto cobrar por cada servicio desde el paso de Precio en tu configuración. El servicio de GARDEN lo paga el cliente aparte: tú recibes íntegro el precio que fijas.',
                                     style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
                                   ),
                                   const SizedBox(height: 20),
@@ -187,7 +187,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                         const SizedBox(height: 12),
                                         Container(height: 1, color: GardenColors.primary.withValues(alpha: 0.15)),
                                         const SizedBox(height: 10),
-                                        Text('La tarifa de GARDEN y los impuestos se suman aparte al precio que paga el cliente. Los montos son solo de referencia: tú decides qué cobrar.', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                        Text('La tarifa de GARDEN se suma aparte al precio que paga el cliente. Los montos son solo de referencia: tú decides qué cobrar.', style: TextStyle(color: subtextColor, fontSize: 11)),
                                       ],
                                     ),
                                   ),

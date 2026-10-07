@@ -72,6 +72,7 @@ import 'services/fcm_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/garden_live_activity.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
+import 'services/taxes_state.dart';
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
 import 'services/analytics_service.dart';
@@ -786,6 +787,9 @@ Future<void> _bootstrap() async {
   // Uso de la app en todas las plataformas (antes quedaba dentro del bloque
   // de Android y en iOS/web nunca arrancaba) — liviano, falla en silencio.
   unawaited(Analytics.instance.init());
+
+  // ¿Se cobran impuestos? (switch del admin). Hasta saberlo, no se mencionan.
+  unawaited(TaxesState.refresh());
 
   // Cargar preferencia de tema guardada antes de mostrar nada
   await themeNotifier.init();

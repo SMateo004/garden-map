@@ -7,6 +7,7 @@
  *   DELETE /api/admin/pricing/overrides/:id    quita un override (vuelve a la comisión del servicio)
  *   GET    /api/admin/pricing/caregivers?q=    buscador de cuidadores/empresas para asignar un override
  *   POST   /api/admin/pricing/preview          simula cuánto paga el cliente por un precio de cuidador
+ *   PUT    /api/admin/pricing/taxes            aprueba cobrar impuestos o los pone en pausa (único requisito)
  *
  *   GET    /api/admin/pricing/allocation?period=month|year|all   a dónde va la comisión (reporte)
  *   PUT    /api/admin/pricing/allocation                         nueva versión del plan de distribución
@@ -32,6 +33,7 @@ import {
   SETTING_DEFAULT_COMMISSION,
   SETTING_SERVICE_COMMISSION,
   SETTING_TAX_RATE,
+  SETTING_TAXES_ENABLED,
   computeClientCharge,
   getPricingConfig,
   invalidatePricingConfig,
@@ -48,6 +50,7 @@ import {
   validateAllocation,
   type AllocationPeriod,
 } from './commission-allocation.service.js';
+import { stripTaxFromAllUnpaidBookings } from './taxes.service.js';
 
 const pct = (max: number) => z.number().min(0).max(max).multipleOf(0.01);
 
@@ -66,6 +69,12 @@ const overrideBodySchema = z.object({
   caregiverId: z.string().uuid(),
   serviceType: z.enum(['ALL', 'PASEO', 'GUARDERIA', 'HOSPEDAJE']),
   pct: pct(MAX_COMMISSION_PCT),
+});
+
+/** confirm:true obligatorio: el switch nunca cambia por un request accidental. */
+const taxesBodySchema = z.object({
+  enabled: z.boolean(),
+  confirm: z.literal(true),
 });
 
 const previewBodySchema = z.object({
@@ -96,6 +105,18 @@ async function writeSetting(key: string, value: number | null, adminId: string |
   });
 }
 
+function taxesStatus(cfg: Awaited<ReturnType<typeof getPricingConfig>>) {
+  return {
+    /** El admin aprobó cobrar impuestos (el switch). */
+    enabled: cfg.taxesEnabled,
+    /** Se cobran hoy (= enabled). */
+    active: cfg.taxesActive,
+    configuredRatePct: cfg.configuredTaxRatePct,
+    /** Tasa que se aplica hoy a las reservas nuevas. */
+    effectiveRatePct: cfg.taxRatePct,
+  };
+}
+
 async function buildConfigResponse() {
   const cfg = await getPricingConfig();
   const rows = await prisma.caregiverCommissionOverride.findMany({
@@ -113,7 +134,10 @@ async function buildConfigResponse() {
   });
   return {
     defaultCommissionPct: cfg.defaultCommissionPct,
-    taxRatePct: cfg.taxRatePct,
+    // La CONFIGURADA (la que edita el formulario y se reenvía al guardar): devolver la
+    // efectiva (0 en pausa) haría que guardar comisiones borre el 16 % configurado.
+    taxRatePct: cfg.configuredTaxRatePct,
+    taxes: taxesStatus(cfg),
     services: Object.fromEntries(
       PRICED_SERVICES.map((svc) => [
         svc,
@@ -164,7 +188,7 @@ router.put(
       details: {
         before: {
           defaultCommissionPct: before.defaultCommissionPct,
-          taxRatePct: before.taxRatePct,
+          taxRatePct: before.configuredTaxRatePct,
           services: before.serviceCommissionPct,
         },
         after: body,
@@ -172,6 +196,46 @@ router.put(
       ip: req.ip,
     });
     res.json({ success: true, data: await buildConfigResponse() });
+  })
+);
+
+/**
+ * Interruptor de impuestos — la única condición para cobrarlos. Aprobar: las reservas NUEVAS
+ * suman la tasa configurada. Pausar: se deja de cobrar y se quita el impuesto de las reservas
+ * que todavía no se pagaron (taxes.service.ts).
+ */
+router.put(
+  '/taxes',
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = taxesBodySchema.parse(req.body);
+    const adminId = req.user?.userId;
+    const before = await getPricingConfig();
+
+    await prisma.appSettings.upsert({
+      where: { key: SETTING_TAXES_ENABLED },
+      update: { value: JSON.stringify(body.enabled), updatedBy: adminId },
+      create: { key: SETTING_TAXES_ENABLED, value: JSON.stringify(body.enabled), updatedBy: adminId },
+    });
+    // Los listados exponen la tasa efectiva: se invalidan junto con la config.
+    await invalidateCaregiverCaches();
+
+    const swept = body.enabled ? { bookings: 0, totalRemoved: 0 } : await stripTaxFromAllUnpaidBookings();
+
+    auditLog({
+      userId: adminId,
+      action: body.enabled ? 'TAXES_ENABLED' : 'TAXES_PAUSED',
+      entity: 'AppSettings',
+      entityId: SETTING_TAXES_ENABLED,
+      details: {
+        before: { enabled: before.taxesEnabled, active: before.taxesActive },
+        after: { enabled: body.enabled },
+        configuredRatePct: before.configuredTaxRatePct,
+        unpaidBookingsAdjusted: swept,
+      },
+      ip: req.ip,
+    });
+    const cfg = await getPricingConfig();
+    res.json({ success: true, data: { taxes: taxesStatus(cfg), unpaidBookingsAdjusted: swept } });
   })
 );
 
@@ -280,6 +344,7 @@ router.post(
         serviceType: body.serviceType as PricedService,
         commissionPct,
         taxRatePct: cfg.taxRatePct,
+        taxesActive: cfg.taxesActive,
         caregiverPrice: charge.base,
         commission: charge.commission,
         priceBeforeTax: charge.priced,

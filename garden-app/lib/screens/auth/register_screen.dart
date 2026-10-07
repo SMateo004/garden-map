@@ -201,7 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'Garden conecta dueños y cuidadores. No somos empleadores ni prestadores directos del servicio. Los cuidadores son independientes — Garden no puede ser demandada por su conducta.', textColor, subtextColor),
                     _termDivider(borderColor),
                     _termPoint(GIcon.comision, 'Tu tarifa es íntegra',
-                        'Garden suma su servicio al precio que fijas (varía según el servicio) y el cliente paga además los impuestos de ley. Tú recibes íntegramente tu tarifa: no se descuenta nada de lo que fijas.', textColor, subtextColor),
+                        'Garden suma su servicio al precio que fijas (varía según el servicio). Tú recibes íntegramente tu tarifa: no se descuenta nada de lo que fijas.', textColor, subtextColor),
                     _termDivider(borderColor),
                     _termPoint(GIcon.seguridad, 'Registro en Polygon',
                         'Cada reserva pagada queda registrada en la red Polygon (monto, fechas y cómo terminó). Ese registro no se puede modificar después.', textColor, subtextColor),

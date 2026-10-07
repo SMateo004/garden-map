@@ -98,9 +98,9 @@ const List<HelpCategory> helpCenterCategories = [
             heading: '5. Paga tu reserva',
             body: 'Puedes pagar con tu Billetera Garden (si tienes saldo), con '
                 'QR bancario, o combinando ambos. El precio que ves ya incluye '
-                'el servicio de la plataforma; al pagar, en el detalle se suman '
-                'aparte los impuestos de ley (IVA e IT), y ese es el total a '
-                'pagar. El cuidador recibe íntegro el precio que fijó.',
+                'el servicio de la plataforma, y antes de pagar el detalle te '
+                'muestra el total exacto. El cuidador recibe íntegro el precio '
+                'que fijó.',
           ),
           HelpSection(
             heading: '6. Espera la confirmación del cuidador',
@@ -192,13 +192,13 @@ const List<HelpCategory> helpCenterCategories = [
   HelpCategory(
     id: 'pagos',
     title: 'Pagos',
-    description: 'Precio, impuestos, QR bancario, Billetera Garden y donaciones',
+    description: 'Precio, QR bancario, Billetera Garden y donaciones',
     icon: GIcon.pagarQr,
     articles: [
       HelpArticle(
         id: 'como-funciona-pago',
         title: 'Cómo funciona el pago',
-        excerpt: 'Qué incluye el precio y qué impuestos se suman al pagar.',
+        excerpt: 'Qué incluye el precio y cuánto pagas en total.',
         keywords: ['precio', 'cuanto cuesta', 'impuestos', 'iva', 'it', 'total'],
         sections: [
           HelpSection(
@@ -209,10 +209,10 @@ const List<HelpCategory> helpCenterCategories = [
                 'mantenimiento de la app.',
           ),
           HelpSection(
-            heading: 'Impuestos',
-            body: 'Al pagar, el detalle muestra el servicio y, aparte, los '
-                'impuestos de ley (IVA e IT), que se suman al total. El '
-                'cuidador recibe íntegro el precio que él fijó.',
+            heading: 'Cuánto pagas',
+            body: 'Antes de pagar, el detalle de pago te muestra el total '
+                'exacto de tu reserva. El cuidador recibe íntegro el precio '
+                'que él fijó.',
           ),
           HelpSection(
             heading: '¿Cuándo recibe el cuidador su pago?',
@@ -416,7 +416,7 @@ const List<HelpCategory> helpCenterCategories = [
             body: 'Fijas tu propio precio para cada servicio que ofreces, '
                 'dentro de un rango mínimo y máximo que define Garden por '
                 'zona (normalmente entre Bs 15 y Bs 400). Este es el monto que '
-                'recibes íntegro — el servicio de Garden y los impuestos los paga el cliente '
+                'recibes íntegro — el servicio de Garden lo paga el cliente '
                 'aparte.',
           ),
           HelpSection(
@@ -504,7 +504,7 @@ const List<HelpCategory> helpCenterCategories = [
           HelpSection(
             heading: 'Recuerda',
             body: 'El precio que fijas es el monto íntegro que recibes — el '
-                'cliente paga además el servicio de Garden y los impuestos. Si '
+                'cliente paga además el servicio de Garden. Si '
                 'subes o bajas tu precio, se aplica a las reservas nuevas '
                 'desde ese momento, no afecta reservas ya confirmadas.',
           ),

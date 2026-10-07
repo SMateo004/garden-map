@@ -15,6 +15,7 @@ import {
   type PricingConfig,
 } from '../../src/modules/pricing/pricing.service';
 import prisma from '../../src/config/database';
+import { env } from '../../src/config/env';
 
 jest.mock('../../src/config/database', () => ({
   __esModule: true,
@@ -35,6 +36,9 @@ function cfg(over: Partial<PricingConfig> = {}): PricingConfig {
     serviceCommissionPct: {},
     overrides: new Map(),
     taxRatePct: 16,
+    configuredTaxRatePct: 16,
+    taxesEnabled: true,
+    taxesActive: true,
     ...over,
   };
 }
@@ -126,12 +130,62 @@ describe('getPricingConfig (lectura de AppSettings + overrides)', () => {
     mockPrisma.appSettings.findUnique.mockResolvedValue(null);
   });
 
-  it('defaults: 10 % de comisión y 16 % de impuestos', async () => {
+  it('defaults: 10 % de comisión; impuestos configurados en 16 % pero EN PAUSA (tasa efectiva 0)', async () => {
     const c = await getPricingConfig();
     expect(c.defaultCommissionPct).toBe(10);
-    expect(c.taxRatePct).toBe(16);
+    expect(c.configuredTaxRatePct).toBe(16);
+    expect(c.taxesEnabled).toBe(false);
+    expect(c.taxesActive).toBe(false);
+    expect(c.taxRatePct).toBe(0);
     expect(c.serviceCommissionPct).toEqual({});
-    expect(await getTaxRate()).toBeCloseTo(0.16);
+    expect(await getTaxRate()).toBe(0);
+  });
+
+  describe('interruptor de impuestos (el switch del admin es la ÚNICA condición)', () => {
+    const sipBefore = env.SIP_ENABLED;
+    const setSip = (v: boolean) => {
+      (env as { SIP_ENABLED: boolean }).SIP_ENABLED = v;
+    };
+    const setTaxesEnabled = (value: string | null) =>
+      mockPrisma.appSettings.findUnique.mockImplementation(async ({ where }: { where: { key: string } }) =>
+        where.key === 'taxesEnabled' && value !== null ? { key: where.key, value } : null
+      );
+    afterAll(() => setSip(sipBefore));
+
+    // SIP_ENABLED se prueba en ambos valores para dejar claro que NO influye.
+    const cases: Array<[string, string | null, boolean, number]> = [
+      ['sin setting, SIP apagado', null, false, 0],
+      ['sin setting, SIP encendido', null, true, 0],
+      ['pausado, SIP encendido', 'false', true, 0],
+      ['valor corrupto', '"si"', true, 0],
+      ['aprobado, SIP apagado', 'true', false, 16],
+      ['aprobado, SIP encendido', 'true', true, 16],
+    ];
+    it.each(cases)('%s (taxesEnabled=%s, SIP=%s) → tasa efectiva %i %%', async (_name, setting, sip, expectedPct) => {
+      invalidatePricingConfig();
+      setSip(sip);
+      setTaxesEnabled(setting);
+      const c = await getPricingConfig();
+      expect(c.taxRatePct).toBe(expectedPct);
+      expect(c.taxesActive).toBe(expectedPct > 0);
+      expect(c.configuredTaxRatePct).toBe(16);
+      expect(await getTaxRate()).toBeCloseTo(expectedPct / 100);
+    });
+
+    it('si la base falla al leer el switch, NO se cobra impuesto', async () => {
+      invalidatePricingConfig();
+      setSip(true);
+      mockPrisma.appSettings.findUnique.mockRejectedValue(new Error('db caída'));
+      expect((await getPricingConfig()).taxRatePct).toBe(0);
+    });
+
+    it('en pausa, una reserva nueva cobra solo la comisión: Bs 100 → 110 (sin impuesto)', async () => {
+      invalidatePricingConfig();
+      setSip(false);
+      setTaxesEnabled(null);
+      const c = await getPricingConfig();
+      expect(computeClientCharge(100, 0.1, c.taxRatePct / 100)).toEqual({ base: 100, priced: 110, commission: 10, tax: 0, total: 110 });
+    });
   });
 
   it('carga overrides por cuidador y servicio, ignorando servicios desconocidos', async () => {
@@ -157,7 +211,7 @@ describe('getPricingConfig (lectura de AppSettings + overrides)', () => {
     });
     const c = await getPricingConfig();
     expect(c.defaultCommissionPct).toBe(10);
-    expect(c.taxRatePct).toBe(16);
+    expect(c.configuredTaxRatePct).toBe(16);
     expect(c.serviceCommissionPct).toEqual({ HOSPEDAJE: 7.5 });
   });
 });

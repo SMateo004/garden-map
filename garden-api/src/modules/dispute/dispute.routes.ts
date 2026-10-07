@@ -714,7 +714,7 @@ INSTRUCCIONES DEL JUEZ (OBLIGATORIAS — no negociables):
    - CLIENT_WINS → si el cuidador falló, no completó el servicio, o el dueño tiene evidencia.
 3. PARTIAL solo como ÚLTIMO RECURSO absoluto: únicamente si las pruebas objetivas son completamente idénticas en peso para ambos lados y es imposible determinar un responsable. Esto debe ser muy raro.
 7. Siempre incluye qué evidencia específica fue DETERMINANTE en tu decisión.
-8. La comisión de GARDEN y los impuestos se mantienen en cualquier veredicto (salvo CLIENT_WINS, que reembolsa el total pagado).
+8. Los cargos de GARDEN registrados en la reserva (comisión y, solo si la reserva los tiene, impuestos) se mantienen en cualquier veredicto (salvo CLIENT_WINS, que reembolsa el total pagado).
 ${b.cancellationSource === 'NO_SHOW' ? `
 ━━━━━━━━━━━━━━━━━━━━━━━
 REGLAS ESPECÍFICAS PARA DISPUTAS DE NO-SHOW (esta reserva es una — reemplazan

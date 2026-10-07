@@ -14,6 +14,7 @@ import { callClaude } from '../services/claude.service.js';
 import { logAgentCall } from '../shared/agent-logger.js';
 import logger from '../shared/logger.js';
 import { getNumericSetting } from '../utils/settings-cache.js';
+import { getPricingConfig } from '../modules/pricing/pricing.service.js';
 
 // FIX (auditoría 2026-09-27, B2 — parcial): los montos/plazos de abajo eran un
 // string estático con números hardcodeados. Si un admin cambiaba una de estas
@@ -40,10 +41,19 @@ async function buildKnowledgeBase(): Promise<string> {
     getNumericSetting('paseoRefund100Horas', 12),
     getNumericSetting('paseoRefund50Horas', 6),
     getNumericSetting('autoReleasePaymentHoras', 24),
-    getNumericSetting('taxRatePct', 16),
+    getPricingConfig().then((c) => (c.taxesActive ? c.taxRatePct : 0)).catch(() => 0),
     getNumericSetting('qrValidityMinutes', 15),
     getNumericSetting('montoMinimoRetiro', 50),
   ]);
+
+  // Impuestos en pausa (pricing.service.ts): el bot no los menciona hasta que se activen.
+  const taxesActive = taxRatePct > 0;
+  const pricePaymentLine = taxesActive
+    ? `En el detalle de pago se suman los impuestos de ley (IVA + IT, ${taxRatePct}% sobre el precio mostrado) y ese es el total a pagar.`
+    : 'Ese precio es el total a pagar: no se suma nada más al pagar. No menciones impuestos, IVA ni IT.';
+  const caregiverPriceLine = taxesActive
+    ? '(el servicio de Garden y los impuestos los paga el cliente aparte)'
+    : '(el servicio de Garden lo paga el cliente aparte)';
 
   return `
 # RESERVAS Y CANCELACIONES
@@ -55,7 +65,7 @@ async function buildKnowledgeBase(): Promise<string> {
 - Meet & Greet: reunión gratuita de 20-30 min (presencial o videollamada), se coordina desde el chat de la reserva con botón "Proponer Meet & Greet". Cancelar después de un Meet & Greet ya realizado no da reembolso.
 
 # PAGOS
-- Precio final: el precio que ve el cliente en la app ya incluye el servicio de Garden (varía según el servicio y el cuidador/empresa; NO des un porcentaje ni lo desgloses). En el detalle de pago se suman los impuestos de ley (IVA + IT, ${taxRatePct}% sobre el precio mostrado) y ese es el total a pagar. El cuidador recibe íntegro el precio que él mismo fijó.
+- Precio final: el precio que ve el cliente en la app ya incluye el servicio de Garden (varía según el servicio y el cuidador/empresa; NO des un porcentaje ni lo desgloses). ${pricePaymentLine} El cuidador recibe íntegro el precio que él mismo fijó.
 - El pago se libera al cuidador de inmediato si el cliente confirma que el servicio terminó bien, o automático a las ${autoReleaseHoras}h de finalizado el servicio si el cliente no confirma ni abre disputa.
 - QR bancario: válido ${qrValidityMinutes} minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante). Si el cliente ya pagó, debe tocar "Ya realicé el pago": la reserva queda en verificación y no se cancela; si el equipo no alcanza a verificarlo antes de que venza el código, la reserva sigue igual y se revisa después — si en esa revisión el pago no llegó, el monto se descuenta de su Billetera Garden (puede quedar saldo pendiente que se cobra en su próximo pago).
 - Billetera Garden: saldo interno, se acumula sobre todo por reembolsos. Se puede combinar con QR si no cubre el total.
@@ -68,7 +78,7 @@ async function buildKnowledgeBase(): Promise<string> {
 # SER CUIDADOR
 - Registro gratuito, wizard de varios pasos que guarda el progreso si cierras la app a la mitad. Requiere: mayor de 18 años, datos + dirección, foto de perfil, servicios y zona, precios (Bs 15-400 típico, rango por zona), disponibilidad, fotos (mín. 2, más fotos del espacio si ofrece Hospedaje/Guardería), bio + cuestionario, verificación de identidad (CI + prueba de vida con reconocimiento facial AWS Rekognition), verificación de teléfono y correo.
 - Verificación de identidad: normalmente instantánea; si no se confirma automático, pasa a revisión manual (24-48h). Si falla, reintentar con buena luz, CI nítida y completa, rostro centrado sin lentes oscuros/gorra.
-- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe (el servicio de Garden y los impuestos los paga el cliente aparte). Cambiar el precio solo afecta reservas nuevas.
+- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe ${caregiverPriceLine}. Cambiar el precio solo afecta reservas nuevas.
 
 # DISPUTAS Y PROBLEMAS
 - Se activa calificando con menos de 3 estrellas al finalizar un servicio — retiene el pago automáticamente y habilita "abrir disputa". Plazo para abrir la disputa: ${autoReleaseHoras}h desde que terminó el servicio; pasado ese plazo el pago se libera al cuidador y ya no se puede reclamar.

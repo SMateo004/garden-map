@@ -2584,8 +2584,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 6),
           Text(
             serviceCount > 1
-                ? 'Fija un precio para cada servicio que ofreces. Puedes ajustarlos cuando quieras. Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suman el servicio de GARDEN y los impuestos.'
-                : 'Fija tu tarifa. Puedes ajustarla cuando quieras. Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suman el servicio de GARDEN y los impuestos.',
+                ? 'Fija un precio para cada servicio que ofreces. Puedes ajustarlos cuando quieras. Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suma el servicio de GARDEN.'
+                : 'Fija tu tarifa. Puedes ajustarla cuando quieras. Recibes íntegro el precio que fijas. En tu perfil, el dueño ve un precio mayor: se le suma el servicio de GARDEN.',
             style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
           const SizedBox(height: 6),

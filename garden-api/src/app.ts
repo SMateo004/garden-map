@@ -42,6 +42,7 @@ import appHealthRoutes from './modules/app-health/app-health.routes.js';
 import legalRoutes from './modules/legal/legal.routes.js';
 import { hideCommissionFromClients } from './middleware/hide-commission.middleware.js';
 import blockchainRoutes from './modules/blockchain/blockchain.routes.js';
+import { getPricingConfig } from './modules/pricing/pricing.service.js';
 
 const app = express();
 
@@ -397,7 +398,15 @@ app.get('/api/settings', async (_req, res) => {
       montoMinimoRetiro: 50,
       autoReleasePaymentHoras: 24,
     };
-    res.json({ success: true, data: { ...defaults, ...map } });
+    // Impuestos aprobados por el admin con el switch (pricing.service.ts). Mientras sea false
+    // la app no menciona impuestos en ningún lado.
+    let taxesActive = false;
+    try {
+      taxesActive = (await getPricingConfig()).taxesActive;
+    } catch {
+      taxesActive = false;
+    }
+    res.json({ success: true, data: { ...defaults, ...map, taxesActive } });
   } catch {
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading settings' } });
   }

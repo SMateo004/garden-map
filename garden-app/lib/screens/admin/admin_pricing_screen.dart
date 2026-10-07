@@ -6,6 +6,7 @@ import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'admin_commission_allocation_screen.dart';
+import 'admin_taxes_switch_card.dart';
 
 /// Admin > Comisiones — ÚNICO lugar donde se configura la comisión de GARDEN.
 /// Pestaña "Tarifas" (esta) y pestaña "Distribución" (a dónde va la comisión,
@@ -14,7 +15,8 @@ import 'admin_commission_allocation_screen.dart';
 /// - Comisión de GARDEN por servicio (Paseo / Guardería / Hospedaje) y una por
 ///   defecto para los servicios sin comisión propia.
 /// - Comisión personalizada por cuidador o empresa (todos los servicios o uno).
-/// - Impuestos (IVA + IT): % que se suma al total en el detalle de pago.
+/// - Impuestos (IVA + IT): interruptor que el admin aprueba o pone en pausa (la única
+///   condición para cobrarlos) y la tasa que se aplica cuando están aprobados.
 ///
 /// El cliente NUNCA ve la comisión: ve el precio del servicio y los impuestos
 /// por separado (ver payment_screen.dart). Los cambios solo afectan reservas
@@ -321,9 +323,10 @@ class _AdminPricingScreenState extends State<AdminPricingScreen> {
                   hint: 'usa ${_defaultCtl.text.isEmpty ? '—' : _defaultCtl.text} %'),
           ]),
         ]),
+        AdminTaxesSwitchCard(adminToken: widget.adminToken, onChanged: _load),
         card([
-          title('Impuestos (IVA 13 % + IT 3 %)',
-              'Se suman al total del servicio y se muestran en el detalle de pago. Hoy GARDEN tributa sobre el total, no solo sobre su comisión.'),
+          title('Tasa de impuestos (IVA 13 % + IT 3 %)',
+              'Se aplica solo mientras los impuestos estén aprobados (interruptor de arriba). En pausa no se cobra ni se muestra.'),
           pctField('Impuestos', _taxCtl),
           const SizedBox(height: 16),
           Align(
@@ -415,7 +418,10 @@ class _AdminPricingScreenState extends State<AdminPricingScreen> {
             _previewRow('Comisión GARDEN (${_fmt(_preview!['commissionPct'] as num)} %, no visible al cliente)',
                 _preview!['commission'], textColor, subtextColor),
             _previewRow('Precio que ve el cliente', _preview!['priceBeforeTax'], textColor, subtextColor),
-            _previewRow('Impuestos (${_fmt(_preview!['taxRatePct'] as num)} %)', _preview!['tax'], textColor, subtextColor),
+            if (_preview!['taxesActive'] == true)
+              _previewRow('Impuestos (${_fmt(_preview!['taxRatePct'] as num)} %)', _preview!['tax'], textColor, subtextColor)
+            else
+              _previewRow('Impuestos (en pausa)', 0, textColor, subtextColor),
             const Divider(height: 18),
             _previewRow('El cliente paga', _preview!['clientPays'], textColor, subtextColor, bold: true),
           ],

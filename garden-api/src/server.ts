@@ -253,6 +253,14 @@ async function start() {
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
     logger.info('Starting background jobs...');
+    // Impuestos en pausa: reservas impagas creadas antes de la pausa no deben cobrar
+    // impuesto (taxes.service.ts). Idempotente; no hace nada si están activos.
+    import('./modules/pricing/taxes.service.js')
+      .then((m) => m.stripTaxFromAllUnpaidBookings())
+      .then((r) => {
+        if (r.bookings > 0) logger.info('[TAXES] reservas impagas sin impuesto al arrancar', r);
+      })
+      .catch((err) => logger.error('[TAXES] barrido de impuestos al arrancar falló', { err }));
     iniciarJobAjustePrecios();
     iniciarJobNotificacionesProgramadas();
     iniciarJobWalkExpiry();

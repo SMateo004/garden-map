@@ -2994,6 +2994,12 @@ export async function getFinancialStats() {
     ) as Record<string, number>,
     customOverrides: pricingCfg.overrides.size,
   };
+  /** Interruptor de impuestos (Admin > Comisiones / Finanzas). taxRatePct de arriba es la efectiva. */
+  const taxes = {
+    enabled: pricingCfg.taxesEnabled,
+    active: pricingCfg.taxesActive,
+    configuredRatePct: pricingCfg.configuredTaxRatePct,
+  };
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -3213,6 +3219,8 @@ export async function getFinancialStats() {
     monthlyChart: monthlyData,
     /** Tarifas vigentes, leídas de Admin > Comisiones (única fuente). */
     currentPricing,
+    /** Estado del cobro de impuestos (en pausa hasta que el admin lo apruebe con el switch). */
+    taxes,
     /** A dónde va la comisión acumulada según el plan de Admin > Comisiones > Distribución. */
     commissionAllocation,
     /**
@@ -3226,7 +3234,7 @@ export async function getFinancialStats() {
     incomeStatement: {
       revenues: {
         commissionsEarned: gardenCommissions,
-        description: `GARDEN cobra una comisión sobre el precio del cuidador que varía por servicio y por cuidador/empresa (configurable solo en Admin > Comisiones). Los impuestos cobrados al cliente (Bs ${taxesCollected.toFixed(2)}) se tributan aparte y no son ingreso.`,
+        description: `GARDEN cobra una comisión sobre el precio del cuidador que varía por servicio y por cuidador/empresa (configurable solo en Admin > Comisiones).${taxesCollected > 0 ? ` Los impuestos cobrados al cliente (Bs ${taxesCollected.toFixed(2)}) se tributan aparte y no son ingreso.` : ''}`,
       },
       expenses: {
         refundedCommissions: refundCommLost,
@@ -3237,7 +3245,8 @@ export async function getFinancialStats() {
       note: (() => {
         const p = currentPricing.services.PASEO ?? pricingCfg.defaultCommissionPct;
         const priced = Math.round(30 * (1 + p / 100));
-        return `Tarifas vigentes (Admin > Comisiones): Paseo ${currentPricing.services.PASEO}% · Guardería ${currentPricing.services.GUARDERIA}% · Hospedaje ${currentPricing.services.HOSPEDAJE}%. Ej. paseo: cuidador cobra Bs 30 → precio Bs ${priced} + impuestos ${currentPricing.taxRatePct}% → GARDEN gana Bs ${priced - 30}.`;
+        const taxPart = taxes.active ? ` + impuestos ${currentPricing.taxRatePct}%` : '';
+        return `Tarifas vigentes (Admin > Comisiones): Paseo ${currentPricing.services.PASEO}% · Guardería ${currentPricing.services.GUARDERIA}% · Hospedaje ${currentPricing.services.HOSPEDAJE}%. Ej. paseo: cuidador cobra Bs 30 → precio Bs ${priced}${taxPart} → GARDEN gana Bs ${priced - 30}.`;
       })(),
     },
     /**

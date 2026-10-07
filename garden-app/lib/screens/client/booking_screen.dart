@@ -11,6 +11,7 @@ import '../../design/garden_service.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../services/taxes_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -229,6 +230,9 @@ class _BookingScreenState extends State<BookingScreen> {
       final response = await http.get(Uri.parse('$_baseUrl/settings'));
       final data = jsonDecode(response.body);
       if (data['success'] == true && mounted) {
+        // Mismo GET /settings: refresca si hoy se cobran impuestos (desglose de abajo).
+        TaxesState.applySettings((data['data'] as Map?)?.cast<String, dynamic>());
+        setState(() {});
         final raw = data['data']?['caregiverAcceptWindowHoras'];
         final parsed = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
         if (parsed != null && parsed > 0) {
@@ -799,19 +803,26 @@ class _BookingScreenState extends State<BookingScreen> {
     return null;
   }
 
-  /// Tasa de impuestos (IVA+IT) que el backend suma sobre los precios
-  /// mostrados — viene en GET /caregivers/:id. Null si el cuidador llegó
-  /// precargado desde un listado que no la trae: ahí se avisa que los
-  /// impuestos se suman al pagar en vez de inventar una tasa.
+  /// Tasa de impuestos que el backend suma sobre los precios mostrados — viene
+  /// en GET /caregivers/:id y es 0 mientras los impuestos estén en pausa (switch
+  /// del admin, ver TaxesState). Null solo si se cobran impuestos y el
+  /// cuidador llegó precargado desde un listado que no trae la tasa: ahí se avisa
+  /// que se suman al pagar en vez de inventar una. En pausa nunca es null: el
+  /// precio mostrado ya es el total y no se mencionan impuestos.
   double? get _taxRate {
     final pct = (_caregiver?['taxRatePct'] as num?)?.toDouble();
-    return pct == null ? null : pct / 100;
+    if (pct != null) return pct / 100;
+    return TaxesState.active.value ? null : 0;
   }
+
+  /// ¿Hay un impuesto que mostrar en el desglose? (tasa conocida y mayor a 0)
+  bool get _showsTax => (_taxRate ?? 0) > 0;
 
   /// Impuesto y total como los calcula pricing.service.ts (montos enteros).
   /// Varios días (paseo o guardería): el backend cobra cada día como su propia
   /// reserva (impuesto redondeado por día), así que se calcula un día y se
   /// multiplica — si no, el total podía diferir en 1 Bs del que se paga.
+  /// Sin impuesto (en pausa) el total es el subtotal y `tax` es null.
   ({int subtotal, int? tax, int total}) _priceBreakdown(double price) {
     final days = _isMultiDayMode ? _selectedDates.length : 1;
     if (days > 1) {
@@ -828,7 +839,7 @@ class _BookingScreenState extends State<BookingScreen> {
   ({int subtotal, int? tax, int total}) _dayPriceBreakdown(double price) {
     final subtotal = price.round();
     final rate = _taxRate;
-    if (rate == null) return (subtotal: subtotal, tax: null, total: subtotal);
+    if (rate == null || rate <= 0) return (subtotal: subtotal, tax: null, total: subtotal);
     final tax = (subtotal * rate).round();
     return (subtotal: subtotal, tax: tax, total: subtotal + tax);
   }
@@ -2151,7 +2162,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(_taxRate != null ? 'Total con impuestos' : 'Subtotal (+ impuestos)',
+                                Text(_taxRate == null ? 'Subtotal (+ impuestos)' : (_showsTax ? 'Total con impuestos' : 'Total'),
                                     style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                 Text('Bs ${_priceBreakdown(calculatedPrice).total}',
                                     style: const TextStyle(
@@ -3716,13 +3727,13 @@ class _BookingScreenState extends State<BookingScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(breakdown.tax != null ? 'Total' : 'Subtotal',
+              Text(_taxRate == null ? 'Subtotal' : 'Total',
                   style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
               Text('Bs ${breakdown.total}',
                   style: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
             ],
           ),
-          if (breakdown.tax == null)
+          if (_taxRate == null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('Los impuestos (IVA e IT) se suman en el detalle de pago.',

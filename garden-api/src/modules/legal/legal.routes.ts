@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { getPricingConfig } from '../pricing/pricing.service.js';
+import { withoutTaxMentions } from './tax-clauses.js';
 
 /**
  * Páginas públicas de Política de Privacidad y Términos y Condiciones —
@@ -83,7 +85,7 @@ const SECTIONS: Array<{ title: string; body: string }> = [
   },
 ];
 
-const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
+export const SECTIONS_TERMS: Array<{ title: string; body: string }> = [
   {
     title: '1. Quiénes somos y qué es Garden',
     body: 'Garden Bolivia ("Garden", "la Plataforma", "nosotros") es una plataforma tecnológica de intermediación que conecta a dueños de mascotas ("Clientes" o "Dueños") con personas que ofrecen servicios de cuidado de animales domésticos ("Cuidadores") en Santa Cruz de la Sierra, Bolivia.\n\n'
@@ -539,10 +541,21 @@ router.get('/privacy', (_req, res) => {
   res.send(renderPage('Política de Privacidad', SECTIONS));
 });
 
+/** Términos vigentes: sin menciones de impuestos mientras estén en pausa (tax-clauses.ts). */
+export function termsSections(taxesActive: boolean): Array<{ title: string; body: string }> {
+  return taxesActive ? SECTIONS_TERMS : SECTIONS_TERMS.map((s) => ({ ...s, body: withoutTaxMentions(s.body) }));
+}
+
 /** GET /legal/terms — página pública de Términos y Condiciones (requerida por las tiendas de apps). */
-router.get('/terms', (_req, res) => {
+router.get('/terms', async (_req, res) => {
+  let taxesActive = false;
+  try {
+    taxesActive = (await getPricingConfig()).taxesActive;
+  } catch {
+    taxesActive = false;
+  }
   res.set('Content-Type', 'text/html; charset=utf-8');
-  res.send(renderPage('Términos y Condiciones', SECTIONS_TERMS));
+  res.send(renderPage('Términos y Condiciones', termsSections(taxesActive)));
 });
 
 export default router;

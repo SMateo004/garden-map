@@ -72,7 +72,8 @@ const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
 import { getNumericSetting } from '../../utils/settings-cache.js';
 import { termsGateWhere } from '../legal/caregiver-terms.service.js';
-import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf } from '../pricing/pricing.service.js';
+import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf, getPricingConfig } from '../pricing/pricing.service.js';
+import { stripTaxFromUnpaidBooking } from '../pricing/taxes.service.js';
 
 /** Lee los parámetros del negocio desde AppSettings (con cache 30s). */
 async function getBookingSettings() {
@@ -1638,6 +1639,21 @@ export async function initPayment(
     }
     const memberIds = members.map((m) => m.id);
     const isGroup = members.length > 1;
+
+    // ── Impuestos en pausa ────────────────────────────────────────────────
+    // Un día creado antes de pausar los impuestos puede traer taxAmount > 0.
+    // Mientras estén en pausa no se cobran: se quita de cada día (la líder y los
+    // demás del grupo) ANTES de sumar el cobro (taxes.service.ts). El QR se genera
+    // más abajo con el monto ya corregido.
+    if (!(await getPricingConfig()).taxesActive) {
+      for (const m of members) {
+        const stripped = await stripTaxFromUnpaidBooking(tx, m.id);
+        if (stripped.removed > 0) {
+          m.totalAmount = new Prisma.Decimal(Number(m.totalAmount) - stripped.removed);
+          logger.info('[TAXES] impuesto quitado al iniciar el pago (impuestos en pausa)', { bookingId: m.id, removed: stripped.removed });
+        }
+      }
+    }
 
     // ── NIT para la factura de esta reserva ───────────────────────────────
     // Snapshot en la propia reserva (no sigue cambios futuros al default del

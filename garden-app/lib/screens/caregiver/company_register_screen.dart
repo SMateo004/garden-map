@@ -1409,7 +1409,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
       children: [
         Text('Precios', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text('Define los precios para los servicios que ofrece tu empresa. Tu empresa recibe íntegro el precio que fija. En su perfil, el dueño ve un precio mayor: se le suman el servicio de GARDEN y los impuestos.',
+        Text('Define los precios para los servicios que ofrece tu empresa. Tu empresa recibe íntegro el precio que fija. En su perfil, el dueño ve un precio mayor: se le suma el servicio de GARDEN.',
             style: TextStyle(color: subtextColor, fontSize: 14)),
         const SizedBox(height: 24),
         if (_services.contains('HOSPEDAJE'))

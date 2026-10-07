@@ -58,7 +58,7 @@ const List<ContractSection> caregiverContractSections = [
   ),
   ContractSection(
     '4. Cómo se paga tu servicio',
-    'Tú fijas libremente tu propio precio. Garden suma una tarifa de plataforma sobre tu precio (varía según el servicio) y el Cliente paga además los impuestos de ley; tú nunca pierdes parte de tu tarifa. Ejemplo: si cobras Bs. 100, tú recibes tus Bs. 100 completos.\n\n'
+    'Tú fijas libremente tu propio precio. Garden suma una tarifa de plataforma sobre tu precio (varía según el servicio); tú nunca pierdes parte de tu tarifa. Ejemplo: si cobras Bs. 100, tú recibes tus Bs. 100 completos.\n\n'
     'El pago se libera a tu billetera Garden de inmediato si el Cliente confirma que el servicio terminó bien, o automáticamente a las 24 horas de finalizado el servicio si el Cliente no confirma ni abre una disputa. Las propinas que te dejen los Clientes son 100% tuyas, sin comisión.\n\n'
     'Puedes retirar tu saldo a tu cuenta bancaria o billetera digital cuando quieras (monto mínimo aplica) — se procesa en 1-3 días hábiles, sin costo.\n\n'
     'Lo que recibes es un ingreso por tu servicio independiente: declararlo y pagar los impuestos que correspondan es tu responsabilidad.',
