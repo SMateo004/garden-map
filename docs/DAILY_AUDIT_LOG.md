@@ -2386,3 +2386,87 @@ profundidad — recordatorio)
 - Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
   recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
   si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+
+---
+
+## 2026-10-07 — Rediseño de `garden-app` del 6-7 de octubre (tarjeta/perfil de cuidador, perfil
+## propio, calificaciones, notificaciones, invita y gana, chat) — sin hallazgo nuevo
+
+**Commit de referencia al iniciar la auditoría:** `c6f13dd` (test: fotos del catálogo con los
+íconos planos). `git log` mostró 14 commits de UI en Flutter sin pasar por esta auditoría desde
+la corrida anterior (`d80cea5` en adelante, 2026-10-06/07): tarjeta de cuidador del marketplace,
+perfil público del cuidador, volumen/sombras en botones y figuras (y su reversión parcial),
+inicio/disponibilidad/edición de perfil del cuidador, Mis datos, Mis mascotas, Mis reservas del
+cuidador, Mi perfil (unificado celular/web), Mis calificaciones, notificaciones (campana),
+"Invita y gana" con enlace que aplica el código solo, e íconos planos + chat rediseñado. Se eligió
+esta área (en vez de abrir una nueva) porque ninguno de estos 14 commits había pasado por la
+auditoría todavía, dos de ellos tocan flujos con dinero de forma tangencial (referidos, precios
+mostrados al cliente) y uno es una reescritura grande (1296 líneas) de la pantalla de perfil que
+unifica dos copias previamente desincronizadas — justo el tipo de cambio donde suele colarse una
+regresión (un ítem de menú que desaparece para un rol, un candado que deja de aplicarse).
+
+**Revisado con el código fuente, no solo los mensajes de commit:**
+- `referral.service.ts` / `referral_invite.dart` (enlace `gardenbo.com/register?ref=CODIGO` que
+  guarda el código y lo aplica solo al haber sesión): el anti-abuso ya existente
+  (`CANNOT_REFER_SELF`, `REFERRAL_ALREADY_APPLIED`, `REFERRAL_TOO_LATE`, claim atómico con
+  `updateMany`) no se tocó — los campos nuevos (`rewardedCount`, `myBonus`) son de solo lectura.
+  `ReferralInvite.applyPending` descarta el código guardado ante cualquier respuesta del servidor
+  que no sea error de red (2xx o 4xx), y lo deja pendiente solo ante excepción o 5xx — coincide con
+  lo que dice el commit. Que el código se intente aplicar en cada carga del marketplace (no solo
+  tras el registro) no abre ninguna vía nueva de abuso: ya era posible cargar el código de otro a
+  mano en cualquier momento antes del primer servicio completado; esto solo automatiza lo mismo.
+- `notification_bell.dart` + `notification_kind.dart` (ícono/tema/ruta por tipo de notificación):
+  se comparó el mapa `_exact` contra un grep real de todos los `type: '...'` que crea
+  `garden-api/src` (72 valores) — todo lo que no cae en `_exact` cae en un respaldo por prefijo con
+  ícono propio (no el genérico), y los 8 valores que el test excluye como "no son notificaciones"
+  (`DONATION`, `FINE`, `HOURLY_PING`, etc.) se confirmaron uno por uno como eventos de servicio o
+  movimientos de billetera (`walletTransaction.create`/`ServiceEvent`, no `Notification.create`) —
+  el test no se está engañando a sí mismo excluyendo algo que sí debería tener ícono. Sin
+  hallazgos.
+- `profile_screen.dart` (reescritura de 1296 líneas, celular+web unificados): se recorrió
+  `_roleGroups()` para los 4 casos (CLIENT, CAREGIVER dueño, CAREGIVER empleado de equipo, ADMIN) —
+  el grupo "Trabaja con GARDEN" queda correctamente condicionado a `_role == 'CLIENT'` (rol
+  permanente, no el efectivo, así que un cuidador navegando en modo cliente no lo ve) y el de
+  empleado de equipo (`AuthState.isCaregiverStaff`) correctamente no muestra "Datos del
+  cuidador"/"Capacitaciones" — se confirmó en el schema (`CaregiverStaffMember` no tiene su propio
+  `CaregiverProfile`, comparte el del dueño) que `GET /caregiver/my-profile` no aplica a un
+  empleado, así que no hay un perfil de cuidador propio al que exigirle estos pasos. Cambio de modo
+  (dueño/cuidador/empleado) sigue viviendo en `ModeSwitcherCard`, sin duplicarse. Logout y "Eliminar
+  cuenta" siguen presentes. Sin hallazgos.
+- `notification_settings_screen.dart`: el patrón de `GardenSettingsRow` con `onTap` que alterna el
+  mismo valor que el `Switch` de `trailing` (tocar la fila entera también prende/apaga) es el mismo
+  patrón estándar de Flutter (el `Switch` gana el gesto si se toca justo encima); no es un doble
+  toggle. El grupo "Siempre activas" (reservas/pagos/reembolsos) no tiene `onTap` ni `Switch` — no
+  hay manera de apagarlo desde la UI, coherente con que el backend nunca lee esas dos preferencias
+  para bloquear avisos transaccionales.
+- `chat_screen.dart` + `garden_chat.dart` (nuevo): separadores de día, agrupado de mensajes
+  seguidos, "N mensajes nuevos" si se está leyendo más arriba, enlaces tocables
+  (`launchUrl(..., mode: LaunchMode.externalApplication)` sobre texto de la otra persona en un chat
+  1 a 1 ya autenticado — mismo riesgo que cualquier chat con links, no un hallazgo nuevo) y tarjeta
+  de ubicación del Meet & Greet. Sin hallazgos de lógica.
+- `garden_caregiver_card.dart` (precio por servicio en la tarjeta del marketplace): la prioridad
+  30 min → 1 h para el paseo y las unidades (hora/noche) coinciden con los campos que de verdad usa
+  el backend (`pricePerWalk30/60`, `pricePerGuarderia`, `pricePerDay`) — es display puro, no
+  recalcula ningún monto.
+
+### Sin cambios aplicados hoy
+No se encontró ningún bug nuevo (ni de alto ni de bajo riesgo) en el lote de 14 commits de UI
+revisado hoy — coincide con lo que ya habían dicho sus propios mensajes de commit (cada uno lista
+su propio arreglo, ya aplicado) y no se encontró ninguna regresión del rediseño sobre lo ya
+auditado. No se corrió `flutter analyze` ni los tests de Flutter: este entorno de ejecución no
+tiene Flutter instalado (mismo límite ya documentado en corridas anteriores) — la revisión de hoy
+fue 100% lectura de código fuente y diffs, comparado donde hizo falta contra el backend real
+(grep de `type: '...'` en `garden-api/src`, schema de `CaregiverStaffMember`).
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces, no revisadas hoy en
+profundidad — recordatorio)
+- Antecedentes del cuidador: auto-aprobación de "antecedentes limpios" por una sola IA sin humano,
+  y auto-limpieza de una revisión ya marcada con solo resubir un documento (2026-10-02).
+- Meet & Greet sin reembolso en caso de incompatibilidad (2026-10-02).
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — no se confirmó si ya se revisó.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
