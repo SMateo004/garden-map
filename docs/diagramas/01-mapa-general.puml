@@ -1,0 +1,128 @@
+@startuml 01-mapa-general
+' GARDEN — mapa general: quién participa y qué hace cada uno (vista funcional)
+' Renderizar: https://www.plantuml.com/plantuml  o  extensión PlantUML de VS Code
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Dueño de mascota" as Dueno
+actor "Cuidador\n(individual / profesional)" as Cuidador
+actor "Empresa cuidadora" as Empresa
+actor "Empleado de empresa" as Empleado
+actor "Administrador GARDEN" as Admin
+actor "Banco (QR)" as Banco <<externo>>
+actor "Agentes de IA" as IA <<sistema>>
+actor "Refugios / Veterinarias aliadas" as Aliados <<externo>>
+actor "Cliente de mostrador\n(sin app)" as WalkIn <<externo>>
+
+Empresa -|> Cuidador
+Empleado ..> Empresa : trabaja para
+
+rectangle "GARDEN" {
+  package "Confianza" {
+    usecase "Registrarse y verificar\nteléfono / correo" as UC_Reg
+    usecase "Verificar identidad\n(selfie + carnet + prueba de vida)" as UC_Id
+    usecase "Subir antecedentes" as UC_Ant
+    usecase "Aprobar / rechazar\ncuidador" as UC_Aprob
+    usecase "Capacitaciones\nobligatorias" as UC_Cap
+  }
+  package "Reserva" {
+    usecase "Buscar cuidador\n(servicio, zona, precio)" as UC_Buscar
+    usecase "Reservar paseo /\nguardería / hospedaje" as UC_Reservar
+    usecase "Meet & Greet" as UC_MG
+    usecase "Reserva recurrente" as UC_Rec
+    usecase "Aceptar / rechazar\nreserva" as UC_Aceptar
+    usecase "Lista de espera" as UC_Wait
+  }
+  package "Dinero" {
+    usecase "Pagar (QR / billetera)" as UC_Pagar
+    usecase "Aprobar pago manual" as UC_AprobPago
+    usecase "Billetera, propinas,\ncódigos, referidos" as UC_Wallet
+    usecase "Retirar saldo" as UC_Retiro
+    usecase "Procesar retiro" as UC_ProcRetiro
+    usecase "Comisiones e impuestos" as UC_Comis
+    usecase "Donar a refugio" as UC_Donar
+  }
+  package "Servicio en vivo" {
+    usecase "Ejecutar servicio\n(fotos, GPS, bitácora)" as UC_Ejec
+    usecase "Seguir en vivo / SOS\n/ extender" as UC_Seguir
+    usecase "Atender emergencia" as UC_Emerg
+  }
+  package "Después del servicio" {
+    usecase "Calificar y liberar pago" as UC_Calif
+    usecase "Calificar al dueño" as UC_CalifDueno
+    usecase "Disputa" as UC_Disp
+    usecase "Juez de disputa" as UC_Juez
+    usecase "Veredicto final / apelación" as UC_Apel
+  }
+  package "Operación" {
+    usecase "Chat de reserva" as UC_Chat
+    usecase "Soporte (bot + humano)" as UC_Sop
+    usecase "Recepción y CRM\nde mostrador" as UC_CRM
+    usecase "Gestionar equipo" as UC_Equipo
+    usecase "Notificaciones masivas,\nbanners, ciudades" as UC_Com
+    usecase "Finanzas, analítica,\nauditoría, blockchain" as UC_Sis
+  }
+}
+
+Dueno --> UC_Reg
+Dueno --> UC_Buscar
+Dueno --> UC_Reservar
+Dueno --> UC_MG
+Dueno --> UC_Rec
+Dueno --> UC_Wait
+Dueno --> UC_Pagar
+Dueno --> UC_Wallet
+Dueno --> UC_Retiro
+Dueno --> UC_Donar
+Dueno --> UC_Seguir
+Dueno --> UC_Calif
+Dueno --> UC_Disp
+Dueno --> UC_Chat
+Dueno --> UC_Sop
+
+Cuidador --> UC_Reg
+Cuidador --> UC_Id
+Cuidador --> UC_Ant
+Cuidador --> UC_Cap
+Cuidador --> UC_Aceptar
+Cuidador --> UC_MG
+Cuidador --> UC_Ejec
+Cuidador --> UC_CalifDueno
+Cuidador --> UC_Disp
+Cuidador --> UC_Wallet
+Cuidador --> UC_Retiro
+Cuidador --> UC_Chat
+Cuidador --> UC_Sop
+
+Empresa --> UC_CRM
+Empresa --> UC_Equipo
+Empleado --> UC_CRM
+Empleado --> UC_Ejec
+WalkIn ..> UC_CRM : es fichado
+
+UC_Aprob <-- Admin
+UC_AprobPago <-- Admin
+UC_ProcRetiro <-- Admin
+UC_Comis <-- Admin
+UC_Emerg <-- Admin
+UC_Apel <-- Admin
+UC_Com <-- Admin
+UC_Sis <-- Admin
+
+UC_Pagar <-- Banco : confirma pago
+UC_Juez <-- IA
+UC_Ant <-- IA : revisa documento
+UC_Sop <-- IA : responde y escala
+UC_Donar --> Aliados
+
+UC_Disp ..> UC_Juez : <<include>>
+UC_Juez ..> UC_Apel : <<extend>>
+UC_Pagar ..> UC_AprobPago : <<extend>>\nsi el banco no confirma
+UC_Retiro ..> UC_ProcRetiro : <<include>>
+UC_Seguir ..> UC_Emerg : <<extend>>\nSOS
+UC_Reg ..> UC_Id : <<include>>\n(solo cuidador)
+UC_Id ..> UC_Aprob : <<include>>
+@enduml

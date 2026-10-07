@@ -1,0 +1,46 @@
+@startuml 06-flujo-del-dinero
+' GARDEN — por dónde entra, se retiene y sale el dinero
+' Ejemplo: cuidador Bs 100, comisión 10 % → dueño paga Bs 110.
+' Impuestos IVA + IT (16 %) EN PAUSA hasta que el admin los apruebe; activos: Bs 110 + 18 = Bs 128.
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam rectangle {
+  RoundCorner 12
+}
+
+actor "Dueño" as Dueno
+actor "Cuidador" as Cuidador
+actor "Banco" as Banco
+actor "Refugio" as Refugio
+actor "Admin" as Admin
+
+rectangle "Billetera del dueño" as BD
+rectangle "Billetera del cuidador" as BC
+rectangle "GARDEN retiene el pago\n(Bs 110 en el ejemplo)" as Retenido
+rectangle "Comisión GARDEN (Bs 10)\n→ distribución por destino" as Comision
+rectangle "Impuestos IVA + IT\n(solo si el admin los activó;\nhoy en pausa)" as Impuestos
+rectangle "Donaciones en tránsito" as Donaciones
+
+Dueno --> Banco : paga QR
+Banco --> Retenido : confirma\n(o admin aprueba, o se aprueba\nsola si el dueño avisó que pagó)
+Dueno --> BD : gift code, bono de referido
+BD --> Retenido : paga con saldo
+
+Retenido --> BC : servicio OK\n(neto Bs 100)
+Retenido --> Comision
+Retenido --> Impuestos
+Retenido --> BD : reembolso\n(cancelación, rechazo,\nMeet & Greet incompatible,\ndisputa ganada)
+Admin --> BD : pago declarado que no llegó\n→ se descuenta (puede quedar deuda)
+
+Dueno --> Donaciones : donación opcional
+Donaciones --> Refugio : admin registra\nla transferencia
+
+Dueno --> BC : propina
+BD --> BC : tiempo extra\n(si falta saldo, queda deuda)
+
+BC --> Admin : pide retiro (mín. Bs 50)
+BD --> Admin : pide retiro
+Admin --> Cuidador : transfiere a banco,\nbilletera móvil o QR
+Admin --> Dueno : transfiere
+@enduml

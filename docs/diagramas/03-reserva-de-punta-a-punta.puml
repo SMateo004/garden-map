@@ -1,0 +1,103 @@
+@startuml 03-reserva-de-punta-a-punta
+' GARDEN — una reserva de punta a punta, por carriles (quién hace cada paso)
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam swimlaneWidth same
+
+|Dueño|
+start
+:Busca en el marketplace\n(servicio, zona, precio);
+:Abre el perfil del cuidador\n(fotos, reseñas, sellos, calendario);
+if (¿Hay disponibilidad?) then (no)
+  :Se anota en lista de espera;
+  |GARDEN|
+  :Avisa cuando se libera un hueco;
+  |Dueño|
+endif
+:Elige fechas/horario, mascotas, extras;
+if (¿Quiere Meet & Greet antes de pagar?) then (sí)
+  |Cuidador|
+  :Encuentro presencial o por video;
+  |Dueño|
+  if (¿Sigue adelante?) then (no)
+    :Reserva cancelada sin cobro;
+    stop
+  endif
+endif
+:Ve el total (servicio; impuestos solo\nsi el admin los activó)\naplica código / donación / NIT;
+if (¿Cómo paga?) then (billetera)
+  |GARDEN|
+  :Descuenta de la billetera;
+else (QR o mixto)
+  |Banco|
+  :Cobra el QR;
+  if (¿Banco integrado?) then (sí)
+    :Confirma el pago a GARDEN;
+  else (no)
+    |Dueño|
+    :Toca "Ya realicé el pago";
+    |Admin|
+    if (¿Revisa antes de que venza el código?) then (sí)
+      :Aprueba (o rechaza: el dueño vuelve a pagar);
+    else (no)
+      |GARDEN|
+      :Se aprueba sola;\nel admin verifica después
+      (si no llegó, se descuenta de la billetera del dueño);
+    endif
+  endif
+endif
+
+|GARDEN|
+:Retiene el dinero;\nAvisa al cuidador;
+
+|Cuidador|
+if (¿Acepta en 3 h?) then (sí, o reserva instantánea)
+  :Reserva confirmada;
+else (rechaza / no responde)
+  |GARDEN|
+  :Reembolsa 100% a la billetera;
+  stop
+endif
+
+|Dueño|
+:Chatea y coordina;
+note right
+  Si cancela: reembolso según
+  anticipación (100 / 50 / 0 %)
+end note
+
+|Cuidador|
+:Abre "Gestionar servicio" con PIN;
+:En camino → Llegué → Inicia con foto;
+fork
+  :Comparte GPS y bitácora\n(comidas, paseos, fotos, medicación);
+fork again
+  |Dueño|
+  :Sigue en vivo;\nPuede extender y pagar la diferencia;
+  if (¿Emergencia?) then (SOS)
+    |Admin|
+    :Atiende la emergencia;\nEl servicio se pausa;
+  endif
+end fork
+|Cuidador|
+:Termina con foto;
+
+|Dueño|
+if (¿Cómo califica?) then (3 a 5 estrellas)
+  |GARDEN|
+  :Libera el pago al cuidador\n(neto = total − comisión − impuestos);
+elseif (1 o 2 estrellas) then
+  |GARDEN|
+  :Retiene el pago y abre disputa\n(ver diagrama 05);
+else (no califica en 24 h)
+  |GARDEN|
+  :Libera el pago automáticamente;
+endif
+
+|Cuidador|
+:Califica al dueño;
+:Retira su saldo cuando quiera;
+|Admin|
+:Transfiere el retiro y lo marca completado;
+stop
+@enduml

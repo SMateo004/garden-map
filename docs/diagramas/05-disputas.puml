@@ -1,0 +1,60 @@
+@startuml 05-disputas
+' GARDEN — cómo se resuelve una disputa
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+start
+if (¿Origen?) then (servicio terminado)
+  |Dueño|
+  :Califica con 1 o 2 estrellas;
+  |GARDEN|
+  :Retiene el pago del cuidador;
+  |Dueño|
+  :Elige sus razones (lista cerrada);
+  |Cuidador|
+  :Responde con su versión;
+else (no-show: nadie inició en 30 min)
+  |GARDEN|
+  :Cancela la reserva sola;
+  if (¿Quién reclama primero? Plazo: 24 h) then (dueño)
+    |Dueño|
+    :Reporta que el cuidador no vino;
+    |Cuidador|
+    :Responde;
+  else (cuidador)
+    |Cuidador|
+    :Reporta que el dueño no estaba;
+    |Dueño|
+    :Responde;
+  endif
+endif
+
+|GARDEN|
+if (¿La otra parte respondió en 72 h?) then (no)
+  |Admin|
+  :Recibe aviso y decide a mano;
+else (sí)
+  |IA|
+  :Juez de IA revisa fotos, GPS,\nbitácora y chat;
+  if (¿La IA pudo decidir?) then (no)
+    |Admin|
+    :Resuelve a mano;
+  endif
+endif
+
+|GARDEN|
+switch (Veredicto)
+case (Gana el dueño)
+  :Reembolso del total pagado al dueño;
+case (Gana el cuidador)
+  :Cuidador cobra su neto\n+ recomendaciones de la IA;
+case (Parcial, último recurso)
+  :Cuidador cobra 80% de su neto;\nDueño recibe código por el 20%;
+endswitch
+
+if (¿Alguien apela?) then (sí)
+  |Admin|
+  :Da el veredicto final;
+endif
+stop
+@enduml

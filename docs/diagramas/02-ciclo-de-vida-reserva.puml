@@ -1,0 +1,73 @@
+@startuml 02-ciclo-de-vida-reserva
+' GARDEN — estados de una reserva y quién mueve cada transición
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam state {
+  BackgroundColor<<dinero>> #FFF4E0
+  BackgroundColor<<final>> #EEEEEE
+}
+
+[*] --> PendienteMG : Dueño reserva\ncon Meet & Greet previo
+[*] --> PendientePago : Dueño reserva
+
+state "Pendiente de Meet & Greet" as PendienteMG
+state "Pendiente de pago" as PendientePago <<dinero>>
+state "Pago en revisión\n(admin)" as PagoRevision <<dinero>>
+state "Esperando al cuidador" as EsperandoCuidador
+state "Conflicto de horario" as Conflicto
+state "Confirmada" as Confirmada
+state "En curso" as EnCurso
+state "Completada" as Completada
+state "Cancelada" as Cancelada <<final>>
+state "Rechazada por el cuidador" as Rechazada <<final>>
+
+PendienteMG --> PendientePago : Dueño decide seguir\n(tras el encuentro)
+PendienteMG --> Cancelada : Dueño desiste / vence /
+cuidador ve incompatibilidad
+
+PendientePago --> EsperandoCuidador : Pago con billetera\no banco confirma QR
+PendientePago --> PagoRevision : Dueño avisa "Ya realicé el pago"\n(sin confirmación del banco)
+PendientePago --> Cancelada : QR vence sin pago
+
+PagoRevision --> EsperandoCuidador : Admin aprueba pago\no banco confirma
+PagoRevision --> EsperandoCuidador : Nadie revisa antes de que venza\nel código → se aprueba sola\n(admin verifica después; si no llegó,\nse descuenta de la billetera del dueño)
+PagoRevision --> PendientePago : Admin rechaza\n(el dueño puede volver a pagar)
+
+EsperandoCuidador --> Confirmada : Cuidador acepta\n(o reserva instantánea)
+EsperandoCuidador --> Rechazada : Cuidador rechaza\n→ reembolso 100%
+EsperandoCuidador --> Cancelada : Cuidador no responde en 3 h\n→ reembolso 100%
+EsperandoCuidador --> Cancelada : Meet & Greet incompatible\n→ reembolso 100%
+EsperandoCuidador --> Conflicto : Otro cliente pagó\nese horario primero
+
+Conflicto --> EsperandoCuidador : Dueño elige otra fecha
+Conflicto --> Cancelada : Dueño pide reembolso\no pasan 72 h
+
+Confirmada --> EnCurso : Cuidador inicia con foto\n(en camino → llegó → inicia)
+Confirmada --> Cancelada : Dueño cancela (reembolso según anticipación)\nCuidador cancela (100% + posible infracción)\nNadie inicia en 30 min (no-show)
+
+state EnCurso {
+  [*] --> Activo
+  Activo --> Pausado : SOS / incidente
+  Pausado --> Activo : Admin resuelve
+  Activo --> Activo : GPS, fotos, bitácora,\nextensión pagada
+}
+
+EnCurso --> Completada : Cuidador termina con foto
+
+state Completada {
+  state "Pago pendiente de liberar" as PagoPend <<dinero>>
+  state "Pago retenido (disputa)" as Retenido <<dinero>>
+  state "Pago liberado al cuidador" as Pagado
+  state "Reembolsado al dueño" as Reembolsado <<dinero>>
+  [*] --> PagoPend
+  PagoPend --> Pagado : Dueño califica 3-5\no pasan 24 h
+  PagoPend --> Retenido : Dueño califica 1-2
+  Retenido --> Pagado : Gana el cuidador\n(o parcial: 80%)
+  Retenido --> Reembolsado : Gana el dueño
+}
+
+Cancelada --> Cancelada : Disputa de no-show\n(24 h para reclamar)
+Completada --> [*]
+Cancelada --> [*]
+Rechazada --> [*]
+@enduml

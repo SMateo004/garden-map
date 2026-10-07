@@ -1,0 +1,83 @@
+@startuml 04-alta-de-cuidador
+' GARDEN — cómo un cuidador (o empresa) entra y se mantiene activo
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Cuidador|
+start
+if (¿Qué tipo de cuenta?) then (individual)
+  :Asistente "Soy cuidador" (12 pasos):\ndatos, foto, servicios, precios,\ndisponibilidad, fotos, descripción;
+elseif (profesional) then
+  :Código de invitación del admin\n+ registro de 8 pasos;
+else (empresa)
+  :Código de empresa + 14 pasos:\ndatos del negocio, ubicación, servicios,\nfotos, precios, logo;
+endif
+:Verifica identidad\n(selfie + carnet + prueba de vida);
+note right: 3 intentos, luego bloqueo de 24 h
+:Verifica teléfono y correo;
+:Contactos de emergencia, contrato y PIN;
+:Envía el perfil;
+
+|Admin|
+repeat
+  :Revisa la solicitud;
+  if (¿Decisión?) then (pedir correcciones)
+    |Cuidador|
+    :Corrige y reenvía;
+    |Admin|
+  elseif (rechazar) then
+    :Perfil rechazado;
+    stop
+  else (aprobar)
+    break
+  endif
+repeat while (¿Pendiente?) is (sí)
+:Perfil aprobado;
+
+|Cuidador|
+fork
+  :Sube certificado de antecedentes;
+  |IA|
+  if (¿Documento limpio?) then (sí)
+    :Sello "Antecedentes verificados";
+  else (dudoso)
+    |Admin|
+    :Revisa y decide si suspende;
+  endif
+fork again
+  |Cuidador|
+  if (¿Sin experiencia?) then (sí)
+    :Capacitaciones obligatorias\n(video + preguntas);
+  endif
+fork again
+  |Cuidador|
+  if (¿Empresa?) then (sí)
+    :Carga NIT;
+    |Admin|
+    :Verifica NIT (sello);
+    |Cuidador|
+    :Invita empleados con código\nde un solo uso;
+  endif
+end fork
+
+|Cuidador|
+:Aparece en el marketplace;
+:Recibe y presta servicios;
+
+|GARDEN|
+if (¿3 cancelaciones tardías en 90 días?) then (sí)
+  :Suspensión automática;\nse reactiva sola a los 30 días;
+elseif (¿5 calificaciones de 1-2 estrellas?) then (sí)
+  :Suspensión automática;\nsolo un admin la levanta;
+else (no)
+  :Sigue activo;
+endif
+
+|Cuidador|
+if (¿Quiere irse?) then (sí)
+  :Solicita baja;
+  |Admin|
+  :Procesa la baja;
+endif
+stop
+@enduml
