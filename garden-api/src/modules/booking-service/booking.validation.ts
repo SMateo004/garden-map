@@ -51,8 +51,9 @@ export type WalkDay = z.infer<typeof walkDaySchema>;
 
 /**
  * Schema completo para paseo. Acepta dos modos:
- * - Single day: walkDate + timeSlot (comportamiento original)
- * - Multi-day: walkDays (array de días con sus slots)
+ * - Un día: walkDate + timeSlot.
+ * - Varios días: walkDays — se crea UNA reserva por día (mismo bookingGroupId)
+ *   y se pagan juntas; ver createDayGroup en booking.service.ts.
  */
 export const paseoSchema = z
   .object({
@@ -95,6 +96,10 @@ export const paseoSchema = z
         'Debes proporcionar walkDate+timeSlot para reserva de un día, o walkDays para múltiples días',
       path: ['walkDate'],
     }
+  )
+  .refine(
+    (data) => !data.walkDays || new Set(data.walkDays.map((d) => d.date)).size === data.walkDays.length,
+    { message: 'No puedes repetir el mismo día', path: ['walkDays'] }
   );
 
 const guarderiaTimeSlotSchema = z.enum(['MANANA', 'TARDE'], {

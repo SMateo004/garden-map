@@ -137,7 +137,7 @@ export interface BookingCreateResult {
   }>;
   /** Servicios extra contratados (snapshot al reservar). Solo presente si hay. */
   extras?: Array<{ name: string; pricePerDay: number; totalPrice: number }>;
-  /** Guardería de varios días: id compartido por todos los días (null en reservas sueltas). */
+  /** Paseo o guardería de varios días: id compartido por todos los días (null en reservas sueltas). */
   bookingGroupId?: string | null;
   /** Resumen del grupo — solo en el detalle de una reserva y al crearla. */
   group?: BookingGroupSummary;

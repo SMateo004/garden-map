@@ -267,7 +267,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   });
 
   // Atomic: update booking + create audit log + create DB notification
-  // (+ los demás días si es una guardería de varios días pagada en conjunto)
+  // (+ los demás días si es un paseo o guardería de varios días pagado en conjunto)
   const groupIds = await prisma.$transaction(async (tx) => {
     await tx.booking.update({
       where: { id },

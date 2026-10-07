@@ -103,7 +103,7 @@ async function _expirarQr(
             },
         });
 
-        // Guardería de varios días: el QR cobraba todos los días del grupo, así
+        // Paseo o guardería de varios días: el QR cobraba todos los días del grupo, así
         // que los demás días sin pagar (sin QR propio) vencen con este.
         await cancelUnpaidGroupSiblings(tx, booking.id, 'QR de pago expirado sin pago confirmado', 'QR_ABANDONED');
 

@@ -176,12 +176,16 @@ class _BookingScreenState extends State<BookingScreen> {
   bool get _isMultiDayMode =>
       _isMultiDay && (_selectedService == 'PASEO' || _selectedService == 'GUARDERIA');
 
-  /// Guardería de varios días: el backend crea una reserva por día y se pagan juntas.
+  /// Guardería de varios días (textos y reglas propias: turnos, cupo compartido).
   bool get _isGuarderiaMultiDay => _isMultiDay && _selectedService == 'GUARDERIA';
 
-  /// Una guardería de varios días no admite Meet & Greet (se coordina en una
-  /// reserva de un día) — si el cuidador lo exige, solo se ofrece "1 día".
-  bool get _guarderiaMultiDayAllowed => _caregiver?['requireMeetAndGreet'] != true;
+  /// Varios días (paseo o guardería) no admite Meet & Greet: el backend crea
+  /// una reserva por día y el M&G se coordina en una reserva de un día — si
+  /// el cuidador lo exige, solo se ofrece "1 día".
+  bool get _multiDayAllowed => _caregiver?['requireMeetAndGreet'] != true;
+
+  void _warnMultiDayNeedsMg() => GardenSnackBar.warning(context,
+      'Este cuidador pide un Meet & Greet antes de cada reserva, así que por ahora solo puedes reservar un día a la vez.');
 
   /// Total acumulado de los extras seleccionados (pricePerDay × días).
   double get _extraServicesTotal {
@@ -805,11 +809,11 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   /// Impuesto y total como los calcula pricing.service.ts (montos enteros).
-  /// Guardería de varios días: el backend cobra cada día como su propia
+  /// Varios días (paseo o guardería): el backend cobra cada día como su propia
   /// reserva (impuesto redondeado por día), así que se calcula un día y se
   /// multiplica — si no, el total podía diferir en 1 Bs del que se paga.
   ({int subtotal, int? tax, int total}) _priceBreakdown(double price) {
-    final days = _isGuarderiaMultiDay ? _selectedDates.length : 1;
+    final days = _isMultiDayMode ? _selectedDates.length : 1;
     if (days > 1) {
       final perDay = _dayPriceBreakdown(price / days);
       return (
@@ -1377,6 +1381,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               });
                             }),
                             _buildDayModeTab('Varios días', _isMultiDay, () {
+                              if (!_multiDayAllowed) return _warnMultiDayNeedsMg();
                               setState(() {
                                 _isMultiDay = true;
                                 _selectedDate = null;
@@ -1622,7 +1627,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       Text('Horario para todos los días',
                           style: GardenText.h4.copyWith(color: textColor)),
                       const SizedBox(height: 4),
-                      Text('El mismo bloque horario se aplicará a todos los días seleccionados.',
+                      Text('Cada paseo es su propia reserva: el cuidador confirma cada uno y puedes cancelar un día sin perder los demás.',
                           style: TextStyle(color: subtextColor, fontSize: 12)),
                       const SizedBox(height: 12),
                       _buildMultiDaySlotSelector(textColor, subtextColor),
@@ -1743,11 +1748,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               });
                             }),
                             _buildDayModeTab('Varios días', _isMultiDay, () {
-                              if (!_guarderiaMultiDayAllowed) {
-                                GardenSnackBar.warning(context,
-                                    'Este cuidador pide un Meet & Greet antes de cada reserva, así que por ahora solo puedes reservar un día a la vez.');
-                                return;
-                              }
+                              if (!_multiDayAllowed) return _warnMultiDayNeedsMg();
                               setState(() {
                                 _isMultiDay = true;
                                 _selectedDate = null;
@@ -2106,9 +2107,9 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
 
                 // ── Meet & Greet opcional ───────────────────────────────
-                // (no en guardería de varios días: el M&G se coordina en una
-                // reserva de un solo día, ver createBooking en el backend)
-                if (!_isGuarderiaMultiDay)
+                // (no en varios días: el M&G se coordina en una reserva de un
+                // solo día, ver createBooking en el backend)
+                if (!_isMultiDayMode)
                   _buildMeetAndGreetSection(surface, textColor, subtextColor, borderColor),
 
                 const SizedBox(height: 24),

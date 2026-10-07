@@ -1,5 +1,5 @@
 /**
- * Guardería de varios días: una reserva normal por día, unidas por
+ * Paseo o guardería de varios días: una reserva normal por día, unidas por
  * Booking.bookingGroupId. Mientras no están pagadas se comportan como una sola
  * compra — un único QR/pago, y si se cancela o vence el pago caen todas juntas —;
  * una vez pagadas, cada día sigue su propio ciclo (aceptación del cuidador,

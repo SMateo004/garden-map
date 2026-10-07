@@ -237,14 +237,18 @@ export async function createBooking(
   body: CreateBookingBody,
   mgData?: MgDataInput
 ): Promise<BookingCreateResult> {
-  // Guardería de varios días → una reserva por día (ver booking-group.service.ts).
-  const guarderiaDays = body.serviceType === ServiceType.GUARDERIA
+  // Paseo o guardería de varios días → una reserva por día (ver
+  // booking-group.service.ts). Antes el paseo guardaba todos los días en
+  // Booking.walkDays dentro de UNA reserva, pero disponibilidad, recordatorios,
+  // inicio/cierre y reembolsos solo miraban el primer día: los demás días se
+  // cobraban sin bloquear la agenda del cuidador ni ejecutarse.
+  const multiDays = body.serviceType === ServiceType.GUARDERIA || body.serviceType === ServiceType.PASEO
     ? (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined
     : undefined;
-  if (guarderiaDays && guarderiaDays.length > 0) {
+  if (multiDays && multiDays.length > 0) {
     const { walkDays: _days, ...singleBody } = body as any;
-    if (guarderiaDays.length === 1) {
-      const [day] = guarderiaDays;
+    if (multiDays.length === 1) {
+      const [day] = multiDays;
       body = { ...singleBody, walkDate: day!.date, timeSlot: day!.timeSlot, startTime: day!.startTime } as CreateBookingBody;
     } else {
       if (mgData) {
@@ -254,7 +258,7 @@ export async function createBooking(
           'walkDays'
         );
       }
-      return createGuarderiaGroup(clientId, singleBody, guarderiaDays);
+      return createDayGroup(clientId, singleBody, multiDays);
     }
   }
 
@@ -264,13 +268,13 @@ export async function createBooking(
 }
 
 /**
- * Guardería de varios días: crea una reserva normal por día, todas en la misma
- * transacción (si un día no tiene disponibilidad, no se crea ninguno) y con el
- * mismo bookingGroupId. Cada día pasa por exactamente la misma validación y
- * cálculo de precio que una guardería suelta. Devuelve el primer día con el
- * resumen del grupo — el pago se hace sobre ese (ver initPayment).
+ * Paseo o guardería de varios días: crea una reserva normal por día, todas en
+ * la misma transacción (si un día no tiene disponibilidad, no se crea ninguno)
+ * y con el mismo bookingGroupId. Cada día pasa por exactamente la misma
+ * validación y cálculo de precio que una reserva suelta. Devuelve el primer
+ * día con el resumen del grupo — el pago se hace sobre ese (ver initPayment).
  */
-async function createGuarderiaGroup(
+async function createDayGroup(
   clientId: string,
   baseBody: Omit<CreateBookingBody, 'walkDays'>,
   days: Array<{ date: string; timeSlot: string; startTime?: string }>
@@ -286,7 +290,7 @@ async function createGuarderiaGroup(
     }
     return results;
   }, { timeout: 60000 });
-  logger.info('Guardería de varios días creada', { bookingGroupId, clientId, days: created.length });
+  logger.info('Reserva de varios días creada', { bookingGroupId, clientId, serviceType: baseBody.serviceType, days: created.length });
   return { ...created[0]!, group: (await getGroupSummary(prisma, bookingGroupId)) ?? undefined };
 }
 
@@ -583,33 +587,17 @@ async function createBookingInTx(
         'GUARDERIA'
       );
     } else {
-      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
-      if (walkDays && walkDays.length > 0) {
-        // Multi-day: validate each day individually
-        for (const day of walkDays) {
-          await assertPaseoAvailability(
-            tx,
-            body.caregiverId,
-            day.date,
-            day.timeSlot as any,
-            day.startTime,
-            (body as any).duration,
-            petCount,
-            'PASEO'
-          );
-        }
-      } else {
-        await assertPaseoAvailability(
-          tx,
-          body.caregiverId,
-          (body as any).walkDate,
-          (body as any).timeSlot,
-          (body as any).startTime,
-          (body as any).duration,
-          petCount,
-          'PASEO'
-        );
-      }
+      // Varios días llega acá un día a la vez (createDayGroup).
+      await assertPaseoAvailability(
+        tx,
+        body.caregiverId,
+        (body as any).walkDate,
+        (body as any).timeSlot,
+        (body as any).startTime,
+        (body as any).duration,
+        petCount,
+        'PASEO'
+      );
     }
 
     let pricePerUnit: number;
@@ -660,7 +648,6 @@ async function createBookingInTx(
     } else {
       const duration = (body as any).duration;
       const p60 = caregiver.pricePerWalk60 ?? 0;
-      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
 
       if (p60 <= 0) {
         throw new BookingValidationError('El cuidador no tiene precio de paseo configurado', 'BOOKING_VALIDATION', 'caregiverId');
@@ -668,10 +655,8 @@ async function createBookingInTx(
 
       // 30 min = mitad del precio de 60 min (sin campo separado en BD)
       pricePerUnit = duration === 30 ? Math.round(p60 / 2) : p60;
-      // Multi-day: multiply by number of days; Multi-pet: apply discount multiplier
-      const numDays = walkDays && walkDays.length > 0 ? walkDays.length : 1;
-      totalAmount = Math.round(pricePerUnit * numDays * petMultiplier);
-      extraDaysMultiplier = numDays;
+      // Un paseo por reserva (varios días = una reserva por día); multi-mascota con descuento
+      totalAmount = Math.round(pricePerUnit * petMultiplier);
     }
 
     // ── Validar límites de precio configurados por admin ──────────────────────
@@ -759,28 +744,14 @@ async function createBookingInTx(
           endDate: new Date(body.endDate),
           totalDays,
         }
-        : body.serviceType === ServiceType.GUARDERIA
-        ? {
+        // PASEO y GUARDERIA: un día por reserva. Booking.walkDays queda solo
+        // en reservas de paseo viejas (antes de agruparse por día).
+        : {
           walkDate: new Date((body as any).walkDate),
           timeSlot: (body as any).timeSlot,
           startTime: (body as any).startTime,
           duration: (body as any).duration,
-        }
-        : (() => {
-          const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
-          const isMultiDay = walkDays && walkDays.length > 0;
-          // walkDate = first day (for backward compat / display)
-          const firstDate = isMultiDay ? walkDays![0]!.date : (body as any).walkDate;
-          const firstSlot = isMultiDay ? walkDays![0]!.timeSlot : (body as any).timeSlot;
-          const firstStart = isMultiDay ? walkDays![0]!.startTime : (body as any).startTime;
-          return {
-            walkDate: new Date(firstDate),
-            timeSlot: firstSlot,
-            startTime: firstStart,
-            duration: (body as any).duration,
-            ...(isMultiDay ? { walkDays: walkDays as any } : {}),
-          };
-        })()),
+        }),
     };
 
     const booking = await tx.booking.create({
@@ -1632,7 +1603,7 @@ export async function initPayment(
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
 }> {
   const cfg = await getBookingSettings();
-  // Guardería de varios días: se paga siempre sobre el primer día sin pagar
+  // Paseo o guardería de varios días: se paga siempre sobre el primer día sin pagar
   // del grupo, sin importar desde cuál se abrió el pago (un solo QR por grupo).
   bookingId = await resolvePaymentLeadId(bookingId, clientId);
   const result = await prisma.$transaction(async (tx) => {
@@ -2040,7 +2011,7 @@ export async function declarePaymentMade(
   bookingId: string,
   clientId: string
 ): Promise<{ status: BookingStatus; paymentDeclaredAt: string | null; alreadyDeclared: boolean }> {
-  // Guardería de varios días: el pago (y el QR) vive en la reserva líder del grupo.
+  // Paseo o guardería de varios días: el pago (y el QR) vive en la reserva líder del grupo.
   bookingId = await resolvePaymentLeadId(bookingId, clientId);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
@@ -2618,7 +2589,7 @@ export async function cancelBooking(
       // reembolso ni la notificación.
       throw new BookingValidationError('La reserva ya está cancelada');
     }
-    // Guardería de varios días todavía sin pagar: se compró junta, se cae
+    // Paseo o guardería de varios días todavía sin pagar: se compró junta, se cae
     // junta (salir del pago, QR vencido). Días ya pagados no se tocan — cada
     // uno se cancela por separado con su propio reembolso.
     if (!booking.paidAt) {
