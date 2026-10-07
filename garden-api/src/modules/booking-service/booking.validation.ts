@@ -68,12 +68,12 @@ export const paseoSchema = z
       })
       .optional(),
     startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
+    // Solo 30 o 60 min: son los dos precios que fija el cuidador (walk30BasePrice / pricePerWalk60).
+    // Antes se aceptaba hasta 240 min y todo lo que no era 30 se cobraba al precio de 60.
     duration: z.coerce
       .number()
       .int()
-      .min(30)
-      .max(240)
-      .refine((n) => n % 30 === 0, { message: 'La duración debe ser múltiplo de 30 minutos' }),
+      .refine((n): boolean => n === 30 || n === 60, { message: 'El paseo dura 30 o 60 minutos' }),
     // Multi-day field
     walkDays: z
       .array(walkDaySchema)

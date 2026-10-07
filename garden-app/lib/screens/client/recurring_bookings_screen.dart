@@ -255,7 +255,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
-            children: [30, 60, 90, 120].map((d) {
+            children: [30, 60].map((d) { // los dos precios que fija el cuidador
               final selected = _duration == d;
               return ChoiceChip(
                 label: Text('$d min'),
