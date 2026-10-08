@@ -4,7 +4,7 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
-import { addPlacePhotoAtomic, removePlacePhotoAtomic, submitAntecedentesDocument, submitNitDocument } from './caregiver-profile.service.js';
+import { addPlacePhotoAtomic, removePlacePhotoAtomic, assertCanSubmitAntecedentes, submitAntecedentesDocument, submitNitDocument } from './caregiver-profile.service.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
@@ -210,6 +210,9 @@ router.post('/profile/antecedentes', upload.single('document'),
     const userId = (req as any).user.userId;
     const file = req.file;
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó documento' } });
+    // Antes de subir nada a storage: no se acepta un documento nuevo si ya hay
+    // uno en revisión o aprobado.
+    await assertCanSubmitAntecedentes(userId);
 
     const mediaType = await assertImageOrPdfBuffer(file.buffer) as
       'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf';

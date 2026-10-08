@@ -7,11 +7,12 @@ import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 
-/// Panel admin: documentos de antecedentes penales (FELCC/REJAP) marcados
-/// por el agente de IA (documento-antecedentes.agent.ts) — el agente NUNCA
-/// suspende solo, solo marca. Acá un admin abre el documento, lee el
-/// veredicto del agente, y decide si suspende la cuenta (cancela y
-/// reembolsa reservas activas) o descarta la alerta.
+/// Panel admin: TODOS los documentos de antecedentes penales (FELCC/REJAP)
+/// en revisión. El sello "Antecedentes verificados" solo lo otorga un admin
+/// desde acá (decisión de producto 2026-10-07); el agente de IA
+/// (documento-antecedentes.agent.ts) solo deja su veredicto como ayuda. El
+/// admin abre el documento y decide: aprobar el sello, rechazar el documento
+/// (se pide uno nuevo) o suspender la cuenta (cancela y reembolsa reservas).
 class AdminAntecedentesFlaggedScreen extends StatefulWidget {
   final String adminToken;
   const AdminAntecedentesFlaggedScreen({super.key, required this.adminToken});
@@ -64,7 +65,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
       if (!mounted) return;
       if (data['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Alerta descartada — la cuenta sigue activa'), backgroundColor: GardenColors.warning),
+          const SnackBar(content: Text('Sello aprobado — el perfil ya muestra "Antecedentes verificados"'), backgroundColor: GardenColors.success),
         );
         await _load();
       } else {
@@ -204,7 +205,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
             padding: const EdgeInsets.all(16),
             color: GardenColors.error.withValues(alpha: 0.08),
             child: Text(
-              'El agente de IA solo marca documentos dudosos o con antecedentes explícitos — nunca suspende solo. Revisa el documento antes de decidir.',
+              'El sello solo lo otorgas tú. El veredicto de la IA es una ayuda: abre el documento y verifica que el nombre coincida con el del cuidador antes de aprobar.',
               style: TextStyle(color: textColor, fontSize: 12.5),
             ),
           ),
@@ -214,8 +215,8 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                 : _items.isEmpty
                     ? const GardenEmptyState(
                         type: GardenEmptyType.bookings,
-                        title: 'Sin alertas pendientes',
-                        subtitle: 'Ningún documento de antecedentes está marcado para revisión.',
+                        title: 'Sin documentos por revisar',
+                        subtitle: 'No hay documentos de antecedentes esperando tu revisión.',
                         compact: true,
                       )
                     : RefreshIndicator(
@@ -294,7 +295,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                                             'VEREDICTO DEL AGENTE'
                                             '${documentoLicito == false ? ' — DOCUMENTO DUDOSO' : ''}'
                                             '${antecedentesDetectados ? ' — ANTECEDENTES DETECTADOS' : ''}',
-                                            style: TextStyle(color: GardenColors.error, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                                            style: TextStyle(color: (documentoLicito == false || antecedentesDetectados) ? GardenColors.error : subtextColor, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.3),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(razon, style: TextStyle(color: textColor, fontSize: 12.5)),
@@ -315,7 +316,7 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                                             side: BorderSide(color: borderColor),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                           ),
-                                          child: const Text('Descartar'),
+                                          child: const Text('Aprobar sello'),
                                         ),
                                       ),
                                       const SizedBox(width: 8),

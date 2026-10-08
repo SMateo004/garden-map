@@ -80,6 +80,7 @@ class NotificationKind {
     'REJECTED': NotificationKind(NotificationTopic.account, GIcon.conflicto, StoryTone.alert),
     'APPROVED': NotificationKind(NotificationTopic.account, GIcon.verificado, StoryTone.good),
     'ANTECEDENTES_REJECTED': NotificationKind(NotificationTopic.account, GIcon.antecedentes, StoryTone.alert),
+    'ANTECEDENTES_APPROVED': NotificationKind(NotificationTopic.account, GIcon.antecedentes, StoryTone.good),
     'ACCOUNT_SUSPENDED': NotificationKind(NotificationTopic.account, GIcon.bloqueado, StoryTone.alert),
     'ACCOUNT_ACTIVATED': NotificationKind(NotificationTopic.account, GIcon.desbloqueado, StoryTone.good),
     'TRAINING_REMINDER': NotificationKind(NotificationTopic.account, GIcon.capacitacion, StoryTone.waiting),

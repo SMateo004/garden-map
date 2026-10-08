@@ -911,18 +911,43 @@ export async function markNotificationRead(userId: string, notificationId: strin
   return { success: true };
 }
 
+/** Estados desde los que el cuidador puede (re)subir su documento de antecedentes. */
+const ANTECEDENTES_UPLOADABLE = ['PENDING', 'RECHAZADO'];
+
+/**
+ * Chequeo previo (antes de subir el archivo a storage): solo se acepta un
+ * documento nuevo si todavía no hay uno en revisión ni uno ya aprobado.
+ * Antes un cuidador con un documento marcado como dudoso podía resubir otro y,
+ * si la IA lo daba por limpio, salir de la cola del admin sin que nadie lo
+ * viera. El claim atómico real está en submitAntecedentesDocument.
+ */
+export async function assertCanSubmitAntecedentes(userId: string): Promise<void> {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { userId },
+    select: { antecedentesStatus: true } as any,
+  });
+  if (!profile) throw new BadRequestError('Perfil de cuidador no encontrado');
+  const status = (profile as any).antecedentesStatus as string;
+  if (!ANTECEDENTES_UPLOADABLE.includes(status)) {
+    throw new ConflictError(
+      status === 'LIMPIO'
+        ? 'Tu documento de antecedentes ya fue aprobado.'
+        : 'Ya tienes un documento de antecedentes en revisión. El equipo de GARDEN te avisará cuando lo revise.'
+    );
+  }
+}
+
 /**
  * Sube el documento de antecedentes penales (FELCC/REJAP) — filtro
  * OPCIONAL, no bloquea que el perfil se muestre en el marketplace. El
  * documento ya viene subido a storage (uploadRawFile/uploadImage, según el
- * mimeType) — esta función solo corre el agente de IA y decide el nuevo
- * status.
+ * mimeType) — esta función corre el agente de IA y deja el documento en la
+ * cola del admin.
  *
- * Nunca suspende la cuenta por sí sola: si el agente marca antecedentes
- * explícitos o un documento dudoso, queda en EN_REVISION con una
- * AdminNotification para que un admin humano decida (ver admin.service.ts
- * suspendCaregiver). Si el agente falla técnicamente, también queda en
- * EN_REVISION — nunca pasa a LIMPIO por un error nuestro.
+ * Decisión de producto (2026-10-07): el sello "Antecedentes verificados"
+ * (LIMPIO) SIEMPRE lo otorga un admin (dismissAntecedentesFlag en
+ * admin.service.ts). La IA solo asiste: su veredicto queda en AgentLog y el
+ * admin lo ve junto al documento. Nunca suspende ni aprueba por sí sola.
  */
 export async function submitAntecedentesDocument(
   userId: string,
@@ -933,44 +958,37 @@ export async function submitAntecedentesDocument(
   const profile = await prisma.caregiverProfile.findUnique({ where: { userId }, select: { id: true } });
   if (!profile) throw new BadRequestError('Perfil de cuidador no encontrado');
 
-  await prisma.caregiverProfile.update({
-    where: { userId },
+  // Claim atómico: dos subidas simultáneas (o una resubida con un documento
+  // ya en revisión) no pueden pisar el documento que el admin está revisando.
+  const claimed = await prisma.caregiverProfile.updateMany({
+    where: { userId, antecedentesStatus: { in: ANTECEDENTES_UPLOADABLE } } as any,
     data: {
       antecedentesUrl: documentUrl,
       antecedentesStatus: 'EN_REVISION',
       antecedentesSubmittedAt: new Date(),
+      antecedentesReviewedAt: null,
+      antecedentesReviewedById: null,
     } as any,
   });
+  if (claimed.count === 0) {
+    throw new ConflictError('Ya tienes un documento de antecedentes en revisión o aprobado.');
+  }
 
   const { verificarAntecedentes } = await import('../../agents/documento-antecedentes.agent.js');
   const resultado = await verificarAntecedentes({ documentBuffer, mediaType, userId });
 
-  let finalStatus = 'EN_REVISION';
-  if (resultado && resultado.documentoLicito && !resultado.antecedentesDetectados) {
-    // Documento lícito y sin antecedentes de violencia/maltrato — se puede
-    // otorgar el badge automáticamente, no requiere aprobación de admin (a
-    // diferencia de una suspensión, esto no es una acción punitiva).
-    finalStatus = 'LIMPIO';
-  } else if (resultado) {
-    // Documento dudoso o con antecedentes marcados — nunca se suspende
-    // solo, queda para que un admin lo revise.
-    await prisma.adminNotification.create({
-      data: {
-        type: 'ANTECEDENTES_FLAGGED',
-        caregiverId: profile.id,
-      },
-    });
-  }
-  // Si resultado es null (fallo técnico del agente), finalStatus se queda
-  // en 'EN_REVISION' — no se crea AdminNotification porque no hay nada
-  // concreto que revisar todavía, pero tampoco se limpia solo.
-
-  await prisma.caregiverProfile.update({
-    where: { userId },
-    data: { antecedentesStatus: finalStatus } as any,
+  // Siempre a la cola del admin. El tipo solo indica la prioridad: si la IA
+  // vio algo dudoso (o falló), la alerta es más urgente que una revisión de
+  // rutina de un documento que la IA ve limpio.
+  const aiClean = !!(resultado && resultado.documentoLicito && !resultado.antecedentesDetectados);
+  await prisma.adminNotification.create({
+    data: {
+      type: aiClean ? 'ANTECEDENTES_REVIEW' : 'ANTECEDENTES_FLAGGED',
+      caregiverId: profile.id,
+    },
   });
 
-  return { antecedentesStatus: finalStatus };
+  return { antecedentesStatus: 'EN_REVISION' };
 }
 
 /**

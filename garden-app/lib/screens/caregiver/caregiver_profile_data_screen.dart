@@ -1027,7 +1027,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       if (data['success'] == true) {
         setState(() => _antecedentesStatus = data['data']?['antecedentesStatus'] as String? ?? 'EN_REVISION');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Documento enviado. Lo estamos revisando.'), backgroundColor: GardenColors.success),
+          const SnackBar(content: Text('Documento enviado. Una persona del equipo de GARDEN lo revisará.'), backgroundColor: GardenColors.success),
         );
       } else {
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir el documento');
@@ -1269,11 +1269,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Widget _antecedentesRow(Color textColor, Color subtextColor, Color borderColor) {
     final (statusIcon, statusColor, statusLabel) = switch (_antecedentesStatus) {
       'LIMPIO' => (GIcon.confirmado, GardenColors.success, 'Verificado'),
-      'EN_REVISION' => (GIcon.esperando, GardenColors.warning, 'En revisión'),
+      'EN_REVISION' => (GIcon.esperando, GardenColors.warning, 'Lo revisa el equipo de GARDEN'),
       'FLAGGED' => (GIcon.reportar, GardenColors.error, 'En revisión por un admin'),
+      'RECHAZADO' => (GIcon.reportar, GardenColors.error, 'Rechazado: sube uno nuevo'),
       _ => (GIcon.documento, subtextColor, 'Pendiente'),
     };
-    final canUpload = _antecedentesStatus == 'PENDING';
+    // Mismo criterio que el servidor (ANTECEDENTES_UPLOADABLE): solo se sube
+    // un documento nuevo si no hay uno en revisión ni uno ya aprobado.
+    final canUpload = _antecedentesStatus == 'PENDING' || _antecedentesStatus == 'RECHAZADO';
 
     return Container(
       padding: const EdgeInsets.all(12),

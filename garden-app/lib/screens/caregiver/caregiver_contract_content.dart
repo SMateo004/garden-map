@@ -83,7 +83,7 @@ const List<ContractSection> caregiverContractSections = [
   ),
   ContractSection(
     '8. Verificación de identidad',
-    'Ya pasaste (o vas a pasar) por nuestra verificación de identidad con reconocimiento facial. Esto confirma que eres quien dices ser — no es un aval de Garden sobre tu carácter o antecedentes. Si subiste tu documento de antecedentes penales de forma voluntaria, nuestro sistema solo lo revisa para detectar antecedentes explícitos de maltrato animal o violencia; cualquier caso dudoso lo revisa una persona del equipo de Garden, nunca una IA sola.',
+    'Ya pasaste (o vas a pasar) por nuestra verificación de identidad con reconocimiento facial. Esto confirma que eres quien dices ser — no es un aval de Garden sobre tu carácter o antecedentes. Si subiste tu documento de antecedentes penales de forma voluntaria, una persona del equipo de Garden lo revisa antes de darte el distintivo, con ayuda de un sistema que señala antecedentes explícitos de maltrato animal o violencia; nunca lo decide una IA sola.',
   ),
   ContractSection(
     '9. Tu kit de bienvenida (voluntario)',

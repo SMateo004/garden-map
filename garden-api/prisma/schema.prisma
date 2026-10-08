@@ -295,9 +295,9 @@ model CaregiverProfile {
   identityVerificationScore       Float?
   identityVerificationSubmittedAt DateTime?
   /// Antecedentes penales (FELCC/REJAP) — filtro OPCIONAL, no bloquea el
-  /// marketplace. Un agente de IA (documento-antecedentes.agent.ts) marca el
-  /// documento, pero solo un admin decide suspender (ver admin.service.ts).
-  /// Status: PENDING | EN_REVISION | LIMPIO | FLAGGED
+  /// marketplace. Un agente de IA (documento-antecedentes.agent.ts) solo asiste;
+  /// el sello (LIMPIO) y la suspensión los decide siempre un admin (ver admin.service.ts).
+  /// Status: PENDING | EN_REVISION | LIMPIO | RECHAZADO | FLAGGED
   antecedentesUrl                 String?
   antecedentesStatus              String                      @default("PENDING") @db.VarChar(20)
   antecedentesSubmittedAt         DateTime?

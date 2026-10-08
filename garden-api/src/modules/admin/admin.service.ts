@@ -3872,9 +3872,9 @@ export async function generateEmailOtpMessage(userId: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ANTECEDENTES PENALES FLAGGEADOS — el agente de IA (documento-antecedentes.
-// agent.ts) solo marca, nunca suspende solo. Un admin revisa el documento y
-// decide acá si suspende la cuenta o descarta la alerta.
+// ANTECEDENTES PENALES — todo documento subido queda en EN_REVISION hasta que
+// un admin decide acá: aprobar el sello, rechazar el documento o suspender.
+// El agente de IA (documento-antecedentes.agent.ts) solo deja su veredicto.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** GET /api/admin/antecedentes-flagged — cuidadores con documento en revisión. */
@@ -3926,21 +3926,40 @@ export async function suspendForAntecedentes(profileId: string, adminId: string)
 
 /**
  * POST /api/admin/antecedentes-flagged/:profileId/dismiss — el admin revisó
- * el documento y decide que NO amerita suspensión (falso positivo del
- * agente, o antecedentes que no son de maltrato animal/violencia).
+ * el documento y lo aprueba: es la ÚNICA vía para otorgar el sello
+ * "Antecedentes verificados" (LIMPIO). La IA solo asiste; ver
+ * submitAntecedentesDocument en caregiver-profile.service.ts.
  */
 export async function dismissAntecedentesFlag(profileId: string, adminId: string): Promise<void> {
-  await prisma.caregiverProfile.update({
-    where: { id: profileId },
+  // Solo se aprueba un documento que sigue en revisión — dos clics o dos
+  // admins no aprueban dos veces, y no se puede aprobar uno ya rechazado.
+  const approved = await prisma.caregiverProfile.updateMany({
+    where: { id: profileId, antecedentesStatus: 'EN_REVISION' } as any,
     data: {
       antecedentesStatus: 'LIMPIO',
       antecedentesReviewedAt: new Date(),
       antecedentesReviewedById: adminId,
     } as any,
   });
+  if (approved.count === 0) {
+    throw new BadRequestError('Este documento ya no está en revisión');
+  }
   await prisma.adminAction.create({
     data: { adminId, actionType: 'DISMISS_ANTECEDENTES_FLAG', targetId: profileId },
   });
+
+  const profile = await prisma.caregiverProfile.findUnique({ where: { id: profileId }, select: { userId: true } });
+  if (profile) {
+    await prisma.notification.create({
+      data: {
+        userId: profile.userId,
+        title: 'Antecedentes verificados',
+        message: 'El equipo de GARDEN revisó tu documento. Tu perfil ya muestra el sello "Antecedentes verificados".',
+        type: 'ANTECEDENTES_APPROVED',
+      },
+    });
+  }
+  await delByPrefix('caregivers:list:');
 }
 
 /**
