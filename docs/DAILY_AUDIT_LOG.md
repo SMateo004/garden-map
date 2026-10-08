@@ -2470,3 +2470,101 @@ profundidad — recordatorio)
 - Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
   recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
   si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+
+---
+
+## 2026-10-08 — Verificación de 2 pendientes ya resueltos + auditoría a fondo de "Ya realicé el
+## pago" (pago declarado, aprobación automática) e impuestos en pausa — sin hallazgo nuevo
+
+**Commit de referencia al iniciar la auditoría:** `3df1012` (chore: sube build number a 1.3.0+30).
+`git log` mostró ~32 commits nuevos desde la referencia de la corrida anterior (`c6f13dd`,
+2026-10-07 mañana) que esta rutina no había revisado todavía: el lote grande del 7 de octubre —
+"Ya realicé el pago" (pago declarado con aprobación automática y verificación posterior),
+impuestos en pausa hasta aprobación del admin, guardería/paseo de varios días con una reserva por
+día, el sello de antecedentes ahora siempre lo aprueba un admin, Meet & Greet incompatible con
+reembolso, feriados de Bolivia 2027, corrección de precio del paseo de 30 min, y limpieza de
+credenciales/seed de prueba del repo. Working tree limpio y `main` local al día con `origin/main`
+antes de empezar — no hizo falta ningún fast-forward hoy.
+
+**Primero, dos pendientes de auditorías anteriores: verificados como YA RESUELTOS, releyendo el
+código real (no solo el mensaje de commit):**
+- **Antecedentes del cuidador — auto-aprobación por IA sin humano (hallazgo del 2026-10-02).**
+  Commit `17dcbed`. Confirmado: todo documento queda en `EN_REVISION`; la IA ya no puede otorgar
+  `LIMPIO` por sí sola (antes lo hacía al ver el documento "limpio"). `dismissAntecedentesFlag`
+  (ahora la única vía al sello) usa `updateMany` condicionado a `EN_REVISION` — claim atómico
+  correcto, dos clics de "Aprobar sello" no duplican el aviso. También se bloqueó la resubida de un
+  documento mientras hay uno en revisión o aprobado (`assertCanSubmitAntecedentes`), que era la
+  vía por la que un cuidador flaggeado podía "lavar" su documento. Resuelto correctamente.
+- **Meet & Greet incompatible sin reembolso (hallazgo del 2026-10-02).** Commit `68d5eb7`. Se
+  revisó `meet-and-greet.service.ts`: ahora en una sola transacción se cierra el M&G, se cancela la
+  reserva (origen `MG_INCOMPATIBLE`) y se acredita el 100 % a la billetera del cliente; hay un test
+  dedicado (`meet-and-greet.refund.test.ts`) que cubre el doble-envío (no reembolsa dos veces).
+  Resuelto correctamente.
+
+**Área elegida para profundizar hoy:** el pago declarado ("Ya realicé el pago",
+`payment-review.service.ts`, `payment-review.job.ts`, `declarePaymentMade`/`verifyPaymentManual`/
+`rejectPayment`/`reviewAutoApprovedPayment` en `booking.service.ts`/`payment.service.ts`/
+`admin.service.ts`) y su interacción con el modelo de impuestos en pausa (`taxes.service.ts`) y con
+las reservas de varios días (`booking-group.service.ts`) — la feature de dinero más nueva y de
+mayor riesgo del lote del 7 de octubre (categoría (b) de CLAUDE.md), nunca auditada todavía. Se leyó
+el código fuente completo de cada función involucrada (no solo los commits), se trazó cada camino
+de carrera posible (dos admins, admin vs. job automático, admin vs. banco/SIP) y se comparó contra
+el lado Flutter (`payment_screen.dart`, `taxes_state.dart`).
+
+**Sin hallazgos — el diseño ya sigue los patrones correctos establecidos en el proyecto:**
+- Todo claim de estado (`declarePaymentMade`, `verifyPaymentManual`, `rejectPayment`,
+  `reviewAutoApprovedPayment`) usa `SELECT ... FOR UPDATE` sobre la fila de la reserva (y, cuando
+  corresponde, del usuario) dentro de una `$transaction`, con `updateMany` condicionado al estado
+  esperado — el mismo patrón que ya se exigió en auditorías anteriores. Admin vs. job automático vs.
+  callback SIP se serializan correctamente sobre el lock de la misma fila.
+- El monto a cobrar si el pago "aprobado automáticamente" resulta no haber llegado
+  (`amountExpectedByQr`) se congela en `paymentExpectedAmount` al declarar (incluye los días
+  hermanos de una guardería/paseo de varios días, menos billetera, más donación) — no se recalcula
+  con datos que puedan haber cambiado después, evitando el mismo tipo de drift que ya se corrigió en
+  la auditoría del 2026-09-30 (E2, comisión de extensiones).
+  - Se consideró si `reviewAutoApprovedPayment` debería negarse a cobrar `NOT_RECEIVED` sobre una
+    reserva que mientras tanto fue rechazada/cancelada y ya reembolsada — no lo valida, pero se
+    verificó que esto es intencional y no duplica nada: el reembolso de una reserva rechazada
+    devuelve dinero que nunca llegó a Garden, y el cobro posterior de `NOT_RECEIVED` es justamente
+    lo que recupera ese mismo monto (el saldo puede terminar en deuda, documentado a propósito en
+    CLAUDE.md) — no es una doble recuperación, es el mismo mecanismo de deuda ya diseñado.
+- `booking-group.service.ts` (varios días): `markGroupSiblingsPaid` bloquea toda la fila del grupo
+  antes de leer/escribir; `revertGroupSiblingsToPending`/`cancelUnpaidGroupSiblings` usan
+  `updateMany` con guarda de estado, seguro aunque no tomen el lock explícito (el `WHERE` de
+  Postgres ya es atómico por fila). `cancelBooking` ya bloquea la cancelación automática
+  (`QR_ABANDONED`/`PAYMENT_TIMEOUT`) sobre una reserva con pago declarado, individual o de un
+  hermano del mismo grupo (`declaredInGroup`) — correcto.
+- `taxes.service.ts` (impuestos en pausa): `stripTaxFromUnpaidBooking` correctamente NO toca
+  reservas en `PAYMENT_PENDING_APPROVAL` (ya declaradas/en revisión) — tocarlas desalinearía el
+  monto con lo que el cliente ya mandó pagar por QR. Se corre al arrancar el servidor, al pausar
+  desde el admin, y por reserva al generar un QR nuevo. Consistente.
+- Lado Flutter (`payment_screen.dart`): se sospechó un bug (declarar pago y después tocar "atrás"
+  podía disparar el diálogo "¿Cancelar reserva?" y, aunque el backend rechaza ese cancel, la app
+  igual navegaba como si hubiera funcionado) — descartado tras leer el árbol de widgets completo:
+  en cuanto `_manualRequested`/`_paymentDeclared` quedan en `true`, el build temprano devuelve
+  `_buildManualPendingScreen()` (sin `PopScope` ni diálogo de cancelación, con su propio mensaje
+  "tu reserva no se cancelará"), antes de llegar al bloque que arma `_handleBack` — y
+  `_syncBrowserBackGuard` desactiva el guard del botón atrás del navegador en el mismo estado. No
+  hay tal bug.
+- `taxes_state.dart`/`legal_screen.dart`: el reemplazo de texto (quitar menciones a impuestos
+  cuando están en pausa) se hace por coincidencia de string exacta contra el texto real de los
+  Términos — en principio frágil (un futuro cambio de redacción podría romperlo en silencio) pero
+  ya tiene su propia prueba (`taxes_state_test.dart`) que lee `legal_screen.dart` real y falla si
+  alguna frase deja de existir. Sin hallazgo.
+
+### Sin cambios aplicados hoy
+No se encontró ningún bug nuevo (ni de alto ni de bajo riesgo) en el área revisada — el lote del 7
+de octubre está sólidamente hecho, con los mismos patrones de guardas atómicas ya exigidos por esta
+auditoría en corridas anteriores, y dos hallazgos pendientes de hace varios días quedaron
+confirmados como resueltos (ver arriba). No se corrieron `tsc`/tests porque no hubo cambios de
+código — solo se actualiza este log.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó;
+  el ejemplo numérico (Bs. 100 → 110 → +18 % → 128) sigue repetido tal cual en `legal_screen.dart`.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
