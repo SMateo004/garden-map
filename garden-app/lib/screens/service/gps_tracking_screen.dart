@@ -679,7 +679,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                   child: Text(
                     _sinceFix != null && !_isFresh
                         ? 'No llega la ubicación hace un rato: puede ser la señal del celular del cuidador. Escríbele por el chat si te preocupa.'
-                        : 'El mapa se actualiza solo cuando el cuidador se mueve.',
+                        : 'El mapa se actualiza cada pocos segundos, se mueva o no el cuidador.',
                     style: TextStyle(color: subtextColor, fontSize: 11),
                   ),
                 ),

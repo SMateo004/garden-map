@@ -2568,3 +2568,111 @@ código — solo se actualiza este log.
 - Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
   recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
   si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+
+---
+
+## 2026-10-09 — Pantalla de ejecución del servicio y mapa GPS (lote del 7-8 de octubre nunca
+## auditado) — 5 bugs de bajo riesgo arreglados, sin hallazgos de alto riesgo
+
+**Commit de referencia al iniciar la auditoría:** `3b357e3` (chore: registrar auditoría diaria —
+pago declarado e impuestos en pausa sin hallazgo nuevo). Working tree limpio, `main` local al día
+con `origin/main`.
+
+**Área auditada:** 8 commits del 7-8 de octubre que nunca habían pasado por esta auditoría
+(`04ced9a`, `a21ef02`, `0939087`, `b5a4bc7`, `fb72fd2`, `f4acbf3`, `36e9a1c`, `e4a72b8`) — reescriben
+fuertemente `garden-app/lib/screens/service/service_execution_screen.dart` (7149 líneas: paso a
+paso de preparación, servicio en vivo con reloj de cuánto falta, y resumen final que "dice dónde
+está la plata"), `garden-app/lib/screens/service/gps_tracking_screen.dart` (mapa GPS en vivo) y
+`garden_service_clock.dart`, más backend chico (`bookingId` agregado a varias notificaciones/jobs
+para que "sepan a qué reserva pertenecen"). Se eligió por ser (c) coherencia de negocio y (d)
+UI/Flutter sin cubrir todavía, y por tocar de pasada visualización de dinero ("dónde está la
+plata") y plazos (reloj del servicio) — justo el tipo de pantalla donde CLAUDE.md pide buscar
+textos/montos que no coincidan con el backend real. Delegado a un subagente de solo lectura que
+leyó los 3 archivos de Flutter completos, los diffs exactos de los 8 commits, y el backend tocado
+(`booking.service.ts`, `booking.types.ts`, `admin.service.ts/controller.ts`, `dispute.routes.ts`,
+`chat.routes.ts`, `socket.service.ts`, `meet-and-greet.service.ts`, los 6 `jobs/*.job.ts`,
+`pricing.service.ts`); cada hallazgo se re-verificó leyendo el código fuente real (no el reporte
+del subagente a ciegas) antes de clasificar riesgo y aplicar los fixes de bajo riesgo.
+
+**Categorías revisadas sin hallazgo real:** `bookingId` en notificaciones (los 61 lugares que
+debían llevarlo lo llevan; los excluidos a propósito por el propio commit — retiros, cuenta/perfil,
+capacitaciones, anuncios masivos — siguen sin él, correcto); fuga de datos en el tracking GPS
+(scoping a cliente titular/cuidador asignado y token HMAC del link público son preexistentes, no
+tocados por este lote); código muerto (barrido heurístico sin resultados); doble-tap en las
+acciones de red principales (todas tienen su flag de loading propio y botón deshabilitado en
+vuelo).
+
+### Hallazgos de bajo riesgo — aplicados y pusheados hoy
+
+Los 5 son bugs de texto/UI puros — ninguno toca dinero, balance, autenticación ni verificación de
+identidad, así que se aplicaron sin pedir aprobación, según la política explícita de esta rutina.
+
+- **"Nuevo en GARDEN" se mostraba para TODOS los cuidadores, incluso veteranos con 500 reseñas.**
+  `service_execution_screen.dart` (pantalla de preparación que ve el dueño, cambiada por `fb72fd2`).
+  El texto usaba `_booking?['caregiverRating']` como si fuera el rating del perfil del cuidador,
+  pero ese campo es la calificación que EL CUIDADOR le da AL DUEÑO por esa reserva puntual
+  (simétrico de `ownerRating`, ver `booking.types.ts:108`) — en la pantalla `CONFIRMED` (antes de
+  empezar el servicio) siempre es `null`, para cualquier cuidador. Antes del rewrite el texto de
+  respaldo era "Cuidador verificado" (vago pero cierto); `fb72fd2` lo cambió a "Nuevo en GARDEN"
+  (específico y falso en el 100% de los casos, ya que el payload de la reserva no incluye en ningún
+  otro campo el rating real del perfil). Se revirtió el texto a "Cuidador verificado". El mismo root
+  cause sigue sin arreglar en otras 2 pantallas (no tocadas por el lote de hoy, con fallback "Tu
+  cuidador"/"Cuidador certificado" respectivamente) — no se tocaron porque su fallback ya era
+  genérico/cierto, no una afirmación falsa como esta; mostrar ahí el rating real del perfil
+  (agregando el campo al payload del backend) queda como mejora pendiente, no como bug urgente.
+- **Dos conteos de "fotos" distintos en la misma pantalla de resumen final.** El tile nuevo de
+  `0939087` (`service_execution_screen.dart`) contaba `_serviceEvents.length` — eventos con foto U
+  video, sin las fotos de inicio/fin del servicio — y el bloque de más abajo ("N fotos del
+  servicio", preexistente) suma inicio + eventos tipo `PHOTO` (sin video) + fin. Un paseo típico con
+  foto de inicio + 2 fotos obligatorias + foto de fin mostraba "2 fotos" arriba y "4 fotos del
+  servicio" abajo, en la misma pantalla. Se igualó el cálculo del tile nuevo al del bloque de abajo.
+- **El anillo de "cuánto falta" seguía llenándose hacia el 100% durante una pausa por emergencia,
+  mientras el número del centro quedaba correctamente congelado.** `_buildClientClock()` (nuevo en
+  `04ced9a`). El deadline usado para `remaining` se corre hacia adelante al mismo ritmo que el reloj
+  real mientras hay una pausa activa (correcto, así el número central no avanza), pero `progress` se
+  calculaba como `(ahora − inicio) / (deadline − inicio)` — con el deadline corriéndose junto con
+  "ahora", ese cociente sigue creciendo hacia 1 cuanto más dura la pausa, así que el anillo visual se
+  iba llenando aunque el texto dijera "faltan X min". No gatea ningún botón real
+  (`_isPaidServiceTimeUp` sí está correctamente congelado, es lo que de verdad habilita "Marcar
+  servicio como terminado"), así que es puramente visual. Se recalculó `progress` restando lo
+  pausado (histórico + pausa activa en curso) del lado del numerador en vez de dejar que crezca con
+  el deadline corrido, igual de congelado que el número central durante una pausa.
+- **El texto nuevo del mapa GPS contradice cómo funciona el tracking real.**
+  `gps_tracking_screen.dart` (agregado en `b5a4bc7`): decía "El mapa se actualiza solo cuando el
+  cuidador se mueve" — pero tanto el tick de iOS/web como el de Android mandan una posición nueva
+  cada 5 segundos SIEMPRE, se haya movido o no el cuidador (confirmado en el propio código de
+  `GpsTrackingSession`/`GpsTaskHandler`, con un comentario explícito sobre la cadencia fija). Se
+  corrigió el texto.
+- **Una confirmación de "fin de servicio" rechazada por el servidor se marcaba igual como ya
+  atendida, dejando el diálogo sin volver a aparecer.** `_respondToEndConfirm()`
+  (`service_execution_screen.dart`): `_respondedEndMarks.add(markedAt)` se ejecutaba apenas se
+  decodificaba la respuesta HTTP, sin chequear `data['success']` — a diferencia del propio
+  comentario del `catch` de la misma función, que sí explica el caso de error de red como el único
+  que debía dejar la respuesta sin marcar. Si el POST llegaba al servidor pero éste devolvía
+  `success:false` por cualquier motivo de negocio, el cuidador perdía la oportunidad de
+  aceptar/rechazar esa confirmación hasta salir y reentrar a la pantalla, aunque el refresco de 10s
+  siguiera trayendo `clientMarkedEndAt` activo. Se movió `_respondedEndMarks.add(markedAt)` dentro
+  del `if (data['success'] == true)`.
+
+**Verificación antes de commitear:** este entorno de ejecución no tiene Flutter/Dart instalados
+(mismo límite ya documentado en corridas del 2026-10-06/07/08) — no se pudo correr `flutter
+analyze` ni los tests. Se releyó cada diff a mano verificando balance de llaves/paréntesis y tipos.
+Se intentó `dart format --set-exit-if-changed` sobre ambos archivos vía `npx`, pero instaló un
+paquete de npm llamado `dart` (no el SDK real de Dart) — su resultado no se puede tomar como
+validación real, se deja constancia para no confundirlo con un `flutter analyze` real en una
+corrida futura. No hubo cambios en `garden-api`, así que no aplica `tsc`/`npm run test:unit` hoy.
+
+### Sin hallazgos nuevos de alto riesgo
+Los pendientes de corridas anteriores (carrera en `startPhoneChange`, revisión legal del texto de
+comisión/impuestos, veredicto `PARTIAL` en blockchain) siguen sin cambios — no se re-auditaron hoy,
+el foco de esta corrida fue un área distinta; se listan abajo solo como recordatorio.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó;
+  el ejemplo numérico (Bs. 100 → 110 → +18 % → 128) sigue repetido tal cual en `legal_screen.dart`.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.

@@ -859,8 +859,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final now = DateTime.now();
     final remaining = deadline?.difference(now) ?? Duration(minutes: totalPaidMin - _elapsed.inMinutes);
     final done = remaining.isNegative || remaining.inSeconds == 0;
-    final progress = totalPaidMin > 0 && startedAt != null
-        ? (now.difference(startedAt).inMinutes / (deadline!.difference(startedAt).inMinutes.clamp(1, 1 << 30))).clamp(0.0, 1.0)
+    // Tiempo pagado transcurrido, SIN contar lo pausado (histórico + pausa
+    // activa en curso) — igual que `_paidDeadline` corre el deadline hacia
+    // adelante para que `remaining` quede congelado durante una pausa, acá
+    // hay que restar lo pausado del lado del numerador para que el anillo
+    // (progress) quede igualmente congelado en vez de seguir llenándose
+    // mientras el número del centro no cambia.
+    final totalPausedMinForRing = (_booking?['totalPausedMinutes'] as num?)?.toInt() ?? 0;
+    final pausedAtForRing = DateTime.tryParse(_booking?['pausedAt'] as String? ?? '');
+    final activePauseMinForRing = pausedAtForRing != null ? now.difference(pausedAtForRing).inMinutes : 0;
+    final elapsedPaidMin = startedAt != null
+        ? now.difference(startedAt).inMinutes - totalPausedMinForRing - activePauseMinForRing
+        : 0;
+    final progress = totalPaidMin > 0
+        ? (elapsedPaidMin / totalPaidMin).clamp(0.0, 1.0)
         : 0.0;
     final (value, unit) = done ? ('0', 'min') : _remainingParts(remaining);
 
@@ -2410,7 +2422,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                   ),
                                 ])
                               else
-                                Text('Nuevo en GARDEN', style: TextStyle(color: subtextColor, fontSize: 13)),
+                                Text('Cuidador verificado', style: TextStyle(color: subtextColor, fontSize: 13)),
                             ],
                           ),
                         ),
@@ -3944,7 +3956,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               : '$m min';
     }
     final distM = (_booking?['gpsDistance'] as num?)?.toDouble();
-    final photos = _serviceEvents.length;
+    // Mismo cálculo que "N fotos del servicio" en _buildServiceReportSection
+    // (inicio + galería de tipo PHOTO + fin) — antes contaba
+    // _serviceEvents.length, que incluye videos y excluye las fotos de
+    // inicio/fin, dando un número distinto al de más abajo en esta misma
+    // pantalla.
+    final startPhotoTile = _booking?['serviceStartPhoto'] as String?;
+    final endPhotoTile = _booking?['serviceEndPhoto'] as String?;
+    final photos = _serviceEvents.where((e) => e['type'] == 'PHOTO' && (e['photoUrl'] as String? ?? '').isNotEmpty).length +
+        (startPhotoTile != null && startPhotoTile.isNotEmpty ? 1 : 0) +
+        (endPhotoTile != null && endPhotoTile.isNotEmpty ? 1 : 0);
     final tiles = <(String, String)>[
       if (duration != null) (duration, 'duró'),
       if (service == GardenService.paseo && distM != null && distM > 0)
@@ -5346,12 +5367,19 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         body: jsonEncode({'accepted': accepted}),
       );
       final data = jsonDecode(res.body);
-      _respondedEndMarks.add(markedAt);
-      if (data['success'] == true && mounted) {
-        setState(() {
-          _booking = data['data'] as Map<String, dynamic>;
-          _elapsed = _computeElapsedNow();
-        });
+      // Solo se marca como "ya atendida" si el servidor de verdad aceptó la
+      // respuesta — antes se marcaba apenas llegaba CUALQUIER respuesta HTTP,
+      // así que un success:false de negocio (no un error de red) dejaba el
+      // diálogo sin volver a aparecer en esta sesión aunque
+      // clientMarkedEndAt siguiera activo en el próximo refresco.
+      if (data['success'] == true) {
+        _respondedEndMarks.add(markedAt);
+        if (mounted) {
+          setState(() {
+            _booking = data['data'] as Map<String, dynamic>;
+            _elapsed = _computeElapsedNow();
+          });
+        }
       }
     } catch (_) {
       // Si falla la request, igual cerramos el diálogo — el cuidador puede
