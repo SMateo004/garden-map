@@ -935,24 +935,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ── Accesos rápidos ──────────────────────────────────────────────────────
+  // Recogidos en una barra que se despliega ahí mismo: antes eran cinco
+  // burbujas grandes con texto entre los servicios y la lista.
   Widget _buildShortcuts() {
-    final items = <(GIcon, String, VoidCallback)>[
-      (GIcon.veterinaria, 'Veterinarias cerca',
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
-      (GIcon.favorito, 'Favoritos', () => context.push('/favorites')),
-      (GIcon.repetir, 'Reservas fijas', () => context.push('/recurring-bookings')),
-      (GIcon.regalo, 'Invita y gana', () => context.push('/referral')),
-      (GIcon.ayuda, 'Ayuda', () => context.push('/help-center')),
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final (icon, label, onTap) in items) GardenShortcut(icon: icon, label: label, onTap: onTap),
-        ],
-      ),
+    return GardenQuickAccess(
+      summary: 'Veterinarias, favoritos y más',
+      items: [
+        GardenQuickItem(GIcon.veterinaria, 'Veterinarias',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
+        GardenQuickItem(GIcon.favorito, 'Favoritos', () => context.push('/favorites')),
+        GardenQuickItem(GIcon.regalo, 'Invita y gana', () => context.push('/referral')),
+        GardenQuickItem(GIcon.repetir, 'Reservas fijas', () => context.push('/recurring-bookings')),
+        GardenQuickItem(GIcon.ayuda, 'Ayuda', () => context.push('/help-center')),
+      ],
     );
   }
 

@@ -374,16 +374,19 @@ class _CatalogPageState extends State<_CatalogPage> {
               child: const _TilesDemo(),
             ),
             const SizedBox(height: 14),
-            Wrap(children: [
-              for (final (i, l) in const [
-                (GIcon.veterinaria, 'Veterinarias cerca'),
-                (GIcon.favorito, 'Favoritos'),
-                (GIcon.repetir, 'Reservas fijas'),
-                (GIcon.regalo, 'Invita y gana'),
-                (GIcon.ayuda, 'Ayuda'),
-              ])
-                GardenShortcut(icon: i, label: l, onTap: () {}),
-            ]),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenQuickAccess(
+                summary: 'Veterinarias, favoritos y más',
+                items: [
+                  GardenQuickItem(GIcon.veterinaria, 'Veterinarias', () {}),
+                  GardenQuickItem(GIcon.favorito, 'Favoritos', () {}),
+                  GardenQuickItem(GIcon.regalo, 'Invita y gana', () {}),
+                  GardenQuickItem(GIcon.repetir, 'Reservas fijas', () {}),
+                  GardenQuickItem(GIcon.ayuda, 'Ayuda', () {}),
+                ],
+              ),
+            ),
           ]),
           _Section('Cambio de perfil (dueño / cuidador / equipo)', [
             ConstrainedBox(
