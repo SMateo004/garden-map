@@ -92,6 +92,44 @@ class CaregiverStaffService {
     await _decode(res);
   }
 
+  /// El dueño da o quita permisos (solo los que el admin habilitó para la empresa).
+  Future<Map<String, dynamic>> setStaffPermissions(String memberId, {bool? canManageBookings, bool? canChat}) async {
+    final res = await http.patch(
+      Uri.parse('$baseUrl/caregiver-staff/members/$memberId/permissions'),
+      headers: _authHeaders,
+      body: jsonEncode({
+        if (canManageBookings != null) 'canManageBookings': canManageBookings,
+        if (canChat != null) 'canChat': canChat,
+      }),
+    );
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
+  /// El dueño asigna una reserva a un empleado (null = quitar la asignación).
+  Future<void> assignBooking(String bookingId, String? staffMemberId) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/caregiver-staff/assignments/$bookingId'),
+      headers: _authHeaders,
+      body: jsonEncode({'staffMemberId': staffMemberId}),
+    );
+    await _decode(res);
+  }
+
+  /// Reservas del dueño (con `assignedStaff`), para asignarlas.
+  Future<List<Map<String, dynamic>>> getOwnerBookings({int limit = 50}) async {
+    final res = await http.get(Uri.parse('$baseUrl/caregiver/bookings?page=1&limit=$limit'), headers: _authHeaders);
+    final data = await _decode(res);
+    return (data['data'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Perfil del dueño (trae `businessFeatures`: lo que el admin habilitó).
+  Future<Map<String, dynamic>> getOwnerProfile() async {
+    final res = await http.get(Uri.parse('$baseUrl/caregiver/my-profile'), headers: _authHeaders);
+    final data = await _decode(res);
+    return (data['data'] as Map).cast<String, dynamic>();
+  }
+
   // ── Autoservicio del empleado (sin auth) ─────────────────────────────────
 
   Future<Map<String, dynamic>> previewInvite(String code) async {
@@ -129,9 +167,10 @@ class CaregiverStaffService {
     return data['data'] as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> getBookings({int page = 1, int limit = 20}) async {
+  /// [assignedToMe]: solo las reservas que el dueño le asignó a este empleado.
+  Future<List<Map<String, dynamic>>> getBookings({int page = 1, int limit = 20, bool assignedToMe = false}) async {
     final res = await http.get(
-      Uri.parse('$baseUrl/caregiver-staff/bookings?page=$page&limit=$limit'),
+      Uri.parse('$baseUrl/caregiver-staff/bookings?page=$page&limit=$limit${assignedToMe ? '&assigned=me' : ''}'),
       headers: _authHeaders,
     );
     final data = await _decode(res);
@@ -161,6 +200,23 @@ class CaregiverStaffService {
       Uri.parse('$baseUrl/caregiver-staff/bookings/$bookingId/start'),
       headers: _authHeaders,
       body: jsonEncode({'photo': photoUrl}),
+    );
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
+  /// Solo si el dueño le dio el permiso y el admin lo habilitó para la empresa.
+  Future<Map<String, dynamic>> acceptBooking(String bookingId) async {
+    final res = await http.post(Uri.parse('$baseUrl/caregiver-staff/bookings/$bookingId/accept'), headers: _authHeaders);
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> rejectBooking(String bookingId, {String? reason}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/caregiver-staff/bookings/$bookingId/reject'),
+      headers: _authHeaders,
+      body: jsonEncode({if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim()}),
     );
     final data = await _decode(res);
     return data['data'] as Map<String, dynamic>;

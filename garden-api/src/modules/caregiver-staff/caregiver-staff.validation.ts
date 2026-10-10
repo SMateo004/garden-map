@@ -20,6 +20,14 @@ export const removalReasonBodySchema = z.object({
   reason: z.string().max(300).optional(),
 });
 
+/** Permisos del empleado que da el dueño — al menos uno. */
+export const staffPermissionsBodySchema = z
+  .object({ canManageBookings: z.boolean().optional(), canChat: z.boolean().optional() })
+  .refine((b): boolean => b.canManageBookings !== undefined || b.canChat !== undefined, 'Indica al menos un permiso');
+
+/** null = quitar la asignación. */
+export const assignBookingBodySchema = z.object({ staffMemberId: z.string().uuid().nullable() });
+
 export const joinTeamBodySchema = z.object({
   code: z.string().trim().min(1, 'Código de invitación requerido').max(12),
 });

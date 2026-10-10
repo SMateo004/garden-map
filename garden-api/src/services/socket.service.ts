@@ -187,7 +187,17 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                 select: { id: true },
             }).catch(() => null);
 
-            if (!booking) {
+            // Empresas: empleado con permiso de chat (y la función habilitada por el admin).
+            const staffAllowed = booking ? false : await (async () => {
+                const { getStaffContext } = await import('../modules/caregiver-staff/caregiver-staff.service.js');
+                const { getFeaturesForProfile } = await import('../modules/business-features/business-features.service.js');
+                const ctx = await getStaffContext(userId);
+                if (!ctx?.canChat) return false;
+                const owned = await prisma.booking.count({ where: { id: bookingId, caregiverId: ctx.caregiverProfileId } });
+                return owned > 0 && (await getFeaturesForProfile(ctx.caregiverProfileId)).STAFF_CLIENT_CHAT;
+            })().catch(() => false);
+
+            if (!booking && !staffAllowed) {
                 socket.emit('error', { message: 'No tienes acceso a esta reserva' });
                 logger.warn('Socket join_booking denegado', { userId, bookingId });
                 return;

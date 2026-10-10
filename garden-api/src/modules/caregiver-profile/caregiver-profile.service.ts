@@ -25,6 +25,7 @@ import { corregirCamposPerfil } from '../../agents/redaccion.agent.js';
 import { enqueueProfileSync, enqueueSafely } from '../../services/chain-registry.service.js';
 import { onCaregiverWelcome } from '../../services/notification.service.js';
 import { BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
+import { resolveFeatures } from '../business-features/business-features.service.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
 
@@ -223,7 +224,12 @@ export async function getMyProfile(userId: string) {
   // El wizard usa esto solo para decidir si mostrar el paso de configurar
   // PIN (resume) — nunca debe llegar el hash real al cliente.
   const { securityPinHash, ...userWithoutHash } = refreshed.user;
-  return { ...refreshed, user: { ...userWithoutHash, hasSecurityPin: !!securityPinHash } };
+  // businessFeatures sale resuelto (lo que el admin habilitó y aplica a esta cuenta), no crudo.
+  return {
+    ...refreshed,
+    businessFeatures: resolveFeatures(refreshed),
+    user: { ...userWithoutHash, hasSecurityPin: !!securityPinHash },
+  };
 }
 
 /** PATCH profile: actualización parcial. 403 si status APPROVED. Si DRAFT o NEEDS_REVISION → mantiene o fija DRAFT. */

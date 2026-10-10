@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
-import { requireStaffMembership, auditStaffAction, actAsOwner } from '../../middleware/require-staff-membership.middleware.js';
+import { requireStaffMembership, requireStaffPermission, auditStaffAction, actAsOwner } from '../../middleware/require-staff-membership.middleware.js';
+import { requireBusinessFeature } from '../../middleware/require-business-feature.middleware.js';
 import * as caregiverStaffController from './caregiver-staff.controller.js';
 import * as caregiverProfileController from '../caregiver-profile/caregiver-profile.controller.js';
 import * as bookingController from '../booking-service/booking.controller.js';
@@ -21,19 +22,24 @@ router.post('/join', authMiddleware, caregiverStaffController.joinTeam);
 router.post('/leave', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.leaveTeam);
 
 // ── Gestión del dueño (empresa) ──────────────────────────────────────────────
-router.post('/invites', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.createInvite);
-router.get('/invites', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.listInvites);
-router.delete('/invites/:id', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.revokeInvite);
-router.get('/members', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.listStaffMembers);
-router.delete('/members/:id', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.removeStaffMember);
-router.patch('/members/:id/suspend', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.suspendStaffMember);
-router.patch('/members/:id/reactivate', authMiddleware, requireRole('CAREGIVER'), caregiverStaffController.reactivateStaffMember);
+router.post('/invites', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.createInvite);
+router.get('/invites', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.listInvites);
+router.delete('/invites/:id', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.revokeInvite);
+router.get('/members', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.listStaffMembers);
+router.delete('/members/:id', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.removeStaffMember);
+router.patch('/members/:id/suspend', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.suspendStaffMember);
+router.put('/assignments/:bookingId', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.assignBooking);
+router.patch('/members/:id/permissions', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.setStaffPermissions);
+router.patch('/members/:id/reactivate', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('STAFF_TEAM'), caregiverStaffController.reactivateStaffMember);
 
 // ── Operativo del empleado ────────────────────────────────────────────────────
 // requireStaffMembership resuelve la membresía con una consulta fresca por
 // request; actAsOwner sustituye req.user.userId por el del dueño justo antes
 // de delegar en los handlers YA EXISTENTES de reservas/ejecución de servicio
 // (sin duplicar esa lógica) — ver require-staff-membership.middleware.ts.
+// Las reservas del empleado exigen que el admin haya habilitado el equipo de la empresa.
+router.use('/bookings', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, requireBusinessFeature('STAFF_TEAM'));
+
 router.get('/whoami', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, caregiverStaffController.whoami);
 
 router.get(
@@ -45,6 +51,21 @@ router.get(
   '/bookings/:id',
   authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner,
   bookingController.getById
+);
+// Aceptar/rechazar: función habilitada por el admin + permiso del dueño a este empleado.
+router.post(
+  '/bookings/:id/accept',
+  authMiddleware, requireRole('CAREGIVER'), requireStaffMembership,
+  requireBusinessFeature('STAFF_BOOKING_DECISIONS'), requireStaffPermission('canManageBookings'),
+  auditStaffAction('STAFF_ACCEPT_BOOKING'), actAsOwner,
+  bookingController.accept
+);
+router.post(
+  '/bookings/:id/reject',
+  authMiddleware, requireRole('CAREGIVER'), requireStaffMembership,
+  requireBusinessFeature('STAFF_BOOKING_DECISIONS'), requireStaffPermission('canManageBookings'),
+  auditStaffAction('STAFF_REJECT_BOOKING'), actAsOwner,
+  bookingController.reject
 );
 router.post(
   '/bookings/:id/start',

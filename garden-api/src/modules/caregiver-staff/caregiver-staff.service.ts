@@ -17,6 +17,7 @@ import logger from '../../shared/logger.js';
 import type { JwtPayload } from '../../middleware/auth.middleware.js';
 import type { z } from 'zod';
 import type { registerStaffBodySchema } from './caregiver-staff.validation.js';
+import { assertFeature, getFeaturesForProfile } from '../business-features/business-features.service.js';
 
 type RegisterStaffBody = z.infer<typeof registerStaffBodySchema>;
 
@@ -25,6 +26,9 @@ export interface StaffContext {
   ownerUserId: string;
   companyName: string | null;
   staffMemberId: string;
+  /** Permisos que dio el dueño. Además del permiso, cada ruta exige su función de negocio. */
+  canManageBookings: boolean;
+  canChat: boolean;
 }
 
 function generateCode(): string {
@@ -106,7 +110,8 @@ export async function previewInvite(code: string): Promise<{ companyName: string
     where: { code: code.trim().toUpperCase() },
     include: { caregiverProfile: { select: { companyName: true } } },
   });
-  const valid = !!invite && invite.status === 'PENDING' && invite.expiresAt > new Date();
+  const teamEnabled = !!invite && (await getFeaturesForProfile(invite.caregiverProfileId)).STAFF_TEAM;
+  const valid = !!invite && teamEnabled && invite.status === 'PENDING' && invite.expiresAt > new Date();
   return { companyName: invite?.caregiverProfile.companyName ?? '', valid };
 }
 
@@ -127,7 +132,93 @@ export async function listStaffMembers(ownerUserId: string) {
     invitedAt: m.invitedAt,
     joinedAt: m.joinedAt,
     removedAt: m.removedAt,
+    canManageBookings: m.canManageBookings,
+    canChat: m.canChat,
   }));
+}
+
+/**
+ * El dueño da o quita permisos a un empleado. Dar un permiso exige que el admin haya
+ * habilitado la función correspondiente para la empresa; quitarlo siempre se puede.
+ */
+export async function setStaffPermissions(
+  ownerUserId: string,
+  staffMemberId: string,
+  changes: { canManageBookings?: boolean; canChat?: boolean }
+): Promise<{ canManageBookings: boolean; canChat: boolean }> {
+  const member = await assertOwnsStaffMember(ownerUserId, staffMemberId);
+  if (member.status === 'REMOVED') throw new BadRequestError('Ese empleado ya no está en el equipo', 'STAFF_REMOVED');
+  if (changes.canManageBookings) await assertFeature(member.caregiverProfileId, 'STAFF_BOOKING_DECISIONS');
+  if (changes.canChat) await assertFeature(member.caregiverProfileId, 'STAFF_CLIENT_CHAT');
+  const updated = await prisma.caregiverStaffMember.update({
+    where: { id: staffMemberId },
+    data: changes,
+    select: { canManageBookings: true, canChat: true },
+  });
+  return updated;
+}
+
+/** Reservas que todavía se pueden asignar (las terminadas o canceladas ya no). */
+const ASSIGNABLE_STATUSES = ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'] as const;
+
+/**
+ * El dueño asigna una reserva a un empleado activo de su equipo (o la desasigna con null).
+ * Avisa al empleado por push. La reserva sigue siendo de la empresa: asignar no cambia
+ * quién cobra ni quién puede operarla, solo ordena el trabajo del equipo.
+ */
+export async function assignBooking(
+  ownerUserId: string,
+  bookingId: string,
+  staffMemberId: string | null
+): Promise<{ bookingId: string; assignedStaffMemberId: string | null }> {
+  const profile = await assertIsCompanyOwner(ownerUserId);
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, caregiverId: true, status: true, petName: true, serviceType: true, startDate: true, walkDate: true },
+  });
+  if (!booking || booking.caregiverId !== profile.id) throw new NotFoundError('Reserva no encontrada');
+  if (!(ASSIGNABLE_STATUSES as readonly string[]).includes(booking.status)) {
+    throw new BadRequestError('Solo se pueden asignar reservas por aceptar, confirmadas o en curso', 'BOOKING_NOT_ASSIGNABLE');
+  }
+
+  let assigneeUserId: string | null = null;
+  if (staffMemberId) {
+    const member = await prisma.caregiverStaffMember.findUnique({ where: { id: staffMemberId } });
+    if (!member || member.caregiverProfileId !== profile.id) throw new NotFoundError('Empleado no encontrado');
+    if (member.status !== 'ACTIVE') throw new BadRequestError('Ese empleado no está activo', 'STAFF_NOT_ACTIVE');
+    assigneeUserId = member.userId;
+  }
+
+  await prisma.booking.update({ where: { id: bookingId }, data: { assignedStaffMemberId: staffMemberId } });
+
+  if (assigneeUserId) {
+    const day = booking.walkDate ?? booking.startDate;
+    const when = day ? ` el ${day.toISOString().slice(0, 10).split('-').reverse().join('/')}` : '';
+    const svc = booking.serviceType === 'PASEO' ? 'Paseo' : booking.serviceType === 'HOSPEDAJE' ? 'Hospedaje' : 'Guardería';
+    sendPushToUser(assigneeUserId, 'Te asignaron una reserva', `${svc} de ${booking.petName ?? 'una mascota'}${when}.`, {
+      type: 'STAFF_BOOKING',
+      bookingId,
+    }).catch((err) => logger.warn('[STAFF] push de asignación falló', { bookingId, err }));
+  }
+  return { bookingId, assignedStaffMemberId: staffMemberId };
+}
+
+/**
+ * userIds de los empleados activos con un permiso — para avisarles (push) de lo que les toca.
+ * Vacío si el admin no habilitó la función para la empresa.
+ */
+export async function staffUserIdsWithPermission(
+  caregiverProfileId: string,
+  permission: 'canManageBookings' | 'canChat'
+): Promise<string[]> {
+  const features = await getFeaturesForProfile(caregiverProfileId);
+  const feature = permission === 'canManageBookings' ? features.STAFF_BOOKING_DECISIONS : features.STAFF_CLIENT_CHAT;
+  if (!feature) return [];
+  const members = await prisma.caregiverStaffMember.findMany({
+    where: { caregiverProfileId, status: 'ACTIVE', [permission]: true },
+    select: { userId: true },
+  });
+  return members.map((m) => m.userId);
 }
 
 async function assertOwnsStaffMember(ownerUserId: string, staffMemberId: string) {
@@ -144,6 +235,15 @@ export async function removeStaffMember(ownerUserId: string, staffMemberId: stri
   await prisma.caregiverStaffMember.update({
     where: { id: staffMemberId },
     data: { status: 'REMOVED', removedAt: new Date(), removedByUserId: ownerUserId, removalReason: reason ?? null },
+  });
+  await unassignOpenBookings(staffMemberId);
+}
+
+/** Quien sale del equipo deja libres sus reservas pendientes, para que el dueño las reasigne. */
+async function unassignOpenBookings(staffMemberId: string): Promise<void> {
+  await prisma.booking.updateMany({
+    where: { assignedStaffMemberId: staffMemberId, status: { in: [...ASSIGNABLE_STATUSES] } },
+    data: { assignedStaffMemberId: null },
   });
 }
 
@@ -180,6 +280,8 @@ export async function registerStaffMember(body: RegisterStaffBody): Promise<Regi
   if (invite.expiresAt <= new Date()) {
     throw new BadRequestError('Ese código de invitación venció', 'STAFF_CODE_EXPIRED');
   }
+  // Un código emitido antes de que el admin apagara el equipo ya no sirve.
+  await assertFeature(invite.caregiverProfileId, 'STAFF_TEAM');
 
   const email = body.email.toLowerCase().trim();
   const [existingEmail, existingPhone] = await Promise.all([
@@ -291,6 +393,8 @@ export async function getStaffContext(staffUserId: string): Promise<StaffContext
     ownerUserId: membership.caregiverProfile.userId,
     companyName: membership.caregiverProfile.companyName,
     staffMemberId: membership.id,
+    canManageBookings: membership.canManageBookings,
+    canChat: membership.canChat,
   };
 }
 
@@ -352,6 +456,7 @@ export async function joinTeamWithExistingAccount(
   if (invite.expiresAt <= new Date()) {
     throw new BadRequestError('Ese código de invitación venció', 'STAFF_CODE_EXPIRED');
   }
+  await assertFeature(invite.caregiverProfileId, 'STAFF_TEAM');
   if (invite.caregiverProfile.suspended) {
     throw new BadRequestError('Esa empresa no está activa en este momento', 'STAFF_COMPANY_SUSPENDED');
   }
@@ -460,4 +565,5 @@ export async function leaveTeam(userId: string): Promise<void> {
     where: { userId },
     data: { status: 'REMOVED', removedAt: new Date(), removedByUserId: userId, removalReason: 'Salió del equipo por su cuenta' },
   });
+  await unassignOpenBookings(member.id);
 }

@@ -5,10 +5,11 @@
  * igual; cada función toma `ownerUserId` y resuelve el perfil, mismo
  * patrón que getBookingsByCaregiverUserId y todo caregiver-staff.service.ts.
  */
-import { BookingStatus, ServiceType } from '@prisma/client';
+import { BookingStatus, Prisma, ServiceType } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
+import { boliviaToday, combinedOccupancyByDay, dayKey, firstFullDay } from './walk-in-capacity.js';
 import { sendTransactionalEmail } from '../auth/email.service.js';
 import logger from '../../shared/logger.js';
 import type { z } from 'zod';
@@ -19,6 +20,7 @@ import type {
   patchWalkInPetBodySchema,
   addVisitEventBodySchema,
   patchWalkInVisitBodySchema,
+  createWalkInReservationBodySchema,
 } from './caregiver-crm.validation.js';
 
 type CreateWalkInClientBody = z.infer<typeof createWalkInClientBodySchema>;
@@ -27,6 +29,7 @@ type CreateWalkInPetBody = z.infer<typeof createWalkInPetBodySchema>;
 type PatchWalkInPetBody = z.infer<typeof patchWalkInPetBodySchema>;
 type AddVisitEventBody = z.infer<typeof addVisitEventBodySchema>;
 type PatchWalkInVisitBody = z.infer<typeof patchWalkInVisitBodySchema>;
+type CreateWalkInReservationBody = z.infer<typeof createWalkInReservationBodySchema>;
 
 /** Mismo patrón que ALLOWED_EVENT_TYPES en booking.service.ts — bitácora de
  * cuidado (FEEDING/WALK/MEDICATION/BATH/NOTE, nunca dispara email) +
@@ -198,45 +201,263 @@ export async function deleteWalkInPet(ownerUserId: string, petId: string): Promi
   if (pet._count.visits > 0) {
     throw new ConflictError('No se puede borrar una mascota con historial de visitas', 'WALKIN_HAS_HISTORY');
   }
-  await prisma.walkInPet.delete({ where: { id: petId } });
+  await prisma.$transaction([
+    prisma.walkInReservation.deleteMany({ where: { walkInPetId: petId } }),
+    prisma.walkInPet.delete({ where: { id: petId } }),
+  ]);
 }
 
 // ── Check-in / check-out ─────────────────────────────────────────────────────
+
+export interface CheckInOptions {
+  notes?: string;
+  spaceLabel?: string;
+  /** Entrada de una reserva de mostrador ya cargada. */
+  reservationId?: string;
+  /** Hospedaje sin reserva previa: día de salida (exclusivo). */
+  untilDate?: string;
+  /** Registrar aunque el cupo esté lleno — solo vale si isOwner. */
+  force?: boolean;
+  /** true = lo hace el dueño (el empleado nunca puede pasar el cupo). */
+  isOwner?: boolean;
+}
 
 export async function checkInWalkInPet(
   ownerUserId: string,
   actingUserId: string,
   petId: string,
   serviceType: ServiceType,
-  notes?: string,
-  spaceLabel?: string
+  opts: CheckInOptions = {}
 ) {
   const profile = await resolveCompanyProfile(ownerUserId);
   await findOwnedPet(profile.id, petId);
+  const today = boliviaToday();
+  const todayDate = parseDay(today);
 
   // Lock de fila sobre la mascota (mismo patrón que payment.service.ts/
   // booking.service.ts) para que dos check-in casi simultáneos de la misma
   // mascota no pasen ambos el chequeo de "no hay visita abierta" bajo Read
   // Committed y terminen creando dos WalkInVisit abiertas para el mismo pet.
+  // Y sobre el perfil, para que dos entradas a la vez no pasen las dos el chequeo de cupo.
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "walk_in_pets" WHERE id = ${petId} FOR UPDATE`;
+    await lockProfile(tx, profile.id);
     const openVisit = await tx.walkInVisit.findFirst({ where: { walkInPetId: petId, checkedOutAt: null } });
     if (openVisit) {
       throw new ConflictError('Esta mascota ya está registrada como presente', 'ALREADY_CHECKED_IN');
     }
 
-    return tx.walkInVisit.create({
+    let reservationId: string | null = null;
+    let createReservationUntil: Date | null = null;
+    let overCapacity = false;
+    let type = serviceType;
+
+    if (opts.reservationId) {
+      // Su lugar ya está contado desde que se reservó: no se vuelve a chequear el cupo.
+      const r = await tx.walkInReservation.findUnique({ where: { id: opts.reservationId } });
+      if (!r || r.caregiverProfileId !== profile.id || r.walkInPetId !== petId) {
+        throw new NotFoundError('Reserva no encontrada');
+      }
+      if (r.status !== 'RESERVED') throw new BadRequestError('Esa reserva ya no está pendiente de entrada', 'RESERVATION_NOT_PENDING');
+      if (dayKey(r.startDate) > today) {
+        throw new BadRequestError(`Esa reserva empieza el ${fmtDay(dayKey(r.startDate))}`, 'RESERVATION_NOT_STARTED');
+      }
+      if (dayKey(r.endDate) <= today) throw new BadRequestError('Esa reserva ya venció', 'RESERVATION_EXPIRED');
+      reservationId = r.id;
+      type = r.serviceType;
+    } else if (IN_PREMISES_TYPES.includes(serviceType)) {
+      let end = addDays(todayDate, 1);
+      if (opts.untilDate) {
+        if (serviceType !== ServiceType.HOSPEDAJE) {
+          throw new BadRequestError('Solo el hospedaje tiene día de salida', 'UNTIL_DATE_ONLY_HOSPEDAJE');
+        }
+        end = parseDay(opts.untilDate);
+        assertReservationRange(todayDate, end, todayDate);
+        createReservationUntil = end;
+      }
+      overCapacity = await assertRoom(tx, profile.id, todayDate, end, opts);
+    }
+
+    const visit = await tx.walkInVisit.create({
       data: {
         caregiverProfileId: profile.id,
         walkInPetId: petId,
-        serviceType,
-        notes: notes ?? null,
-        spaceLabel: spaceLabel ?? null,
+        serviceType: type,
+        notes: opts.notes ?? null,
+        spaceLabel: opts.spaceLabel ?? null,
         checkedInByUserId: actingUserId,
       },
       include: { walkInPet: { select: { name: true } } },
     });
+
+    if (reservationId) {
+      await tx.walkInReservation.update({ where: { id: reservationId }, data: { status: 'CHECKED_IN', visitId: visit.id } });
+    } else if (createReservationUntil) {
+      const r = await tx.walkInReservation.create({
+        data: {
+          caregiverProfileId: profile.id,
+          walkInPetId: petId,
+          serviceType: type,
+          startDate: todayDate,
+          endDate: createReservationUntil,
+          status: 'CHECKED_IN',
+          visitId: visit.id,
+          createdByUserId: actingUserId,
+          overCapacity,
+        },
+      });
+      reservationId = r.id;
+    }
+    return { ...visit, reservationId, overCapacity };
   });
+}
+
+// ── Reservas de mostrador (lugar guardado a futuro) ─────────────────────────
+
+const IN_PREMISES_TYPES: ServiceType[] = [ServiceType.HOSPEDAJE, ServiceType.GUARDERIA];
+const MAX_RESERVATION_DAYS = 60;
+const MAX_DAYS_AHEAD = 180;
+
+function parseDay(day: string): Date {
+  return new Date(`${day}T00:00:00.000Z`);
+}
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() + n);
+  return out;
+}
+
+/** 'YYYY-MM-DD' → 'DD/MM/YYYY'. */
+function fmtDay(day: string): string {
+  return day.split('-').reverse().join('/');
+}
+
+async function lockProfile(tx: Prisma.TransactionClient, profileId: string) {
+  await tx.$queryRaw`SELECT id FROM "caregiver_profiles" WHERE id = ${profileId} FOR UPDATE`;
+}
+
+function assertReservationRange(start: Date, end: Date, today: Date) {
+  if (start < today) throw new BadRequestError('No se puede reservar en días pasados', 'RESERVATION_IN_PAST');
+  if (end <= start) throw new BadRequestError('La salida debe ser después de la entrada', 'RESERVATION_INVALID_RANGE');
+  if (end.getTime() - start.getTime() > MAX_RESERVATION_DAYS * 86400000) {
+    throw new BadRequestError(`Una reserva de mostrador puede durar hasta ${MAX_RESERVATION_DAYS} días`, 'RESERVATION_TOO_LONG');
+  }
+  if (start > addDays(today, MAX_DAYS_AHEAD)) {
+    throw new BadRequestError(`Se puede reservar hasta ${MAX_DAYS_AHEAD} días por adelantado`, 'RESERVATION_TOO_FAR');
+  }
+}
+
+/**
+ * Chequea el cupo combinado (app + mostrador) de cada día en [start, end) para UNA mascota
+ * más. Lleno → 409 CAPACITY_FULL, salvo que el dueño fuerce (el empleado nunca puede).
+ * Devuelve true si quedó por encima del cupo (forzado).
+ */
+async function assertRoom(
+  tx: Prisma.TransactionClient,
+  profileId: string,
+  start: Date,
+  end: Date,
+  opts: { force?: boolean; isOwner?: boolean }
+): Promise<boolean> {
+  const occupancy = await combinedOccupancyByDay(tx, profileId, start, end);
+  const full = firstFullDay(occupancy, start, end, 1);
+  if (!full) return false;
+  if (opts.force && opts.isOwner) return true;
+  const base = `Cupo lleno el ${fmtDay(full.day)}: ya hay ${full.occupied} de ${occupancy.maxPets} mascotas entre hospedaje y guardería (reservas de la app y de recepción).`;
+  throw new ConflictError(
+    opts.isOwner ? `${base} Si igual quieres registrarla, confirma que vas a pasar el cupo.` : `${base} Solo el dueño puede registrar por encima del cupo.`,
+    'CAPACITY_FULL'
+  );
+}
+
+export async function createWalkInReservation(
+  ownerUserId: string,
+  actingUserId: string,
+  petId: string,
+  body: CreateWalkInReservationBody,
+  isOwner: boolean
+) {
+  const profile = await resolveCompanyProfile(ownerUserId);
+  await findOwnedPet(profile.id, petId);
+  const today = parseDay(boliviaToday());
+  const start = parseDay(body.startDate);
+  const end = body.serviceType === 'HOSPEDAJE' ? parseDay(body.endDate!) : addDays(start, 1);
+  assertReservationRange(start, end, today);
+
+  return prisma.$transaction(async (tx) => {
+    await lockProfile(tx, profile.id);
+    const overlap = await tx.walkInReservation.findFirst({
+      where: { walkInPetId: petId, status: { in: ['RESERVED', 'CHECKED_IN'] }, startDate: { lt: end }, endDate: { gt: start } },
+    });
+    if (overlap) {
+      throw new ConflictError(
+        `Esta mascota ya tiene una reserva del ${fmtDay(dayKey(overlap.startDate))} al ${fmtDay(dayKey(overlap.endDate))}`,
+        'RESERVATION_OVERLAP'
+      );
+    }
+    const overCapacity = await assertRoom(tx, profile.id, start, end, { force: body.force, isOwner });
+    return tx.walkInReservation.create({
+      data: {
+        caregiverProfileId: profile.id,
+        walkInPetId: petId,
+        serviceType: body.serviceType,
+        startDate: start,
+        endDate: end,
+        notes: body.notes?.trim() || null,
+        createdByUserId: actingUserId,
+        overCapacity,
+      },
+      include: { walkInPet: { select: { name: true } } },
+    });
+  });
+}
+
+/** Reservas de mostrador pendientes o en curso que tocan [from, to). Por defecto, de hoy a 60 días. */
+export async function listWalkInReservations(ownerUserId: string, fromStr?: string, toStr?: string) {
+  const profile = await resolveCompanyProfile(ownerUserId);
+  const from = parseDay(fromStr ?? boliviaToday());
+  const to = toStr ? parseDay(toStr) : addDays(from, 60);
+  if (to <= from) throw new BadRequestError('Rango de fechas inválido', 'INVALID_RANGE');
+  if (to.getTime() - from.getTime() > MAX_DAYS_AHEAD * 86400000) {
+    throw new BadRequestError(`El rango máximo es de ${MAX_DAYS_AHEAD} días`, 'RANGE_TOO_LONG');
+  }
+  const rows = await prisma.walkInReservation.findMany({
+    where: { caregiverProfileId: profile.id, status: { in: ['RESERVED', 'CHECKED_IN'] }, startDate: { lt: to }, endDate: { gt: from } },
+    include: { walkInPet: { select: { id: true, name: true, photoUrl: true, walkInClient: { select: { id: true, name: true, phone: true } } } } },
+    orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    serviceType: r.serviceType,
+    startDate: dayKey(r.startDate),
+    endDate: dayKey(r.endDate),
+    notes: r.notes,
+    overCapacity: r.overCapacity,
+    visitId: r.visitId,
+    petId: r.walkInPet.id,
+    petName: r.walkInPet.name,
+    petPhotoUrl: r.walkInPet.photoUrl,
+    clientId: r.walkInPet.walkInClient.id,
+    clientName: r.walkInPet.walkInClient.name,
+    clientPhone: r.walkInPet.walkInClient.phone,
+  }));
+}
+
+/** Cancela una reserva que todavía no entró: libera su lugar en el cupo. */
+export async function cancelWalkInReservation(ownerUserId: string, actingUserId: string, reservationId: string) {
+  const profile = await resolveCompanyProfile(ownerUserId);
+  const r = await prisma.walkInReservation.findUnique({ where: { id: reservationId } });
+  if (!r || r.caregiverProfileId !== profile.id) throw new NotFoundError('Reserva no encontrada');
+  const claimed = await prisma.walkInReservation.updateMany({
+    where: { id: reservationId, status: 'RESERVED' },
+    data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledByUserId: actingUserId },
+  });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Solo se puede cancelar una reserva que todavía no entró', 'RESERVATION_NOT_PENDING');
+  }
+  return { id: reservationId, status: 'CANCELLED' as const };
 }
 
 export async function getWalkInVisit(ownerUserId: string, visitId: string) {
@@ -296,6 +517,8 @@ export async function checkOutWalkInVisit(ownerUserId: string, actingUserId: str
   if (claimed.count === 0) {
     throw new BadRequestError('Esta visita ya tiene check-out registrado', 'ALREADY_CHECKED_OUT');
   }
+  // Si entró con reserva, la reserva termina acá: una salida anticipada libera los días restantes.
+  await prisma.walkInReservation.updateMany({ where: { visitId, status: 'CHECKED_IN' }, data: { status: 'COMPLETED' } });
   const updated = await prisma.walkInVisit.findUniqueOrThrow({
     where: { id: visitId },
     include: { walkInPet: { select: { name: true } } },
@@ -423,11 +646,24 @@ export interface OccupancyEntry {
   photoUrl: string | null;
 }
 
+export interface ArrivingReservation {
+  reservationId: string;
+  petId: string;
+  petName: string;
+  clientName: string;
+  serviceType: 'HOSPEDAJE' | 'GUARDERIA';
+  endDate: string;
+}
+
 export interface OccupancyDashboard {
   occupied: number;
   capacity: number;
   overCapacity: boolean;
   entries: OccupancyEntry[];
+  /** Lugares de hoy ya tomados: presentes + reservas de la app y de mostrador que llegan hoy. */
+  committedToday: number;
+  /** Reservas de mostrador de hoy que todavía no registraron su entrada. */
+  arrivingToday: ArrivingReservation[];
 }
 
 export async function getOccupancyDashboard(ownerUserId: string): Promise<OccupancyDashboard> {
@@ -468,7 +704,33 @@ export async function getOccupancyDashboard(ownerUserId: string): Promise<Occupa
 
   const entries = [...bookingEntries, ...walkInEntries].sort((a, b) => a.since.getTime() - b.since.getTime());
   const capacity = combinedHospedajeGuarderiaMax(profile);
-  return { occupied: entries.length, capacity, overCapacity: entries.length > capacity, entries };
+
+  const today = parseDay(boliviaToday());
+  const tomorrow = addDays(today, 1);
+  const [occupancyToday, arriving] = await Promise.all([
+    combinedOccupancyByDay(prisma, profile.id, today, tomorrow),
+    prisma.walkInReservation.findMany({
+      where: { caregiverProfileId: profile.id, status: 'RESERVED', startDate: { lte: today }, endDate: { gt: today } },
+      include: { walkInPet: { select: { id: true, name: true, walkInClient: { select: { name: true } } } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]);
+
+  return {
+    occupied: entries.length,
+    capacity,
+    overCapacity: entries.length > capacity,
+    entries,
+    committedToday: occupancyToday.byDay.get(dayKey(today)) ?? 0,
+    arrivingToday: arriving.map((r) => ({
+      reservationId: r.id,
+      petId: r.walkInPet.id,
+      petName: r.walkInPet.name,
+      clientName: r.walkInPet.walkInClient.name,
+      serviceType: r.serviceType as 'HOSPEDAJE' | 'GUARDERIA',
+      endDate: dayKey(r.endDate),
+    })),
+  };
 }
 
 // ── Reportes (solo dueño) ─────────────────────────────────────────────────────

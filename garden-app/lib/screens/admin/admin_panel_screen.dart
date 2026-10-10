@@ -28,6 +28,7 @@ import 'admin_test_booking_screen.dart';
 import 'admin_finance_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_pricing_screen.dart';
+import 'admin_business_features_card.dart';
 import 'admin_support_screen.dart';
 import 'admin_blockchain_screen.dart';
 import 'payment_qr_admin_screen.dart';
@@ -4494,6 +4495,13 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+                  // FUNCIONES DEL NEGOCIO (solo si aplica alguna a este tipo de cuenta)
+                  AdminBusinessFeaturesCard(
+                    caregiverProfileId: widget.caregiverId,
+                    adminToken: widget.token,
+                    baseUrl: widget.baseUrl,
+                  ),
 
                   // CONTACTO
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

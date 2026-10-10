@@ -312,6 +312,14 @@ export const cancellationRequestBodySchema = z.object({
 
 export type CancellationRequestBody = z.infer<typeof cancellationRequestBodySchema>;
 
+/** Rechazo del cuidador: el motivo es opcional. Antes se validaba con el esquema de
+ * cancelación (reasonCode + reason obligatorios) y el botón "Rechazar" de la app, que no
+ * manda cuerpo, siempre fallaba con 400. */
+export const rejectBookingBodySchema = z.object({
+  reason: z.string().trim().max(2000, 'Máximo 2000 caracteres').optional(),
+  reasonCode: z.enum(CANCELLATION_REASON_CODES).optional(),
+});
+
 /** POST /api/bookings/:id/request-extension-payment — inicia pago de extensión de paseo. */
 export const requestExtensionPaymentBodySchema = z.object({
   additionalMinutes: z.number().int().refine((n) => [15, 30, 60].includes(n), {

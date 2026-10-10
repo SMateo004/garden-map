@@ -30,6 +30,21 @@ export async function requireStaffMembership(req: Request, _res: Response, next:
 }
 
 /**
+ * Exige un permiso que el dueño le dio al empleado (canManageBookings / canChat). Va después
+ * de requireStaffMembership; la función de negocio la exige requireBusinessFeature aparte.
+ */
+export function requireStaffPermission(permission: 'canManageBookings' | 'canChat') {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.staffContext?.[permission]) {
+      const what = permission === 'canManageBookings' ? 'aceptar o rechazar reservas' : 'chatear con clientes';
+      next(new ForbiddenError(`El dueño de la empresa no te dio permiso para ${what}`, 'STAFF_PERMISSION_DENIED'));
+      return;
+    }
+    next();
+  };
+}
+
+/**
  * Registra en el audit log qué empleado hizo la acción (con su userId real)
  * ANTES de que actAsOwner sustituya la identidad para el handler reusado —
  * fire-and-forget, nunca bloquea el request. `entity`/`entityIdParam`

@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { BadRequestError } from '../../shared/errors.js';
 import * as caregiverStaffService from './caregiver-staff.service.js';
-import { createInviteBodySchema, registerStaffBodySchema, removalReasonBodySchema, joinTeamBodySchema } from './caregiver-staff.validation.js';
+import { getFeaturesForProfile } from '../business-features/business-features.service.js';
+import { createInviteBodySchema, registerStaffBodySchema, removalReasonBodySchema, joinTeamBodySchema, staffPermissionsBodySchema, assignBookingBodySchema } from './caregiver-staff.validation.js';
 
 // ── Gestión del dueño ────────────────────────────────────────────────────────
 
@@ -42,6 +43,26 @@ export const removeStaffMember = asyncHandler(async (req: Request, res: Response
 export const suspendStaffMember = asyncHandler(async (req: Request, res: Response) => {
   await caregiverStaffService.suspendStaffMember(req.user!.userId, req.params.id!);
   res.json({ success: true });
+});
+
+/** PATCH /api/caregiver-staff/members/:id/permissions — { canManageBookings?, canChat? } */
+export const setStaffPermissions = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = staffPermissionsBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  }
+  const data = await caregiverStaffService.setStaffPermissions(req.user!.userId, req.params.id!, parsed.data);
+  res.json({ success: true, data });
+});
+
+/** PUT /api/caregiver-staff/assignments/:bookingId — { staffMemberId | null }. Solo el dueño. */
+export const assignBooking = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = assignBookingBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  }
+  const data = await caregiverStaffService.assignBooking(req.user!.userId, req.params.bookingId!, parsed.data.staffMemberId);
+  res.json({ success: true, data });
 });
 
 export const reactivateStaffMember = asyncHandler(async (req: Request, res: Response) => {
@@ -86,5 +107,16 @@ export const leaveTeam = asyncHandler(async (req: Request, res: Response) => {
 /** GET /api/caregiver-staff/whoami — para que la pantalla del staff sepa a qué empresa pertenece. */
 export const whoami = asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.staffContext!;
-  res.json({ success: true, data: { companyName: ctx.companyName, staffMemberId: ctx.staffMemberId } });
+  const businessFeatures = await getFeaturesForProfile(ctx.caregiverProfileId);
+  res.json({
+    success: true,
+    data: {
+      companyName: ctx.companyName,
+      staffMemberId: ctx.staffMemberId,
+      businessFeatures,
+      // Lo que este empleado puede hacer de verdad: permiso del dueño Y función habilitada por el admin.
+      canManageBookings: ctx.canManageBookings && businessFeatures.STAFF_BOOKING_DECISIONS,
+      canChat: ctx.canChat && businessFeatures.STAFF_CLIENT_CHAT,
+    },
+  });
 });

@@ -42,6 +42,7 @@ import type {
 } from './booking.validation.js';
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
+import { combinedOccupancyByDay, firstFullDay, walkInPetsByDay } from '../caregiver-crm/walk-in-capacity.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 import { grantReferralRewardIfEligible } from '../referral/referral.service.js';
@@ -896,107 +897,20 @@ async function assertHospedajeAvailability(
     );
   }
 
-  // Reservas que bloquean: CONFIRMED, IN_PROGRESS, PAYMENT_PENDING_APPROVAL,
-  // WAITING_CAREGIVER_APPROVAL, PENDING_MG, o PENDING_PAYMENT reciente (<15 min).
-  const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
-
   // Hospedaje y Guardería comparten UN solo cupo simultáneo (no uno cada
-  // uno) — si el cuidador atiende ambos servicios a la vez, consume el mismo
-  // pool de mascotas. Ver combinedHospedajeGuarderiaMax().
-  const profileForMaxPets = await tx.caregiverProfile.findUnique({
-    where: { id: caregiverId },
-    select: { maxPetsHospedaje: true, maxPetsGuarderia: true, maxPets: true },
-  });
-  const maxPets = combinedHospedajeGuarderiaMax(profileForMaxPets ?? {});
-
-  const activeStatusFilter = {
-    OR: [
-      {
-        status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
-      },
-      {
-        status: BookingStatus.PENDING_PAYMENT,
-        createdAt: { gte: expirationDate },
-      }
-    ],
-  };
-
-  // For maxPets > 1, we need to check per-day capacity, not just total count.
-  // Find all overlapping HOSPEDAJE bookings and count how many cover each date.
-  const overlappingBookings = await tx.booking.findMany({
-    where: {
-      caregiverId,
-      serviceType: 'HOSPEDAJE',
-      ...activeStatusFilter,
-      startDate: { lte: end },
-      endDate: { gt: start },
-    },
-    select: { startDate: true, endDate: true, petCount: true },
-  });
-
-  // GUARDERIA consume del MISMO pool — cualquier reserva de guardería ese
-  // día cuenta contra el cupo combinado, aunque hospedaje ocupe el día
-  // entero y guardería solo algunas horas (ver ejemplo del producto: 2
-  // hospedajes que se solapan + 1 guardería ese mismo día = 3, ya al tope).
-  const overlappingGuarderia = await tx.booking.findMany({
-    where: {
-      caregiverId,
-      serviceType: 'GUARDERIA',
-      ...activeStatusFilter,
-      walkDate: { gte: start, lt: end },
-    },
-    select: { walkDate: true, petCount: true },
-  });
-
-  // Count total pets (not bookings) per day — block when pets + newPetCount > maxPets
-  const datePetCounts = new Map<string, number>();
-  for (const b of overlappingBookings) {
-    let d = new Date(b.startDate!);
-    const bPetCount = b.petCount ?? 1;
-    while (d < b.endDate!) {
-      const ds = d.toISOString().slice(0, 10);
-      datePetCounts.set(ds, (datePetCounts.get(ds) ?? 0) + bPetCount);
-      d.setDate(d.getDate() + 1);
-    }
+  // uno) y cuentan también los clientes de mostrador de las empresas
+  // (visitas abiertas y reservas de recepción a futuro) — misma cuenta que
+  // usa la recepción, ver walk-in-capacity.ts. Bloquean las reservas
+  // CONFIRMED, IN_PROGRESS, PAYMENT_PENDING_APPROVAL, WAITING_CAREGIVER_APPROVAL,
+  // PENDING_MG y PENDING_PAYMENT reciente (<15 min).
+  const occupancy = await combinedOccupancyByDay(tx, caregiverId, start, end);
+  const full = firstFullDay(occupancy, start, end, newPetCount);
+  if (full) {
+    throw new AvailabilityConflictError(
+      `El cuidador ya tiene ${full.occupied} mascota${full.occupied !== 1 ? 's' : ''} entre hospedaje y guardería el ${full.day} (máx. ${occupancy.maxPets} combinado). Elige otras fechas.`,
+      'startDate'
+    );
   }
-  for (const b of overlappingGuarderia) {
-    if (!b.walkDate) continue;
-    const ds = b.walkDate.toISOString().slice(0, 10);
-    datePetCounts.set(ds, (datePetCounts.get(ds) ?? 0) + (b.petCount ?? 1));
-  }
-  const walkInNow = await countWalkInPetsPresentNow(tx, caregiverId);
-  if (walkInNow.pets > 0) {
-    datePetCounts.set(walkInNow.today, (datePetCounts.get(walkInNow.today) ?? 0) + walkInNow.pets);
-  }
-  let cur = new Date(start);
-  while (cur < end) {
-    const ds = cur.toISOString().slice(0, 10);
-    const occupiedPets = datePetCounts.get(ds) ?? 0;
-    if (occupiedPets + newPetCount > maxPets) {
-      throw new AvailabilityConflictError(
-        `El cuidador ya tiene ${occupiedPets} mascota${occupiedPets !== 1 ? 's' : ''} entre hospedaje y guardería el ${ds} (máx. ${maxPets} combinado). Elige otras fechas.`,
-        'startDate'
-      );
-    }
-    cur.setDate(cur.getDate() + 1);
-  }
-}
-
-/** Mascotas walk-in (CRM de empresas) que están en el local AHORA, en
- * hospedaje/guardería. No tienen fecha de fin, así que solo se pueden
- * contar contra "hoy" (hora Bolivia). Antes la disponibilidad solo miraba
- * reservas de la app: un hotel lleno de walk-in seguía recibiendo reservas
- * del marketplace y quedaba sobrevendido. */
-async function countWalkInPetsPresentNow(tx: Prisma.TransactionClient, caregiverId: string): Promise<{ today: string; pets: number }> {
-  const today = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const pets = await tx.walkInVisit.count({
-    where: {
-      caregiverProfileId: caregiverId,
-      checkedOutAt: null,
-      serviceType: { in: [ServiceType.HOSPEDAJE, ServiceType.GUARDERIA] },
-    },
-  });
-  return { today, pets };
 }
 
 /** Paseo: la fecha debe estar disponible (fila con timeBlocks[slot]=true o defaultSchedule.paseoTimeBlocks[slot]). */
@@ -1120,10 +1034,11 @@ async function assertPaseoAvailability(
       select: { petCount: true },
     });
     hospedajePetsThatDay = overlappingHospedaje.reduce((s, b) => s + (b.petCount ?? 1), 0);
-    const walkInNow = await countWalkInPetsPresentNow(tx, caregiverId);
-    if (walkInNow.pets > 0 && date.toISOString().slice(0, 10) === walkInNow.today) {
-      hospedajePetsThatDay += walkInNow.pets;
-    }
+    // Clientes de mostrador de las empresas (visitas abiertas y reservas de recepción).
+    const dayAfter = new Date(date);
+    dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+    const walkIn = await walkInPetsByDay(tx, caregiverId, date, dayAfter);
+    hospedajePetsThatDay += walkIn.get(date.toISOString().slice(0, 10)) ?? 0;
   }
 
   // Un bloque 'legacy' es aquel que no tiene hora de inicio (bloquea todo el slot)
@@ -3562,6 +3477,7 @@ export async function getMyBookings(
         meetAndGreet: true,
         bookingPets: true,
         bookingExtras: true,
+        assignedStaffMember: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -3749,7 +3665,9 @@ export async function getBookingById(
 export async function getBookingsByCaregiverUserId(
   caregiverUserId: string,
   page = 1,
-  limit = 20
+  limit = 20,
+  /** Empleado de empresa: solo las reservas que el dueño le asignó. */
+  opts: { assignedStaffMemberId?: string } = {}
 ): Promise<{ bookings: BookingCreateResult[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
   const profile = await prisma.caregiverProfile.findFirst({
     where: { userId: caregiverUserId },
@@ -3765,6 +3683,7 @@ export async function getBookingsByCaregiverUserId(
     status: {
       notIn: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] as BookingStatus[],
     },
+    ...(opts.assignedStaffMemberId ? { assignedStaffMemberId: opts.assignedStaffMemberId } : {}),
   };
 
   const [bookings, total] = await Promise.all([

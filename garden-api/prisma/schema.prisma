@@ -249,6 +249,10 @@ model CaregiverProfile {
   /// pero no se valida como mutuamente excluyente para no bloquear al
   /// cuidador — la app se lo advierte al activarlo.
   instantBookingEnabled           Boolean                     @default(false)
+  /// Funciones de negocio que SOLO el admin habilita, por negocio y a pedido
+  /// (recepción, equipo, permisos del equipo…). Ausente/false = apagada.
+  /// Claves y a qué tipo de cuenta aplica cada una: business-features.service.ts.
+  businessFeatures                Json?
   sizesAccepted                   String[]
   noAcceptBreeds                  Boolean?
   breedsWhy                       String?                     @db.VarChar(500)
@@ -379,6 +383,7 @@ model CaregiverProfile {
   staffInvites                    CaregiverStaffInvite[]
   walkInClients                   WalkInClient[]
   walkInVisits                    WalkInVisit[]
+  walkInReservations              WalkInReservation[]
 
   @@index([status])
   @@index([userId])
@@ -413,6 +418,11 @@ model CaregiverStaffMember {
   removedAt          DateTime?
   removedByUserId    String?
   removalReason      String?
+  /// Permisos que da el dueño, y solo si el admin habilitó la función para la empresa
+  /// (STAFF_BOOKING_DECISIONS / STAFF_CLIENT_CHAT — business-features.service.ts).
+  canManageBookings  Boolean              @default(false)
+  canChat            Boolean              @default(false)
+  assignedBookings   Booking[]            @relation("BookingAssignee")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -500,6 +510,7 @@ model WalkInPet {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   visits          WalkInVisit[]
+  reservations    WalkInReservation[]
 
   @@index([walkInClientId])
   @@map("walk_in_pets")
@@ -535,9 +546,48 @@ model WalkInVisit {
   /// FEEDING | WALK | MEDICATION | BATH | NOTE | PHOTO | INCIDENT |
   /// INCIDENT_RESOLVED. Cada entrada: { type, note?, photoUrl?, at, byUserId }.
   events              Json?            @db.JsonB
+  reservation         WalkInReservation?
 
   @@index([caregiverProfileId, checkedOutAt])
   @@map("walk_in_visits")
+}
+
+/// Reserva de mostrador (recepción): guarda el lugar de una mascota walk-in para fechas
+/// futuras, o para los días que se queda después de entrar. Ocupa el cupo combinado
+/// igual que una reserva de la app (walk-in-capacity.ts). endDate exclusiva (guardería =
+/// un día). Puro registro interno: sin dinero, nunca toca User.balance.
+model WalkInReservation {
+  id                 String                  @id @default(uuid())
+  caregiverProfileId String
+  caregiverProfile   CaregiverProfile        @relation(fields: [caregiverProfileId], references: [id], onDelete: Cascade)
+  walkInPetId        String
+  walkInPet          WalkInPet               @relation(fields: [walkInPetId], references: [id], onDelete: Restrict)
+  serviceType        ServiceType
+  startDate          DateTime                @db.Date
+  endDate            DateTime                @db.Date
+  status             WalkInReservationStatus @default(RESERVED)
+  notes              String?
+  /// Visita creada al registrar la entrada con esta reserva.
+  visitId            String?                 @unique
+  visit              WalkInVisit?            @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  createdByUserId    String
+  /// true si el dueño la cargó aunque el cupo estaba lleno.
+  overCapacity       Boolean                 @default(false)
+  cancelledAt        DateTime?
+  cancelledByUserId  String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([caregiverProfileId, status, startDate])
+  @@index([walkInPetId])
+  @@map("walk_in_reservations")
+}
+
+enum WalkInReservationStatus {
+  RESERVED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
 }
 
 /// Disponibilidad por cuidador y fecha. MVP: hospedaje por día; paseos por bloques (MANANA/TARDE/NOCHE).
@@ -569,6 +619,9 @@ model Booking {
   id                         String           @id @default(uuid())
   clientId                   String
   caregiverId                String
+  /// Empresas con equipo habilitado: empleado al que el dueño asignó esta reserva (opcional).
+  assignedStaffMemberId      String?
+  assignedStaffMember        CaregiverStaffMember? @relation("BookingAssignee", fields: [assignedStaffMemberId], references: [id], onDelete: SetNull)
   serviceType                ServiceType
   status                     BookingStatus    @default(PENDING_PAYMENT)
   startDate                  DateTime?        @db.Date
@@ -773,6 +826,7 @@ model Booking {
   @@index([petId])
   @@index([recurringSeriesId])
   @@index([bookingGroupId])
+  @@index([assignedStaffMemberId])
   @@map("bookings")
 }
 

@@ -12,10 +12,17 @@ import {
   patchWalkInVisitBodySchema,
   addVisitEventBodySchema,
   occupancyReportQuerySchema,
+  createWalkInReservationBodySchema,
+  listWalkInReservationsQuerySchema,
 } from './caregiver-crm.validation.js';
 
 function actingUserId(req: Request): string {
   return req.actingUserId ?? req.user!.userId;
+}
+
+/** El dueño entra directo; el empleado llega con staffContext (y nunca puede pasar el cupo). */
+function isOwner(req: Request): boolean {
+  return !req.staffContext;
 }
 
 // ── Clientes walk-in ─────────────────────────────────────────────────────────
@@ -81,10 +88,35 @@ export const deletePet = asyncHandler(async (req: Request, res: Response) => {
 export const checkIn = asyncHandler(async (req: Request, res: Response) => {
   const parsed = checkInBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
-  const visit = await crmService.checkInWalkInPet(
-    req.user!.userId, actingUserId(req), req.params.petId!, parsed.data.serviceType, parsed.data.notes, parsed.data.spaceLabel
-  );
+  const { serviceType, ...opts } = parsed.data;
+  const visit = await crmService.checkInWalkInPet(req.user!.userId, actingUserId(req), req.params.petId!, serviceType, {
+    ...opts,
+    isOwner: isOwner(req),
+  });
   res.status(201).json({ success: true, data: visit });
+});
+
+// ── Reservas de mostrador ────────────────────────────────────────────────────
+
+export const createReservation = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = createWalkInReservationBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const reservation = await crmService.createWalkInReservation(
+    req.user!.userId, actingUserId(req), req.params.petId!, parsed.data, isOwner(req)
+  );
+  res.status(201).json({ success: true, data: reservation });
+});
+
+export const listReservations = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = listWalkInReservationsQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const reservations = await crmService.listWalkInReservations(req.user!.userId, parsed.data.from, parsed.data.to);
+  res.json({ success: true, data: reservations });
+});
+
+export const cancelReservation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await crmService.cancelWalkInReservation(req.user!.userId, actingUserId(req), req.params.id!);
+  res.json({ success: true, data: result });
 });
 
 export const getVisit = asyncHandler(async (req: Request, res: Response) => {

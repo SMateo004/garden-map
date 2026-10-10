@@ -16,6 +16,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
 import '../../services/work_mode.dart';
+import '../../services/business_features.dart';
 import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -626,10 +627,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: 'Mi disponibilidad',
               onTap: () => context.push('/caregiver/home?tab=disponibilidad')),
           GardenSettingsRow(icon: GIcon.mascotas, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
-          if (isCompany) ...[
+          // Equipo y recepción solo si el admin los habilitó para este negocio.
+          if (isCompany && BusinessFeatures.has(p, BusinessFeatures.staffTeam))
             GardenSettingsRow(icon: GIcon.equipo, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
-            GardenSettingsRow(icon: GIcon.inicio, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
-          ],
+          if (isCompany && BusinessFeatures.has(p, BusinessFeatures.reception))
+            GardenSettingsRow(icon: GIcon.habitacion, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
           GardenSettingsRow(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
           // Solo en modo cuidador: además del atajo dentro del selector de perfil,
           // a la vista en su grupo de trabajo.

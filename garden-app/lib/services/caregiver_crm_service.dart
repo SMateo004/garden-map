@@ -4,6 +4,17 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'auth_state.dart';
 
+/// Error del backend con su código (ej. CAPACITY_FULL), para que la pantalla pueda
+/// reaccionar distinto según el caso. toString() da solo el mensaje (friendlyError).
+class CrmApiException implements Exception {
+  final String message;
+  final String? code;
+  CrmApiException(this.message, [this.code]);
+
+  @override
+  String toString() => 'Exception: $message';
+}
+
 /// Cliente HTTP del CRM de mascotas walk-in + dashboard de ocupación.
 /// Una sola clase parametrizada por prefijo — el dueño y el staff pegan a
 /// los MISMOS endpoints del backend, solo cambia el prefijo de la URL
@@ -28,7 +39,8 @@ class CaregiverCrmService {
   Future<Map<String, dynamic>> _decode(http.Response res) async {
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     if (data['success'] != true) {
-      throw Exception((data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'Error inesperado');
+      final error = data['error'] as Map<String, dynamic>?;
+      throw CrmApiException(error?['message'] as String? ?? 'Error inesperado', error?['code'] as String?);
     }
     return data;
   }
@@ -134,7 +146,18 @@ class CaregiverCrmService {
 
   // ── Check-in / check-out ──────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> checkIn(String petId, {required String serviceType, String? notes, String? spaceLabel}) async {
+  /// [reservationId]: entrada de una reserva de mostrador. [untilDate] ('AAAA-MM-DD'):
+  /// hospedaje sin reserva — guarda el lugar hasta ese día. [force]: solo el dueño, pasar
+  /// el cupo cuando está lleno (si no, el backend responde CAPACITY_FULL).
+  Future<Map<String, dynamic>> checkIn(
+    String petId, {
+    required String serviceType,
+    String? notes,
+    String? spaceLabel,
+    String? reservationId,
+    String? untilDate,
+    bool force = false,
+  }) async {
     final res = await http.post(
       _u('/pets/$petId/check-in'),
       headers: _authHeaders,
@@ -142,10 +165,53 @@ class CaregiverCrmService {
         'serviceType': serviceType,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         if (spaceLabel != null && spaceLabel.isNotEmpty) 'spaceLabel': spaceLabel,
+        if (reservationId != null) 'reservationId': reservationId,
+        if (untilDate != null) 'untilDate': untilDate,
+        if (force) 'force': true,
       }),
     );
     final data = await _decode(res);
     return data['data'] as Map<String, dynamic>;
+  }
+
+  // ── Reservas de mostrador ─────────────────────────────────────────────────
+
+  /// Guarda el lugar de una mascota de mostrador. [endDate] (exclusiva) solo en hospedaje.
+  Future<Map<String, dynamic>> createReservation(
+    String petId, {
+    required String serviceType,
+    required String startDate,
+    String? endDate,
+    String? notes,
+    bool force = false,
+  }) async {
+    final res = await http.post(
+      _u('/pets/$petId/reservations'),
+      headers: _authHeaders,
+      body: jsonEncode({
+        'serviceType': serviceType,
+        'startDate': startDate,
+        if (endDate != null) 'endDate': endDate,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (force) 'force': true,
+      }),
+    );
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listReservations({String? from, String? to}) async {
+    final res = await http.get(
+      _u('/reservations', {if (from != null) 'from': from, if (to != null) 'to': to}),
+      headers: _authHeaders,
+    );
+    final data = await _decode(res);
+    return (data['data'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> cancelReservation(String reservationId) async {
+    final res = await http.post(_u('/reservations/$reservationId/cancel'), headers: _authHeaders);
+    await _decode(res);
   }
 
   Future<Map<String, dynamic>> checkOut(String visitId, {double? amountCollected}) async {

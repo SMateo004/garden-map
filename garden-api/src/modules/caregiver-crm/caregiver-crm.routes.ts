@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as crmController from './caregiver-crm.controller.js';
+import { requireBusinessFeature } from '../../middleware/require-business-feature.middleware.js';
 
 /** Rutas del dueño — acceso directo, req.user.userId es su propio userId. */
 const router = Router();
+
+// Toda la recepción exige que el admin la haya habilitado para este negocio.
+router.use('/crm', authMiddleware, requireRole('CAREGIVER'), requireBusinessFeature('RECEPTION'));
 
 router.get('/crm/clients', authMiddleware, requireRole('CAREGIVER'), crmController.listClients);
 router.get('/crm/clients/:id', authMiddleware, requireRole('CAREGIVER'), crmController.getClient);
@@ -17,6 +21,10 @@ router.patch('/crm/pets/:id', authMiddleware, requireRole('CAREGIVER'), crmContr
 router.delete('/crm/pets/:id', authMiddleware, requireRole('CAREGIVER'), crmController.deletePet);
 
 router.post('/crm/pets/:petId/check-in', authMiddleware, requireRole('CAREGIVER'), crmController.checkIn);
+router.post('/crm/pets/:petId/reservations', authMiddleware, requireRole('CAREGIVER'), crmController.createReservation);
+router.get('/crm/reservations', authMiddleware, requireRole('CAREGIVER'), crmController.listReservations);
+router.post('/crm/reservations/:id/cancel', authMiddleware, requireRole('CAREGIVER'), crmController.cancelReservation);
+
 router.get('/crm/visits/:id', authMiddleware, requireRole('CAREGIVER'), crmController.getVisit);
 router.post('/crm/visits/:visitId/check-out', authMiddleware, requireRole('CAREGIVER'), crmController.checkOut);
 router.patch('/crm/visits/:id', authMiddleware, requireRole('CAREGIVER'), crmController.updateVisit);

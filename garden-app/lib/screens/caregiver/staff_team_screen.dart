@@ -4,6 +4,8 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../design/garden_icons.dart';
+import '../../services/business_features.dart';
+import 'staff_assign_bookings_screen.dart';
 
 /// "Mi equipo" — el dueño de una empresa invita empleados (código de un solo
 /// uso, compartido por WhatsApp/etc.) y administra quiénes tienen acceso
@@ -21,6 +23,12 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
   bool _isGeneratingInvite = false;
   List<Map<String, dynamic>> _members = [];
   List<Map<String, dynamic>> _invites = [];
+  /// Perfil del dueño: `businessFeatures` decide qué permisos se pueden dar.
+  Map<String, dynamic>? _ownerProfile;
+
+  bool get _canGrantDecisions => BusinessFeatures.has(_ownerProfile, BusinessFeatures.staffBookingDecisions);
+  bool get _canGrantChat => BusinessFeatures.has(_ownerProfile, BusinessFeatures.staffClientChat);
+  List<Map<String, dynamic>> get _activeMembers => _members.where((m) => m['status'] == 'ACTIVE').toList();
 
   @override
   void initState() {
@@ -32,10 +40,15 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([_service.listStaffMembers(), _service.listInvites()]);
+      Map<String, dynamic>? profile;
+      try {
+        profile = await _service.getOwnerProfile();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _members = results[0];
         _invites = (results[1]).where((i) => i['status'] == 'PENDING').toList();
+        _ownerProfile = profile;
       });
     } catch (e) {
       if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
@@ -141,6 +154,24 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
     }
   }
 
+  Future<void> _setPermission(Map<String, dynamic> member, {bool? canManageBookings, bool? canChat}) async {
+    try {
+      final updated = await _service.setStaffPermissions(member['id'] as String,
+          canManageBookings: canManageBookings, canChat: canChat);
+      if (!mounted) return;
+      setState(() => member.addAll(updated));
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Widget _permissionSwitch(String label, bool value, ValueChanged<bool> onChanged, Color textColor) {
+    return Row(children: [
+      Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 12.5))),
+      Switch(value: value, onChanged: onChanged),
+    ]);
+  }
+
   Color _statusColor(String status) {
     switch (status) {
       case 'ACTIVE': return GardenColors.success;
@@ -195,6 +226,17 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                         loading: _isGeneratingInvite,
                         onPressed: _isGeneratingInvite ? null : _generateInvite,
                       ),
+                      if (_activeMembers.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        GardenButton(
+                          label: 'Asignar reservas',
+                          gIcon: GIcon.calendario,
+                          outline: true,
+                          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => StaffAssignBookingsScreen(activeMembers: _activeMembers),
+                          )),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       if (_invites.isNotEmpty) ...[
                         Text('CÓDIGOS PENDIENTES', style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
@@ -271,6 +313,13 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
                                         child: Text(_statusLabel(member['status'] as String),
                                             style: TextStyle(color: _statusColor(member['status'] as String), fontSize: 11, fontWeight: FontWeight.w700)),
                                       ),
+                                      // Permisos: solo los que el admin habilitó para la empresa.
+                                      if (member['status'] == 'ACTIVE' && _canGrantDecisions)
+                                        _permissionSwitch('Puede aceptar y rechazar reservas', member['canManageBookings'] == true,
+                                            (v) => _setPermission(member, canManageBookings: v), textColor),
+                                      if (member['status'] == 'ACTIVE' && _canGrantChat)
+                                        _permissionSwitch('Puede chatear con los clientes', member['canChat'] == true,
+                                            (v) => _setPermission(member, canChat: v), textColor),
                                     ],
                                   ),
                                 ),

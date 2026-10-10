@@ -11,6 +11,7 @@ import {
   changeDatesBookingBodySchema,
   initPaymentBodySchema,
   cancellationRequestBodySchema,
+  rejectBookingBodySchema,
   requestExtensionPaymentBodySchema,
   confirmExtensionQrBodySchema,
   requestHospedajeExtensionPaymentBodySchema,
@@ -395,8 +396,12 @@ export const accept = asyncHandler(async (req: Request, res: Response) => {
 export const reject = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
   const caregiverUserId = req.user!.userId;
-  const body = cancellationRequestBodySchema.parse(req.body); // use the same schema as cancellation
-  const booking = await bookingService.rejectBooking(bookingId, caregiverUserId, body.reason);
+  const body = rejectBookingBodySchema.parse(req.body ?? {});
+  const booking = await bookingService.rejectBooking(
+    bookingId,
+    caregiverUserId,
+    body.reason || 'El cuidador no puede atender esta reserva'
+  );
   res.json({ success: true, data: booking });
 });
 

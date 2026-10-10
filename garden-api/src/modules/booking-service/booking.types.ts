@@ -141,6 +141,9 @@ export interface BookingCreateResult {
   bookingGroupId?: string | null;
   /** Resumen del grupo — solo en el detalle de una reserva y al crearla. */
   group?: BookingGroupSummary;
+  /** Empresas: empleado al que el dueño asignó la reserva (null = sin asignar). */
+  assignedStaffMemberId?: string | null;
+  assignedStaff?: { id: string; firstName: string | null; lastName: string | null } | null;
 }
 
 /** Misma lógica usada en generateQR() (booking.service.ts) al construir la
@@ -310,6 +313,12 @@ export function bookingToResponse(b: any): BookingCreateResult {
         full: cp.address ?? null,
       };
     }
+  }
+
+  if (b.assignedStaffMemberId !== undefined) res.assignedStaffMemberId = b.assignedStaffMemberId ?? null;
+  if (b.assignedStaffMember !== undefined) {
+    const m = b.assignedStaffMember;
+    res.assignedStaff = m ? { id: m.id, firstName: m.user?.firstName ?? null, lastName: m.user?.lastName ?? null } : null;
   }
 
   return res;

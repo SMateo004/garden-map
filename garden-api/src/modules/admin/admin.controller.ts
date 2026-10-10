@@ -16,6 +16,7 @@ import * as paymentQrAmountService from '../../services/payment-qr-amount.servic
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
+import * as businessFeatures from '../business-features/business-features.service.js';
 import { z } from 'zod';
 import { reviewAutoApprovedPayment as reviewAutoApprovedPaymentService } from '../payment-service/payment-review.service.js';
 
@@ -194,6 +195,37 @@ export const toggleVerify = asyncHandler(async (req: Request, res: Response) => 
 export const toggleProfessional = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.toggleProfessional(req.params.id!, req.user!.userId);
   res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/caregivers/:id/features — funciones de negocio que aplican a este cuidador y su estado. */
+export const getBusinessFeatures = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await businessFeatures.getFeaturesAdminView(req.params.id!) });
+});
+
+const setBusinessFeaturesSchema = z.object({
+  features: z
+    .record(z.enum(businessFeatures.BUSINESS_FEATURE_KEYS as [businessFeatures.BusinessFeature, ...businessFeatures.BusinessFeature[]]), z.boolean())
+    .refine((f): boolean => Object.keys(f).length > 0, 'Indica al menos una función'),
+});
+
+/** PUT /api/admin/caregivers/:id/features — { features: { RECEPTION: true, ... } }. Solo el admin. */
+export const setBusinessFeatures = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = setBusinessFeaturesSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Datos inválidos' } });
+    return;
+  }
+  const profileId = req.params.id!;
+  const { before, after } = await businessFeatures.setFeatures(profileId, parsed.data.features);
+  auditLog({
+    userId: req.user!.userId,
+    action: 'BUSINESS_FEATURES_UPDATED',
+    entity: 'CaregiverProfile',
+    entityId: profileId,
+    details: { before, after },
+    ip: req.ip,
+  });
+  res.json({ success: true, data: await businessFeatures.getFeaturesAdminView(profileId) });
 });
 
 /** PATCH /api/admin/caregivers/:id/unlock-verification — reset identity verification lockout. */

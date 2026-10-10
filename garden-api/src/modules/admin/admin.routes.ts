@@ -86,6 +86,10 @@ router.delete('/caregivers/:id', adminController.deleteCaregiver);
 /** PATCH /api/admin/caregivers/:id/toggle-professional — assign/remove professional flag. */
 router.patch('/caregivers/:id/toggle-professional', adminController.toggleProfessional);
 
+/** Funciones de negocio (recepción, equipo…): solo el admin las habilita, por negocio. */
+router.get('/caregivers/:id/features', adminController.getBusinessFeatures);
+router.put('/caregivers/:id/features', adminController.setBusinessFeatures);
+
 /** Manually verify caregiver email. */
 router.patch('/caregivers/:id/verify-email', adminController.verifyEmail);
 

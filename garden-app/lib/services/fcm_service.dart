@@ -163,6 +163,10 @@ class FcmService {
         // reserva de forma prominente con los botones Aceptar/Rechazar.
         _router!.go('/caregiver/home');
         break;
+      case 'STAFF_BOOKING':
+        // Empleado de empresa: reserva nueva por aceptar o reserva que le asignaron.
+        _router!.go('/caregiver-staff/home');
+        break;
       case 'CHAT_MESSAGE':
         if (bookingId != null) {
           _router!.go('/chat/$bookingId');

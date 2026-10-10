@@ -5,6 +5,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import 'walkin_clients_screen.dart';
 import 'walkin_visit_detail_screen.dart';
 import 'walkin_reports_screen.dart';
+import 'walkin_reservations_screen.dart';
 import '../../design/garden_icons.dart';
 
 /// Dashboard de ocupación + CRM de mascotas walk-in — compartido entre el
@@ -64,7 +65,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
 
   Future<void> _openCheckInFlow() async {
     final didCheckIn = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => WalkInCheckInFlowScreen(service: _service)),
+      MaterialPageRoute(builder: (_) => WalkInCheckInFlowScreen(service: _service, isOwner: _isOwner)),
     );
     if (didCheckIn == true) _load();
   }
@@ -77,6 +78,19 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
   }
 
   bool get _isOwner => widget.apiPrefix == 'caregiver';
+
+  /// Entrada de una reserva de mostrador que llega hoy (su lugar ya estaba contado).
+  Future<void> _checkInReservation(Map<String, dynamic> r) async {
+    try {
+      await _service.checkIn(r['petId'] as String,
+          serviceType: r['serviceType'] as String, reservationId: r['reservationId'] as String);
+      if (!mounted) return;
+      GardenSnackBar.success(context, 'Entrada de ${r['petName']} registrada');
+      _load();
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, friendlyError(e));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +108,8 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
         final capacity = _dashboard?['capacity'] as int? ?? 0;
         final overCapacity = _dashboard?['overCapacity'] == true;
         final entries = (_dashboard?['entries'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final committedToday = _dashboard?['committedToday'] as int?;
+        final arrivingToday = (_dashboard?['arrivingToday'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final summaryColor = overCapacity ? GardenColors.error : (occupied == capacity && capacity > 0 ? GardenColors.warning : GardenColors.success);
 
         final fab = FloatingActionButton.extended(
@@ -130,6 +146,10 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                                   if (overCapacity)
                                     Text('Por encima del máximo configurado',
                                         style: TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  // Presentes + los que llegan hoy (reservas de la app y de mostrador).
+                                  if (committedToday != null && committedToday > occupied)
+                                    Text('$committedToday de $capacity lugares tomados hoy contando las llegadas',
+                                        style: TextStyle(color: subtextColor, fontSize: 12.5)),
                                 ],
                               ),
                             ),
@@ -155,6 +175,35 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text('Clientes y mascotas registradas',
+                                    style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                              ),
+                              GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => WalkInReservationsScreen(service: _service, isOwner: _isOwner),
+                          ));
+                          _load();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              GardenIcon(GIcon.calendario, size: GIconSize.md, color: GardenColors.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text('Reservas de mostrador',
                                     style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
                               ),
                               GardenIcon(GIcon.siguiente, size: GIconSize.lg, color: subtextColor),
@@ -189,6 +238,42 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                             ),
                           ),
                         ),
+                      ],
+                      if (arrivingToday.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text('Llegan hoy', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        for (final r in arrivingToday)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(children: [
+                              GardenIcon(_serviceIcon(r['serviceType'] as String), size: GIconSize.lg),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(r['petName'] as String,
+                                      style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                                  Text(
+                                    r['serviceType'] == 'HOSPEDAJE'
+                                        ? '${r['clientName']} · hasta el ${shortDay(r['endDate'] as String)}'
+                                        : '${r['clientName']} · guardería',
+                                    style: TextStyle(color: subtextColor, fontSize: 12),
+                                  ),
+                                ]),
+                              ),
+                              OutlinedButton(
+                                onPressed: () => _checkInReservation(r),
+                                child: const Text('Registrar entrada'),
+                              ),
+                            ]),
+                          ),
+                        Text('En el local', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700)),
                       ],
                       const SizedBox(height: 8),
                       if (entries.isEmpty)
@@ -281,7 +366,9 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
 /// mascota → elegir tipo de servicio → check-in.
 class WalkInCheckInFlowScreen extends StatefulWidget {
   final CaregiverCrmService service;
-  const WalkInCheckInFlowScreen({super.key, required this.service});
+  /// Solo el dueño puede registrar por encima del cupo.
+  final bool isOwner;
+  const WalkInCheckInFlowScreen({super.key, required this.service, this.isOwner = false});
 
   @override
   State<WalkInCheckInFlowScreen> createState() => _WalkInCheckInFlowScreenState();
@@ -295,6 +382,12 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
   Map<String, dynamic>? _selectedClient;
   Map<String, dynamic>? _selectedPet;
   String _serviceType = 'HOSPEDAJE';
+  /// false = entra ahora; true = reservar fechas a futuro (guarda el lugar en el cupo).
+  bool _reserveLater = false;
+  /// Hospedaje que entra ahora: día de salida opcional (guarda el lugar esos días).
+  DateTime? _untilDate;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   final _newClientNameCtrl = TextEditingController();
   final _newClientPhoneCtrl = TextEditingController();
@@ -384,11 +477,35 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
 
   Future<void> _confirmCheckIn() async {
     if (_isLoading) return;
+    final petId = _selectedPet!['id'] as String;
+    if (_reserveLater) {
+      if (_startDate == null || (_serviceType == 'HOSPEDAJE' && _endDate == null)) {
+        GardenErrorDialog.show(context, _serviceType == 'HOSPEDAJE' ? 'Elige el día de entrada y el de salida.' : 'Elige el día.');
+        return;
+      }
+    }
     setState(() => _isLoading = true);
     try {
-      await widget.service.checkIn(_selectedPet!['id'] as String, serviceType: _serviceType);
-      if (!mounted) return;
-      GardenSnackBar.success(context, '¡Check-in registrado!');
+      final done = await runWithCapacityCheck(
+        context,
+        isOwner: widget.isOwner,
+        action: (force) => _reserveLater
+            ? widget.service.createReservation(
+                petId,
+                serviceType: _serviceType,
+                startDate: isoDay(_startDate!),
+                endDate: _serviceType == 'HOSPEDAJE' ? isoDay(_endDate!) : null,
+                force: force,
+              )
+            : widget.service.checkIn(
+                petId,
+                serviceType: _serviceType,
+                untilDate: _serviceType == 'HOSPEDAJE' && _untilDate != null ? isoDay(_untilDate!) : null,
+                force: force,
+              ),
+      );
+      if (done == null || !mounted) return;
+      GardenSnackBar.success(context, _reserveLater ? '¡Reserva guardada!' : '¡Check-in registrado!');
       Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) GardenErrorDialog.show(context, friendlyError(e));
@@ -425,7 +542,7 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
             elevation: 0,
             iconTheme: IconThemeData(color: textColor),
             title: Text(
-              _step == 0 ? 'Elige o crea un cliente' : _step == 1 ? 'Elige o crea una mascota' : 'Confirmar check-in',
+              _step == 0 ? 'Elige o crea un cliente' : _step == 1 ? 'Elige o crea una mascota' : _reserveLater ? 'Reservar fechas' : 'Confirmar check-in',
               style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
             ),
           ),
@@ -548,17 +665,92 @@ class _WalkInCheckInFlowScreenState extends State<WalkInCheckInFlowScreen> {
         Text('Tipo de servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, children: [
-          for (final (value, label, icon) in [('HOSPEDAJE', 'Hospedaje', GIcon.hospedaje), ('GUARDERIA', 'Guardería', GIcon.guarderia), ('PASEO', 'Paseo', GIcon.paseo)])
+          for (final (value, label) in [(false, 'Entra ahora'), (true, 'Reservar fechas')])
             ChoiceChip(
-              avatar: GardenIcon(icon, size: GIconSize.sm, state: GIconState.active),
               label: Text(label),
-              selected: _serviceType == value,
-              onSelected: (_) => setState(() => _serviceType = value),
+              selected: _reserveLater == value,
+              onSelected: (_) => setState(() {
+                _reserveLater = value;
+                // El paseo es fuera del local: no se reserva lugar.
+                if (value && _serviceType == 'PASEO') _serviceType = 'HOSPEDAJE';
+              }),
             ),
         ]),
+        const SizedBox(height: 16),
+        Text('Tipo de servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, children: [
+          for (final (value, label, icon) in [('HOSPEDAJE', 'Hospedaje', GIcon.hospedaje), ('GUARDERIA', 'Guardería', GIcon.guarderia), ('PASEO', 'Paseo', GIcon.paseo)])
+            if (!_reserveLater || value != 'PASEO')
+              ChoiceChip(
+                avatar: GardenIcon(icon, size: GIconSize.sm, state: GIconState.active),
+                label: Text(label),
+                selected: _serviceType == value,
+                onSelected: (_) => setState(() => _serviceType = value),
+              ),
+        ]),
+        const SizedBox(height: 16),
+        if (!_reserveLater && _serviceType == 'HOSPEDAJE')
+          _dateRow('¿Hasta cuándo se queda? (opcional)', _untilDate, textColor, subtextColor, borderColor,
+              first: DateTime.now().add(const Duration(days: 1)), onPicked: (d) => setState(() => _untilDate = d)),
+        if (_reserveLater) ...[
+          _dateRow(_serviceType == 'HOSPEDAJE' ? 'Entrada' : 'Día', _startDate, textColor, subtextColor, borderColor,
+              first: DateTime.now(), onPicked: (d) => setState(() {
+                    _startDate = d;
+                    if (_endDate != null && !_endDate!.isAfter(d)) _endDate = null;
+                  })),
+          if (_serviceType == 'HOSPEDAJE')
+            _dateRow('Salida', _endDate, textColor, subtextColor, borderColor,
+                first: (_startDate ?? DateTime.now()).add(const Duration(days: 1)),
+                onPicked: (d) => setState(() => _endDate = d)),
+        ],
+        if (!_reserveLater && _serviceType == 'HOSPEDAJE' && _untilDate != null || _reserveLater)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('El lugar queda guardado esos días y la app no lo vende.',
+                style: TextStyle(color: subtextColor, fontSize: 12)),
+          ),
         const Spacer(),
-        SizedBox(width: double.infinity, child: GardenButton(label: 'Confirmar check-in', loading: _isLoading, onPressed: _isLoading ? null : _confirmCheckIn)),
+        SizedBox(
+          width: double.infinity,
+          child: GardenButton(
+            label: _reserveLater ? 'Guardar reserva' : 'Confirmar check-in',
+            loading: _isLoading,
+            onPressed: _isLoading ? null : _confirmCheckIn,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _dateRow(String label, DateTime? value, Color textColor, Color subtextColor, Color borderColor,
+      {required DateTime first, required ValueChanged<DateTime> onPicked}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () async {
+          final start = DateTime(first.year, first.month, first.day);
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: value != null && !value.isBefore(start) ? value : start,
+            firstDate: start,
+            lastDate: start.add(const Duration(days: 180)),
+          );
+          if (picked != null) onPicked(picked);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+          child: Row(children: [
+            GardenIcon(GIcon.calendario, size: GIconSize.md, color: subtextColor),
+            const SizedBox(width: 10),
+            Expanded(child: Text(label, style: TextStyle(color: subtextColor, fontSize: 13))),
+            Text(value == null ? 'Elegir' : shortDay(isoDay(value)),
+                style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      ),
     );
   }
 }

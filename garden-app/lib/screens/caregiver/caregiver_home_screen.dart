@@ -29,6 +29,7 @@ import '../service/service_execution_screen.dart';
 import '../../widgets/pet_profile_sheet.dart';
 import '../../widgets/price_suggestion_banner.dart';
 import '../../services/auth_service.dart';
+import '../../services/business_features.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 import 'reception_screen.dart';
@@ -2987,7 +2988,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             automaticallyImplyLeading: false,
             title: logoTitle,
             actions: [
-              if (_caregiver?['isCompany'] == true)
+              if (BusinessFeatures.has(_caregiver, BusinessFeatures.reception))
                 IconButton(
                   icon: GardenIcon(GIcon.habitacion, size: GIconSize.lg, color: subtextColor),
                   tooltip: 'Recepción',

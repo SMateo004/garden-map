@@ -71,6 +71,30 @@ export const checkInBodySchema = z.object({
   serviceType: z.nativeEnum(ServiceType),
   notes: z.string().max(500).optional(),
   spaceLabel: z.string().max(50).optional(),
+  /** Entrada de una reserva de mostrador ya cargada (toma su servicio y no vuelve a contar cupo). */
+  reservationId: z.string().uuid().optional(),
+  /** Hospedaje sin reserva previa: día de salida (exclusivo) — guarda el lugar esos días. */
+  untilDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD)').optional(),
+  /** Solo el dueño: registrar aunque el cupo esté lleno. */
+  force: z.boolean().optional(),
+}).strict();
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD)');
+
+/** Reserva de mostrador: hospedaje con salida (exclusiva) o guardería de un día. */
+export const createWalkInReservationBodySchema = z.object({
+  serviceType: z.enum(['HOSPEDAJE', 'GUARDERIA']),
+  startDate: isoDay,
+  endDate: isoDay.optional(),
+  notes: z.string().max(500).optional(),
+  force: z.boolean().optional(),
+}).strict()
+  .refine((d): boolean => d.serviceType !== 'HOSPEDAJE' || !!d.endDate, { message: 'Indica el día de salida', path: ['endDate'] })
+  .refine((d): boolean => !d.endDate || d.serviceType !== 'HOSPEDAJE' || d.endDate > d.startDate, { message: 'La salida debe ser después de la entrada', path: ['endDate'] });
+
+export const listWalkInReservationsQuerySchema = z.object({
+  from: isoDay.optional(),
+  to: isoDay.optional(),
 }).strict();
 
 export const checkOutBodySchema = z.object({

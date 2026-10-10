@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { requireStaffMembership, actAsOwner, captureActingUser, auditStaffAction } from '../../middleware/require-staff-membership.middleware.js';
 import * as crmController from './caregiver-crm.controller.js';
+import { requireBusinessFeature } from '../../middleware/require-business-feature.middleware.js';
 
 /**
  * Rutas del empleado — mismos handlers que caregiver-crm.routes.ts, pero
@@ -11,6 +12,9 @@ import * as crmController from './caregiver-crm.controller.js';
  * empleado real, no al dueño.
  */
 const router = Router();
+
+// El empleado necesita que el admin haya habilitado el equipo Y la recepción de su empresa.
+router.use('/crm', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, requireBusinessFeature('STAFF_TEAM', 'RECEPTION'));
 
 router.get('/crm/clients', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner, crmController.listClients);
 router.get('/crm/clients/:id', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner, crmController.getClient);
@@ -29,6 +33,21 @@ router.post(
   captureActingUser, auditStaffAction('STAFF_CRM_CHECK_IN', 'WalkInVisit', 'petId'),
   actAsOwner,
   crmController.checkIn
+);
+router.post(
+  '/crm/pets/:petId/reservations',
+  authMiddleware, requireRole('CAREGIVER'), requireStaffMembership,
+  captureActingUser, auditStaffAction('STAFF_CRM_RESERVATION', 'WalkInPet', 'petId'),
+  actAsOwner,
+  crmController.createReservation
+);
+router.get('/crm/reservations', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner, crmController.listReservations);
+router.post(
+  '/crm/reservations/:id/cancel',
+  authMiddleware, requireRole('CAREGIVER'), requireStaffMembership,
+  captureActingUser, auditStaffAction('STAFF_CRM_RESERVATION_CANCEL', 'WalkInReservation', 'id'),
+  actAsOwner,
+  crmController.cancelReservation
 );
 router.get('/crm/visits/:id', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner, crmController.getVisit);
 router.post(

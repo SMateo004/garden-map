@@ -2,9 +2,13 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { getIO, isUserOnline } from '../../services/socket.service.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
+import { getStaffContext } from '../caregiver-staff/caregiver-staff.service.js';
+import { getFeaturesForProfile } from '../business-features/business-features.service.js';
+import { notifyStaffWithPermission } from '../../services/notification.service.js';
 
 const REPORT_REASONS = ['HARASSMENT', 'INAPPROPRIATE_CONTENT', 'SPAM', 'SCAM_OR_FRAUD', 'THREATS', 'OTHER'];
 
@@ -27,6 +31,30 @@ const chatMessageLimiter = rateLimit({
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * ¿Puede este usuario chatear en esta reserva? Cliente titular, cuidador dueño, o — en
+ * empresas — un empleado activo al que el dueño dio permiso de chat, siempre que el admin
+ * haya habilitado STAFF_CLIENT_CHAT para la empresa. El empleado habla en nombre de la
+ * empresa: sus mensajes van como CAREGIVER y los bloqueos se miran contra el dueño.
+ */
+async function resolveChatAccess<T extends Prisma.BookingInclude>(bookingId: string, userId: string, include?: T) {
+    const booking = await prisma.booking.findFirst({
+        where: { id: bookingId, OR: [{ clientId: userId }, { caregiver: { userId } }] },
+        include: { ...(include ?? {}), caregiver: { select: { userId: true } } } as T & { caregiver: { select: { userId: true } } },
+    });
+    if (booking) return { booking, isStaff: false };
+
+    const ctx = await getStaffContext(userId);
+    if (!ctx?.canChat) return null;
+    const staffBooking = await prisma.booking.findFirst({
+        where: { id: bookingId, caregiverId: ctx.caregiverProfileId },
+        include: { ...(include ?? {}), caregiver: { select: { userId: true } } } as T & { caregiver: { select: { userId: true } } },
+    });
+    if (!staffBooking) return null;
+    if (!(await getFeaturesForProfile(ctx.caregiverProfileId)).STAFF_CLIENT_CHAT) return null;
+    return { booking: staffBooking, isStaff: true };
+}
+
 // GET /api/chat/:bookingId/other-participant - Datos de la otra parte de la conversación
 // (necesario para el menú de bloquear/reportar en la pantalla de chat).
 router.get('/:bookingId/other-participant', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
@@ -36,31 +64,25 @@ router.get('/:bookingId/other-participant', authMiddleware, asyncHandler(async (
     }
     const userId = (req as any).user.userId;
 
-    const booking = await prisma.booking.findFirst({
-        where: {
-            id: bookingId,
-            OR: [
-                { clientId: userId },
-                { caregiver: { userId } },
-            ],
-        },
-        include: {
-            caregiver: { select: { userId: true, user: { select: { firstName: true, lastName: true, profilePicture: true } } } },
-            client: { select: { id: true, firstName: true, lastName: true, profilePicture: true } },
-        },
+    const access = await resolveChatAccess(bookingId!, userId, {
+        caregiver: { select: { userId: true, user: { select: { firstName: true, lastName: true, profilePicture: true } } } },
+        client: { select: { id: true, firstName: true, lastName: true, profilePicture: true } },
     });
 
-    if (!booking) {
+    if (!access) {
         return res.status(403).json({ success: false, error: { message: 'Sin acceso' } });
     }
+    const booking = access.booking as any;
 
     const isClient = booking.clientId === userId;
     const other = isClient
         ? { id: booking.caregiver.userId, name: `${booking.caregiver.user.firstName} ${booking.caregiver.user.lastName}`.trim(), photo: booking.caregiver.user.profilePicture ?? null }
         : { id: booking.client.id, name: `${booking.client.firstName} ${booking.client.lastName}`.trim(), photo: booking.client.profilePicture ?? null };
 
-    const blockedByMe = await prisma.userBlock.findFirst({ where: { blockerId: userId, blockedId: other.id } });
-    const blockedMe = await prisma.userBlock.findFirst({ where: { blockerId: other.id, blockedId: userId } });
+    // El empleado ve los bloqueos de la empresa (los del dueño).
+    const me = access.isStaff ? booking.caregiver.userId : userId;
+    const blockedByMe = await prisma.userBlock.findFirst({ where: { blockerId: me, blockedId: other.id } });
+    const blockedMe = await prisma.userBlock.findFirst({ where: { blockerId: other.id, blockedId: me } });
 
     res.json({
         success: true,
@@ -84,17 +106,9 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
     const userId = (req as any).user.userId;
 
     // Verificar acceso al booking
-    const booking = await prisma.booking.findFirst({
-        where: {
-            id: bookingId,
-            OR: [
-                { clientId: userId },
-                { caregiver: { userId } },
-            ],
-        },
-    });
+    const access = await resolveChatAccess(bookingId!, userId);
 
-    if (!booking) {
+    if (!access) {
         return res.status(403).json({ success: false, error: { message: 'Sin acceso' } });
     }
 
@@ -112,11 +126,11 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
     });
     const messages = messagesDesc.reverse();
 
-    // Marcar como leídos los mensajes del otro usuario
+    // Marcar como leídos los mensajes del otro usuario (el empleado solo marca los del cliente).
     await prisma.chatMessage.updateMany({
         where: {
             bookingId,
-            senderId: { not: userId },
+            ...(access.isStaff ? { senderRole: 'CLIENT' } : { senderId: { not: userId } }),
             read: false,
         },
         data: { read: true },
@@ -158,33 +172,25 @@ router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHan
     }
 
     // Verificar acceso al booking y obtener roles
-    const booking = await prisma.booking.findFirst({
-        where: {
-            id: bookingId,
-            OR: [
-                { clientId: userId },
-                { caregiver: { userId } },
-            ],
-        },
-        include: {
-            caregiver: { select: { userId: true } },
-        },
-    });
+    const access = await resolveChatAccess(bookingId!, userId);
 
-    if (!booking) {
+    if (!access) {
         return res.status(403).json({ success: false, error: { message: 'Sin acceso' } });
     }
+    const { booking } = access;
 
     const isClient = booking.clientId === userId;
     const senderRole = isClient ? 'CLIENT' : 'CAREGIVER';
     const recipientId = isClient ? booking.caregiver.userId : booking.clientId;
+    // El empleado habla por la empresa: los bloqueos se miran contra el dueño.
+    const blockSide = access.isStaff ? booking.caregiver.userId : userId;
 
     // Bloqueo: si cualquiera de las dos partes bloqueó a la otra, no se puede enviar mensajes.
     const blockExists = await prisma.userBlock.findFirst({
         where: {
             OR: [
-                { blockerId: userId, blockedId: recipientId },
-                { blockerId: recipientId, blockedId: userId },
+                { blockerId: blockSide, blockedId: recipientId },
+                { blockerId: recipientId, blockedId: blockSide },
             ],
         },
     });
@@ -253,6 +259,14 @@ router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHan
     // Push notification al destinatario (siempre, no solo el primer mensaje)
     const senderName = payload.senderName;
     sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, message.trim()).catch(() => {});
+    // Empresas: el mensaje del cliente también les llega a los empleados con permiso de chat.
+    if (isClient) {
+        notifyStaffWithPermission(booking.caregiverId, 'canChat', {
+            title: `Mensaje de ${senderName} 💬`,
+            body: message.trim().slice(0, 140),
+            data: { type: 'CHAT_MESSAGE', bookingId: bookingId! },
+        });
+    }
 
     res.status(201).json({ success: true, data: payload });
 }));

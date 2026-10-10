@@ -325,6 +325,28 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
     `${booking.petName} necesita ${svc} el ${dates}. Tienes ${plazo} para aceptar o rechazar.`,
     { type: 'BOOKING_WAITING_APPROVAL', bookingId }
   ).catch((err) => logger.warn('[NOTIFICATION] push onBookingWaitingApproval failed', { bookingId, err }));
+
+  // Empresas: también avisa a los empleados que pueden aceptar/rechazar (si el admin lo
+  // habilitó), para que la ventana no venza mientras el dueño no está mirando.
+  notifyStaffWithPermission(booking.caregiver.id, 'canManageBookings', {
+    title: `⏰ Nueva reserva por aceptar`,
+    body: `${clientName}: ${svc} para ${booking.petName} el ${dates}. Hay ${plazo} para responder.`,
+    data: { type: 'STAFF_BOOKING', bookingId },
+  });
+}
+
+/** Push a los empleados activos de la empresa con ese permiso. Nunca lanza. */
+export function notifyStaffWithPermission(
+  caregiverProfileId: string,
+  permission: 'canManageBookings' | 'canChat',
+  msg: { title: string; body: string; data: Record<string, string> }
+): void {
+  void (async () => {
+    // Import dinámico: caregiver-staff.service importa auth.service, que importa este archivo.
+    const { staffUserIdsWithPermission } = await import('../modules/caregiver-staff/caregiver-staff.service.js');
+    const userIds = await staffUserIdsWithPermission(caregiverProfileId, permission);
+    await Promise.all(userIds.map((uid) => sendPushToUser(uid, msg.title, msg.body, msg.data)));
+  })().catch((err) => logger.warn('[NOTIFICATION] push a empleados falló', { caregiverProfileId, permission, err }));
 }
 
 /**
