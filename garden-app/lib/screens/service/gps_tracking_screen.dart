@@ -19,6 +19,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/analytics_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_depth.dart';
+import '../../widgets/garden_base_map.dart';
 
 class GpsTrackingScreen extends StatefulWidget {
   final String bookingId;
@@ -707,13 +708,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         },
       ),
       children: [
-        TileLayer(
-          urlTemplate: isDark
-              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.garden.bolivia',
-        ),
+        ...GardenBaseMap.layers(isDark),
 
         // Polilínea del trayecto — el dueño SIEMPRE la ve; el cuidador puede
         // ocultarla con el toggle del header (_showTrailForCaregiver).

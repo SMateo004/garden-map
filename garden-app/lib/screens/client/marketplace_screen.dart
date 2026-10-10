@@ -30,6 +30,7 @@ import '../../services/auth_state.dart';
 import '../../services/referral_invite.dart';
 import '../../utils/web_redirect.dart';
 import 'nearby_vets_screen.dart';
+import '../../widgets/garden_base_map.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -70,6 +71,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   List<Map<String, dynamic>> _banners = [];
   bool _isLoading = true;
   bool _hasError = false;
+  // "Avísame cuando lleguemos": ya pidió aviso para la ciudad actual / está enviándose.
+  bool _cityInterestSent = false;
+  bool _cityInterestBusy = false;
   int _currentPage = 1;
   bool _hasMore = true;
 
@@ -428,6 +432,43 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
 
 
+  /// Registra (una sola vez por usuario y ciudad) que este dueño quiere que Garden llegue a su ciudad.
+  Future<void> _registerCityInterest() async {
+    final cityId = _cityId;
+    if (cityId == null || _authToken.isEmpty) return;
+    setState(() => _cityInterestBusy = true);
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/city-interest'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'cityId': cityId}),
+      ).timeout(const Duration(seconds: 25));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() { _cityInterestSent = true; _cityInterestBusy = false; });
+        return;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _cityInterestBusy = false);
+    GardenSnackBar.warning(context, 'No pudimos registrar tu interés. Inténtalo de nuevo en un momento.');
+  }
+
+  /// ¿Ya pidió que le avisen en esta ciudad? (para no mostrar el botón de nuevo).
+  Future<void> _loadCityInterest() async {
+    final cityId = _cityId;
+    if (cityId == null || _authToken.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/city-interest/mine?cityId=$cityId'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      ).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return;
+      final interested = (jsonDecode(res.body)['data']?['interested'] ?? false) == true;
+      if (mounted && interested) setState(() => _cityInterestSent = true);
+    } catch (_) {}
+  }
+
   Future<void> _loadActiveBooking() async {
     if (_authToken.isEmpty) return;
     try {
@@ -531,6 +572,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             _isLoading = false;
           });
           _refreshSheet?.call();
+          if (reset && list.isEmpty && _activeFilterCount == 0) _loadCityInterest();
           return; // éxito
         }
       } catch (_) {
@@ -1414,7 +1456,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 if (_selectedZone != null && _zoneCenters[_selectedZone] != null) {
                   _mapController.move(_zoneCenters[_selectedZone]!, _zoneZooms[_selectedZone] ?? 14.0);
                 } else {
-                  _mapController.move(_cityCenter, _cityZoom);
+                  _fitAllZones();
                 }
               });
             },
@@ -1815,6 +1857,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         onCta: () => _loadCaregivers(reset: true),
       ));
     }
+    // Sin filtros y sin un solo cuidador en la ciudad del dueño = Garden todavía no llegó ahí.
+    if (displayed.isEmpty && !_isLoading && _activeFilterCount == 0 && _cityId != null && _caregivers.isEmpty) {
+      return withHeader(Column(children: [
+        GardenEmptyState(
+          type: GardenEmptyType.caregivers,
+          title: '¡Pronto estaremos en $_cityName!',
+          subtitle: _cityInterestSent
+              ? 'Listo, te avisaremos apenas haya cuidadores en $_cityName. Mientras tanto, cuéntales a tus amigos: mientras más dueños pidan Garden, antes llegamos.'
+              : 'Todavía no hay cuidadores verificados en $_cityName, pero ya estamos trabajando en ello. Déjanos tu interés y te avisamos apenas lleguemos.',
+          ctaLabel: _cityInterestSent ? null : (_cityInterestBusy ? 'Enviando…' : 'Avísame cuando lleguemos'),
+          onCta: _cityInterestSent || _cityInterestBusy ? null : _registerCityInterest,
+        ),
+        TextButton(
+          onPressed: () => context.push('/become-caregiver'),
+          child: Text('¿Quieres cuidar mascotas en $_cityName? Hazte cuidador',
+              textAlign: TextAlign.center),
+        ),
+      ]));
+    }
     if (displayed.isEmpty && !_isLoading) {
       return withHeader(GardenEmptyState(
         type: GardenEmptyType.caregivers,
@@ -2051,6 +2112,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
+    int zoneCount(String key) => _caregivers.where((c) => c['zone'] == key).length;
+    final totalCaregivers = _caregivers.length;
+    // Cámara que encuadra TODAS las zonas con margen: antes el mapa abría en un centro y zoom fijos y las
+    // etiquetas de las zonas de los bordes ("Las Palmas") quedaban cortadas fuera de la pantalla.
+    final allZonePoints = _zonePolygons.entries
+        .where((e) => !_blockedZones.contains(e.key))
+        .expand((e) => e.value)
+        .toList();
+    final CameraFit? initialFit = allZonePoints.length >= 2
+        ? CameraFit.coordinates(coordinates: allZonePoints, padding: const EdgeInsets.fromLTRB(36, 36, 36, 84), maxZoom: 15)
+        : null;
+
     // Las zonas deshabilitadas por un admin desaparecen del mapa — ni su
     // polígono ni su marcador se dibujan mientras estén bloqueadas.
     final polygons = _zonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
@@ -2116,21 +2189,31 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: [
                 const GardenIcon(GIcon.mapa, size: GIconSize.sm, color: GardenColors.primary),
                 const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'Mapa · $_cityName',
-                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Mapa de zonas',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
+                          maxLines: 1),
+                      Text(
+                        totalCaregivers == 0
+                            ? _cityName
+                            : '$_cityName · $totalCaregivers cuidador${totalCaregivers == 1 ? '' : 'es'}',
+                        style: TextStyle(color: subtextColor, fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
                 // Zoom out button
                 if (_selectedZone != null)
                   GestureDetector(
                     onTap: () {
                       _selectZone(null);
-                      _mapController.move(_cityCenter, _cityZoom);
+                      _fitAllZones();
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2167,6 +2250,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
                 final color = _zoneColors[e.key] ?? GardenColors.primary;
                 final isSelected = _selectedZone == e.key;
+                final count = zoneCount(e.key);
                 return GestureDetector(
                   onTap: () {
                     _selectZone(isSelected ? null : e.key);
@@ -2175,7 +2259,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       final z = _zoneZooms[e.key] ?? 14.0;
                       if (c != null) _mapController.move(c, z);
                     } else {
-                      _mapController.move(_cityCenter, _cityZoom);
+                      _fitAllZones();
                     }
                   },
                   child: AnimatedContainer(
@@ -2185,14 +2269,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     decoration: BoxDecoration(
                       color: isSelected ? color.withValues(alpha: 0.2) : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: isSelected ? color : color.withValues(alpha: 0.4)),
+                      border: Border.all(color: isSelected ? color : color.withValues(alpha: count > 0 ? 0.4 : 0.18)),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
                       const SizedBox(width: 5),
-                      Text(e.value,
+                      Text(count > 0 ? '${e.value} · $count' : e.value,
                           style: TextStyle(
-                            color: isSelected ? color : subtextColor,
+                            color: isSelected ? color : subtextColor.withValues(alpha: count > 0 ? 1 : 0.55),
                             fontSize: 10,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                           )),
@@ -2206,11 +2290,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
           // Flutter Map
           Expanded(
-            child: FlutterMap(
+            child: Stack(children: [
+              Positioned.fill(child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _cityCenter,
                 initialZoom: _cityZoom,
+                initialCameraFit: initialFit,
                 minZoom: 10,
                 maxZoom: 17,
                 onTap: (_, __) {
@@ -2219,41 +2305,109 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 },
               ),
               children: [
-                TileLayer(
-                  urlTemplate: isDark
-                      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.garden.bolivia',
-                ),
+                ...GardenBaseMap.layers(isDark),
                 PolygonLayer(polygons: polygons),
                 MarkerLayer(markers: markers),
               ],
-            ),
-          ),
+            )),
 
-          // Map attribution
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: surface,
-            child: Text('© OpenStreetMap contributors · Zonas son aproximadas',
-                style: TextStyle(color: subtextColor, fontSize: 9)),
+              // Aviso de que las zonas son aproximadas (la atribución de OpenStreetMap la dibuja el propio mapa).
+              Positioned(
+                left: 8,
+                bottom: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: surface.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('Zonas aproximadas', style: TextStyle(color: subtextColor, fontSize: 9)),
+                ),
+              ),
+
+              // Zona elegida: botón para ver sus cuidadores (cierra el mapa y la lista ya está filtrada),
+              // o aviso claro si todavía no hay ninguno ahí.
+              if (_selectedZone != null)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 30,
+                  child: Center(child: _buildZoneCta(
+                    label: _zoneLabels[_selectedZone] ?? '',
+                    count: zoneCount(_selectedZone!),
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onSeeCaregivers: onClose ?? () => setState(() => _showMap = false),
+                  )),
+                ),
+            ]),
           ),
         ],
       ),
     );
   }
 
-  // Dark tile tint for night mode
-  Widget _darkTileBuilder(BuildContext context, Widget tileWidget, TileImage tile) {
-    return ColorFiltered(
-      colorFilter: const ColorFilter.matrix([
-        -0.2126, -0.7152, -0.0722, 0, 255,
-        -0.2126, -0.7152, -0.0722, 0, 255,
-        -0.2126, -0.7152, -0.0722, 0, 255,
-        0, 0, 0, 1, 0,
-      ]),
-      child: tileWidget,
+  /// Encuadra todas las zonas visibles (con margen) — vista general del mapa.
+  void _fitAllZones() {
+    final points = _zonePolygons.entries
+        .where((e) => !_blockedZones.contains(e.key))
+        .expand((e) => e.value)
+        .toList();
+    if (points.length >= 2) {
+      _mapController.fitCamera(CameraFit.coordinates(
+        coordinates: points,
+        padding: const EdgeInsets.fromLTRB(36, 36, 36, 84),
+        maxZoom: 15,
+      ));
+    } else {
+      _mapController.move(_cityCenter, _cityZoom);
+    }
+  }
+
+  /// Botón flotante de la zona elegida en el mapa.
+  Widget _buildZoneCta({
+    required String label,
+    required int count,
+    required Color surface,
+    required Color border,
+    required Color textColor,
+    required VoidCallback onSeeCaregivers,
+  }) {
+    if (count == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(GardenRadius.full),
+          border: Border.all(color: border),
+          boxShadow: GardenShadows.card,
+        ),
+        child: Text('Aún no hay cuidadores en $label',
+            style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w600)),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: 'Ver $count cuidador${count == 1 ? '' : 'es'} en $label',
+      excludeSemantics: true,
+      child: GardenPressable(
+        pressedScale: 0.96,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onSeeCaregivers();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            color: GardenColors.primary,
+            borderRadius: BorderRadius.circular(GardenRadius.full),
+            boxShadow: GardenShadows.card,
+          ),
+          child: Text('Ver $count cuidador${count == 1 ? '' : 'es'} en $label',
+              style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w800)),
+        ),
+      ),
     );
   }
 }

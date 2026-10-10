@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import './garden_loading_indicator.dart';
 import '../design/garden_icons.dart';
+import 'garden_base_map.dart';
 
 /// Resultado del mapa picker.
 class AddressMapResult {
@@ -294,13 +295,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         },
                       ),
                       children: [
-                        TileLayer(
-                          urlTemplate: isDark
-                              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                          subdomains: const ['a', 'b', 'c', 'd'],
-                          userAgentPackageName: 'com.garden.bolivia',
-                        ),
+                        ...GardenBaseMap.layers(isDark),
                       ],
                     ),
 

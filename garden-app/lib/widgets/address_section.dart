@@ -6,6 +6,7 @@ import '../services/zones_service.dart';
 import 'address_map_picker.dart';
 import '../design/garden_icons.dart';
 import '../theme/garden_motion.dart';
+import 'garden_base_map.dart';
 
 /// Sección de dirección reutilizable: abre el mapa picker primero,
 /// luego muestra los campos de texto detallados y un selector de
@@ -793,13 +794,7 @@ class _ZoneReferenceMap extends StatelessWidget {
         ),
       ),
       children: [
-        TileLayer(
-          urlTemplate: isDark
-              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.garden.bolivia',
-        ),
+        ...GardenBaseMap.layers(isDark),
         MarkerLayer(markers: markers),
       ],
     );

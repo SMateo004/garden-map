@@ -38,6 +38,7 @@ import '../../widgets/pin_gate.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_service_clock.dart';
 import '../../design/garden_story_progress.dart';
+import '../../widgets/garden_base_map.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -4230,13 +4231,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
                         ),
                         children: [
-                          TileLayer(
-                            urlTemplate: isDark
-                                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                            subdomains: const ['a', 'b', 'c', 'd'],
-                            userAgentPackageName: 'com.garden.bolivia',
-                          ),
+                          ...GardenBaseMap.layers(isDark),
                           PolylineLayer(polylines: [
                             Polyline(points: track, strokeWidth: 4, color: GardenColors.secondary),
                           ]),

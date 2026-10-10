@@ -11,6 +11,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../narrative/booking_story.dart';
+import '../../widgets/garden_base_map.dart';
 
 class AdminReservationDetailScreen extends StatefulWidget {
   final String bookingId;
@@ -1502,13 +1503,7 @@ class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
       mapController: _mapController,
       options: MapOptions(initialCenter: current, initialZoom: 16),
       children: [
-        TileLayer(
-          urlTemplate: isDark
-              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.garden.bolivia',
-        ),
+        ...GardenBaseMap.layers(isDark),
         if (_track.length > 1)
           PolylineLayer(polylines: [
             Polyline(points: _track, strokeWidth: 4, color: GardenColors.primary),
