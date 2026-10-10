@@ -72,9 +72,12 @@ jest.mock('../../src/config/database', () => {
   // La disponibilidad de hospedaje/guardería cuenta las mascotas walk-in
   // presentes en el local (ver countWalkInPetsPresentNow) — 0 = sin walk-in.
   const walkInVisit = { count: jest.fn().mockResolvedValue(0) };
-  const txModels = { walkInVisit, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord };
+  // Y las reservas walk-in hechas por recepción (ninguna en este test).
+  const walkInReservation = { findMany: jest.fn().mockResolvedValue([]) };
+  const txModels = { walkInVisit, walkInReservation, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord };
   const db = {
     walkInVisit,
+    walkInReservation,
     booking,
     caregiverProfile,
     availability,

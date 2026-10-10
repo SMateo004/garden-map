@@ -85,6 +85,8 @@ class NotificationKind {
     'ACCOUNT_ACTIVATED': NotificationKind(NotificationTopic.account, GIcon.desbloqueado, StoryTone.good),
     'TRAINING_REMINDER': NotificationKind(NotificationTopic.account, GIcon.capacitacion, StoryTone.waiting),
     'STAFF_JOINED': NotificationKind(NotificationTopic.account, GIcon.equipo, StoryTone.good),
+    // Empresas: reserva por aceptar o asignada a un empleado del equipo.
+    'STAFF_BOOKING': NotificationKind(NotificationTopic.booking, GIcon.reservas, StoryTone.waiting),
     'NIT_VERIFICATION_SUBMITTED': NotificationKind(NotificationTopic.account, GIcon.documento, StoryTone.info),
     'NIT_REJECTED': NotificationKind(NotificationTopic.account, GIcon.documento, StoryTone.alert),
     'PHONE_CHANGE_AUTHORIZED': NotificationKind(NotificationTopic.account, GIcon.telefono, StoryTone.good),

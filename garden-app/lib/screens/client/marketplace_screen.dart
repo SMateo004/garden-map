@@ -530,6 +530,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             _hasError = false;
             _isLoading = false;
           });
+          _refreshSheet?.call();
           return; // éxito
         }
       } catch (_) {
@@ -539,6 +540,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // Agotó los 3 intentos
     if (mounted) setState(() => _hasError = true);
     if (mounted) setState(() => _isLoading = false);
+    _refreshSheet?.call();
   }
 
   Future<void> _loadNextPage() async {
@@ -686,6 +688,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         style: GardenText.h4.copyWith(color: textColor, fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 10),
+      if (_activeFilterPills.isNotEmpty) ...[
+        _buildActiveFilterPills(textColor, border),
+        const SizedBox(height: 12),
+      ],
     ];
 
     return Scaffold(
@@ -906,6 +912,83 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
+  /// Filtros activos que no están a la vista (el servicio y el nombre ya se
+  /// ven arriba), cada uno con cómo quitarlo.
+  List<(String, GIcon?, VoidCallback)> get _activeFilterPills {
+    const sizes = {'SMALL': 'Pequeño', 'MEDIUM': 'Mediano', 'LARGE': 'Grande', 'GIANT': 'Gigante'};
+    String bs(double v) => v >= 500 ? 'Bs 500+' : 'Bs ${v.toInt()}';
+    String num1(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v'.replaceAll('.', ',');
+    return [
+      if (_selectedZone != null)
+        (_zoneLabels[_selectedZone] ?? _selectedZone!, GIcon.ubicacion, () => _selectZone(null)),
+      if (_selectedPetType != null)
+        (_selectedPetType == 'CATS' ? 'Gato' : 'Perro', _selectedPetType == 'CATS' ? GIcon.gato : GIcon.perro,
+            () => _setFilter(() => _selectedPetType = null)),
+      if (_selectedSizes.isNotEmpty)
+        (_selectedSizes.map((s) => sizes[s] ?? s).join(', '), null, () => _setFilter(() => _selectedSizes = [])),
+      if (_filterPuppies) ('Cachorros', null, () => _setFilter(() => _filterPuppies = false)),
+      if (_filterSeniors) ('Seniors', null, () => _setFilter(() => _filterSeniors = false)),
+      if (_filterAggressive) ('Reactivos', null, () => _setFilter(() => _filterAggressive = false)),
+      if (_priceRange.start > 0 || _priceRange.end < 500)
+        ('${bs(_priceRange.start)} – ${bs(_priceRange.end)}', null,
+            () => _setFilter(() => _priceRange = const RangeValues(0, 500), reload: false)),
+      if (_minRating > 0) ('${num1(_minRating)} o más', GIcon.estrella, () => _setFilter(() => _minRating = 0)),
+      if (_minExperienceYears != null)
+        ('$_minExperienceYears+ años', null, () => _setFilter(() => _minExperienceYears = null)),
+      if (_filterMinSimultaneous != null)
+        ('$_filterMinSimultaneous+ a la vez', null,
+            () => _setFilter(() => _filterMinSimultaneous = null, reload: false)),
+      if (_filterVerifiedOnly) ('Verificados', GIcon.verificado, () => _setFilter(() => _filterVerifiedOnly = false)),
+    ];
+  }
+
+  Widget _buildActiveFilterPills(Color textColor, Color border) {
+    final pills = _activeFilterPills;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final (label, icon, clear) in pills)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Semantics(
+              button: true,
+              label: 'Quitar filtro $label',
+              excludeSemantics: true,
+              child: GestureDetector(
+                onTap: clear,
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.only(left: 12, right: 8),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(GardenRadius.full),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (icon != null) ...[
+                      GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary, state: GIconState.active),
+                      const SizedBox(width: 5),
+                    ],
+                    Text(label,
+                        style: const TextStyle(
+                            color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 4),
+                    const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: GardenColors.primary),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        if (pills.length > 1)
+          TextButton(
+            onPressed: _clearAllFilters,
+            child: const Text('Quitar todos',
+                style: TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+      ]),
+    );
+  }
+
   // ── Servicios como mosaicos (día → noche) ────────────────────────────────
   Widget _buildServiceTiles() {
     const options = <(String, GardenService?)>[
@@ -1055,47 +1138,64 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       ),
     );
 
+  /// Hoja de filtros del teléfono: encabezado y botón fijos, secciones al
+  /// medio. Los filtros se aplican al tocarlos; el botón solo cierra y dice
+  /// cuántos cuidadores quedan.
   void _showMobileFilterSheet(ThemeData theme, bool isDark, Color surface, Color border) {
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => StatefulBuilder(
+      builder: (sheetContext) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           _refreshSheet = () => setSheetState(() {});
-          return GlassBox(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 24),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  decoration: BoxDecoration(
-                    color: border,
-                    borderRadius: BorderRadius.circular(2),
+          final n = _displayCaregivers.length;
+          final label = _isLoading
+              ? 'Buscando…'
+              : _hasError && _caregivers.isEmpty
+                  ? 'No pudimos buscar · Cerrar'
+                  : n == 0
+                  ? 'Ningún cuidador con estos filtros'
+                  : 'Ver $n cuidador${n == 1 ? '' : 'es'}';
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.88),
+            child: Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2)),
                   ),
-                ),
+                  _filterHeader(textColor),
+                  Container(height: 1, color: border),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _filterSections(isDark, border, inSheet: true),
+                      ),
+                    ),
+                  ),
+                  Container(height: 1, color: border),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + MediaQuery.of(ctx).padding.bottom),
+                    child: GardenButton(
+                      label: label,
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              // Reutilizamos el panel de filtros existente
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.65,
-                child: _buildFilterPanel(theme, isDark, surface, border),
-              ),
-              GardenButton(
-                label: 'Aplicar filtros',
-                onPressed: () {
-                  Navigator.pop(context);
-                  _loadCaregivers(reset: true);
-                },
-              ),
-            ],
-          ),
-        ),
+            ),
           );
         },
       ),
@@ -1338,7 +1438,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: active ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
-          border: Border.all(color: active ? GardenColors.primary.withValues(alpha: 0.5) : GardenColors.darkBorder.withValues(alpha: 0.3)),
+          border: Border.all(color: active ? GardenColors.primary.withValues(alpha: 0.5) : (Theme.of(context).brightness == Brightness.dark ? GardenColors.darkBorder : GardenColors.lightBorder)),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -1383,323 +1483,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _buildFilterPanel(ThemeData theme, bool isDark, Color surface, Color border) {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
 
     return Container(
       color: surface,
       child: Column(
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
-            child: Row(
-              children: [
-                const GardenIcon(GIcon.filtros, size: GIconSize.sm, color: GardenColors.primary),
-                const SizedBox(width: 8),
-                Text('Filtros', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
-                if (_activeFilterCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(10)),
-                    child: Text('$_activeFilterCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                ],
-                const Spacer(),
-                if (_activeFilterCount > 0)
-                  GestureDetector(
-                    onTap: _clearAllFilters,
-                    child: const Text('Limpiar todo',
-                        style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ),
-              ],
-            ),
-          ),
+          _filterHeader(textColor),
           Container(height: 1, color: border),
-
-          // Scrollable filter sections
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  // ── Tipo de servicio ──
-                  // Chips de ancho natural + scroll horizontal en vez de
-                  // Expanded a partes iguales: con 4 opciones de largo muy
-                  // distinto ("Todos" vs "Hospedaje"), forzar el mismo
-                  // ancho partía el texto en dos líneas. Así siempre quedan
-                  // en una sola línea, tanto en el sidebar web como en mobile.
-                  _sectionTitle('Tipo de servicio', textColor),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _serviceChip('Todos', 'todos', textColor),
-                        const SizedBox(width: 8),
-                        _serviceChip('Paseo', 'paseo', textColor),
-                        const SizedBox(width: 8),
-                        _serviceChip('Hospedaje', 'hospedaje', textColor),
-                        const SizedBox(width: 8),
-                        _serviceChip('Guardería', 'guarderia', textColor),
-                      ],
-                    ),
-                  ),
-                  _divider(border),
-
-                  // ── Tipo de mascota ──
-                  _sectionTitle('Tipo de mascota', textColor),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _petTypeChip(null, 'Todos', textColor),
-                        const SizedBox(width: 8),
-                        _petTypeChip('DOGS', 'Perro', textColor),
-                        const SizedBox(width: 8),
-                        _petTypeChip('CATS', 'Gato', textColor),
-                      ],
-                    ),
-                  ),
-                  _divider(border),
-
-                  // ── Buscar ──
-                  _sectionTitle('Buscar por nombre', textColor),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: textColor, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Nombre del cuidador...',
-                      hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: const GardenIcon(GIcon.buscar, size: GIconSize.sm, color: GardenColors.primary),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                                _loadCaregivers(reset: true);
-                              })
-                          : null,
-                      filled: true, fillColor: surfaceEl,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    onChanged: (v) {
-                      _searchDebounce?.cancel();
-                      _searchDebounce = Timer(const Duration(milliseconds: 450), () {
-                        setState(() => _searchQuery = v.trim());
-                        _loadCaregivers(reset: true);
-                      });
-                    },
-                  ),
-                  _divider(border),
-
-                  // ── Zona ──
-                  _sectionTitle('Zona', textColor),
-                  const SizedBox(height: 4),
-                  Text('Selecciona una zona para encontrar cuidadores cercanos',
-                      style: TextStyle(color: subtextColor, fontSize: 11)),
-                  const SizedBox(height: 10),
-                  // "Todas" pill
-                  GestureDetector(
-                    onTap: () => _selectZone(null),
-                    child: Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _selectedZone == null
-                            ? GardenColors.primary.withValues(alpha: 0.12)
-                            : surfaceEl,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectedZone == null ? GardenColors.primary : border,
-                          width: _selectedZone == null ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Row(children: [
-                        GardenIcon(GIcon.web, size: GIconSize.xs, color: _selectedZone == null ? GardenColors.primary : subtextColor),
-                        const SizedBox(width: 8),
-                        Text('Todas las zonas',
-                            style: TextStyle(
-                              color: _selectedZone == null ? GardenColors.primary : textColor,
-                              fontWeight: _selectedZone == null ? FontWeight.w700 : FontWeight.w500,
-                              fontSize: 13,
-                            )),
-                        if (_selectedZone == null) ...[
-                          const Spacer(),
-                          const GardenIcon(GIcon.hecho, size: GIconSize.xs, color: GardenColors.primary),
-                        ],
-                      ]),
-                    ),
-                  ),
-                  // Zone pills — las zonas que un admin deshabilitó no se
-                  // muestran como opción de filtro.
-                  Wrap(
-                    spacing: 6, runSpacing: 6,
-                    children: _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-                      final isSelected = _selectedZone == e.key;
-                      final color = _zoneColors[e.key] ?? GardenColors.primary;
-                      return GestureDetector(
-                        onTap: () => _selectZone(isSelected ? null : e.key),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isSelected ? color.withValues(alpha: 0.15) : surfaceEl,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected ? color : border,
-                              width: isSelected ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8, height: 8,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(e.value,
-                                  style: TextStyle(
-                                    color: isSelected ? color : textColor,
-                                    fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                  )),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  _divider(border),
-
-                  // ── Precio ──
-                  _sectionTitle('Precio por servicio', textColor),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Bs ${_priceRange.start.toInt()}', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text(_priceRange.end >= 500 ? 'Bs 500+' : 'Bs ${_priceRange.end.toInt()}',
-                          style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  SliderTheme(
-                    data: SliderThemeData(
-                      activeTrackColor: GardenColors.primary,
-                      inactiveTrackColor: GardenColors.primary.withValues(alpha: 0.2),
-                      thumbColor: GardenColors.primary,
-                      overlayColor: GardenColors.primary.withValues(alpha: 0.1),
-                      trackHeight: 3,
-                    ),
-                    child: RangeSlider(
-                      values: _priceRange,
-                      min: 0, max: 500, divisions: 50,
-                      labels: RangeLabels(
-                        'Bs ${_priceRange.start.toInt()}',
-                        _priceRange.end >= 500 ? 'Bs 500+' : 'Bs ${_priceRange.end.toInt()}',
-                      ),
-                      onChanged: (v) {
-                        setState(() => _priceRange = v);
-                        _refreshSheet?.call();
-                      },
-                      onChangeEnd: (_) => setState(() {}),
-                    ),
-                  ),
-                  _divider(border),
-
-                  // ── Experiencia ──
-                  _sectionTitle('Experiencia mínima', textColor),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6, runSpacing: 6,
-                    children: [
-                      _expChip(null, 'Sin mínimo', textColor),
-                      _expChip(1, '1+ año', textColor),
-                      _expChip(2, '2+ años', textColor),
-                      _expChip(3, '3+ años', textColor),
-                      _expChip(5, '5+ años', textColor),
-                    ],
-                  ),
-                  _divider(border),
-
-                  // ── Tamaño de mascota ──
-                  _sectionTitle('Tamaño de mascota', textColor),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6, runSpacing: 6,
-                    children: [
-                      _sizeChip('SMALL', 'Pequeño', textColor),
-                      _sizeChip('MEDIUM', 'Mediano', textColor),
-                      _sizeChip('LARGE', 'Grande', textColor),
-                      _sizeChip('GIANT', 'Gigante', textColor),
-                    ],
-                  ),
-                  _divider(border),
-
-                  // ── Políticas ──
-                  _sectionTitle('Políticas de aceptación', textColor),
-                  const SizedBox(height: 4),
-                  _filterSwitch('Acepta perros agresivos', GIcon.advertencia, _filterAggressive, (v) {
-                    setState(() => _filterAggressive = v);
-                    _refreshSheet?.call();
-                    _loadCaregivers(reset: true);
-                  }, textColor, subtextColor),
-                  _filterSwitch('Acepta cachorros', GIcon.cachorro, _filterPuppies, (v) {
-                    setState(() => _filterPuppies = v);
-                    _refreshSheet?.call();
-                    _loadCaregivers(reset: true);
-                  }, textColor, subtextColor),
-                  _filterSwitch('Acepta perros seniors', GIcon.salud, _filterSeniors, (v) {
-                    setState(() => _filterSeniors = v);
-                    _refreshSheet?.call();
-                    _loadCaregivers(reset: true);
-                  }, textColor, subtextColor),
-                  _divider(border),
-
-                  // ── Mascotas simultáneas ──
-                  _sectionTitle('Mascotas simultáneas', textColor),
-                  const SizedBox(height: 4),
-                  Text('Cuidadores que aceptan cuántas mascotas a la vez',
-                      style: TextStyle(color: subtextColor, fontSize: 11)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6, runSpacing: 6,
-                    children: [
-                      _simultaneousChip(null, 'Cualquiera', textColor),
-                      _simultaneousChip(1, 'Solo 1', textColor),
-                      _simultaneousChip(2, 'Mín. 2', textColor),
-                      _simultaneousChip(3, '3 mascotas', textColor),
-                    ],
-                  ),
-                  _divider(border),
-
-                  // ── Calificación ──
-                  _sectionTitle('Calificación mínima', textColor),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6, runSpacing: 6,
-                    children: [
-                      _ratingChip(0, 'Cualquiera', textColor),
-                      _ratingChip(3, '3+ ⭐', textColor),
-                      _ratingChip(4, '4+ ⭐', textColor),
-                      _ratingChip(4.5, '4.5+ ⭐', textColor),
-                    ],
-                  ),
-                ],
+                children: _filterSections(isDark, border, inSheet: false),
               ),
             ),
           ),
@@ -1708,159 +1504,283 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _sectionTitle(String title, Color textColor) => Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+  Widget _filterHeader(Color textColor) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 12, 12),
+        child: Row(
+          children: [
+            Text('Filtros', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 17)),
+            if (_activeFilterCount > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(10)),
+                child: Text('$_activeFilterCount',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
+            ],
+            const Spacer(),
+            if (_activeFilterCount > 0)
+              TextButton(
+                onPressed: _clearAllFilters,
+                child: const Text('Limpiar todo',
+                    style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+          ],
+        ),
       );
 
+  /// Cambia un filtro y vuelve a pedir la lista. Todos los filtros se aplican
+  /// al instante (antes unos sí y otros recién al tocar "Aplicar").
+  void _setFilter(VoidCallback change, {bool reload = true}) {
+    HapticFeedback.selectionClick();
+    setState(change);
+    _refreshSheet?.call();
+    if (reload) _loadCaregivers(reset: true);
+  }
+
+  /// Secciones del filtro. En la hoja del teléfono no van el servicio ni el
+  /// nombre: ya están a la vista en la pantalla (mosaicos y buscador).
+  List<Widget> _filterSections(bool isDark, Color border, {required bool inSheet}) {
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final zones = _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).toList();
+    String bs(double v) => v >= 500 ? 'Bs 500+' : 'Bs ${v.toInt()}';
+    final priceSet = _priceRange.start > 0 || _priceRange.end < 500;
+
+    return [
+      if (!inSheet) ...[
+        _filterTitle('Servicio', textColor),
+        _chipWrap([
+          for (final (value, label) in const [
+            ('todos', 'Todos'),
+            ('paseo', 'Paseo'),
+            ('guarderia', 'Guardería'),
+            ('hospedaje', 'Hospedaje'),
+          ])
+            _filterChip(label, _selectedService == value, () => _setFilter(() => _selectedService = value)),
+        ]),
+        _divider(border),
+        _filterTitle('Nombre', textColor),
+        TextField(
+          controller: _searchController,
+          style: TextStyle(color: textColor, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'Busca un cuidador por nombre',
+            hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.all(10),
+              child: GardenIcon(GIcon.buscar, size: GIconSize.sm, color: subtextColor),
+            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: subtextColor, semanticLabel: 'Borrar'),
+                    onPressed: () {
+                      _searchController.clear();
+                      _setFilter(() => _searchQuery = '');
+                    })
+                : null,
+            filled: true,
+            fillColor: surfaceEl,
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(GardenRadius.full), borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(GardenRadius.full),
+                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          onChanged: (v) {
+            _searchDebounce?.cancel();
+            _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+              setState(() => _searchQuery = v.trim());
+              _loadCaregivers(reset: true);
+            });
+          },
+        ),
+        _divider(border),
+      ],
+
+      // ── Zona ──
+      _filterTitle('Zona', textColor, hint: 'Cuidadores cerca de tu casa'),
+      _chipWrap([
+        _filterChip('Todas', _selectedZone == null, () => _selectZone(null)),
+        for (final e in zones)
+          _filterChip(
+            e.value,
+            _selectedZone == e.key,
+            () => _selectZone(_selectedZone == e.key ? null : e.key),
+            dot: _zoneColors[e.key] ?? GardenColors.primary,
+          ),
+      ]),
+      _divider(border),
+
+      // ── Tu mascota ──
+      _filterTitle('Tu mascota', textColor),
+      _chipWrap([
+        _filterChip('Perro o gato', _selectedPetType == null, () => _setFilter(() => _selectedPetType = null)),
+        _filterChip('Perro', _selectedPetType == 'DOGS', () => _setFilter(() => _selectedPetType = 'DOGS'),
+            icon: GIcon.perro),
+        _filterChip('Gato', _selectedPetType == 'CATS', () => _setFilter(() => _selectedPetType = 'CATS'),
+            icon: GIcon.gato),
+      ]),
+      const SizedBox(height: 14),
+      _filterSubtitle('Tamaño', subtextColor),
+      _chipWrap([
+        for (final (value, label) in const [
+          ('SMALL', 'Pequeño'),
+          ('MEDIUM', 'Mediano'),
+          ('LARGE', 'Grande'),
+          ('GIANT', 'Gigante'),
+        ])
+          _filterChip(
+            label,
+            _selectedSizes.contains(value),
+            () => _setFilter(() => _selectedSizes.contains(value)
+                ? _selectedSizes.remove(value)
+                : _selectedSizes.add(value)),
+          ),
+      ]),
+      const SizedBox(height: 14),
+      _filterSubtitle('Que acepte', subtextColor),
+      _chipWrap([
+        _filterChip('Cachorros', _filterPuppies, () => _setFilter(() => _filterPuppies = !_filterPuppies),
+            icon: GIcon.cachorro),
+        _filterChip('Seniors', _filterSeniors, () => _setFilter(() => _filterSeniors = !_filterSeniors),
+            icon: GIcon.salud),
+        _filterChip('Reactivos o agresivos', _filterAggressive,
+            () => _setFilter(() => _filterAggressive = !_filterAggressive),
+            icon: GIcon.advertencia),
+      ]),
+      _divider(border),
+
+      // ── Precio ──
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(child: _filterTitle('Precio', textColor)),
+          Text(
+            priceSet ? '${bs(_priceRange.start)} – ${bs(_priceRange.end)}' : 'Cualquiera',
+            style: TextStyle(
+              color: priceSet ? GardenColors.primary : subtextColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      SliderTheme(
+        data: SliderThemeData(
+          activeTrackColor: GardenColors.primary,
+          inactiveTrackColor: GardenColors.primary.withValues(alpha: 0.18),
+          thumbColor: GardenColors.primary,
+          overlayColor: GardenColors.primary.withValues(alpha: 0.1),
+          trackHeight: 4,
+          showValueIndicator: ShowValueIndicator.never,
+        ),
+        child: RangeSlider(
+          values: _priceRange,
+          min: 0,
+          max: 500,
+          divisions: 50,
+          semanticFormatterCallback: bs,
+          onChanged: (v) {
+            setState(() => _priceRange = v);
+            _refreshSheet?.call();
+          },
+        ),
+      ),
+      Text('Por servicio, según el que elegiste arriba.', style: TextStyle(color: subtextColor, fontSize: 12)),
+      _divider(border),
+
+      // ── El cuidador ──
+      _filterTitle('El cuidador', textColor),
+      _filterSubtitle('Calificación', subtextColor),
+      _chipWrap([
+        for (final (value, label) in const [(0.0, 'Cualquiera'), (4.0, '4 o más'), (4.5, '4,5 o más')])
+          _filterChip(label, _minRating == value, () => _setFilter(() => _minRating = value),
+              icon: value > 0 ? GIcon.estrella : null),
+      ]),
+      const SizedBox(height: 14),
+      _filterSubtitle('Experiencia', subtextColor),
+      _chipWrap([
+        for (final (value, label) in const [(null, 'Cualquiera'), (1, '1 año o más'), (3, '3 años o más'), (5, '5 años o más')])
+          _filterChip(label, _minExperienceYears == value, () => _setFilter(() => _minExperienceYears = value)),
+      ]),
+      const SizedBox(height: 14),
+      _filterSubtitle('Mascotas a la vez', subtextColor),
+      _chipWrap([
+        for (final (value, label) in const [(null, 'Cualquiera'), (2, '2 o más'), (3, '3 o más')])
+          _filterChip(label, _filterMinSimultaneous == value,
+              () => _setFilter(() => _filterMinSimultaneous = value, reload: false)),
+      ]),
+    ];
+  }
+
+  Widget _filterTitle(String title, Color textColor, {String? hint}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+          if (hint != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(hint,
+                  style: TextStyle(
+                      color: textColor.withValues(alpha: 0.6), fontSize: 12, fontWeight: FontWeight.w500)),
+            ),
+        ]),
+      );
+
+  Widget _filterSubtitle(String title, Color subtextColor) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(title, style: TextStyle(color: subtextColor, fontWeight: FontWeight.w700, fontSize: 12.5)),
+      );
+
+  Widget _chipWrap(List<Widget> chips) => Wrap(spacing: 8, runSpacing: 8, children: chips);
+
   Widget _divider(Color border) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         child: Divider(height: 1, thickness: 1, color: border),
       );
 
-  Widget _serviceChip(String label, String value, Color textColor) {
-    final selected = _selectedService == value;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedService = value);
-        _refreshSheet?.call();
-        _loadCaregivers(reset: true);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? GardenColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
+  /// Un solo estilo de chip para todos los filtros (antes había tres, con
+  /// borde de modo oscuro también en modo claro).
+  Widget _filterChip(String label, bool selected, VoidCallback onTap, {GIcon? icon, Color? dot}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final fg = selected ? GardenColors.primary : textColor;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: GardenMotion.resolve(context, GardenMotion.quick),
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(GardenRadius.full),
+            border: Border.all(color: selected ? GardenColors.primary : border, width: selected ? 1.5 : 1),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (dot != null) ...[
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+              const SizedBox(width: 7),
+            ] else if (icon != null) ...[
+              GardenIcon(icon,
+                  size: GIconSize.xs, color: fg, state: selected ? GIconState.active : GIconState.idle),
+              const SizedBox(width: 6),
+            ],
+            Text(label,
+                softWrap: false,
+                style: TextStyle(color: fg, fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+          ]),
         ),
-        child: Text(label,
-            softWrap: false,
-            style: TextStyle(
-              color: selected ? Colors.white : textColor,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 12,
-            )),
       ),
     );
   }
-
-  Widget _petTypeChip(String? val, String label, Color textColor) {
-    final selected = _selectedPetType == val;
-    return GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _selectedPetType = val);
-          _refreshSheet?.call();
-          _loadCaregivers(reset: true);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? GardenColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
-          ),
-          child: Text(label,
-              softWrap: false,
-              style: TextStyle(
-                color: selected ? Colors.white : textColor,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 12,
-              )),
-        ),
-    );
-  }
-
-  Widget _expChip(int? val, String label, Color textColor) {
-    final selected = _minExperienceYears == val;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _minExperienceYears = selected ? null : val);
-        _refreshSheet?.call();
-        _loadCaregivers(reset: true);
-      },
-      child: _smallChip(label, selected, textColor),
-    );
-  }
-
-  Widget _sizeChip(String val, String label, Color textColor) {
-    final selected = _selectedSizes.contains(val);
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => selected ? _selectedSizes.remove(val) : _selectedSizes.add(val));
-        _refreshSheet?.call();
-        _loadCaregivers(reset: true);
-      },
-      child: _smallChip(label, selected, textColor),
-    );
-  }
-
-  Widget _ratingChip(double val, String label, Color textColor) {
-    final selected = _minRating == val;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _minRating = selected ? 0 : val);
-        _refreshSheet?.call();
-      },
-      child: _smallChip(label, selected, textColor),
-    );
-  }
-
-  Widget _simultaneousChip(int? val, String label, Color textColor) {
-    final selected = _filterMinSimultaneous == val;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _filterMinSimultaneous = selected ? null : val);
-        _refreshSheet?.call();
-      },
-      child: _smallChip(label, selected, textColor),
-    );
-  }
-
-  Widget _smallChip(String label, bool selected, Color textColor) => AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              color: selected ? GardenColors.primary : textColor,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 12,
-            )),
-      );
-
-  Widget _filterSwitch(String label, GIcon icon, bool value, Function(bool) onChanged,
-      Color textColor, Color subtextColor) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(children: [
-          GardenIcon(icon, size: GIconSize.sm, color: value ? GardenColors.primary : subtextColor),
-          const SizedBox(width: 8),
-          Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 12))),
-          Transform.scale(
-            scale: 0.8,
-            child: Switch(
-              value: value,
-              onChanged: (v) {
-                HapticFeedback.selectionClick();
-                onChanged(v);
-              },
-              activeColor: GardenColors.primary,
-            ),
-          ),
-        ]),
-      );
 
   // ── Caregiver List ────────────────────────────────────────────────────────
 
@@ -1898,7 +1818,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (displayed.isEmpty && !_isLoading) {
       return withHeader(GardenEmptyState(
         type: GardenEmptyType.caregivers,
-        title: 'Sin cuidadores disponibles',
+        title: _activeFilterCount > 0 ? 'Nadie coincide con tus filtros' : 'Sin cuidadores disponibles',
         subtitle: _activeFilterCount > 0
             ? 'Ningún cuidador coincide con tus filtros. Prueba ampliar la zona o quitar algún filtro.'
             : 'No hay cuidadores disponibles en este momento. Vuelve a intentar en un rato.',
