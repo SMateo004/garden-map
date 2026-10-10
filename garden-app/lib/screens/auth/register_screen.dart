@@ -455,7 +455,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
         final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
 
-        return Scaffold(
+        // Tema claro para toda la pantalla, no solo los colores de acá: los
+        // campos y botones que leen Theme.of(context) seguían el modo oscuro.
+        return Theme(
+          data: gardenTheme(),
+          child: Scaffold(
           backgroundColor: bg,
           body: SafeArea(
             child: LayoutBuilder(
@@ -472,6 +476,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return _buildFormPanel(bg, surface, surfaceEl, textColor, subtextColor, borderColor, isDark);
               },
             ),
+          ),
           ),
         );
       },

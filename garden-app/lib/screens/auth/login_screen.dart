@@ -148,7 +148,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    return Scaffold(
+    // El tema claro envuelve toda la pantalla: así los componentes que leen
+    // Theme.of(context) (el campo de correo, los botones sociales) tampoco
+    // salen en modo nocturno cuando la app está en oscuro.
+    return Theme(
+      data: gardenTheme(),
+      child: Scaffold(
       backgroundColor: bg,
       body: SafeArea(
         child: LayoutBuilder(
@@ -171,6 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
             return _buildFormPanel(surface, textColor, subtextColor, borderColor, isDark);
           },
         ),
+      ),
       ),
     );
   }

@@ -1382,7 +1382,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  GardenIcon(GIcon.filtros, size: GIconSize.sm, color: textColor),
+                  GardenIcon(GIcon.ordenar, size: GIconSize.sm, color: textColor),
                   const SizedBox(width: 6),
                   Text(_sortLabel(_sortBy), style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w500)),
                   const SizedBox(width: 4),

@@ -26,6 +26,7 @@ class Ph {
   static const arrowUUpLeft = PhGlyph(IconData(0xe08a, fontFamily: _reg), IconData(0xe08b, fontFamily: _duo), IconData(0xe08a, fontFamily: _duo));
   static const arrowUp = PhGlyph(IconData(0xe08e, fontFamily: _reg), IconData(0xe08f, fontFamily: _duo), IconData(0xe08e, fontFamily: _duo));
   static const arrowsClockwise = PhGlyph(IconData(0xe094, fontFamily: _reg), IconData(0xe095, fontFamily: _duo), IconData(0xe094, fontFamily: _duo));
+  static const arrowsDownUp = PhGlyph(IconData(0xe098, fontFamily: _reg), IconData(0xe099, fontFamily: _duo), IconData(0xe098, fontFamily: _duo));
   static const arrowsLeftRight = PhGlyph(IconData(0xe0a0, fontFamily: _reg), IconData(0xe0a1, fontFamily: _duo), IconData(0xe0a0, fontFamily: _duo));
   static const baby = PhGlyph(IconData(0xe774, fontFamily: _reg), IconData(0xe775, fontFamily: _duo), IconData(0xe774, fontFamily: _duo));
   static const bank = PhGlyph(IconData(0xe0b4, fontFamily: _reg), IconData(0xe0b5, fontFamily: _duo), IconData(0xe0b4, fontFamily: _duo));

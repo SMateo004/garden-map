@@ -201,6 +201,7 @@ enum GIcon {
   linterna(Ph.flashlight),
   ampliar(Ph.magnifyingGlassPlus),
   intercambiar(Ph.arrowsLeftRight),
+  ordenar(Ph.arrowsDownUp),
   auto(Ph.car),
   herramientas(Ph.wrench),
   lanzar(Ph.rocketLaunch),
