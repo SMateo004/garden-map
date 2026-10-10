@@ -53,10 +53,10 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : const Color(0xFFF7F9F4);
-    final surface = isDark ? GardenColors.darkSurface : Colors.white;
-    final text = isDark ? GardenColors.darkTextPrimary : const Color(0xFF1A2E0A);
-    final subtext = isDark ? GardenColors.darkTextSecondary : const Color(0xFF5A7040);
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtext = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return Scaffold(
       backgroundColor: bg,

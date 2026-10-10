@@ -302,7 +302,9 @@ class GardenSegmented<T> extends StatelessWidget {
       decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(GardenRadius.md)),
       child: LayoutBuilder(builder: (context, c) {
         final w = c.maxWidth / options.length;
-        return Stack(children: [
+        // fit: expand — sin esto la fila de textos quedaba arriba y no
+        // centrada sobre la pastilla que se desliza.
+        return Stack(fit: StackFit.expand, children: [
           AnimatedPositioned(
             duration: d,
             curve: GardenMotion.move,

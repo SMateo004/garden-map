@@ -3,11 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/brote.dart';
+import '../../design/garden_caregiver_card.dart';
+import '../../design/garden_icons.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
-import '../../design/garden_icons.dart';
 
+/// Cuidadores guardados. Usa la misma tarjeta que el marketplace (antes tenía
+/// una propia, con el precio de 30 min rotulado "/ 1 hora") y el corazón de
+/// la esquina quita al cuidador con opción de deshacer.
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -16,9 +22,9 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  List<dynamic> _favorites = [];
+  List<Map<String, dynamic>> _favorites = [];
   bool _isLoading = true;
-  String _token = '';
+  bool _failed = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
@@ -27,61 +33,96 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     _loadFavorites();
   }
 
-  Future<void> _loadFavorites() async {
+  Future<void> _loadFavorites({bool silent = false}) async {
     final token = AuthState.token;
-
     if (token.isEmpty) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
-    setState(() {
-      _token = token;
-      _isLoading = true;
-    });
-
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _failed = false;
+      });
+    }
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/client/favorites'),
-        headers: {'Authorization': 'Bearer $_token'},
+        headers: {'Authorization': 'Bearer $token'},
       );
       final data = jsonDecode(response.body);
-      if (data['success'] == true && mounted) {
-        setState(() => _favorites = data['data'] as List);
+      if (data['success'] != true) throw Exception();
+      if (mounted) {
+        setState(() {
+          _favorites = (data['data'] as List).cast<Map<String, dynamic>>();
+          _failed = false;
+        });
       }
-    } catch (e) {
-      debugPrint('Error loading favorites: $e');
+    } catch (_) {
+      // Antes un error de red mostraba "Aún no tienes favoritos".
+      if (mounted && !silent) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _removeFavorite(String caregiverId) async {
+  /// El endpoint alterna (agrega o quita). Devuelve si salió bien.
+  Future<bool> _toggle(String caregiverId) async {
     try {
-      await http.post(
+      final r = await http.post(
         Uri.parse('$_baseUrl/client/favorites/$caregiverId'),
-        headers: {'Authorization': 'Bearer $_token'},
+        headers: {'Authorization': 'Bearer ${AuthState.token}'},
       );
-      await _loadFavorites();
-    } catch (_) {}
+      return r.statusCode >= 200 && r.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _nameOf(Map<String, dynamic> c) {
+    final company = (c['companyName'] as String?)?.trim();
+    if (c['isCompany'] == true && (company?.isNotEmpty ?? false)) return company!;
+    return '${c['firstName'] ?? ''}'.trim().isEmpty ? 'el cuidador' : '${c['firstName']}';
+  }
+
+  /// Se quita al instante; "Deshacer" lo vuelve a guardar en su lugar.
+  Future<void> _remove(Map<String, dynamic> c) async {
+    HapticFeedback.mediumImpact();
+    final index = _favorites.indexOf(c);
+    setState(() => _favorites.remove(c));
+    final ok = await _toggle(c['id'] as String);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    if (!ok) {
+      setState(() => _favorites.insert(index.clamp(0, _favorites.length), c));
+      messenger.showSnackBar(const SnackBar(content: Text('No se pudo quitar. Revisa tu conexión e intenta de nuevo.')));
+      return;
+    }
+    messenger.showSnackBar(SnackBar(
+      content: Text('Quitaste a ${_nameOf(c)} de favoritos'),
+      action: SnackBarAction(
+        label: 'Deshacer',
+        onPressed: () async {
+          if (await _toggle(c['id'] as String) && mounted) {
+            setState(() => _favorites.insert(index.clamp(0, _favorites.length), c));
+          }
+        },
+      ),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: Text(
-          'Mis Favoritos',
-          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 20),
-        ),
+        title: Text('Mis favoritos', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 20)),
         backgroundColor: bg,
         elevation: 0,
         iconTheme: IconThemeData(color: textColor),
@@ -91,271 +132,119 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ? ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               itemCount: 3,
-              itemBuilder: (_, __) => _buildFavoriteCardSkeleton(surface, borderColor),
-            )
-          : _favorites.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadFavorites,
-                  color: GardenColors.primary,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: _favorites.length,
-                    itemBuilder: (context, index) {
-                      final c = _favorites[index];
-                      return _buildFavoriteCard(c, surface, textColor, subtextColor, borderColor);
-                    },
-                  ),
-                ),
-    );
-  }
-
-  Widget _buildFavoriteCard(
-    Map<String, dynamic> c,
-    Color surface,
-    Color textColor,
-    Color subtextColor,
-    Color borderColor,
-  ) {
-    final rating = (c['rating'] as num? ?? 0).toStringAsFixed(1);
-    final reviewCount = c['reviewCount'] ?? 0;
-    final firstName = c['firstName'] ?? '';
-    final lastName = c['lastName'] ?? '';
-    final zone = c['zone'] ?? '';
-    final pricePerWalk = c['pricePerWalk60'] ?? c['pricePerWalk30'];
-    final pricePerDay = c['pricePerDay'];
-    final verified = c['verified'] == true;
-    final profilePicture = c['profilePicture'] as String?;
-
-    return GardenPressable(
-      pressedScale: 0.98,
-      onTap: () async {
-        HapticFeedback.lightImpact();
-        await context.push('/caregiver/${c['id']}');
-        if (mounted) _loadFavorites();
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor),
-          boxShadow: GardenShadows.card,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Foto
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Stack(
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 8,
-                    child: profilePicture != null && profilePicture.isNotEmpty
-                        ? Image.network(
-                            fixImageUrl(profilePicture),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _photoPlaceholder(),
-                          )
-                        : _photoPlaceholder(),
-                  ),
-                  // Botón quitar de favoritos (esquina superior derecha sobre la foto)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: GardenPressable(
-                      pressedScale: 0.85,
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        _removeFavorite(c['id']);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: Colors.red),
-                      ),
-                    ),
-                  ),
-                  // Badge verificado sobre foto
-                  if (verified)
-                    Positioned(
-                      bottom: 10,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: GardenColors.success.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          children: [
-                            GardenIcon(GIcon.verificado, size: GIconSize.xs, state: GIconState.active, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text('Verificado', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+              itemBuilder: (_, __) => const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: GardenSkeleton(width: double.infinity, height: 150, radius: GardenRadius.lg),
               ),
-            ),
-
-            // Info
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$firstName $lastName',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                GardenIcon(GIcon.ubicacion, size: GIconSize.xs, color: subtextColor),
-                                const SizedBox(width: 3),
-                                Text(zone, style: TextStyle(color: subtextColor, fontSize: 12)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+            )
+          : _failed
+              ? ListView(padding: const EdgeInsets.all(24), children: [
+                  const SizedBox(height: 40),
+                  GardenEmptyState(
+                    type: GardenEmptyType.caregivers,
+                    brote: BrotePose.oops,
+                    title: 'No pudimos cargar tus favoritos',
+                    subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
+                    ctaLabel: 'Reintentar',
+                    onCta: _loadFavorites,
+                  ),
+                ])
+              : _favorites.isEmpty
+                  ? GardenEmptyState(
+                      type: GardenEmptyType.caregivers,
+                      title: 'Aún no tienes favoritos',
+                      subtitle: 'Guarda a los cuidadores que más te gusten tocando el corazón en su perfil.',
+                      ctaLabel: 'Explorar cuidadores',
+                      onCta: () => context.go('/marketplace'),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => _loadFavorites(silent: true),
+                      color: GardenColors.primary,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: [
-                          Row(
-                            children: [
-                              const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
-                              const SizedBox(width: 3),
-                              Text(rating, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                            ],
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 640),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 2, bottom: 12),
+                                  child: Text(
+                                    _favorites.length == 1 ? '1 cuidador guardado' : '${_favorites.length} cuidadores guardados',
+                                    style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                for (final c in _favorites)
+                                  Padding(
+                                    key: ValueKey(c['id']),
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Stack(children: [
+                                      GardenCaregiverCard(
+                                        caregiver: c,
+                                        onTap: () async {
+                                          HapticFeedback.lightImpact();
+                                          await context.push('/caregiver/${c['id']}', extra: c);
+                                          if (mounted) _loadFavorites(silent: true);
+                                        },
+                                      ),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: _HeartButton(onTap: () => _remove(c)),
+                                      ),
+                                    ]),
+                                  ),
+                              ]),
+                            ),
                           ),
-                          if (reviewCount > 0)
-                            Text('$reviewCount reseñas', style: TextStyle(color: subtextColor, fontSize: 10)),
                         ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        pricePerWalk != null
-                            ? 'Bs $pricePerWalk / 1 hora'
-                            : pricePerDay != null
-                                ? 'Bs $pricePerDay / noche'
-                                : 'Consultar precio',
-                        style: const TextStyle(
-                          color: GardenColors.primary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      GardenPressable(
-                        pressedScale: 0.94,
-                        onTap: () async {
-                          HapticFeedback.lightImpact();
-                          await context.push('/booking/${c['id']}');
-                          if (mounted) _loadFavorites();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: GardenColors.primary,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Reservar',
-                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+    );
+  }
+}
+
+/// Corazón lleno para quitar de favoritos: se hunde al tocarlo.
+class _HeartButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _HeartButton({required this.onTap});
+
+  @override
+  State<_HeartButton> createState() => _HeartButtonState();
+}
+
+class _HeartButtonState extends State<_HeartButton> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Semantics(
+      button: true,
+      label: 'Quitar de favoritos',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) => setState(() => _down = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          duration: GardenMotion.resolve(context, GardenMotion.instant),
+          scale: _down ? 0.85 : 1,
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurface,
+              shape: BoxShape.circle,
+              border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
             ),
-          ],
+            child: const GardenIcon(GIcon.favorito, size: GIconSize.sm, state: GIconState.active, color: GardenColors.error),
+          ),
         ),
       ),
-    );
-  }
-
-  /// Skeleton que calca el layout de [_buildFavoriteCard] mientras carga.
-  Widget _buildFavoriteCardSkeleton(Color surface, Color borderColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-        boxShadow: GardenShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: AspectRatio(
-              aspectRatio: 16 / 8,
-              child: GardenSkeleton(width: double.infinity, height: double.infinity, radius: 0),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const GardenSkeleton(width: 140, height: 14),
-                const SizedBox(height: GardenSpacing.sm),
-                const GardenSkeleton(width: 80, height: 11),
-                const SizedBox(height: GardenSpacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const GardenSkeleton(width: 90, height: 14),
-                    GardenSkeleton(width: 70, height: 26, radius: GardenRadius.full),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _photoPlaceholder() {
-    return Container(
-      color: GardenColors.primary.withValues(alpha: 0.1),
-      child: const Center(child: GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: GardenColors.primary)),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return GardenEmptyState(
-      type: GardenEmptyType.caregivers,
-      title: 'Aún no tienes favoritos',
-      subtitle: 'Guarda a los cuidadores que más te gusten tocando el corazón en su perfil.',
-      ctaLabel: 'Explorar cuidadores',
-      onCta: () => context.go('/marketplace'),
     );
   }
 }

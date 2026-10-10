@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_settings.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
 import '../../services/auth_state.dart';
 
-/// Centro de Ayuda — pantalla principal (estilo Airbnb).
-/// Buscador arriba, categorías con artículos largos y explicados, y el chat
-/// directo con soporte como ÚLTIMA medida al final de la página — YA NO hay
-/// enlace a WhatsApp: todo el contacto directo pasa por el chat in-app (ver
-/// SupportChatScreen) para que el admin tenga todo centralizado.
+/// Centro de Ayuda — pantalla principal.
+/// Saludo con buscador, lo más consultado según quién mira (dueño o
+/// cuidador), todos los temas en grupos como en Mi perfil, y el chat directo
+/// con soporte como ÚLTIMA medida al final — sin WhatsApp: todo el contacto
+/// directo pasa por el chat in-app (ver SupportChatScreen) para que el admin
+/// tenga todo centralizado.
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
 
@@ -21,22 +24,53 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   final _searchCtrl = TextEditingController();
   String _query = '';
 
+  /// Lo que más se pregunta, según el modo en que se usa la app.
+  static const _popularOwner = ['como-reservar', 'cancelar-reserva', 'pagar-con-qr'];
+  static const _popularCaregiver = ['como-retirar', 'configurar-datos-cobro', 'precios-y-disponibilidad'];
+
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  /// Minúsculas y sin tildes: "pagó" encuentra "pago" (antes no).
+  static String _norm(String s) {
+    const from = 'áéíóúüñ';
+    const to = 'aeiouun';
+    final lower = s.toLowerCase();
+    final out = StringBuffer();
+    for (final ch in lower.split('')) {
+      final i = from.indexOf(ch);
+      out.write(i >= 0 ? to[i] : ch);
+    }
+    return out.toString();
+  }
+
   List<({HelpCategory category, HelpArticle article})> get _searchResults {
-    final q = _query.trim().toLowerCase();
+    final q = _norm(_query.trim());
     if (q.isEmpty) return const [];
     return allHelpArticles.where((entry) {
       final a = entry.article;
-      if (a.title.toLowerCase().contains(q)) return true;
-      if (a.excerpt.toLowerCase().contains(q)) return true;
-      return a.keywords.any((k) => k.toLowerCase().contains(q));
+      if (_norm(a.title).contains(q)) return true;
+      if (_norm(a.excerpt).contains(q)) return true;
+      return a.keywords.any((k) => _norm(k).contains(q));
     }).toList();
   }
+
+  List<({HelpCategory category, HelpArticle article})> get _popular {
+    final ids = AuthState.effectiveRole == 'CAREGIVER' ? _popularCaregiver : _popularOwner;
+    final all = allHelpArticles;
+    return [
+      for (final id in ids)
+        ...all.where((e) => e.article.id == id).take(1),
+    ];
+  }
+
+  void _openArticle(({HelpCategory category, HelpArticle article}) e) => context.push(
+        '/help-center/article',
+        extra: {'article': e.article, 'categoryTitle': e.category.title},
+      );
 
   void _openSupportChat() {
     if (!AuthState.hasSession) {
@@ -69,203 +103,156 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : const Color(0xFFF7F9F4);
-    final surface = isDark ? GardenColors.darkSurface : Colors.white;
-    final text = isDark ? GardenColors.darkTextPrimary : const Color(0xFF1A2E0A);
-    final subtext = isDark ? GardenColors.darkTextSecondary : const Color(0xFF5A7040);
+    // Colores del tema (antes este centro tenía los suyos, fijos).
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtext = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final searching = _query.trim().isNotEmpty;
+    final results = _searchResults;
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: surface,
+        backgroundColor: bg,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: GardenIcon(GIcon.atras, color: text, semanticLabel: 'Volver'),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Centro de ayuda', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w700)),
+        title: Text('Centro de ayuda', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
-          // ── Buscador ──────────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(GardenRadius.lg),
-              border: Border.all(color: border),
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _query = v),
-              style: TextStyle(color: text, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: '¿En qué podemos ayudarte?',
-                hintStyle: TextStyle(color: subtext, fontSize: 14),
-                prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.buscar, color: subtext)),
-                suffixIcon: searching
-                    ? IconButton(
-                        icon: GardenIcon(GIcon.cerrar, color: subtext, semanticLabel: 'Borrar búsqueda'),
-                        onPressed: () => setState(() {
-                          _searchCtrl.clear();
-                          _query = '';
-                        }),
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          if (searching) ...[
-            Text(
-              _searchResults.isEmpty
-                  ? 'Sin resultados para "$_query"'
-                  : '${_searchResults.length} resultado(s) para "$_query"',
-              style: TextStyle(color: subtext, fontSize: 12.5, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            for (final entry in _searchResults)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => context.push(
-                      '/help-center/article',
-                      extra: {'article': entry.article, 'categoryTitle': entry.category.title},
-                    ),
-                    borderRadius: BorderRadius.circular(GardenRadius.md),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        border: Border.all(color: border),
-                      ),
-                      child: Row(
-                        children: [
-                          GardenIcon(entry.category.icon, size: GIconSize.md, color: GardenColors.primary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(entry.article.title,
-                                    style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 2),
-                                Text(entry.category.title,
-                                    style: TextStyle(color: subtext, fontSize: 11.5)),
-                              ],
-                            ),
-                          ),
-                          GardenIcon(GIcon.siguiente, color: subtext, size: GIconSize.sm),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ] else ...[
-            // ── Categorías ────────────────────────────────────────────
-            Text(
-              'Todos los temas',
-              style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.2),
-            ),
-            const SizedBox(height: 12),
-            for (final category in helpCenterCategories)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => context.push('/help-center/category', extra: category),
-                    borderRadius: BorderRadius.circular(GardenRadius.lg),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.lg),
-                        border: Border.all(color: border),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: GardenColors.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(GardenRadius.md),
-                            ),
-                            child: GardenIcon(category.icon, size: GIconSize.md, color: GardenColors.primary),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(category.title,
-                                    style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 3),
-                                Text(category.description,
-                                    style: TextStyle(color: subtext, fontSize: 12, height: 1.3)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GardenIcon(GIcon.siguiente, color: subtext),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-
-          const SizedBox(height: 28),
-          Divider(color: border),
-          const SizedBox(height: 20),
-
-          // ── Última medida: contacto directo ────────────────────────
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: GardenColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(GardenRadius.lg),
-              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const GardenIcon(GIcon.soporte, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active),
-                    const SizedBox(width: 10),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                // ── Saludo y buscador ─────────────────────────────────
+                if (!searching) ...[
+                  Row(children: [
+                    const Brote(pose: BrotePose.hola, size: 56),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        '¿No encontraste lo que buscabas?',
-                        style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700),
-                      ),
+                      child: Text('¿En qué te ayudamos?',
+                          style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900, height: 1.15)),
                     ),
-                  ],
+                  ]),
+                  const SizedBox(height: 14),
+                ],
+                TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _query = v),
+                  textInputAction: TextInputAction.search,
+                  style: TextStyle(color: text, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Busca: cancelar, retiro, QR…',
+                    hintStyle: TextStyle(color: subtext, fontSize: 14.5),
+                    filled: true,
+                    fillColor: surface,
+                    prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.buscar, color: subtext)),
+                    suffixIcon: searching
+                        ? IconButton(
+                            icon: GardenIcon(GIcon.cerrar, color: subtext, semanticLabel: 'Borrar búsqueda'),
+                            onPressed: () => setState(() {
+                              _searchCtrl.clear();
+                              _query = '';
+                            }),
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(GardenRadius.full),
+                      borderSide: BorderSide(color: border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(GardenRadius.full),
+                      borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Si tu problema es urgente o no se resolvió con estos artículos, '
-                  'escríbenos directo a nuestro equipo de soporte por chat.',
-                  style: TextStyle(color: subtext, fontSize: 12.5, height: 1.5),
+                const SizedBox(height: 22),
+
+                if (searching) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      results.isEmpty
+                          ? 'Sin resultados para "${_query.trim()}"'
+                          : results.length == 1
+                              ? '1 resultado'
+                              : '${results.length} resultados',
+                      style: TextStyle(color: subtext, fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (results.isNotEmpty)
+                    GardenSettingsGroup(children: [
+                      for (final e in results)
+                        GardenSettingsRow(
+                          icon: e.category.icon,
+                          title: e.article.title,
+                          subtitle: e.category.title,
+                          onTap: () => _openArticle(e),
+                        ),
+                    ])
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 18),
+                      child: Text('Prueba con otra palabra, o escríbenos por chat.',
+                          style: TextStyle(color: subtext, fontSize: 13)),
+                    ),
+                ] else ...[
+                  GardenSettingsGroup(title: 'Lo más consultado', children: [
+                    for (final e in _popular)
+                      GardenSettingsRow(
+                        icon: e.category.icon,
+                        title: e.article.title,
+                        onTap: () => _openArticle(e),
+                      ),
+                  ]),
+                  GardenSettingsGroup(title: 'Todos los temas', children: [
+                    for (final category in helpCenterCategories)
+                      GardenSettingsRow(
+                        icon: category.icon,
+                        title: category.title,
+                        subtitle: category.description,
+                        onTap: () => context.push('/help-center/category', extra: category),
+                      ),
+                  ]),
+                ],
+
+                // ── Última medida: contacto directo ────────────────────
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(GardenRadius.xl),
+                    border: Border.all(color: border),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      const GardenIcon(GIcon.soporte, color: GardenColors.primary, size: GIconSize.lg, state: GIconState.active),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('¿No encontraste lo que buscabas?',
+                            style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Si es urgente o no se resolvió con estos artículos, escríbenos por chat: '
+                      'te responde una persona del equipo.',
+                      style: TextStyle(color: subtext, fontSize: 13, height: 1.5),
+                    ),
+                    const SizedBox(height: 14),
+                    GardenButton(label: 'Chatear con soporte', gIcon: GIcon.chat, onPressed: _openSupportChat),
+                  ]),
                 ),
-                const SizedBox(height: 14),
-                GardenButton(
-                  label: 'Chatear con soporte',
-                  gIcon: GIcon.chat,
-                  onPressed: _openSupportChat,
-                ),
-              ],
+              ]),
             ),
           ),
         ],

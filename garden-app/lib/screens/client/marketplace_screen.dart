@@ -945,7 +945,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
         GardenQuickItem(GIcon.favorito, 'Favoritos', () => context.push('/favorites')),
         GardenQuickItem(GIcon.regalo, 'Invita y gana', () => context.push('/referral')),
-        GardenQuickItem(GIcon.repetir, 'Reservas fijas', () => context.push('/recurring-bookings')),
+        GardenQuickItem(GIcon.repetir, 'Paseos fijos', () => context.push('/recurring-bookings')),
         GardenQuickItem(GIcon.ayuda, 'Ayuda', () => context.push('/help-center')),
       ],
     );

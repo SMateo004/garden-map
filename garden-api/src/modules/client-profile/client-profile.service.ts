@@ -125,7 +125,7 @@ export async function getFavorites(userId: string) {
 
   // Mismo precio que el listado: comisión de Admin > Comisiones por servicio y cuidador.
   const pricing = await getPricingConfig();
-  const priced = (price: number | null, service: 'PASEO' | 'HOSPEDAJE', caregiverId: string) =>
+  const priced = (price: number | null, service: 'PASEO' | 'HOSPEDAJE' | 'GUARDERIA', caregiverId: string) =>
     price ? Math.round(price * (1 + resolveCommissionPct(pricing, service, caregiverId) / 100)) : null;
 
   // Map to CaregiverListItem-like format
@@ -139,7 +139,15 @@ export async function getFavorites(userId: string) {
     reviewCount: c.reviewCount,
     pricePerDay: priced(c.pricePerDay, 'HOSPEDAJE', c.id),
     pricePerWalk30: priced(walk30BasePrice(c.pricePerWalk30, c.pricePerWalk60), 'PASEO', c.id),
+    // Lo mismo que trae el listado del marketplace, para que la app muestre
+    // la misma tarjeta (antes faltaban guardería, antecedentes y empresa).
+    pricePerWalk60: priced(c.pricePerWalk60, 'PASEO', c.id),
+    pricePerGuarderia: priced(c.pricePerGuarderia, 'GUARDERIA', c.id),
     services: c.servicesOffered,
     verified: c.verified,
+    antecedentesVerified: (c as any).antecedentesStatus === 'LIMPIO',
+    experienceYears: c.experienceYears,
+    isCompany: (c as any).isCompany ?? false,
+    companyName: (c as any).companyName ?? null,
   }));
 }
