@@ -33,6 +33,9 @@ jest.mock('../../src/config/database', () => ({
   },
 }));
 
+const mockCronSchedule = jest.fn();
+jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: (...a: unknown[]) => mockCronSchedule(...a) } }));
+
 jest.mock('../../src/services/firebase.service', () => ({
   sendPushToUser: (...a: unknown[]) => mockPush(...a),
 }));
@@ -58,7 +61,12 @@ import {
   termsEnforcementFrom,
   termsGateWhere,
 } from '../../src/modules/legal/caregiver-terms.service';
-import { buildTermsNotification, enviarRecordatoriosTerminos } from '../../src/jobs/terms-renewal.job';
+import {
+  buildTermsNotification,
+  enviarRecordatoriosTerminos,
+  esHoraDeAvisar,
+  iniciarJobRenovacionTerminos,
+} from '../../src/jobs/terms-renewal.job';
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Una fecha lo bastante posterior a la vigencia (60 días + gracia + margen) como para que toda aceptación simulada
@@ -245,6 +253,52 @@ describe('excepción para las cuentas de prueba de las tiendas (reviewer.*)', ()
     expect(sent).toBe(1);
     expect(mockNotificationCreate).toHaveBeenCalledTimes(1);
     expect(mockNotificationCreate.mock.calls[0]![0].data.userId).toBe('u-x');
+  });
+});
+
+
+describe('el job de avisos no depende de que el servidor esté despierto justo a la hora del cron', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    mockProfileFindMany.mockResolvedValue([]);
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('esHoraDeAvisar: de 08:00 a 21:00 hora de Bolivia (UTC-4), nunca de madrugada', () => {
+    expect(esHoraDeAvisar(new Date('2026-10-10T12:00:00Z'))).toBe(true); // 08:00 BO
+    expect(esHoraDeAvisar(new Date('2026-10-10T20:59:00Z'))).toBe(true); // 16:59 BO
+    expect(esHoraDeAvisar(new Date('2026-10-11T00:59:00Z'))).toBe(true); // 20:59 BO
+    expect(esHoraDeAvisar(new Date('2026-10-11T01:00:00Z'))).toBe(false); // 21:00 BO
+    expect(esHoraDeAvisar(new Date('2026-10-10T05:00:00Z'))).toBe(false); // 01:00 BO
+    expect(esHoraDeAvisar(new Date('2026-10-10T11:59:00Z'))).toBe(false); // 07:59 BO
+  });
+
+  it('programa el cron diario a las 09:30 de Bolivia (13:30 UTC)', () => {
+    iniciarJobRenovacionTerminos();
+    expect(mockCronSchedule).toHaveBeenCalledWith('30 13 * * *', expect.any(Function));
+  });
+
+  it('además hace un repaso tras arrancar (si es de día) para cubrir un cron que no disparó', async () => {
+    jest.setSystemTime(new Date('2026-10-10T15:00:00Z')); // 11:00 BO
+    iniciarJobRenovacionTerminos();
+    expect(mockProfileFindMany).not.toHaveBeenCalled(); // espera a que la API caliente
+    await jest.advanceTimersByTimeAsync(91_000);
+    expect(mockProfileFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('el repaso de arranque no manda nada de noche', async () => {
+    jest.setSystemTime(new Date('2026-10-10T05:00:00Z')); // 01:00 BO
+    iniciarJobRenovacionTerminos();
+    await jest.advanceTimersByTimeAsync(91_000);
+    expect(mockProfileFindMany).not.toHaveBeenCalled();
+  });
+
+  it('un fallo del repaso de arranque no tumba el servidor', async () => {
+    jest.setSystemTime(new Date('2026-10-10T15:00:00Z'));
+    mockProfileFindMany.mockRejectedValue(new Error('db caída'));
+    iniciarJobRenovacionTerminos();
+    await expect(jest.advanceTimersByTimeAsync(91_000)).resolves.not.toThrow();
   });
 });
 

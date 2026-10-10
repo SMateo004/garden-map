@@ -1,5 +1,5 @@
 /**
- * Job diario: recuerda a los cuidadores que deben volver a aceptar los Términos (cada 2 meses o por
+ * Job diario (09:30 Bolivia y un repaso tras cada arranque): recuerda a los cuidadores que deben volver a aceptar los Términos (cada 2 meses o por
  * versión nueva) — HAYAN o no prestado servicios. Ver caregiver-terms.service.ts.
  *
  * Recorre todos los cuidadores aprobados y no suspendidos. Si falta poco para el vencimiento
@@ -16,11 +16,34 @@ import { computeTermsStatus, isTermsExemptEmail } from '../modules/legal/caregiv
 const NOTIFICATION_TYPE = 'TERMS_RENEWAL';
 const REPEAT_EVERY_DAYS = 3;
 
+/** Tras arrancar, se espera un poco para que la API termine de calentar antes del repaso. */
+const STARTUP_DELAY_MS = 90_000;
+/** Bolivia = UTC-4 todo el año. Los avisos solo salen de día para no despertar a nadie con un push. */
+const BOLIVIA_UTC_OFFSET_H = -4;
+const NOTIFY_FROM_HOUR = 8;
+const NOTIFY_UNTIL_HOUR = 21;
+
+export function esHoraDeAvisar(now: Date = new Date()): boolean {
+  const hour = (now.getUTCHours() + BOLIVIA_UTC_OFFSET_H + 24) % 24;
+  return hour >= NOTIFY_FROM_HOUR && hour < NOTIFY_UNTIL_HOUR;
+}
+
 export function iniciarJobRenovacionTerminos() {
-  cron.schedule('30 10 * * *', async () => {
+  // 13:30 UTC = 09:30 en Bolivia.
+  cron.schedule('30 13 * * *', async () => {
     await enviarRecordatoriosTerminos();
   });
-  logger.info('[TERMS-RENEWAL JOB] Recordatorio diario de renovación de Términos activo.');
+
+  // El cron solo dispara si el servidor está despierto justo a esa hora: con un plan que se duerme por
+  // inactividad (o con un reinicio por cada despliegue) puede no ocurrir nunca. Este repaso al arrancar lo
+  // cubre. Es seguro repetirlo: no vuelve a avisar dentro de REPEAT_EVERY_DAYS ni de noche.
+  const startup = setTimeout(() => {
+    if (!esHoraDeAvisar()) return;
+    enviarRecordatoriosTerminos().catch((err) => logger.error('[TERMS-RENEWAL JOB] repaso de arranque falló', { err }));
+  }, STARTUP_DELAY_MS);
+  startup.unref?.();
+
+  logger.info('[TERMS-RENEWAL JOB] Recordatorio de renovación de Términos activo (diario 09:30 Bolivia + repaso al arrancar).');
 }
 
 export function buildTermsNotification(status: ReturnType<typeof computeTermsStatus>): { title: string; message: string } | null {
