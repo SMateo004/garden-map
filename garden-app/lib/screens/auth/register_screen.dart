@@ -1077,7 +1077,10 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
   bool _loading = false;
 
   Future<void> _handle() async {
+    if (_loading) return; // un segundo toque no abre otra ventana de Google
     setState(() => _loading = true);
+    // El servidor se va despertando mientras la persona elige su cuenta de Google.
+    SocialAuthService.warmUpBackend();
     try {
       final data = await SocialAuthService.signInWithGoogle();
       if (data == null) {

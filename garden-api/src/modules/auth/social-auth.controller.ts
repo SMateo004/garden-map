@@ -4,8 +4,41 @@ import bcrypt from 'bcrypt';
 import prisma from '../../config/database.js';
 import { signAccessToken, createRefreshToken, assertBetaAccess } from './auth.service.js';
 import { getBoolSetting } from '../../utils/settings-cache.js';
-import { NotFoundError, BadRequestError } from '../../shared/errors.js';
+import { NotFoundError, BadRequestError, UnauthorizedError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+
+function firebaseCredentials(): { projectId: string; privateKey: string; clientEmail: string } | null {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  if (!projectId || !privateKey || !clientEmail) return null;
+  return { projectId, privateKey, clientEmail };
+}
+
+/** Carga e inicializa firebase-admin (una sola vez por proceso). */
+async function getFirebaseAdmin() {
+  const creds = firebaseCredentials();
+  if (!creds) throw new BadRequestError('Firebase no configurado en el servidor');
+  const { default: admin } = await import('firebase-admin');
+  if (!admin.apps.length) {
+    admin.initializeApp({ credential: admin.credential.cert(creds as any) });
+  }
+  return admin;
+}
+
+/**
+ * Precalienta firebase-admin al arrancar el servidor. Sin esto, el PRIMER inicio de sesión con Google después de
+ * cada arranque pagaba la carga del módulo (~2 s) mientras el usuario miraba un spinner. Nunca lanza.
+ */
+export async function warmupFirebaseAdmin(): Promise<void> {
+  try {
+    if (!firebaseCredentials()) return;
+    await getFirebaseAdmin();
+    logger.info('[SocialAuth] firebase-admin precalentado');
+  } catch (err) {
+    logger.warn('[SocialAuth] no se pudo precalentar firebase-admin', { err: err instanceof Error ? err.message : String(err) });
+  }
+}
 
 /** Verifica un Firebase ID token usando firebase-admin y devuelve los claims del usuario. */
 async function verifyFirebaseToken(idToken: string): Promise<{
@@ -15,22 +48,17 @@ async function verifyFirebaseToken(idToken: string): Promise<{
   picture?: string;
   email_verified?: boolean;
 }> {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const admin = await getFirebaseAdmin();
 
-  if (!projectId || !privateKey || !clientEmail) {
-    throw new BadRequestError('Firebase no configurado en el servidor');
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(idToken);
+  } catch (err) {
+    // Token vencido, mal formado o de otro proyecto: es un problema de la sesión de Google, no del servidor.
+    // Antes salía como 500 (y llenaba Sentry); ahora el cliente recibe un 401 con un mensaje que puede mostrar.
+    logger.info('[SocialAuth] idToken inválido', { err: err instanceof Error ? err.message : String(err) });
+    throw new UnauthorizedError('Tu sesión de Google no es válida o expiró. Intenta de nuevo.', 'INVALID_SOCIAL_TOKEN');
   }
-
-  const { default: admin } = await import('firebase-admin');
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({ projectId, privateKey, clientEmail } as any),
-    });
-  }
-
-  const decoded = await admin.auth().verifyIdToken(idToken);
   return {
     uid: decoded.uid,
     email: decoded.email,

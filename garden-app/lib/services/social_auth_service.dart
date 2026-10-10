@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -72,30 +73,74 @@ class SocialAuthService {
       'API_URL',
       defaultValue: 'https://api.gardenbo.com/api');
 
-  // ── Google ──────────────────────────────────────────────────────────────
+  // ── Red: límite de espera, reintento y precalentamiento ─────────────────────
+  // El servidor puede estar dormido (plan gratuito de Render) y tardar 20+ s en despertar. Antes el inicio
+  // de sesión social no tenía límite de espera ni reintento: el usuario veía un spinner sin fin o un error
+  // genérico, y al salir y volver a entrar la sesión ya estaba guardada.
 
-  /// Lee el resultado pendiente de un signInWithRedirect de Google (si lo hubo).
-  /// Devuelve null si no hay resultado pendiente.
-  static Future<SocialUserData?> getGoogleRedirectResult() async {
+  @visibleForTesting
+  static http.Client client = http.Client();
+
+  /// Espera máxima por intento.
+  @visibleForTesting
+  static Duration requestTimeout = const Duration(seconds: 25);
+
+  /// Pausa entre el intento fallido y el reintento.
+  @visibleForTesting
+  static Duration retryDelay = const Duration(milliseconds: 600);
+
+  static const _attempts = 2;
+  static DateTime? _lastWarmUp;
+
+  /// Despierta el servidor en segundo plano. Se llama al abrir el login y al tocar "Continuar con Google", así
+  /// mientras la persona elige su cuenta el servidor ya está arrancando. Nunca lanza ni bloquea.
+  static void warmUpBackend() {
+    final last = _lastWarmUp;
+    if (last != null && DateTime.now().difference(last) < const Duration(minutes: 2)) return;
+    _lastWarmUp = DateTime.now();
+    final api = Uri.parse(_baseUrl);
+    final health = api.replace(path: '/health', query: '');
+    unawaited(client.get(health).timeout(const Duration(seconds: 40)).then((_) {}).catchError((_) {}));
+  }
+
+  @visibleForTesting
+  static void resetWarmUpForTest() => _lastWarmUp = null;
+
+  /// POST JSON con límite de espera y un reintento ante timeout, error de red o 502/503/504 (servidor despertando).
+  /// Devuelve la respuesta, o null si se agotaron los intentos.
+  static Future<http.Response?> _postJson(String path, Map<String, dynamic> body) async {
+    for (var attempt = 1; attempt <= _attempts; attempt++) {
+      try {
+        final res = await client
+            .post(
+              Uri.parse('$_baseUrl$path'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(body),
+            )
+            .timeout(requestTimeout);
+        final waking = res.statusCode == 502 || res.statusCode == 503 || res.statusCode == 504;
+        if (!waking || attempt == _attempts) return waking ? null : res;
+      } catch (e) {
+        debugPrint('[SocialAuth] intento $attempt falló: $e');
+        if (attempt == _attempts) return null;
+      }
+      await Future<void>.delayed(retryDelay);
+    }
+    return null;
+  }
+
+  static const _slowServerMessage = 'El servidor está tardando en responder. Intenta de nuevo en unos segundos.';
+
+  static Map<String, dynamic>? _decode(http.Response res) {
     try {
-      final result = await FirebaseAuth.instance.getRedirectResult();
-      final user = result.user;
-      if (user == null) return null;
-      final idToken = await user.getIdToken();
-      final parts = (user.displayName ?? '').split(' ');
-      return SocialUserData(
-        idToken: idToken,
-        email: user.email ?? '',
-        firstName: parts.isNotEmpty ? parts.first : '',
-        lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
-        photoUrl: user.photoURL,
-        provider: SocialProvider.google,
-      );
-    } catch (e) {
-      debugPrint('[SocialAuth] getRedirectResult error: $e');
+      final d = jsonDecode(res.body);
+      return d is Map<String, dynamic> ? d : null;
+    } catch (_) {
       return null;
     }
   }
+
+  // ── Google ──────────────────────────────────────────────────────────────
 
   static Future<SocialUserData?> signInWithGoogle() async {
     try {
@@ -222,36 +267,39 @@ class SocialAuthService {
           success: false, userExists: false, error: 'Token vacío');
     }
 
+    final res = await _postJson('/auth/social/login', {
+      'provider': data.provider.name, // 'google' | 'apple'
+      'idToken': data.idToken,
+    });
+    if (res == null) {
+      return const SocialLoginResult(success: false, userExists: false, error: _slowServerMessage);
+    }
+
+    final body = _decode(res);
+    if (body == null) {
+      return const SocialLoginResult(
+          success: false, userExists: false, error: 'El servidor respondió algo inesperado. Intenta de nuevo.');
+    }
+
     try {
-      final providerName = data.provider.name; // 'google' | 'apple'
-      final res = await http.post(
-        Uri.parse('$_baseUrl/auth/social/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'provider': providerName,
-          'idToken': data.idToken,
-        }),
-      );
-
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-
       if (res.statusCode == 200 && body['success'] == true) {
-        return _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: false);
+        return await _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: false);
       }
 
       if (res.statusCode == 404) {
         // Cuenta no existe → crearla automáticamente como CLIENT (pre-registro)
-        return _registerClientWithBackend(data);
+        return await _registerClientWithBackend(data);
       }
 
       return SocialLoginResult(
         success: false,
         userExists: false,
-        error: body['error']?['message'] as String? ?? 'Error al iniciar sesión',
+        error: (body['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'Error al iniciar sesión',
       );
     } catch (e) {
+      debugPrint('[SocialAuth] error guardando la sesión: $e');
       return const SocialLoginResult(
-          success: false, userExists: false, error: 'Error de conexión');
+          success: false, userExists: false, error: 'No pudimos guardar tu sesión. Intenta de nuevo.');
     }
   }
 
@@ -260,31 +308,29 @@ class SocialAuthService {
   /// teléfono ni fecha de nacimiento. Llamado solo desde [loginWithBackend]
   /// cuando el email no tiene cuenta existente.
   static Future<SocialLoginResult> _registerClientWithBackend(SocialUserData data) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$_baseUrl/auth/social/register-client'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'provider': data.provider.name,
-          'idToken': data.idToken,
-        }),
-      );
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-
-      if (res.statusCode == 201 && body['success'] == true) {
-        return _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: true);
-      }
-
-      return SocialLoginResult(
-        success: false,
-        userExists: false,
-        error: (body['error'] as Map<String, dynamic>?)?['message'] as String? ??
-            'No se pudo crear tu cuenta. Intenta de nuevo.',
-      );
-    } catch (e) {
-      return const SocialLoginResult(
-          success: false, userExists: false, error: 'Error de conexión');
+    final res = await _postJson('/auth/social/register-client', {
+      'provider': data.provider.name,
+      'idToken': data.idToken,
+    });
+    if (res == null) {
+      return const SocialLoginResult(success: false, userExists: false, error: _slowServerMessage);
     }
+    final body = _decode(res);
+    if (body == null) {
+      return const SocialLoginResult(
+          success: false, userExists: false, error: 'El servidor respondió algo inesperado. Intenta de nuevo.');
+    }
+
+    if (res.statusCode == 201 && body['success'] == true) {
+      return _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: true);
+    }
+
+    return SocialLoginResult(
+      success: false,
+      userExists: false,
+      error: (body['error'] as Map<String, dynamic>?)?['message'] as String? ??
+          'No se pudo crear tu cuenta. Intenta de nuevo.',
+    );
   }
 
   /// Guarda tokens + datos de usuario (común a login y registro social).

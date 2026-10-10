@@ -249,6 +249,8 @@ async function start() {
 
   // Log storage status on startup
   import('./services/storage.service.js').then(m => m.logStorageStatus()).catch(() => {});
+  // El primer inicio de sesión con Google no debe pagar la carga de firebase-admin.
+  import('./modules/auth/social-auth.controller.js').then(m => m.warmupFirebaseAdmin()).catch(() => {});
 
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
