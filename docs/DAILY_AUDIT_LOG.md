@@ -2676,3 +2676,148 @@ el foco de esta corrida fue un área distinta; se listan abajo solo como recorda
 - Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
   recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
   si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+
+---
+
+## 2026-10-10 — Feature nueva de "funciones de negocio" (equipo/recepción/asignación de
+## reservas), nunca auditada — 2 hallazgos de alto riesgo, sin fix de bajo riesgo hoy
+
+**Commit de referencia al iniciar la auditoría:** `fade646` (fix: login y registro claros también
+en sus campos, e icono propio para "Ordenar"). `git log` mostró 11 commits nuevos desde la
+referencia de la corrida anterior (`3b357e3`/`f50a91c`, 2026-10-09) sin pasar por esta auditoría:
+switcher de modo, "Mi perfil" sin "(modo temporal)", código de equipo desde "Hazte cuidador", avisos
+de renovación de Términos sin depender del cron, **funciones de negocio + equipo/recepción
+completos** (`1f73564`, la más grande: 22 archivos de `garden-api` + 5 de `garden-app`, con 4
+migraciones de Prisma), test de notificaciones, "escribiendo…" en el chat, favoritos/veterinarias/
+paseos fijos/centro de ayuda, filtros del marketplace, y login con Google.
+
+**Nota operativa:** el checkout inicial estaba en `HEAD` detached en `fade646` (igual que
+`origin/main`, sin pérdida de datos), mientras la rama local `main` resultó ser una referencia
+vieja y **sin ancestro común** con `origin/main` (`git merge-base main origin/main` sin resultado) —
+no un simple atraso como en corridas anteriores, sino una rama local completamente distinta. No se
+tocó esa rama local (ni reset ni borrado); se hizo todo el trabajo en `HEAD` detached en el commit
+de `origin/main`, y si hace falta pushear hoy se usaría `git push origin HEAD:main` en vez de
+depender de la rama local `main`. Se deja constancia para que una corrida futura no pierda tiempo
+con esto — convendría en algún momento limpiar esa rama local obsoleta desde una sesión interactiva.
+
+**Área auditada:** el commit `1f73564` ("funciones de negocio habilitadas por el admin y
+equipo/recepción completos") — la empresa/cuidador ahora puede tener empleados con permisos
+(`canManageBookings`, `canChat`), recepción para clientes de mostrador (`WalkInReservation`/
+`WalkInVisit`) que comparte el mismo cupo combinado Hospedaje+Guardería que el marketplace
+(`walk-in-capacity.ts`, nuevo), asignación de reservas a un empleado (`Booking.assignedStaffMemberId`),
+y el fix de que "Rechazar" del cuidador fallaba siempre con 400. Se eligió por ser, de lejos, el
+cambio más grande y más reciente sin auditar (hecho horas antes de esta corrida), toca autorización
+(un empleado actuando "como" el dueño vía `actAsOwner`) y toca de pasada capacidad/disponibilidad de
+reservas — exactamente las categorías (a)/(c) que pide CLAUDE.md. Se delegó una exploración de solo
+lectura a un subagente (schema, middlewares nuevos, rutas de staff/CRM, `walk-in-capacity.ts`,
+`caregiver-staff.service.ts`, job de expiración de aceptación) y cada hallazgo se re-verificó
+leyendo el código fuente real antes de clasificar riesgo — incluida una carrera que ya había
+encontrado por mi cuenta en paralelo, antes del reporte del subagente, y que el subagente confirmó
+de forma independiente con más detalle.
+
+**Autorización — revisado a fondo, sin hallazgos:** `requireStaffMembership` resuelve la membresía
+con una consulta fresca a la base en cada request (nunca cacheada en el JWT — si el dueño saca a un
+empleado, el corte es inmediato, no cuando expire el token). `requireStaffPermission('canManageBookings'
+|'canChat')` se exige en las rutas correctas (`/caregiver-staff/bookings/:id/accept|reject`,
+`chat.routes.ts`) además de `requireBusinessFeature`, y `actAsOwner` solo sustituye el `userId` DESPUÉS
+de confirmar la membresía — los handlers reusados (`booking.service.ts`) siguen resolviendo todo
+contra `caregiverId: profile.id` del dueño, así que un empleado no puede tocar reservas de otra
+empresa. `assignBooking` y el chat verifican explícitamente que la reserva pertenezca al mismo
+`caregiverProfileId`. El override de cupo lleno (`force`) solo lo puede pasar el dueño
+(`isOwner` se deriva del lado servidor de `req.staffContext`, nunca de un valor que mande el cliente).
+El fix del 400 en "Rechazar" (ahora `reason`/`reasonCode` opcionales en el schema) no abrió ningún
+hueco: el `updateMany` atómico contra `WAITING_CAREGIVER_APPROVAL` sigue intacto.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): la ventana de aceptación de 3h NO se
+extiende para empresas con equipo, al revés de lo que promete el propio mensaje del commit
+
+**Dónde:** `garden-api/src/jobs/caregiver-accept-expiry.job.ts` (archivo completo, no tocado por el
+commit `1f73564` — confirmado con `git show 1f73564 --name-status`).
+
+**Qué pasa:** el commit dice "la ventana de 3 h ya no vence si el dueño no mira" cuando hay un
+empleado con permiso, pero lo único que de verdad se agregó es una notificación push al empleado
+permitido (`notification.service.ts:331`, `notifyStaffWithPermission(..., 'canManageBookings', ...)`,
+disparada desde `onBookingWaitingApproval`). El job en sí (línea 29-62, corre cada 10 min) sigue
+leyendo únicamente `status: WAITING_CAREGIVER_APPROVAL` + `updatedAt < cutoff` (cutoff =
+`caregiverAcceptWindowHoras`, default 3h) sin ninguna noción de equipo/`STAFF_BOOKING_DECISIONS`/
+`canManageBookings` — y cuando expira, **reembolsa el 100% de inmediato a la billetera del cliente**
+(líneas 71-107: `updateMany` guardado + `tx.user.update({balance:{increment}})` + `WalletTransaction`,
+correcto en cuanto a atomicidad, el bug no es de carrera sino de que dispara cuando no debería). Un
+negocio con empleados activos trabajando la reserva igual la pierde (con reembolso automático) a las
+3h en punto si ni el dueño ni el empleado la aceptaron todavía — la promesa del commit de que el
+equipo "gana tiempo" en la práctica no gana nada, solo se entera antes de que pasa lo mismo de
+siempre.
+
+**Por qué no se aplicó:** el fix toca directamente el único job que ejecuta reembolsos automáticos
+de dinero real, y requiere antes una decisión de producto (¿la ventana debe extenderse indefinidamente
+mientras exista un empleado con permiso? ¿hasta un segundo límite fijo? ¿debe bastar con que la
+empresa tenga la función activa, o con que haya al menos un empleado con `canManageBookings` en ese
+momento?) — cae de lleno en la categoría de alto riesgo (dinero/reembolsos) de esta auditoría.
+**Propuesta de fix (no aplicada):** en `procesarAceptacionesExpiradas`, antes de expirar una reserva,
+resolver si el cuidador tiene `STAFF_BOOKING_DECISIONS` activo y al menos un `StaffMember` activo con
+`canManageBookings=true`; si es así, aplicar una ventana más larga (o no expirar y en su lugar avisar
+a admin) en vez del cutoff fijo de 3h.
+
+### Hallazgo 2 (ALTO RIESGO — no aplicado, solo reportado): el cupo combinado recepción+marketplace
+no es atómico entre los dos caminos — puede sobrevender el cupo de hospedaje/guardería
+
+**Dónde:**
+- `garden-api/src/modules/caregiver-crm/caregiver-crm.service.ts` (`checkInWalkInPet` línea ~244,
+  `createWalkInReservation` línea ~389): ambas llaman `lockProfile(tx, profile.id)` ANTES de leer
+  `combinedOccupancyByDay` e insertar — `lockProfile` = `SELECT id FROM "caregiver_profiles" WHERE
+  id = $1 FOR UPDATE` (mismo patrón ya exigido en todo el proyecto).
+- `garden-api/src/modules/booking-service/booking.service.ts` (`assertHospedajeAvailability`/
+  `assertPaseoAvailability`, usadas por `createBooking` del marketplace): llaman a la MISMA
+  `combinedOccupancyByDay`/`firstFullDay` (`walk-in-capacity.ts`, nuevo en este commit, ahora suma
+  mascotas de recepción + marketplace) pero **nunca** bloquean la fila de `caregiver_profiles` —
+  confirmado con grep, los únicos `FOR UPDATE` de todo el archivo son sobre `bookings`/`users`, nunca
+  sobre `caregiver_profiles`. No hay `isolationLevel: 'Serializable'` en ninguna de las dos
+  transacciones que compense la falta de lock.
+
+**Qué pasa:** bajo Postgres Read Committed, una lectura simple (sin `FOR UPDATE`) no espera a que
+otra transacción con un lock de fila distinto confirme — solo lo bloquearía otro intento de tomar el
+MISMO lock. Entonces: un cliente manda una reserva de Hospedaje por el marketplace justo cuando
+recepción hace un check-in o crea una reserva de mostrador para el último cupo disponible — ambas
+transacciones leen la ocupación combinada al mismo tiempo (ninguna ve el insert todavía no
+confirmado de la otra), las dos pasan el chequeo de cupo, las dos confirman → el cuidador termina
+con una mascota más de las que `maxPets` permite. Es exactamente la misma clase de bug de
+sobreventa/condición de carrera que esta auditoría ya encontró y arregló varias veces en reservas y
+retiros (falta de `SELECT ... FOR UPDATE` simétrico entre dos caminos que compiten por el mismo
+recurso) — acá es nuevo porque el commit de hoy es el que por primera vez hace que recepción y
+marketplace compitan por el mismo cupo; antes de este commit cada uno solo competía consigo mismo.
+
+**Por qué no se aplicó:** el fix implica tocar la transacción de creación de CUALQUIER reserva del
+marketplace (`createBooking`, el camino de pago más usado de la app) para agregar un lock de fila
+sobre `caregiver_profiles` — es acotado en concepto (mismo patrón que `lockProfile` ya usa el lado
+de recepción) pero de alto impacto si algo sale mal (bloqueo exagerado o deadlock en el flujo de
+reservas en producción, sin entorno de staging para probarlo bajo carga real). Se deja para que el
+dueño del proyecto decida el momento y lo revise antes de aplicar.
+**Propuesta de fix (no aplicada):** en `assertHospedajeAvailability`/`assertPaseoAvailability` (o
+justo antes de llamarlas, dentro de la misma `tx` de `createBooking`), agregar
+`SELECT id FROM "caregiver_profiles" WHERE id = ${caregiverId} FOR UPDATE` antes de
+`combinedOccupancyByDay` — mismo lock que ya usa `lockProfile` en `caregiver-crm.service.ts`, para
+que ambos caminos se serialicen sobre la misma fila.
+
+### Sin hallazgos en el resto del commit
+Autorización (ver arriba), dinero (el modelo de `WalkInReservation` no tiene campos de monto ni
+toca `totalAmount`/`balance`, confirmado en el schema), y coherencia de mensajes `FEATURE_DISABLED`
+(enforced en el middleware, no solo ocultado en la UI) — sin hallazgos. No se revisó a fondo el lado
+Flutter de las 5 pantallas nuevas/tocadas (`admin_business_features_card.dart`,
+`staff_assign_bookings_screen.dart`, `walkin_reservations_screen.dart`, `reception_screen.dart`,
+`staff_home_screen.dart`) más allá de confirmar que `BusinessFeatures` (Flutter) usa las mismas 4
+claves que `business-features.service.ts` (backend) — queda como posible foco de una corrida futura.
+
+### Sin cambios aplicados hoy
+Ambos hallazgos son de alto riesgo (dinero / cambio de alto impacto en el flujo de reservas más
+usado de la app) — no se tocó código. Solo se actualiza este log. No aplica `tsc`/tests porque no
+hubo cambios de código.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó;
+  el ejemplo numérico (Bs. 100 → 110 → +18 % → 128) sigue repetido tal cual en `legal_screen.dart`.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
