@@ -22,6 +22,7 @@ import 'design/garden_service.dart';
 import 'design/garden_service_clock.dart';
 import 'design/garden_settings.dart';
 import 'design/garden_status_pill.dart';
+import 'design/garden_theme_prompt.dart';
 import 'narrative/booking_story.dart';
 import 'narrative/chat_event.dart';
 import 'screens/client/pet_form_sheet.dart';
@@ -436,6 +437,18 @@ class _CatalogPageState extends State<_CatalogPage> {
                 ]),
               ]),
             ),
+          ]),
+          _Section('Apariencia de la primera vez (teléfono en modo oscuro)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: GardenButton(
+                label: 'Ver la pregunta',
+                gIcon: GIcon.modoOscuro,
+                outline: true,
+                onPressed: () => GardenThemePrompt.show(context),
+              ),
+            ),
+            _Note('Se muestra una sola vez, al abrir la app por primera vez con el teléfono en modo oscuro.', fg),
           ]),
           _Section('Calificaciones (por calificar y reseña)', [
             ConstrainedBox(

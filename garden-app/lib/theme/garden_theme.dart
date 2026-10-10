@@ -1234,7 +1234,14 @@ class GardenButton extends StatelessWidget {
               ? GardenIcon(gIcon!, color: textColor, size: GIconSize.md)
               : Icon(icon, color: textColor, size: 18),
           const SizedBox(width: 8),
-          Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10)),
+          // Flexible + elipsis: en un teléfono angosto o con letra grande
+          // (accesibilidad) la etiqueta se recorta en vez de desbordar el botón.
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10)),
+          ),
         ],
       );
     }
@@ -1442,9 +1449,14 @@ enum GardenThemeMode {
 
 class ThemeNotifier extends ChangeNotifier {
   static const String _prefKey = 'garden_theme_mode';
+  /// La pregunta "¿claro u oscuro?" de la primera vez ya se resolvió (se
+  /// mostró, o la primera apertura no fue en modo oscuro y no hacía falta).
+  static const String _promptKey = 'garden_theme_prompt_done';
 
   GardenThemeMode _mode = GardenThemeMode.system;
   bool _isDark = false;
+  // true hasta leer las prefs: nunca preguntar antes de saber si ya se hizo.
+  bool _promptDone = true;
 
   ThemeNotifier() {
     // Escucha los cambios de brillo del sistema operativo en tiempo real
@@ -1457,6 +1469,13 @@ class ThemeNotifier extends ChangeNotifier {
     if (_mode == GardenThemeMode.system) _updateDark();
   }
 
+  /// Solo para tests: simula el brillo del sistema (null = el real).
+  @visibleForTesting
+  static Brightness? debugSystemBrightness;
+
+  bool get _systemIsDark =>
+      (debugSystemBrightness ?? PlatformDispatcher.instance.platformBrightness) == Brightness.dark;
+
   bool _computeIsDark() {
     switch (_mode) {
       case GardenThemeMode.dark:
@@ -1464,7 +1483,7 @@ class ThemeNotifier extends ChangeNotifier {
       case GardenThemeMode.light:
         return false;
       case GardenThemeMode.system:
-        return PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+        return _systemIsDark;
     }
   }
 
@@ -1490,7 +1509,31 @@ class ThemeNotifier extends ChangeNotifier {
         orElse: () => GardenThemeMode.system,
       );
     }
+    _promptDone = prefs.getBool(_promptKey) ?? false;
+    // Solo cuenta la PRIMERA apertura: si no fue en modo oscuro (o ya había
+    // una apariencia elegida), se marca como resuelta y no se pregunta nunca,
+    // aunque después el teléfono pase a modo oscuro.
+    if (!_promptDone && !shouldAskOnFirstLaunch) {
+      _promptDone = true;
+      await prefs.setBool(_promptKey, true);
+    }
     _updateDark();
+  }
+
+  /// ¿Mostrar la pregunta de la primera vez ([GardenThemePrompt])? Solo si
+  /// nunca se resolvió, no hay apariencia elegida y el teléfono está oscuro.
+  bool get shouldAskOnFirstLaunch =>
+      !_promptDone &&
+      _mode == GardenThemeMode.system &&
+      _systemIsDark;
+
+  /// Guarda la respuesta de la pregunta de la primera vez como la apariencia
+  /// elegida y la marca como resuelta para no volver a preguntar.
+  Future<void> answerFirstLaunchPrompt(GardenThemeMode mode) async {
+    _promptDone = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_promptKey, true);
+    await setMode(mode);
   }
 
   // ── Cambiar modo ──────────────────────────────────────────────────────────

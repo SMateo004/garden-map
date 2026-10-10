@@ -83,6 +83,7 @@ import 'utils/web_redirect.dart';
 import 'package:http/http.dart' as http;
 import './widgets/garden_loading_indicator.dart';
 import 'design/garden_icons.dart';
+import 'design/garden_theme_prompt.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -926,6 +927,25 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     // necesite tiempo real.
     _refreshNextBookingWidget();
     _refreshMonthlyStatsWidget();
+    // Primera apertura con el teléfono en modo oscuro: preguntar una sola vez
+    // si se prefiere claro u oscuro (themeNotifier.init ya cargó las prefs).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askThemeOnFirstLaunch());
+  }
+
+  Future<void> _askThemeOnFirstLaunch({int attempt = 0}) async {
+    if (!mounted || !themeNotifier.shouldAskOnFirstLaunch) return;
+    // Igual que los demás diálogos globales: el contexto de DENTRO del router.
+    // En el primer frame puede no existir todavía — se reintenta un poco.
+    final dialogContext = _router.routerDelegate.navigatorKey.currentContext;
+    if (dialogContext == null) {
+      if (attempt < 20) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        return _askThemeOnFirstLaunch(attempt: attempt + 1);
+      }
+      return;
+    }
+    final choice = await GardenThemePrompt.show(dialogContext);
+    if (choice != null) await themeNotifier.answerFirstLaunchPrompt(choice);
   }
 
   @override
