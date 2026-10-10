@@ -40,7 +40,7 @@ import placesRoutes from './modules/places/places.routes.js';
 import vetsRoutes from './modules/vets/vets.routes.js';
 import appHealthRoutes from './modules/app-health/app-health.routes.js';
 import legalRoutes from './modules/legal/legal.routes.js';
-import { hideCommissionFromClients } from './middleware/hide-commission.middleware.js';
+import { hideCommissionFromClients, hideDonationFromCaregivers } from './middleware/hide-commission.middleware.js';
 import blockchainRoutes from './modules/blockchain/blockchain.routes.js';
 import { getPricingConfig } from './modules/pricing/pricing.service.js';
 
@@ -290,7 +290,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/caregivers', caregiverRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/bookings', hideCommissionFromClients, bookingRoutes);
+app.use('/api/bookings', hideCommissionFromClients, hideDonationFromCaregivers, bookingRoutes);
 app.use('/api/recurring-bookings', recurringBookingRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/payments', paymentRoutes);

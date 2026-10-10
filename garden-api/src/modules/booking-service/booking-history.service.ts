@@ -39,7 +39,10 @@ export interface BookingHistory {
     totalAmount: number;
     walletAmount: number;
     externalAmount: number;
+    /** Donación del dueño a un hogar de mascotas: el cuidador no la ve (llega en 0). */
     donationAmount: number;
+    /** Propina del dueño al cuidador tras el servicio (100 % del cuidador); la ven ambos. */
+    tipAmount: number;
     paidAt: string | null;
     approvedBySupport: boolean;
     reference: string | null;
@@ -192,7 +195,9 @@ export async function getBookingHistory(
     totalAmount: total,
     walletAmount: wallet,
     externalAmount: Math.max(0, total - wallet),
-    donationAmount: donation,
+    // La donación es del dueño: el cuidador no la ve (admin sí, para soporte).
+    donationAmount: viewerRole === 'CAREGIVER' ? 0 : donation,
+    tipAmount: Number(booking.tipAmount ?? 0),
     paidAt: iso(booking.paidAt),
     approvedBySupport,
     reference: rawRef ? String(rawRef).slice(-8) : null,

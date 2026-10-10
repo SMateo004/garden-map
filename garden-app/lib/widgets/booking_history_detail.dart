@@ -169,7 +169,8 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
     final status = pay['status'] as String;
     final wallet = (pay['walletAmount'] as num).toDouble();
     final external = (pay['externalAmount'] as num).toDouble();
-    final donation = (pay['donationAmount'] as num).toDouble();
+    final donation = (pay['donationAmount'] as num?)?.toDouble() ?? 0;
+    final tip = (pay['tipAmount'] as num?)?.toDouble() ?? 0;
     final refund = (pay['refundAmount'] as num?)?.toDouble();
     final ref = pay['reference'] as String?;
     final paidAt = pay['paidAt'] as String?;
@@ -227,6 +228,7 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
           if (method != 'PENDING' && wallet > 0) line('Con billetera', _bs(wallet)),
           if (method != 'PENDING' && external > 0.005) line(_externalLabel(method), _bs(external)),
           if (donation > 0) line('Donación', _bs(donation)),
+          if (tip > 0) line(isClient ? 'Propina' : 'Propina recibida', _bs(tip)),
           if (!isClient && pay['caregiverNetAmount'] != null) ...[
             line('Comisión Garden', _bs(pay['commissionAmount'] as num)),
             if ((pay['taxAmount'] as num) > 0) line('Impuestos', _bs(pay['taxAmount'] as num)),
