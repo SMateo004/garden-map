@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../services/taxes_state.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../design/garden_icons.dart';
 
 /// Pantalla genérica para documentos legales (Política + Términos).
 /// Se instancia con [title] y [sections] — cada sección tiene título y párrafo.
-class LegalScreen extends StatelessWidget {
+///
+/// El texto no cambia acá: esta pantalla solo lo hace legible. Índice para
+/// saltar a una sección, buscador (sin tildes) que deja solo las secciones que
+/// mencionan la palabra, viñetas y numerales con sangría, la etiqueta en
+/// mayúsculas de cada punto en negrita y un botón para volver arriba.
+class LegalScreen extends StatefulWidget {
   final String title;
   final String lastUpdated;
   final List<_LegalSection> sections;
@@ -19,58 +25,244 @@ class LegalScreen extends StatelessWidget {
   });
 
   @override
+  State<LegalScreen> createState() => _LegalScreenState();
+}
+
+class _LegalScreenState extends State<LegalScreen> {
+  final _scroll = ScrollController();
+  final _searchCtrl = TextEditingController();
+  late final List<GlobalKey> _keys = [for (final _ in widget.sections) GlobalKey()];
+  String _query = '';
+  bool _showIndex = false;
+  bool _showTop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      final show = _scroll.offset > 900;
+      if (show != _showTop) setState(() => _showTop = show);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  static String _norm(String s) {
+    const from = 'áéíóúüñ';
+    const to = 'aeiouun';
+    final out = StringBuffer();
+    for (final ch in s.toLowerCase().split('')) {
+      final i = from.indexOf(ch);
+      out.write(i >= 0 ? to[i] : ch);
+    }
+    return out.toString();
+  }
+
+  /// Minutos de lectura a ~200 palabras por minuto.
+  int get _minutes {
+    final words = widget.sections.fold<int>(
+        0, (n, s) => n + s.body.split(RegExp(r'\s+')).length + s.title.split(' ').length);
+    return (words / 200).ceil();
+  }
+
+  Future<void> _jumpTo(int i) async {
+    // Primero se pliega el índice; recién con el alto final se sabe dónde
+    // quedó la sección (si no, el salto cae miles de píxeles más arriba).
+    setState(() => _showIndex = false);
+    await Future.delayed(GardenMotion.resolve(context, GardenMotion.quick) + const Duration(milliseconds: 40));
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _keys[i].currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(ctx,
+          duration: GardenMotion.resolve(context, GardenMotion.standard),
+          curve: GardenMotion.move,
+          alignment: 0.02);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? GardenColors.background : const Color(0xFFF7F9F4);
-    final surface = isDark ? GardenColors.surface : Colors.white;
-    final text = isDark ? GardenColors.textPrimary : const Color(0xFF1A2E0A);
-    final subtext = isDark ? GardenColors.textSecondary : const Color(0xFF5A7040);
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtext = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final q = _norm(_query.trim());
+    final visible = <int>[
+      for (var i = 0; i < widget.sections.length; i++)
+        if (q.isEmpty ||
+            _norm(widget.sections[i].title).contains(q) ||
+            _norm(widget.sections[i].body).contains(q))
+          i,
+    ];
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: surface,
+        backgroundColor: bg,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text),
+          icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: text, semanticLabel: 'Volver'),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text(
-          title,
-          style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w700),
-        ),
+        title: Text(widget.title, style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Chip de última actualización
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: GardenColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Última actualización: $lastUpdated',
-              style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w500),
-              textAlign: TextAlign.center,
-            ),
+      floatingActionButton: _showTop
+          ? FloatingActionButton.small(
+              backgroundColor: surface,
+              elevation: 1,
+              tooltip: 'Volver arriba',
+              onPressed: () => _scroll.animateTo(0,
+                  duration: GardenMotion.resolve(context, GardenMotion.standard), curve: GardenMotion.move),
+              child: GardenIcon(GIcon.arriba, color: text, size: GIconSize.sm),
+            )
+          : null,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          // Todo construido de una vez (no ListView perezoso): así el índice
+          // puede saltar a cualquier sección aunque todavía no se haya visto.
+          child: SingleChildScrollView(
+            controller: _scroll,
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              // ── Encabezado ──
+              Text(
+                'Actualizado: ${widget.lastUpdated} · ${widget.sections.length} secciones · unos $_minutes min de lectura',
+                style: TextStyle(color: subtext, fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Buscador ──
+              TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _query = v),
+                textInputAction: TextInputAction.search,
+                style: TextStyle(color: text, fontSize: 14.5),
+                decoration: InputDecoration(
+                  hintText: 'Busca: cancelación, reembolso, datos…',
+                  hintStyle: TextStyle(color: subtext, fontSize: 14),
+                  filled: true,
+                  fillColor: surface,
+                  prefixIcon: Padding(padding: const EdgeInsets.all(12), child: GardenIcon(GIcon.buscar, color: subtext)),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: GardenIcon(GIcon.cerrar, color: subtext, semanticLabel: 'Borrar búsqueda'),
+                          onPressed: () => setState(() {
+                            _searchCtrl.clear();
+                            _query = '';
+                          }),
+                        ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(GardenRadius.full), borderSide: BorderSide(color: border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(GardenRadius.full),
+                      borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Índice (plegable) ──
+              if (q.isEmpty)
+                Container(
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(GardenRadius.lg),
+                    border: Border.all(color: border),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(GardenRadius.lg),
+                      onTap: () => setState(() => _showIndex = !_showIndex),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        child: Row(children: [
+                          GardenIcon(GIcon.lista, color: GardenColors.primary, size: GIconSize.sm),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text('Contenido',
+                                style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                          ),
+                          AnimatedRotation(
+                            turns: _showIndex ? 0.5 : 0,
+                            duration: GardenMotion.resolve(context, GardenMotion.quick),
+                            child: GardenIcon(GIcon.desplegar, color: subtext, size: GIconSize.sm),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: GardenMotion.resolve(context, GardenMotion.quick),
+                      curve: GardenMotion.move,
+                      alignment: Alignment.topCenter,
+                      child: !_showIndex
+                          ? const SizedBox(width: double.infinity)
+                          : Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                              child: Column(children: [
+                                for (var i = 0; i < widget.sections.length; i++)
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(GardenRadius.md),
+                                    onTap: () => _jumpTo(i),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                                      child: Row(children: [
+                                        Expanded(
+                                          child: Text(widget.sections[i].title,
+                                              style: TextStyle(color: text, fontSize: 13.5, height: 1.3)),
+                                        ),
+                                        GardenIcon(GIcon.siguiente, color: subtext, size: GIconSize.xs),
+                                      ]),
+                                    ),
+                                  ),
+                              ]),
+                            ),
+                    ),
+                  ]),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Text(
+                    visible.isEmpty
+                        ? 'Ninguna sección menciona "${_query.trim()}".'
+                        : visible.length == 1
+                            ? '1 sección menciona "${_query.trim()}"'
+                            : '${visible.length} secciones mencionan "${_query.trim()}"',
+                    style: TextStyle(color: subtext, fontSize: 12.5, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              const SizedBox(height: 26),
+
+              for (final i in visible)
+                _SectionWidget(
+                  key: _keys[i],
+                  section: widget.sections[i],
+                  textColor: text,
+                  subtextColor: subtext,
+                ),
+
+              const SizedBox(height: 16),
+              Text(
+                '© 2026 Garden Bolivia. Todos los derechos reservados.\nSanta Cruz de la Sierra, Bolivia.',
+                style: TextStyle(color: subtext, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ]),
           ),
-          const SizedBox(height: 24),
-
-          ...sections.map((s) => _SectionWidget(section: s, textColor: text, subtextColor: subtext, surface: surface)),
-
-          const SizedBox(height: 40),
-
-          // Footer
-          Text(
-            '© 2025 Garden Bolivia. Todos los derechos reservados.\nSanta Cruz de la Sierra, Bolivia.',
-            style: TextStyle(color: subtext, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }
@@ -80,40 +272,60 @@ class _SectionWidget extends StatelessWidget {
   final _LegalSection section;
   final Color textColor;
   final Color subtextColor;
-  final Color surface;
 
   const _SectionWidget({
+    super.key,
     required this.section,
     required this.textColor,
     required this.subtextColor,
-    required this.surface,
   });
+
+  /// "• CLIENTE / DUEÑO: …" o "1. RESPONSABILIDAD PRESUMIDA. …": la marca va
+  /// aparte (con sangría colgante) y la etiqueta en mayúsculas, en negrita.
+  static final _marker = RegExp(r'^(•|\d{1,2}\.|[a-z]\))\s+');
+  static final _label = RegExp(r'^([A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑ0-9 /&,()\-]{2,}[A-ZÁÉÍÓÚÑ)])([:.])\s');
+
+  List<InlineSpan> _spans(String p, TextStyle base) {
+    final m = _label.firstMatch(p);
+    if (m == null) return [TextSpan(text: p)];
+    return [
+      TextSpan(text: '${m.group(1)}${m.group(2)}', style: base.copyWith(color: textColor, fontWeight: FontWeight.w800)),
+      TextSpan(text: p.substring(m.group(1)!.length + 1)),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final base = TextStyle(color: subtextColor, fontSize: 14.5, height: 1.6);
+    final paragraphs = section.body.split('\n\n').where((p) => p.trim().isNotEmpty);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            section.title,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
+          Text(section.title,
+              style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800, height: 1.3)),
+          const SizedBox(height: 10),
+          for (final p in paragraphs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Builder(builder: (_) {
+                final m = _marker.firstMatch(p);
+                if (m == null) return Text.rich(TextSpan(style: base, children: _spans(p, base)));
+                final mark = m.group(1)!;
+                final rest = p.substring(m.end);
+                return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(
+                    width: 24,
+                    child: Text(mark,
+                        style: base.copyWith(
+                            color: mark == '•' ? GardenColors.primary : textColor, fontWeight: FontWeight.w800)),
+                  ),
+                  Expanded(child: Text.rich(TextSpan(style: base, children: _spans(rest, base)))),
+                ]);
+              }),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            section.body,
-            style: TextStyle(
-              color: subtextColor,
-              fontSize: 13.5,
-              height: 1.6,
-            ),
-          ),
         ],
       ),
     );
