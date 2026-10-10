@@ -40,6 +40,7 @@ void main() {
     testWidgets('muestra la descripción del modo actual y cambia al elegir otro', (tester) async {
       GardenMode? picked;
       await tester.pumpWidget(_host(GardenModeSwitcher(
+        initiallyExpanded: true,
         options: _options,
         current: GardenMode.staff,
         onSelect: (m) => picked = m,
@@ -54,6 +55,7 @@ void main() {
     testWidgets('tocar el modo actual no dispara nada', (tester) async {
       var calls = 0;
       await tester.pumpWidget(_host(GardenModeSwitcher(
+        initiallyExpanded: true,
         options: _options,
         current: GardenMode.independent,
         onSelect: (_) => calls++,
@@ -65,6 +67,7 @@ void main() {
     testWidgets('mientras cambia muestra el indicador e ignora más toques', (tester) async {
       var calls = 0;
       await tester.pumpWidget(_host(GardenModeSwitcher(
+        initiallyExpanded: true,
         options: _options,
         current: GardenMode.owner,
         switching: GardenMode.staff,
@@ -77,6 +80,7 @@ void main() {
 
     testWidgets('el fondo del selector se desliza a la opción elegida', (tester) async {
       Widget build(GardenMode current) => _host(GardenModeSwitcher(
+            initiallyExpanded: true,
             options: _options,
             current: current,
             bare: true,
@@ -98,11 +102,11 @@ void main() {
     testWidgets('con "reducir movimiento" el fondo salta directo', (tester) async {
       await tester.pumpWidget(MediaQuery(
         data: const MediaQueryData(disableAnimations: true),
-        child: _host(GardenModeSwitcher(options: _options, current: GardenMode.owner, bare: true, onSelect: (_) {})),
+        child: _host(GardenModeSwitcher(initiallyExpanded: true, options: _options, current: GardenMode.owner, bare: true, onSelect: (_) {})),
       ));
       await tester.pumpWidget(MediaQuery(
         data: const MediaQueryData(disableAnimations: true),
-        child: _host(GardenModeSwitcher(options: _options, current: GardenMode.staff, bare: true, onSelect: (_) {})),
+        child: _host(GardenModeSwitcher(initiallyExpanded: true, options: _options, current: GardenMode.staff, bare: true, onSelect: (_) {})),
       ));
       await tester.pump();
       expect(tester.widget<AnimatedPositioned>(find.byType(AnimatedPositioned)).left, closeTo(240, 0.5));
@@ -111,6 +115,7 @@ void main() {
     testWidgets('las acciones "agregar" aparecen y responden', (tester) async {
       var tapped = false;
       await tester.pumpWidget(_host(GardenModeSwitcher(
+        initiallyExpanded: true,
         options: _options.sublist(0, 2),
         current: GardenMode.owner,
         onSelect: (_) {},
@@ -118,6 +123,103 @@ void main() {
       )));
       await tester.tap(find.text('Unirme a un equipo'));
       expect(tapped, isTrue);
+    });
+  
+
+    group('plegado por defecto (barra delgada)', () {
+      Widget barra({GardenMode current = GardenMode.owner, ValueChanged<GardenMode>? onSelect, GardenMode? switching}) =>
+          _host(GardenModeSwitcher(
+            options: _options,
+            current: current,
+            switching: switching,
+            onSelect: onSelect ?? (_) {},
+            addActions: [GardenModeAddAction(label: 'Unirme a un equipo', onTap: () {})],
+            footer: const Text('Salir del equipo'),
+          ));
+
+      testWidgets('solo muestra en qué perfil estás: nada de opciones ni extras', (tester) async {
+        await tester.pumpWidget(barra());
+        expect(find.textContaining('Usando Garden como'), findsOneWidget);
+        expect(find.textContaining('Dueño'), findsOneWidget); // el nombre del perfil actual, no el selector
+        expect(find.text('Cuidador'), findsNothing);
+        expect(find.text('Equipo'), findsNothing);
+        expect(find.text('Descripción dueño'), findsNothing);
+        expect(find.text('Unirme a un equipo'), findsNothing);
+        expect(find.text('Salir del equipo'), findsNothing);
+      });
+
+      testWidgets('es delgada (no ocupa más que una fila)', (tester) async {
+        await tester.pumpWidget(barra());
+        expect(tester.getSize(find.byType(GardenModeSwitcher)).height, lessThanOrEqualTo(48));
+      });
+
+      testWidgets('tocar la barra despliega las opciones ahí mismo, sin ventanas emergentes', (tester) async {
+        await tester.pumpWidget(barra());
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pumpAndSettle();
+        expect(find.text('Cuidador'), findsOneWidget);
+        expect(find.text('Equipo'), findsOneWidget);
+        expect(find.text('Descripción dueño'), findsOneWidget);
+        expect(find.text('Unirme a un equipo'), findsOneWidget);
+        expect(find.text('Salir del equipo'), findsOneWidget);
+        expect(find.byType(Dialog), findsNothing);
+        expect(find.byType(BottomSheet), findsNothing);
+      });
+
+      testWidgets('tocarla otra vez la vuelve a plegar', (tester) async {
+        await tester.pumpWidget(barra());
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pumpAndSettle();
+        expect(find.text('Cuidador'), findsNothing);
+      });
+
+      testWidgets('deslizar hacia abajo despliega y hacia arriba pliega', (tester) async {
+        await tester.pumpWidget(barra());
+        await tester.fling(find.textContaining('Usando Garden como'), const Offset(0, 120), 1200);
+        await tester.pumpAndSettle();
+        expect(find.text('Cuidador'), findsOneWidget);
+
+        await tester.fling(find.textContaining('Usando Garden como'), const Offset(0, -120), 1200);
+        await tester.pumpAndSettle();
+        expect(find.text('Cuidador'), findsNothing);
+      });
+
+      testWidgets('desplegada, elegir otro perfil funciona igual que antes', (tester) async {
+        GardenMode? picked;
+        await tester.pumpWidget(barra(onSelect: (m) => picked = m));
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cuidador'));
+        expect(picked, GardenMode.independent);
+      });
+
+      testWidgets('mientras cambia de perfil queda desplegada aunque no se haya tocado', (tester) async {
+        await tester.pumpWidget(barra(switching: GardenMode.staff));
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      });
+
+      testWidgets('con "reducir movimiento" también se despliega y se pliega', (tester) async {
+        await tester.pumpWidget(MediaQuery(data: const MediaQueryData(disableAnimations: true), child: barra()));
+        expect(find.text('Cuidador'), findsNothing);
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pump();
+        expect(find.text('Cuidador'), findsOneWidget);
+        await tester.tap(find.textContaining('Usando Garden como'));
+        await tester.pump();
+        expect(find.text('Cuidador'), findsNothing);
+      });
+
+      testWidgets('es accesible: se anuncia como botón desplegable con el perfil actual', (tester) async {
+        final handle = tester.ensureSemantics();
+        await tester.pumpWidget(barra(current: GardenMode.independent));
+        expect(
+          find.bySemanticsLabel(RegExp('Cambiar de perfil. Estás usando Garden como Cuidador')),
+          findsOneWidget,
+        );
+        handle.dispose();
+      });
     });
   });
 

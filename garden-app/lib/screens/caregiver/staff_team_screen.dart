@@ -99,7 +99,7 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
             onPressed: () {
               Clipboard.setData(ClipboardData(
                   text: 'Te invité a mi equipo en Garden. Descarga la app (o entra a gardenbo.com), '
-                      've a Perfil > Unirme a un equipo e ingresa este código: $code'));
+                      'toca "¿Te invitó una empresa? Únete con tu código" en el inicio de sesión e ingresa este código: $code'));
               GardenSnackBar.success(context, 'Mensaje de invitación copiado');
             },
             child: const Text('Copiar mensaje'),

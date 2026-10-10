@@ -389,9 +389,16 @@ class _CatalogPageState extends State<_CatalogPage> {
             ),
           ]),
           _Section('Cambio de perfil (dueño / cuidador / equipo)', [
+            // Plegado por defecto: una barra delgada que se toca o se desliza hacia abajo.
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: const _ModeSwitcherDemo(),
+            ),
+            const SizedBox(height: 12),
+            // Desplegado (así empieza en la hoja inferior).
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: const _ModeSwitcherDemo(initiallyExpanded: true),
             ),
           ]),
           _Section('Mi perfil (encabezado y ajustes)', [
@@ -827,7 +834,8 @@ class _MotionRowState extends State<_MotionRow> {
 /// Demo del selector de perfil: simula la espera del servidor (700 ms) para
 /// ver el indicador y el deslizamiento del fondo.
 class _ModeSwitcherDemo extends StatefulWidget {
-  const _ModeSwitcherDemo();
+  final bool initiallyExpanded;
+  const _ModeSwitcherDemo({this.initiallyExpanded = false});
 
   @override
   State<_ModeSwitcherDemo> createState() => _ModeSwitcherDemoState();
@@ -877,6 +885,7 @@ class _ModeSwitcherDemoState extends State<_ModeSwitcherDemo> {
       options: _options,
       current: _current,
       switching: _switching,
+      initiallyExpanded: widget.initiallyExpanded,
       onSelect: _select,
       addActions: [GardenModeAddAction(label: 'Unirme a un equipo', onTap: () {})],
     );

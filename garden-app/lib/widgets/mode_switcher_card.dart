@@ -17,7 +17,16 @@ class ModeSwitcherCard extends StatefulWidget {
   /// Se llama justo antes de navegar (ej. para cerrar una hoja inferior).
   final VoidCallback? onBeforeNavigate;
 
-  const ModeSwitcherCard({super.key, this.isCompany = false, this.bare = false, this.onBeforeNavigate});
+  /// Empieza desplegado (la hoja inferior). Por defecto es una barra delgada.
+  final bool initiallyExpanded;
+
+  const ModeSwitcherCard({
+    super.key,
+    this.isCompany = false,
+    this.bare = false,
+    this.onBeforeNavigate,
+    this.initiallyExpanded = false,
+  });
 
   @override
   State<ModeSwitcherCard> createState() => _ModeSwitcherCardState();
@@ -99,14 +108,19 @@ class _ModeSwitcherCardState extends State<ModeSwitcherCard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final subtext = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    final switcher = GardenModeSwitcher(
+    // "Unirme a un equipo" es cosa del modo cuidador: un dueño de mascota no tiene por qué verlo.
+    final inCaregiverMode = WorkMode.current == GardenMode.independent;
+    final company = AuthState.staffCompanyName.isEmpty ? 'la empresa' : AuthState.staffCompanyName;
+
+    return GardenModeSwitcher(
       options: WorkMode.options(isCompany: widget.isCompany),
       current: WorkMode.current,
       switching: _switching,
-      bare: true,
+      bare: widget.bare,
+      initiallyExpanded: widget.initiallyExpanded,
       onSelect: _select,
       addActions: [
-        if (!AuthState.hasStaffMembership && !widget.isCompany)
+        if (inCaregiverMode && !AuthState.hasStaffMembership && !widget.isCompany)
           GardenModeAddAction(
             label: 'Unirme a un equipo',
             onTap: () {
@@ -117,43 +131,22 @@ class _ModeSwitcherCardState extends State<ModeSwitcherCard> {
         if (AuthState.hasStaffMembership && !AuthState.hasOwnCaregiverProfile)
           GardenModeAddAction(label: 'Trabajar también por mi cuenta', onTap: _startOwnProfile),
       ],
-    );
-
-    final company = AuthState.staffCompanyName.isEmpty ? 'la empresa' : AuthState.staffCompanyName;
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        switcher,
-        if (AuthState.hasStaffMembership) ...[
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: _busy ? null : _leaveTeam,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: const Size(0, 32),
-                foregroundColor: subtext,
+      // "Salir del equipo" vive dentro de la parte desplegada: la barra plegada no lleva nada más.
+      footer: AuthState.hasStaffMembership
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: _busy ? null : _leaveTeam,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 32),
+                  foregroundColor: subtext,
+                ),
+                child: Text('Salir del equipo de $company',
+                    style: GardenText.labelMedium.copyWith(color: subtext, decoration: TextDecoration.underline)),
               ),
-              child: Text('Salir del equipo de $company',
-                  style: GardenText.labelMedium.copyWith(color: subtext, decoration: TextDecoration.underline)),
-            ),
-          ),
-        ],
-      ],
-    );
-
-    if (widget.bare) return content;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(GardenRadius.xl),
-        border: Border.all(color: border),
-      ),
-      child: content,
+            )
+          : null,
     );
   }
 }
@@ -168,7 +161,12 @@ Future<void> showModeSwitcherSheet(BuildContext context, {bool isCompany = false
     builder: (ctx) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: ModeSwitcherCard(bare: true, isCompany: isCompany, onBeforeNavigate: () => Navigator.of(ctx).maybePop()),
+        child: ModeSwitcherCard(
+          bare: true,
+          initiallyExpanded: true,
+          isCompany: isCompany,
+          onBeforeNavigate: () => Navigator.of(ctx).maybePop(),
+        ),
       ),
     ),
   );

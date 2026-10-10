@@ -597,11 +597,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: 'Hazte cuidador',
                 subtitle: 'Gana dinero cuidando mascotas',
                 onTap: () => context.push('/become-caregiver')),
-            GardenSettingsRow(
-                icon: GIcon.equipo,
-                title: 'Unirme a un equipo',
-                subtitle: 'Si una empresa te invitó con un código',
-                onTap: () => context.push('/caregiver-staff/join')),
+            // "Unirme a un equipo" ya no se ofrece a un dueño de mascota: vive en el selector de perfil,
+            // solo en modo cuidador (mode_switcher_card.dart).
           ]),
       ];
     }
