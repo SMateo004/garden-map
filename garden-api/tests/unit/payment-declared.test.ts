@@ -195,7 +195,7 @@ describe('verificación posterior del admin', () => {
     expect(db.walletTransaction.create.mock.calls[0][0].data).toMatchObject({ type: 'PAYMENT_NOT_RECEIVED', amount: 90, balance: -60 });
     expect(db.booking.update.mock.calls[0][0].data).toMatchObject({ paymentReviewOutcome: 'NOT_RECEIVED', paymentChargedBackAmount: 90 });
     const notif = db.notification.create.mock.calls[0][0].data;
-    expect(notif).toMatchObject({ userId: 'client-1', title: 'Tienes un pago pendiente', type: 'PAYMENT_NOT_RECEIVED' });
+    expect(notif).toMatchObject({ bookingId: 'b1', userId: 'client-1', title: 'Tienes un pago pendiente', type: 'PAYMENT_NOT_RECEIVED' });
     expect(notif.message).toMatch(/Bs 90\.00/);
     expect(notif.message).toMatch(/próximo pago/);
     expect(firebase.sendPushToUser).toHaveBeenCalledWith('client-1', 'Tienes un pago pendiente', expect.any(String));

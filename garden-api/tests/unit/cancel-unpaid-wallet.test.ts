@@ -79,6 +79,8 @@ describe('cancelar sin pagar con billetera puesta (pago combinado)', () => {
     const clientNotif = db.notification.create.mock.calls[0][0].data;
     expect(clientNotif.message).toMatch(/Bs 40\.00/);
     expect(clientNotif.message).not.toMatch(/No aplica reembolso/);
+    // La notificación lleva su reserva: en la app, tocarla abre esa reserva.
+    expect(clientNotif.bookingId).toBe('b1');
   });
 
   it('también al salir del pago o vencer el QR en la app (QR_ABANDONED)', async () => {
