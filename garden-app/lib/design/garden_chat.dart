@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
@@ -344,6 +346,88 @@ class GardenNewMessagesPill extends StatelessWidget {
             ]),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Escribiendo…" de la otra persona: tres huellas que suben y bajan en una
+/// burbuja (detalle del plan: dice GARDEN sin palabras). Solo se mueve
+/// mientras está a la vista; con "reducir movimiento", quietas.
+class GardenTypingIndicator extends StatefulWidget {
+  final String? avatarUrl;
+  final String initials;
+  const GardenTypingIndicator({super.key, this.avatarUrl, this.initials = '?'});
+
+  @override
+  State<GardenTypingIndicator> createState() => _GardenTypingIndicatorState();
+}
+
+class _GardenTypingIndicatorState extends State<GardenTypingIndicator> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (GardenMotion.reduced(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ink = isDark ? GardenColors.primaryLight : GardenColors.primary;
+    return Semantics(
+      label: 'Está escribiendo',
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          GardenAvatar(imageUrl: widget.avatarUrl, size: 28, initials: widget.initials),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+                bottomLeft: Radius.circular(5),
+              ),
+              border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+            ),
+            child: AnimatedBuilder(
+              animation: _c,
+              builder: (_, __) => Row(mainAxisSize: MainAxisSize.min, children: [
+                for (var i = 0; i < 3; i++)
+                  Builder(builder: (_) {
+                    // Cada huella sube y baja 0,15 del ciclo después de la anterior.
+                    final phase = ((_c.value - i * 0.15) % 1 + 1) % 1;
+                    final up = phase < 0.4 ? math.sin(phase / 0.4 * math.pi) : 0.0;
+                    return Padding(
+                      padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
+                      child: Transform.translate(
+                        offset: Offset(0, -4 * up),
+                        child: Opacity(
+                          opacity: 0.45 + 0.55 * up,
+                          child: GardenIcon(GIcon.huella, size: GIconSize.xs, state: GIconState.active, color: ink),
+                        ),
+                      ),
+                    );
+                  }),
+              ]),
+            ),
+          ),
+        ]),
       ),
     );
   }

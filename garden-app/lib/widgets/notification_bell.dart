@@ -73,6 +73,15 @@ class AppNotification {
   if (role == 'ADMIN' && (kind.topic == NotificationTopic.problem || kind.topic == NotificationTopic.account)) {
     return (label: 'Abrir panel admin', route: '/admin', extra: null, highlight: null);
   }
+  // Mensaje del chat: abre esa conversación (el nombre lo trae el chat).
+  if (bookingId != null && kind.topic == NotificationTopic.chat) {
+    return (
+      label: 'Abrir el chat',
+      route: '/chat/$bookingId',
+      extra: {'role': role == 'CAREGIVER' ? 'CAREGIVER' : 'CLIENT'},
+      highlight: null,
+    );
+  }
   // Servicio en curso o recién terminado: directo a esa reserva.
   if (bookingId != null && kind.topic == NotificationTopic.service && !staff) {
     return (

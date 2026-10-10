@@ -208,6 +208,17 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             socket.to(`booking:${bookingId}`).emit('user_online', { userId });
         });
 
+        // "Escribiendo…": solo se reenvía dentro de la sala de una reserva a la
+        // que este socket ya se unió (join_booking verificó que es el cliente o
+        // el cuidador). No se guarda nada; la app lo limita a uno cada 3 s.
+        socket.on('typing', (data: { bookingId?: unknown; typing?: unknown }) => {
+            const bookingId = data?.bookingId;
+            if (typeof bookingId !== 'string' || !bookingId) return;
+            const room = `booking:${bookingId}`;
+            if (!socket.rooms.has(room)) return;
+            socket.to(room).emit('typing', { userId: socket.data.userId, typing: data.typing !== false });
+        });
+
         socket.on('disconnecting', () => {
             // 'disconnecting' (a diferencia de 'disconnect') corre ANTES de que el
             // socket abandone sus rooms — es la única oportunidad de saber a qué

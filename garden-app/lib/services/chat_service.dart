@@ -89,6 +89,42 @@ class ChatService extends ChangeNotifier {
   String? _otherUserId;
   bool otherOnline = false;
 
+  /// La otra persona está escribiendo (evento de socket "typing"). Se apaga
+  /// sola a los 6 s sin novedades o cuando llega su mensaje.
+  bool otherTyping = false;
+  Timer? _otherTypingTimer;
+  bool _typingSent = false;
+  DateTime? _lastTypingSent;
+
+  /// Avisa a la otra persona si uno está escribiendo. Manda "sí" como mucho
+  /// una vez cada 3 s mientras haya texto, y "no" una sola vez al vaciarse.
+  void setTyping(bool typing) {
+    final bookingId = _pendingBookingId;
+    if (!_connected || bookingId == null || _isDisposed) return;
+    final now = DateTime.now();
+    if (typing) {
+      if (_typingSent && _lastTypingSent != null && now.difference(_lastTypingSent!) < const Duration(seconds: 3)) {
+        return;
+      }
+      _typingSent = true;
+      _lastTypingSent = now;
+      _socket?.emit('typing', {'bookingId': bookingId, 'typing': true});
+    } else if (_typingSent) {
+      _typingSent = false;
+      _socket?.emit('typing', {'bookingId': bookingId, 'typing': false});
+    }
+  }
+
+  void _setOtherTyping(bool typing) {
+    _otherTypingTimer?.cancel();
+    if (typing) {
+      _otherTypingTimer = Timer(const Duration(seconds: 6), () => _setOtherTyping(false));
+    }
+    if (otherTyping == typing || _isDisposed) return;
+    otherTyping = typing;
+    notifyListeners();
+  }
+
   void setOtherUserId(String userId, {required bool initialOnline}) {
     _otherUserId = userId;
     otherOnline = initialOnline;
@@ -165,6 +201,9 @@ class ChatService extends ChangeNotifier {
           _messages.add(msg);
           if (msg.senderId != _currentUserId) {
             _unreadCount++;
+            // Llegó lo que estaba escribiendo.
+            _otherTypingTimer?.cancel();
+            otherTyping = false;
             // Solo notificar si el chat NO está en primer plano — si está
             // abierto y visible el mensaje ya aparece en la lista, una
             // notificación local ahí encima es puro ruido duplicado.
@@ -195,6 +234,15 @@ class ChatService extends ChangeNotifier {
           otherOnline = true;
           notifyListeners();
         }
+      });
+
+      _socket!.on('typing', (data) {
+        if (_isDisposed) return;
+        final raw = (data is List && data.isNotEmpty) ? data.first : data;
+        if (raw is! Map) return;
+        final userId = raw['userId'] as String?;
+        if (userId == null || userId == _currentUserId) return;
+        _setOtherTyping(raw['typing'] != false);
       });
 
       _socket!.on('user_offline', (data) {
@@ -325,6 +373,7 @@ class ChatService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _otherTypingTimer?.cancel();
     _stopPolling();
     _socket?.disconnect();
     _socket?.dispose();

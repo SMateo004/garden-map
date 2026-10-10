@@ -564,6 +564,7 @@ final GoRouter _router = GoRouter(
           bookingId: bookingId,
           otherPersonName: extra['otherPersonName'] as String? ?? 'Usuario',
           otherPersonPhoto: extra['otherPersonPhoto'] as String?,
+          role: extra['role'] as String?,
         );
       },
     ),

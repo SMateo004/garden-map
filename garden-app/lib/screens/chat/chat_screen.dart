@@ -59,6 +59,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // call site de ChatScreen pasaba otherPersonPhoto).
   String? _otherPersonPhoto;
 
+  /// Nombre que trae GET /chat/:bookingId/other-participant. Se usa cuando se
+  /// abre sin nombre (desde una notificación llega "Usuario").
+  String? _fetchedName;
+  String get _otherName {
+    final given = widget.otherPersonName.trim();
+    if ((given.isEmpty || given == 'Usuario') && (_fetchedName?.isNotEmpty ?? false)) return _fetchedName!;
+    return given.isEmpty ? 'Usuario' : given;
+  }
+
   // Reserva de este chat (mascota, servicio, estado): da el contexto de la
   // conversación y personaliza las respuestas rápidas. Null si no cargó.
   Map<String, dynamic>? _booking;
@@ -172,6 +181,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _otherPersonId = d['userId'] as String?;
           _iBlockedThem = d['blockedByMe'] as bool? ?? false;
           _theyBlockedMe = d['blockedMe'] as bool? ?? false;
+          final fetchedName = d['name'] as String?;
+          if (fetchedName != null && fetchedName.trim().isNotEmpty) _fetchedName = fetchedName.trim();
           final fetchedPhoto = d['photo'] as String?;
           if (fetchedPhoto != null && fetchedPhoto.isNotEmpty) {
             _otherPersonPhoto = fetchedPhoto;
@@ -506,7 +517,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_unseen > 0 && _nearBottom) setState(() => _unseen = 0);
   }
 
-  void _onTyping() => setState(() {});
+  void _onTyping() {
+    _chatService?.setTyping(_messageController.text.trim().isNotEmpty);
+    setState(() {});
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -584,7 +598,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => GardenGlassDialog(
-        title: Text('¿Bloquear a ${widget.otherPersonName}?'),
+        title: Text('¿Bloquear a ${_otherName}?'),
         content: const Text('Ya no podrá enviarte mensajes en esta conversación. Puedes desbloquearlo más tarde desde tu perfil.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
@@ -607,7 +621,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final data = jsonDecode(response.body);
       if (mounted && data['success'] == true) {
         setState(() => _iBlockedThem = true);
-        GardenSnackBar.success(context, '${widget.otherPersonName} ha sido bloqueado.');
+        GardenSnackBar.success(context, '${_otherName} ha sido bloqueado.');
       } else if (mounted) {
         GardenSnackBar.error(context, 'No se pudo bloquear al usuario.');
       }
@@ -657,7 +671,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(
                     color: borderColor, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 16),
-                  Text('Reportar a ${widget.otherPersonName}', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.bold)),
+                  Text('Reportar a ${_otherName}', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text('Nuestro equipo revisará esta conversación.', style: TextStyle(color: subtextColor, fontSize: 13)),
                   const SizedBox(height: 16),
@@ -741,7 +755,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         context: context,
         builder: (ctx) => GardenGlassDialog(
           title: const Text('¿También quieres bloquear a esta persona?'),
-          content: Text('${widget.otherPersonName} ya no podrá enviarte mensajes si la bloqueas.'),
+          content: Text('${_otherName} ya no podrá enviarte mensajes si la bloqueas.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No, gracias')),
             ElevatedButton(
@@ -851,7 +865,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               children: [
                                 const Brote(pose: BrotePose.hola, size: 110),
                                 const SizedBox(height: 12),
-                                Text('Saluda a ${widget.otherPersonName.split(' ').first}',
+                                Text('Saluda a ${_otherName.split(' ').first}',
                                     textAlign: TextAlign.center,
                                     style: GardenText.h4.copyWith(color: textColor)),
                                 const SizedBox(height: 6),
@@ -870,9 +884,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ListView.builder(
                             controller: _scrollController,
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                            itemCount: _chatService!.messages.length,
+                            itemCount: _chatService!.messages.length + ((_chatService!.otherTyping) ? 1 : 0),
                             itemBuilder: (context, index) {
                               final msgs = _chatService!.messages;
+                              if (index >= msgs.length) {
+                                return GardenTypingIndicator(avatarUrl: _otherPersonPhoto, initials: _otherName);
+                              }
                               final msg = msgs[index];
                               final prev = index > 0 ? msgs[index - 1] : null;
                               final next = index + 1 < msgs.length ? msgs[index + 1] : null;
@@ -1030,7 +1047,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         GardenAvatar(
           imageUrl: _otherPersonPhoto,
           size: 38,
-          initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName : 'U',
+          initials: _otherName.isNotEmpty ? _otherName : 'U',
         ),
         Positioned(
           right: -1,
@@ -1050,12 +1067,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       const SizedBox(width: 10),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(widget.otherPersonName,
+          Text(_otherName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
           Text(
-            !_initialized ? 'Conectando…' : online ? 'En línea' : 'No está en línea ahora',
+            !_initialized
+                ? 'Conectando…'
+                : (_chatService?.otherTyping ?? false)
+                    ? 'Escribiendo…'
+                    : online
+                        ? 'En línea'
+                        : 'No está en línea ahora',
             style: TextStyle(color: online ? GardenColors.success : subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600),
           ),
         ]),
@@ -1071,7 +1094,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         },
         itemBuilder: (ctx) => [
           const PopupMenuItem(value: 'report', child: Text('Reportar')),
-          if (!_iBlockedThem) PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
+          if (!_iBlockedThem) PopupMenuItem(value: 'block', child: Text('Bloquear a ${_otherName}')),
         ],
       );
 
@@ -1274,7 +1297,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       read: msg.read,
       last: last,
       avatarUrl: _otherPersonPhoto,
-      initials: msg.senderName.isNotEmpty ? msg.senderName : widget.otherPersonName,
+      initials: msg.senderName.isNotEmpty ? msg.senderName : _otherName,
     );
   }
 }
