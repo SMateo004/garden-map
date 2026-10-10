@@ -19,7 +19,6 @@ import '../../services/work_mode.dart';
 import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../theme/garden_motion.dart';
 import '../../design/brote.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_settings.dart';
@@ -523,7 +522,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Piezas de la pantalla ────────────────────────────────────────────────────
 
   String get _roleLabel => switch (_effectiveRole) {
-        'CLIENT' => _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota',
+        // El modo se cambia con la barra de abajo: sin "(modo temporal)".
+        'CLIENT' => 'Dueño de mascota',
         'CAREGIVER' => AuthState.isCaregiverStaff ? 'Cuidador de un equipo' : 'Cuidador',
         'ADMIN' => 'Administrador',
         _ => 'Usuario',
@@ -631,6 +631,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             GardenSettingsRow(icon: GIcon.inicio, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
           ],
           GardenSettingsRow(icon: GIcon.billetera, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+          // Solo en modo cuidador: además del atajo dentro del selector de perfil,
+          // a la vista en su grupo de trabajo.
+          if (!isCompany && !AuthState.hasStaffMembership)
+            GardenSettingsRow(
+                icon: GIcon.equipo,
+                title: 'Unirme a un equipo',
+                subtitle: 'Si una empresa te invitó con un código',
+                onTap: () => context.push('/caregiver-staff/join')),
         ]),
         GardenSettingsGroup(title: 'Mi perfil de cuidador', children: [
           GardenSettingsRow(
