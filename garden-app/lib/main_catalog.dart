@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'design/garden_code_input.dart';
 import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
 import 'design/garden_caregiver_card.dart';
@@ -497,6 +498,13 @@ class _CatalogPageState extends State<_CatalogPage> {
                 Center(child: GardenNewMessagesPill(count: 2, onTap: () {})),
               ]),
             ),
+          ]),
+          _Section('Código de verificación (pegar, borrar y autocompletar del SMS)', [
+            Wrap(spacing: 24, runSpacing: 16, children: [
+              _Labeled('vacío', SizedBox(width: 320, child: GardenCodeInput(controller: TextEditingController(), autofocus: false))),
+              _Labeled('a medias', SizedBox(width: 320, child: GardenCodeInput(controller: TextEditingController(text: '482'), autofocus: false))),
+              _Labeled('incorrecto', SizedBox(width: 320, child: GardenCodeInput(controller: TextEditingController(text: '482913'), error: true, autofocus: false))),
+            ]),
           ]),
           _Section('Eventos del chat', [
             for (final raw in const [

@@ -2,15 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_code_input.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 
+/// Verificar el correo con el código de 6 dígitos (registro de empresa).
+/// El código vence a los 10 minutos y admite 5 intentos (email.service.ts).
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
   final bool showAppBar;
@@ -22,89 +25,69 @@ class EmailVerificationScreen extends StatefulWidget {
   });
 
   @override
-  State<EmailVerificationScreen> createState() =>
-      _EmailVerificationScreenState();
+  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen>
-    with SingleTickerProviderStateMixin {
+class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: 'https://api.gardenbo.com/api',
   );
 
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  final _codeCtrl = TextEditingController();
 
   String _email = '';
-  String _token = '';
   bool _isLoading = false;
   bool _isSending = false;
+  bool _sent = false;
   bool _showSuccess = false;
+  bool _codeError = false;
   String? _errorMessage;
+
+  /// El envío automático falló: el servidor ya avisó a un admin para que lo
+  /// mande a mano (EMAIL_OTP_MANUAL_HELP).
+  bool _manualHelp = false;
   int _resendCooldown = 0;
   Timer? _cooldownTimer;
-
-  late AnimationController _successAnimController;
-  late Animation<double> _successScale;
 
   @override
   void initState() {
     super.initState();
-    _successAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _successScale = CurvedAnimation(
-      parent: _successAnimController,
-      curve: GardenMotion.pop,
-    );
     _loadUserAndSendCode();
   }
 
   @override
   void dispose() {
-    for (final c in _controllers) {
-      c.dispose();
-    }
-    for (final n in _focusNodes) {
-      n.dispose();
-    }
+    _codeCtrl.dispose();
     _cooldownTimer?.cancel();
-    _successAnimController.dispose();
     super.dispose();
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
-
   Map<String, String> get _authHeaders => {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_token',
+        'Authorization': 'Bearer ${AuthState.token}',
       };
 
-  String get _code => _controllers.map((c) => c.text).join();
+  static String? _messageOf(String body) {
+    try {
+      final data = jsonDecode(body);
+      return (data['error']?['message'] ?? data['message']) as String?;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _loadUserAndSendCode() async {
-    _token = AuthState.token;
-
-    // Fetch user email from /auth/me
     try {
-      final res = await http.get(
-        Uri.parse('$_baseUrl/auth/me'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
+      final res = await http.get(Uri.parse('$_baseUrl/auth/me'), headers: _authHeaders);
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         final user = data['data'] ?? data;
-        setState(() {
-          _email = user['email'] ?? '';
-        });
+        setState(() => _email = user['email'] ?? '');
       }
     } catch (_) {
-      // Silently ignore - email will just show empty
+      // Sin el correo igual se puede verificar; solo no se muestra a dónde.
     }
-
     await _sendVerificationEmail();
   }
 
@@ -113,27 +96,27 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     setState(() {
       _isSending = true;
       _errorMessage = null;
+      _manualHelp = false;
     });
-
     try {
-      final res = await http.post(
-        Uri.parse('$_baseUrl/auth/send-verification-email'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode != 200 && res.statusCode != 201) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          _errorMessage = data['message'] ?? 'Error al enviar el correo';
-        });
-      } else {
+      final res = await http.post(Uri.parse('$_baseUrl/auth/send-verification-email'), headers: _authHeaders);
+      if (!mounted) return;
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        setState(() => _sent = true);
         _startCooldown();
+      } else if (res.statusCode == 429) {
+        setState(() => _errorMessage = 'Pediste varios códigos seguidos. Espera unos minutos y vuelve a intentar.');
+      } else {
+        final failed = res.body.contains('EMAIL_SEND_FAILED');
+        setState(() {
+          _manualHelp = failed;
+          _errorMessage = failed ? null : (_messageOf(res.body) ?? 'No pudimos enviar el correo. Intenta de nuevo.');
+        });
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'No se pudo enviar el correo de verificacion';
-      });
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'Sin conexión. Revisa tu internet e intenta de nuevo.');
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -141,38 +124,41 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     _cooldownTimer?.cancel();
     setState(() => _resendCooldown = 60);
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_resendCooldown <= 1) {
+      if (!mounted || _resendCooldown <= 1) {
         timer.cancel();
         if (mounted) setState(() => _resendCooldown = 0);
       } else {
-        if (mounted) setState(() => _resendCooldown--);
+        setState(() => _resendCooldown--);
       }
     });
   }
 
-  Future<void> _verifyCode() async {
-    final code = _code;
+  Future<void> _verifyCode([String? fromInput]) async {
+    final code = fromInput ?? _codeCtrl.text;
+    if (_isLoading) return;
     if (code.length != 6) {
-      setState(() => _errorMessage = 'Ingresa el codigo de 6 digitos');
+      setState(() {
+        _codeError = true;
+        _errorMessage = 'Escribe los 6 dígitos del código.';
+      });
       return;
     }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _codeError = false;
     });
-
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/verify-email'),
         headers: _authHeaders,
         body: jsonEncode({'code': code}),
       );
-      final data = jsonDecode(res.body);
-
-      if (res.statusCode == 200 || data['success'] == true) {
+      if (!mounted) return;
+      final ok = res.statusCode == 200 && (jsonDecode(res.body)['success'] == true);
+      if (ok) {
+        HapticFeedback.mediumImpact();
         setState(() => _showSuccess = true);
-        _successAnimController.forward();
         await Future.delayed(const Duration(milliseconds: 1200));
         if (!mounted) return;
         if (widget.onComplete != null) {
@@ -181,76 +167,40 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           context.go('/caregiver/home');
         }
       } else {
+        // Código incorrecto, vencido o demasiados intentos: el servidor lo
+        // dice claro. Se borra para volver a escribir.
+        HapticFeedback.heavyImpact();
+        _codeCtrl.clear();
         setState(() {
-          _errorMessage =
-              data['message'] ?? data['error']?['message'] ?? 'Codigo invalido';
+          _codeError = true;
+          _errorMessage = _messageOf(res.body) ?? 'Código incorrecto.';
         });
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error de conexion. Intenta de nuevo.';
-      });
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'Sin conexión. Revisa tu internet e intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _onDigitChanged(int index, String value) {
-    if (value.length > 1) {
-      // Paste handling: distribute digits across fields
-      final digits = value.replaceAll(RegExp(r'\D'), '');
-      for (int i = 0; i < 6; i++) {
-        _controllers[i].text = i < digits.length ? digits[i] : '';
-      }
-      final focusIndex = digits.length.clamp(0, 5);
-      _focusNodes[focusIndex].requestFocus();
-      if (digits.length >= 6) {
-        _verifyCode();
-      }
-      return;
-    }
-
-    if (value.isNotEmpty && index < 5) {
-      _focusNodes[index + 1].requestFocus();
-    }
-
-    // Auto-submit when all 6 digits entered
-    if (_code.length == 6) {
-      _verifyCode();
-    }
-  }
-
-  void _onKeyPressed(int index, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace &&
-        _controllers[index].text.isEmpty &&
-        index > 0) {
-      _controllers[index - 1].clear();
-      _focusNodes[index - 1].requestFocus();
-    }
-  }
-
-  // ── UI ───────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textPrimary =
-        isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final textSecondary =
-        isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor =
-        isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textPrimary = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final textSecondary = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return Scaffold(
       backgroundColor: bg,
+      // En la web va dentro del registro de empresa, que ya tiene su barra.
       appBar: widget.showAppBar && !kIsWeb
           ? AppBar(
-              title: const Text('Verificacion de Email'),
+              title: Text('Verificar correo',
+                  style: TextStyle(color: textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+              centerTitle: true,
               backgroundColor: bg,
               foregroundColor: textPrimary,
+              surfaceTintColor: Colors.transparent,
               elevation: 0,
             )
           : null,
@@ -259,229 +209,141 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: _showSuccess ? _buildSuccess(textPrimary) : _buildForm(
-              isDark: isDark,
-              surface: surface,
-              textPrimary: textPrimary,
-              textSecondary: textSecondary,
-              borderColor: borderColor,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: AnimatedSwitcher(
+                duration: GardenMotion.resolve(context, GardenMotion.standard),
+                child: _showSuccess
+                    ? _buildSuccess(textPrimary, textSecondary)
+                    : _buildForm(isDark, textPrimary, textSecondary),
+              ),
             ),
-          ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSuccess(Color textPrimary) {
-    return ScaleTransition(
-      scale: _successScale,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: GardenColors.success,
-            ),
-            child: const GardenIcon(GIcon.hecho, size: GIconSize.hero, color: Colors.white),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Email verificado',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm({
-    required bool isDark,
-    required Color surface,
-    required Color textPrimary,
-    required Color textSecondary,
-    required Color borderColor,
-  }) {
+  Widget _buildSuccess(Color textPrimary, Color textSecondary) {
     return Column(
+      key: const ValueKey('ok'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Icon
         Container(
           width: 88,
           height: 88,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: GardenColors.primary.withValues(alpha: 0.12),
-          ),
-          child: const GardenIcon(GIcon.correo, size: GIconSize.hero, color: GardenColors.primary),
-        ),
-        const SizedBox(height: 28),
-
-        // Title
-        Text(
-          'Verifica tu email',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Subtitle
-        Text(
-          _email.isNotEmpty
-              ? 'Enviamos un codigo de 6 digitos a'
-              : 'Enviamos un codigo de 6 digitos a tu correo',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, color: textSecondary),
-        ),
-        if (_email.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            _email,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: textPrimary,
-            ),
-          ),
-        ],
-        const SizedBox(height: 32),
-
-        // OTP fields
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(6, (i) => _buildOtpBox(i, isDark, surface, textPrimary, borderColor)),
-        ),
-        const SizedBox(height: 8),
-
-        // Error
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _errorMessage!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: GardenColors.error, fontSize: 14),
-          ),
-        ],
-        const SizedBox(height: 28),
-
-        // Verify button
-        SizedBox(
-          width: kIsWeb ? 200 : double.infinity,
-          height: kIsWeb ? 44 : 52,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _verifyCode,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: GardenColors.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.4),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? const GardenLoadingIndicator(size: 20, color: Colors.white)
-                : Text('Verificar', style: TextStyle(fontSize: kIsWeb ? 14 : 16, fontWeight: FontWeight.w600)),
-          ),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: GardenColors.success.withValues(alpha: 0.14)),
+          child: const GardenIcon(GIcon.confirmado,
+              size: GIconSize.hero, color: GardenColors.success, state: GIconState.active),
         ),
         const SizedBox(height: 20),
-
-        // Resend link
-        _isSending
-            ? const GardenLoadingIndicator(size: 20, color: GardenColors.primary)
-            : TextButton(
-                onPressed: _resendCooldown > 0 ? null : _sendVerificationEmail,
-                child: Text(
-                  _resendCooldown > 0
-                      ? 'Reenviar codigo ($_resendCooldown s)'
-                      : 'Reenviar codigo',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _resendCooldown > 0
-                        ? textSecondary.withValues(alpha: 0.5)
-                        : GardenColors.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+        Text('Correo verificado', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textPrimary)),
+        const SizedBox(height: 6),
+        Text('Seguimos con el siguiente paso.', style: TextStyle(fontSize: 14, color: textSecondary)),
       ],
     );
   }
 
-  Widget _buildOtpBox(
-    int index,
-    bool isDark,
-    Color surface,
-    Color textPrimary,
-    Color borderColor,
-  ) {
-    final bool hasFocus = _focusNodes[index].hasFocus;
-    final bool hasValue = _controllers[index].text.isNotEmpty;
+  Widget _buildForm(bool isDark, Color textPrimary, Color textSecondary) {
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    return Container(
-      width: 48,
-      height: 56,
-      margin: EdgeInsets.only(right: index < 5 ? 8 : 0),
-      child: KeyboardListener(
-        focusNode: FocusNode(),
-        onKeyEvent: (event) => _onKeyPressed(index, event),
-        child: TextField(
-          controller: _controllers[index],
-          focusNode: _focusNodes[index],
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          maxLength: 6, // allow paste
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: textPrimary,
+    return Column(
+      key: const ValueKey('form'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: GardenColors.primary.withValues(alpha: 0.12)),
+            child: const GardenIcon(GIcon.correo,
+                size: GIconSize.hero, color: GardenColors.primary, state: GIconState.active),
           ),
-          decoration: InputDecoration(
-            counterText: '',
-            filled: true,
-            fillColor: isDark
-                ? (hasFocus
-                    ? GardenColors.darkSurfaceElevated
-                    : surface)
-                : (hasFocus
-                    ? GardenColors.lightSurfaceElevated
-                    : surface),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor, width: 1.5),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: hasValue ? GardenColors.primary : borderColor,
-                width: 1.5,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: GardenColors.primary,
-                width: 2,
-              ),
-            ),
-          ),
-          onChanged: (value) => _onDigitChanged(index, value),
         ),
-      ),
+        const SizedBox(height: 22),
+        Text('Revisa tu correo',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: textPrimary)),
+        const SizedBox(height: 10),
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: _isSending && !_sent ? 'Estamos enviando un código de 6 dígitos a ' : 'Te enviamos un código de 6 dígitos a '),
+            TextSpan(
+              text: _email.isNotEmpty ? _email : 'tu correo',
+              style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800),
+            ),
+            const TextSpan(text: '. Vence en 10 minutos.'),
+          ]),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14.5, color: textSecondary, height: 1.45),
+        ),
+        const SizedBox(height: 28),
+
+        Center(
+          child: GardenCodeInput(
+            controller: _codeCtrl,
+            error: _codeError,
+            enabled: !_isLoading,
+            onCompleted: _verifyCode,
+          ),
+        ),
+
+        if (_errorMessage != null) ...[
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const GardenIcon(GIcon.conflicto, size: GIconSize.sm, color: GardenColors.error),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(_errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: GardenColors.error, fontSize: 13.5, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 24),
+
+        GardenButton(label: 'Verificar', loading: _isLoading, onPressed: _isLoading ? null : () => _verifyCode()),
+        const SizedBox(height: 14),
+
+        // Reenviar
+        Center(
+          child: _isSending
+              ? const GardenLoadingIndicator(size: 20, color: GardenColors.primary)
+              : _resendCooldown > 0
+                  ? Text('¿No llegó? Puedes pedir otro en ${_resendCooldown}s',
+                      style: TextStyle(fontSize: 13, color: textSecondary))
+                  : TextButton(
+                      onPressed: _sendVerificationEmail,
+                      child: const Text('Reenviar código',
+                          style: TextStyle(fontSize: 14, color: GardenColors.primary, fontWeight: FontWeight.w700)),
+                    ),
+        ),
+        const SizedBox(height: 18),
+
+        // Ayuda o envío manual
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _manualHelp ? GardenColors.warning.withValues(alpha: 0.10) : surface,
+            borderRadius: BorderRadius.circular(GardenRadius.lg),
+            border: Border.all(color: _manualHelp ? GardenColors.warning.withValues(alpha: 0.35) : border),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GardenIcon(_manualHelp ? GIcon.soporte : GIcon.info,
+                size: GIconSize.sm, color: _manualHelp ? GardenColors.warning : textSecondary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _manualHelp
+                    ? 'No pudimos enviar el correo automáticamente. Ya avisamos al equipo de Garden: te mandarán el código a mano en breve.'
+                    : 'Si no lo ves, revisa Spam o Promociones. El correo llega de Garden.',
+                style: TextStyle(fontSize: 12.5, color: _manualHelp ? textPrimary : textSecondary, height: 1.4),
+              ),
+            ),
+          ]),
+        ),
+      ],
     );
   }
 }

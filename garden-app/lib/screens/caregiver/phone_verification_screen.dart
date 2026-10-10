@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../design/garden_icons.dart';
+import '../../design/garden_code_input.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -35,9 +35,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     defaultValue: 'https://api.gardenbo.com/api',
   );
 
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  final _codeCtrl = TextEditingController();
+  bool _codeError = false;
 
   bool _codeSent = false;
   bool _isLoading = false;
@@ -56,8 +55,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
 
   @override
   void dispose() {
-    for (final c in _controllers) { c.dispose(); }
-    for (final f in _focusNodes) { f.dispose(); }
+    _codeCtrl.dispose();
     _cooldownTimer?.cancel();
     super.dispose();
   }
@@ -105,13 +103,14 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     }
   }
 
-  Future<void> _submitCode() async {
-    final code = _controllers.map((c) => c.text).join();
+  Future<void> _submitCode([String? fromInput]) async {
+    final code = fromInput ?? _codeCtrl.text;
+    if (_isLoading) return;
     if (code.length < 6) {
-      setState(() => _errorMessage = 'Ingresa el código de 6 dígitos completo.');
+      setState(() { _codeError = true; _errorMessage = 'Escribe los 6 dígitos del código.'; });
       return;
     }
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() { _isLoading = true; _errorMessage = null; _codeError = false; });
     try {
       final token = AuthState.token;
       final res = await http.post(
@@ -129,7 +128,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         widget.onComplete?.call();
       } else {
         final msg = data['error']?['message'] as String? ?? 'Código incorrecto. Intenta de nuevo.';
-        setState(() { _isLoading = false; _errorMessage = msg; });
+        _codeCtrl.clear();
+        setState(() { _isLoading = false; _errorMessage = msg; _codeError = true; });
       }
     } catch (_) {
       if (mounted) {
@@ -139,17 +139,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         });
       }
     }
-  }
-
-  void _onDigitChanged(int index, String value) {
-    if (value.isNotEmpty && index < 5) {
-      _focusNodes[index + 1].requestFocus();
-    }
-    if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-    final allFilled = _controllers.every((c) => c.text.isNotEmpty);
-    if (allFilled) _submitCode();
   }
 
   void _showChangePhoneDialog(BuildContext context, Color subtextColor) {
@@ -262,46 +251,11 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
               ],
 
               if (_codeSent) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(6, (i) {
-                    return Container(
-                      width: 46,
-                      height: 54,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: surfaceEl,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _controllers[i].text.isNotEmpty
-                              ? GardenColors.primary
-                              : borderColor,
-                          width: _controllers[i].text.isNotEmpty ? 1.5 : 1,
-                        ),
-                      ),
-                      child: TextField(
-                        controller: _controllers[i],
-                        focusNode: _focusNodes[i],
-                        textAlign: TextAlign.center,
-                        keyboardType: TextInputType.number,
-                        maxLength: 1,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                        ),
-                        decoration: const InputDecoration(
-                          counterText: '',
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        onChanged: (v) => _onDigitChanged(i, v),
-                      ),
-                    );
-                  }),
+                GardenCodeInput(
+                  controller: _codeCtrl,
+                  error: _codeError,
+                  enabled: !_isLoading,
+                  onCompleted: _submitCode,
                 ),
                 const SizedBox(height: 28),
 

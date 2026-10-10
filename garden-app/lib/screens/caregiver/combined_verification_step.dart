@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import '../../design/garden_code_input.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -53,8 +53,8 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
   String? _phoneError;
   int _phoneCooldown = 0;
   Timer? _phoneCooldownTimer;
-  final List<TextEditingController> _phoneCtrls = List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _phoneFocus = List.generate(6, (_) => FocusNode());
+  final _phoneCodeCtrl = TextEditingController();
+  bool _phoneCodeError = false;
 
   // ── Email ────────────────────────────────────────────────────────────────
   bool _emailVerified = false;
@@ -64,12 +64,12 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
   String? _emailError;
   int _emailCooldown = 0;
   Timer? _emailCooldownTimer;
-  final List<TextEditingController> _emailCtrls = List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _emailFocus = List.generate(6, (_) => FocusNode());
+  final _emailCodeCtrl = TextEditingController();
+  bool _emailCodeError = false;
 
   String get _fullPhone => '+591${_phone.isNotEmpty ? _phone : widget.phoneNumber}';
-  String get _phoneCode => _phoneCtrls.map((c) => c.text).join();
-  String get _emailCode => _emailCtrls.map((c) => c.text).join();
+  String get _phoneCode => _phoneCodeCtrl.text;
+  String get _emailCode => _emailCodeCtrl.text;
 
   Map<String, String> get _authHeaders => {
         'Content-Type': 'application/json',
@@ -84,10 +84,8 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
 
   @override
   void dispose() {
-    for (final c in _phoneCtrls) { c.dispose(); }
-    for (final f in _phoneFocus) { f.dispose(); }
-    for (final c in _emailCtrls) { c.dispose(); }
-    for (final f in _emailFocus) { f.dispose(); }
+    _phoneCodeCtrl.dispose();
+    _emailCodeCtrl.dispose();
     _phoneCooldownTimer?.cancel();
     _emailCooldownTimer?.cancel();
     super.dispose();
@@ -160,11 +158,12 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
 
   Future<void> _verifyPhoneCode() async {
     final code = _phoneCode;
+    if (_phoneVerifying) return;
     if (code.length < 6) {
-      setState(() => _phoneError = 'Ingresa el código de 6 dígitos completo.');
+      setState(() { _phoneCodeError = true; _phoneError = 'Escribe los 6 dígitos del código.'; });
       return;
     }
-    setState(() { _phoneVerifying = true; _phoneError = null; });
+    setState(() { _phoneVerifying = true; _phoneError = null; _phoneCodeError = false; });
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/caregiver/verify-phone'),
@@ -177,27 +176,12 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
         setState(() { _phoneVerified = true; _phoneVerifying = false; });
       } else {
         final msg = data['error']?['message'] as String? ?? 'Código incorrecto. Intenta de nuevo.';
-        setState(() { _phoneVerifying = false; _phoneError = msg; });
+        _phoneCodeCtrl.clear();
+        setState(() { _phoneVerifying = false; _phoneError = msg; _phoneCodeError = true; });
       }
     } catch (_) {
       if (mounted) setState(() { _phoneVerifying = false; _phoneError = 'Error de conexión. Intenta de nuevo.'; });
     }
-  }
-
-  void _onPhoneDigitChanged(int index, String value) {
-    if (value.length > 1) {
-      final digits = value.replaceAll(RegExp(r'\D'), '');
-      for (int i = 0; i < 6; i++) {
-        _phoneCtrls[i].text = i < digits.length ? digits[i] : '';
-      }
-      final focusIndex = digits.length.clamp(0, 5);
-      _phoneFocus[focusIndex].requestFocus();
-      if (digits.length >= 6) _verifyPhoneCode();
-      return;
-    }
-    if (value.isNotEmpty && index < 5) _phoneFocus[index + 1].requestFocus();
-    if (value.isEmpty && index > 0) _phoneFocus[index - 1].requestFocus();
-    if (_phoneCtrls.every((c) => c.text.isNotEmpty)) _verifyPhoneCode();
   }
 
   void _showChangePhoneDialog(Color subtextColor) {
@@ -232,7 +216,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
               setState(() {
                 _phone = num;
                 _phoneCodeSent = false;
-                for (final c in _phoneCtrls) { c.clear(); }
+                _phoneCodeCtrl.clear();
               });
               _sendPhoneCode();
             },
@@ -281,11 +265,12 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
 
   Future<void> _verifyEmailCode() async {
     final code = _emailCode;
+    if (_emailVerifying) return;
     if (code.length != 6) {
-      setState(() => _emailError = 'Ingresa el código de 6 dígitos completo.');
+      setState(() { _emailCodeError = true; _emailError = 'Escribe los 6 dígitos del código.'; });
       return;
     }
-    setState(() { _emailVerifying = true; _emailError = null; });
+    setState(() { _emailVerifying = true; _emailError = null; _emailCodeError = false; });
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/verify-email'),
@@ -297,26 +282,12 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
         if (mounted) setState(() { _emailVerified = true; _emailVerifying = false; });
       } else {
         final msg = data['error']?['message'] as String? ?? data['message'] as String? ?? 'Código incorrecto. Intenta de nuevo.';
-        if (mounted) setState(() { _emailVerifying = false; _emailError = msg; });
+        _emailCodeCtrl.clear();
+        if (mounted) setState(() { _emailVerifying = false; _emailError = msg; _emailCodeError = true; });
       }
     } catch (_) {
       if (mounted) setState(() { _emailVerifying = false; _emailError = 'Error de conexión. Intenta de nuevo.'; });
     }
-  }
-
-  void _onEmailDigitChanged(int index, String value) {
-    if (value.length > 1) {
-      final digits = value.replaceAll(RegExp(r'\D'), '');
-      for (int i = 0; i < 6; i++) {
-        _emailCtrls[i].text = i < digits.length ? digits[i] : '';
-      }
-      final focusIndex = digits.length.clamp(0, 5);
-      _emailFocus[focusIndex].requestFocus();
-      if (digits.length >= 6) _verifyEmailCode();
-      return;
-    }
-    if (value.isNotEmpty && index < 5) _emailFocus[index + 1].requestFocus();
-    if (_emailCode.length == 6) _verifyEmailCode();
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────
@@ -379,9 +350,8 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       sending: _phoneSending,
                       verifying: _phoneVerifying,
                       cooldown: _phoneCooldown,
-                      controllers: _phoneCtrls,
-                      focusNodes: _phoneFocus,
-                      onDigitChanged: _onPhoneDigitChanged,
+                      codeController: _phoneCodeCtrl,
+                      codeError: _phoneCodeError,
                       onVerify: _verifyPhoneCode,
                       onResend: _sendPhoneCode,
                       errorMessage: _phoneError,
@@ -410,9 +380,8 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       sending: _emailSending,
                       verifying: _emailVerifying,
                       cooldown: _emailCooldown,
-                      controllers: _emailCtrls,
-                      focusNodes: _emailFocus,
-                      onDigitChanged: _onEmailDigitChanged,
+                      codeController: _emailCodeCtrl,
+                      codeError: _emailCodeError,
                       onVerify: _verifyEmailCode,
                       onResend: _sendEmailCode,
                       errorMessage: _emailError,
@@ -485,9 +454,8 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
     required bool sending,
     required bool verifying,
     required int cooldown,
-    required List<TextEditingController> controllers,
-    required List<FocusNode> focusNodes,
-    required void Function(int, String) onDigitChanged,
+    required TextEditingController codeController,
+    required bool codeError,
     required VoidCallback onVerify,
     required VoidCallback onResend,
     String? errorMessage,
@@ -530,40 +498,15 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
 
             if (codeSent) ...[
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(6, (i) {
-                  return Container(
-                    width: 42,
-                    height: 50,
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: controllers[i].text.isNotEmpty ? GardenColors.primary : borderColor,
-                        width: controllers[i].text.isNotEmpty ? 1.5 : 1,
-                      ),
-                    ),
-                    child: TextField(
-                      controller: controllers[i],
-                      focusNode: focusNodes[i],
-                      textAlign: TextAlign.center,
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textColor),
-                      decoration: const InputDecoration(
-                        counterText: '',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onChanged: (v) => onDigitChanged(i, v),
-                    ),
-                  );
-                }),
+              Center(
+                child: GardenCodeInput(
+                  controller: codeController,
+                  error: codeError,
+                  enabled: !verifying,
+                  // Dos tarjetas en la misma pantalla: ninguna se enfoca sola.
+                  autofocus: false,
+                  onCompleted: (_) => onVerify(),
+                ),
               ),
               const SizedBox(height: 14),
               if (verifying)
