@@ -98,8 +98,9 @@ class _StaffTeamScreenState extends State<StaffTeamScreen> {
           TextButton(
             onPressed: () {
               Clipboard.setData(ClipboardData(
-                  text: 'Te invité a mi equipo en Garden. Descarga la app (o entra a gardenbo.com), '
-                      'toca "¿Te invitó una empresa? Únete con tu código" en el inicio de sesión e ingresa este código: $code'));
+                  text: 'Te invité a mi equipo en Garden. Descarga la app (o entra a gardenbo.com) y toca "¿Te invitó una empresa? '
+                      'Únete con tu código": está en el inicio de sesión y, si ya tienes cuenta, en Perfil > Hazte cuidador. '
+                      'Ingresa este código: $code'));
               GardenSnackBar.success(context, 'Mensaje de invitación copiado');
             },
             child: const Text('Copiar mensaje'),

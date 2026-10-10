@@ -386,12 +386,64 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
+            // Quien ya tiene sesión y fue invitado por una empresa canjea su código acá: un dueño de mascota
+            // cualquiera no ve "Unirme a un equipo" en su perfil. Sin sesión, ese acceso está en el inicio de sesión.
+            if (AuthState.hasSession) ...[
+              const SizedBox(height: 28),
+              _joinTeamCard(surface: surface, border: borderColor, text: textColor, sub: subtextColor),
+            ],
             const SizedBox(height: 32),
           ],
         ),
         )),
       )),
         ],
+      ),
+    );
+  }
+
+  /// "¿Te invitó una empresa?" — lleva a ingresar el código de equipo con la cuenta que ya tiene sesión.
+  Widget _joinTeamCard({
+    required Color surface,
+    required Color border,
+    required Color text,
+    required Color sub,
+  }) {
+    return Semantics(
+      button: true,
+      label: '¿Te invitó una empresa? Únete a su equipo con tu código',
+      excludeSemantics: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        onTap: () => context.push('/caregiver-staff/join'),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(GardenRadius.md),
+            border: Border.all(color: border),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.circular(GardenRadius.sm),
+              ),
+              child: const GardenIcon(GIcon.equipo, size: GIconSize.sm, color: GardenColors.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('¿Te invitó una empresa?', style: TextStyle(color: text, fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 3),
+                Text('Únete a su equipo con el código que te dieron.', style: TextStyle(color: sub, fontSize: 12, height: 1.45)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: sub),
+          ]),
+        ),
       ),
     );
   }

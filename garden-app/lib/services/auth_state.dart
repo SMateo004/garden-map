@@ -95,6 +95,10 @@ class AuthState {
   @visibleForTesting
   static void debugSetStaffMode(bool value) => _staffMode = value;
 
+  /// Solo para pruebas: simula una sesión iniciada sin tocar el almacenamiento seguro ni abrir el socket.
+  @visibleForTesting
+  static void debugSetToken(String value) => _token = value;
+
   /// Cambia entre trabajar para la empresa (true) o por cuenta propia (false).
   static Future<void> setStaffMode(bool value) async {
     _staffMode = value;
