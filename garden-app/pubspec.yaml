@@ -148,9 +148,13 @@ flutter_launcher_icons:
     generate: false
 
 # ── flutter_native_splash ─────────────────────────────────────────────────────
-# Ejecuta: flutter pub run flutter_native_splash:create
+# Claro: el crema de la app; oscuro: verde bosque. Los mismos dos colores usa
+# el splash de Flutter (mobile_splash_screen.dart) para que no haya salto.
+# OJO: los recursos nativos se editaron a mano (solo color, sin imagen). Antes
+# de correr `dart run flutter_native_splash:create` revisa el diff: reformatea
+# ios/Runner/Info.plist y regenera drawables.
 flutter_native_splash:
-  color: "#3B5E1A"
+  color: "#F2EDE4"
   color_dark: "#3B5E1A"
   android: true
   ios: true

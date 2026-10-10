@@ -7,8 +7,17 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../theme/garden_motion.dart';
+import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
-const _kSplashVersion = 'v4.0-fast';
+const _kSplashVersion = 'v5.0';
+
+/// Mismos colores que el splash nativo (flutter_native_splash en pubspec.yaml:
+/// `color` y `color_dark`): al pasar del nativo a este no hay salto.
+/// Claro: el crema de la app con el logo oliva. Oscuro: verde bosque con el
+/// logo lima.
+const _kSplashLight = GardenColors.lightBackground;
+const _kSplashDark = Color(0xFF3B5E1A);
 
 class _NavTarget {
   final String path;
@@ -27,6 +36,11 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fadeAnim;
+  late final Animation<double> _scaleAnim;
+
+  /// Si decidir a dónde ir tarda (red lenta), se muestra que sigue cargando
+  /// en vez de una pantalla quieta.
+  bool _slow = false;
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
@@ -39,9 +53,12 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     debugPrint('[SPLASH $_kSplashVersion] initState');
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: GardenMotion.expressive,
     );
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: GardenMotion.enter),
+    );
+    _scaleAnim = Tween<double>(begin: 0.94, end: 1).animate(
       CurvedAnimation(parent: _ctrl, curve: GardenMotion.enter),
     );
     _run();
@@ -49,12 +66,16 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
   Future<void> _run() async {
     _ctrl.forward();
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _slow = true);
+    });
 
-    // Compute destination and enforce minimum display time simultaneously.
-    // We navigate only after both complete — no wasted 2.5s hardcoded delay.
+    // Destino y tiempo mínimo en paralelo. Antes el mínimo era de 3 s en CADA
+    // apertura aunque el destino ya estuviera listo; ahora alcanza para ver
+    // la marca sin parpadeo (las consultas ya tienen su propio límite de 3 s).
     final results = await Future.wait<Object?>([
       _computeDestination(),
-      Future.delayed(const Duration(seconds: 3)),
+      Future.delayed(const Duration(milliseconds: 1100)),
     ]);
 
     if (!mounted) return;
@@ -262,17 +283,47 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final ink = isDark ? GardenColors.lime : GardenColors.primary;
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: SizedBox.expand(
-          child: Image.asset(
-            'assets/images/garden_logo.png',
-            fit: BoxFit.cover,
+      backgroundColor: isDark ? _kSplashDark : _kSplashLight,
+      body: Stack(children: [
+        // Antes: una captura de pantalla a pantalla completa (con otro verde,
+        // una esquina negra y recortada según el alto del teléfono). Ahora el
+        // logo real, centrado, sobre el verde del splash nativo.
+        Center(
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: ScaleTransition(
+              scale: _scaleAnim,
+              child: isDark
+                  ? Image.asset(
+                      'assets/images/logo-white.png',
+                      width: 260,
+                      color: GardenColors.lime,
+                      colorBlendMode: BlendMode.srcIn,
+                      semanticLabel: 'Garden',
+                    )
+                  : Image.asset('assets/images/logo-horizontal.png', width: 260, semanticLabel: 'Garden'),
+            ),
           ),
         ),
-      ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: MediaQuery.of(context).padding.bottom + 48,
+          child: AnimatedOpacity(
+            opacity: _slow ? 1 : 0,
+            duration: GardenMotion.resolve(context, GardenMotion.standard),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              GardenLoadingIndicator(size: 22, color: ink),
+              const SizedBox(height: 10),
+              Text('Preparando todo…',
+                  style: TextStyle(color: ink.withValues(alpha: 0.85), fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }
