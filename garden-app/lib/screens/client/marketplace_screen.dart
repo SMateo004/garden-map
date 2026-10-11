@@ -724,16 +724,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       _buildServiceTiles(),
       const SizedBox(height: 14),
       _buildShortcuts(),
-      const SizedBox(height: 18),
-      Text(
-        _listTitle,
-        style: GardenText.h4.copyWith(color: textColor, fontWeight: FontWeight.w800),
-      ),
-      const SizedBox(height: 10),
-      if (_activeFilterPills.isNotEmpty) ...[
-        _buildActiveFilterPills(textColor, border),
-        const SizedBox(height: 12),
-      ],
+      // Sin título ni repetición de filtros: los servicios y el botón de
+      // filtros (con su contador) ya dicen qué se está viendo.
+      const SizedBox(height: 16),
     ];
 
     return Scaffold(
@@ -803,12 +796,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (names.length == 1) return '¿Qué hace ${names.first} hoy?';
     if (names.length == 2) return '¿Qué hacen ${names[0]} y ${names[1]} hoy?';
     return '¿Qué hacen tus mascotas hoy?';
-  }
-
-  String get _listTitle {
-    final names = _petNames;
-    final forWho = names.length == 1 ? 'para ${names.first}' : 'de confianza';
-    return 'Cuidadores $forWho en $_cityName';
   }
 
   // ── Reserva protagonista ─────────────────────────────────────────────────
@@ -951,83 +938,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  /// Filtros activos que no están a la vista (el servicio y el nombre ya se
-  /// ven arriba), cada uno con cómo quitarlo.
-  List<(String, GIcon?, VoidCallback)> get _activeFilterPills {
-    const sizes = {'SMALL': 'Pequeño', 'MEDIUM': 'Mediano', 'LARGE': 'Grande', 'GIANT': 'Gigante'};
-    String bs(double v) => v >= 500 ? 'Bs 500+' : 'Bs ${v.toInt()}';
-    String num1(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v'.replaceAll('.', ',');
-    return [
-      if (_selectedZone != null)
-        (_zoneLabels[_selectedZone] ?? _selectedZone!, GIcon.ubicacion, () => _selectZone(null)),
-      if (_selectedPetType != null)
-        (_selectedPetType == 'CATS' ? 'Gato' : 'Perro', _selectedPetType == 'CATS' ? GIcon.gato : GIcon.perro,
-            () => _setFilter(() => _selectedPetType = null)),
-      if (_selectedSizes.isNotEmpty)
-        (_selectedSizes.map((s) => sizes[s] ?? s).join(', '), null, () => _setFilter(() => _selectedSizes = [])),
-      if (_filterPuppies) ('Cachorros', null, () => _setFilter(() => _filterPuppies = false)),
-      if (_filterSeniors) ('Seniors', null, () => _setFilter(() => _filterSeniors = false)),
-      if (_filterAggressive) ('Reactivos', null, () => _setFilter(() => _filterAggressive = false)),
-      if (_priceRange.start > 0 || _priceRange.end < 500)
-        ('${bs(_priceRange.start)} – ${bs(_priceRange.end)}', null,
-            () => _setFilter(() => _priceRange = const RangeValues(0, 500), reload: false)),
-      if (_minRating > 0) ('${num1(_minRating)} o más', GIcon.estrella, () => _setFilter(() => _minRating = 0)),
-      if (_minExperienceYears != null)
-        ('$_minExperienceYears+ años', null, () => _setFilter(() => _minExperienceYears = null)),
-      if (_filterMinSimultaneous != null)
-        ('$_filterMinSimultaneous+ a la vez', null,
-            () => _setFilter(() => _filterMinSimultaneous = null, reload: false)),
-      if (_filterVerifiedOnly) ('Verificados', GIcon.verificado, () => _setFilter(() => _filterVerifiedOnly = false)),
-    ];
-  }
-
-  Widget _buildActiveFilterPills(Color textColor, Color border) {
-    final pills = _activeFilterPills;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
-        for (final (label, icon, clear) in pills)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Semantics(
-              button: true,
-              label: 'Quitar filtro $label',
-              excludeSemantics: true,
-              child: GestureDetector(
-                onTap: clear,
-                child: Container(
-                  height: 32,
-                  padding: const EdgeInsets.only(left: 12, right: 8),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(GardenRadius.full),
-                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (icon != null) ...[
-                      GardenIcon(icon, size: GIconSize.xs, color: GardenColors.primary, state: GIconState.active),
-                      const SizedBox(width: 5),
-                    ],
-                    Text(label,
-                        style: const TextStyle(
-                            color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
-                    const SizedBox(width: 4),
-                    const GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: GardenColors.primary),
-                  ]),
-                ),
-              ),
-            ),
-          ),
-        if (pills.length > 1)
-          TextButton(
-            onPressed: _clearAllFilters,
-            child: const Text('Quitar todos',
-                style: TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
-          ),
-      ]),
     );
   }
 
