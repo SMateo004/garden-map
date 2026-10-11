@@ -22,6 +22,7 @@ import logger from '../../shared/logger.js';
 import bcrypt from 'bcrypt';
 import { randomInt } from 'node:crypto';
 import { issuePinToken } from '../../middleware/require-pin.middleware.js';
+import { CAREGIVER_TERMS_VERSION } from '../legal/caregiver-terms.service.js';
 import * as phoneChange from './phone-change.service.js';
 
 /** GET /api/auth/me - Usuario actual (requiere Bearer). */
@@ -265,6 +266,26 @@ export const registerClient = asyncHandler(async (req: Request, res: Response) =
   try {
     const result = await authService.registerClient(body);
     auditLog({ userId: result.user.id, action: 'USER_REGISTERED', entity: 'User', entityId: result.user.id, details: { role: 'CLIENT' }, ip: req.ip });
+    // Constancia de que aceptó los Términos y la Privacidad al registrarse
+    // (versión vigente de los textos legales, fecha, IP y dispositivo) — mismo
+    // registro que deja el cuidador al aceptar (caregiver-terms.service.ts).
+    if (body.termsAccepted === true) {
+      auditLog({
+        userId: result.user.id,
+        action: 'TERMS_ACCEPTED',
+        entity: 'User',
+        entityId: result.user.id,
+        details: {
+          role: 'CLIENT',
+          version: CAREGIVER_TERMS_VERSION,
+          source: 'REGISTRATION',
+          acceptedAt: new Date().toISOString(),
+          documents: ['TERMS', 'PRIVACY'],
+          userAgent: req.get('user-agent')?.slice(0, 300) ?? null,
+        },
+        ip: req.ip,
+      });
+    }
     return res.status(201).json({
       success: true,
       data: {

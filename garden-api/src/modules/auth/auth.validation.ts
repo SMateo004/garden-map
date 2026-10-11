@@ -299,6 +299,10 @@ export const registerClientSchema = z.object({
   zoneId: z.string().optional(),
   /** Código de invitación beta. Solo requerido cuando betaInviteRequired=true en AppSettings. */
   inviteCode: z.string().max(64).optional(),
+  /** Marcó "Acepto los Términos y Condiciones y la Política de Privacidad" en
+   *  el registro. Opcional para no romper versiones viejas de la app (que no
+   *  lo mandan); cuando llega, se deja constancia en AuditLog. */
+  termsAccepted: z.literal(true).optional(),
 });
 
 // --- Register professional / register company (con código de admin) ---

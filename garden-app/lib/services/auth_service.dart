@@ -230,6 +230,7 @@ class AuthService {
     String? addressZone,
     String? cityId,
     String? zoneId,
+    bool termsAccepted = false,
   }) async {
     final body = {
       'firstName': firstName,
@@ -250,6 +251,7 @@ class AuthService {
       if (addressZone != null && addressZone.isNotEmpty) 'addressZone': addressZone,
       if (cityId != null) 'cityId': cityId,
       if (zoneId != null) 'zoneId': zoneId,
+      if (termsAccepted) 'termsAccepted': true,
     };
     final http.Response response;
     try {

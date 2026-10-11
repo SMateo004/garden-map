@@ -222,9 +222,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'Estos términos se rigen por las leyes bolivianas: Código Civil (D.L. 12760), Ley N° 453 del Consumidor y Ley N° 164 de TIC.', textColor, subtextColor),
                     const SizedBox(height: 12),
                     GestureDetector(
-                      onTap: () => Navigator.of(ctx).pop('open_terms'),
+                      // Abre el texto completo encima de esta ventana; al volver,
+                      // la ventana sigue abierta para aceptar (antes la cerraba y
+                      // había que empezar de nuevo).
+                      onTap: () => Navigator.of(ctx).push(
+                        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+                      ),
                       child: Text(
-                        'Leer términos completos →',
+                        'Leer los Términos y Condiciones completos →',
                         style: TextStyle(
                           color: GardenColors.primary,
                           fontSize: 13,
@@ -282,14 +287,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
     );
-    // Si quiere leer los términos completos, navegar y volver
-    if (result == 'open_terms') {
-      if (!mounted) return false;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
-      );
-      return false; // Deben aceptar explícitamente al volver
-    }
     return result == 'accept';
   }
 
@@ -370,13 +367,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     if (!_acceptedTerms) {
-      GardenSnackBar.warning(context, 'Debes aceptar los Términos de Servicio y la Política de Privacidad');
+      GardenSnackBar.warning(context, 'Debes aceptar los Términos y Condiciones y la Política de Privacidad');
       return;
     }
 
     HapticFeedback.lightImpact();
-    final accepted = await _showTermsDialog();
-    if (!accepted) return;
 
     setState(() => _isLoading = true);
     try {
@@ -410,6 +405,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           addressZone: _addressZone,
           cityId: _gardenCityId,
           zoneId: zoneId,
+          // Lo aceptó en la casilla: el servidor deja constancia (versión, fecha, IP).
+          termsAccepted: _acceptedTerms,
         );
         if (!mounted) return;
         // El teléfono es el canal de contacto: se verifica en el momento del
@@ -876,14 +873,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
                         ),
-                        child: const Text('Términos de Servicio', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                        child: const Text('Términos y Condiciones',
+                            style: TextStyle(
+                              color: GardenColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                              decorationColor: GardenColors.primary,
+                            )),
                       ),
                       Text(' y la ', style: TextStyle(color: subtextColor, fontSize: 13)),
                       GestureDetector(
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
                         ),
-                        child: const Text('Política de Privacidad', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                        child: const Text('Política de Privacidad',
+                            style: TextStyle(
+                              color: GardenColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                              decorationColor: GardenColors.primary,
+                            )),
                       ),
                       Text(' de Garden.', style: TextStyle(color: subtextColor, fontSize: 13)),
                     ],
@@ -902,7 +913,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             GardenButton(
               label: _selectedRole == 'caregiver' ? 'Comenzar como cuidador →' : 'Crear cuenta',
               loading: _isLoading,
-              onPressed: (_selectedRole == 'owner' && !_isPasswordValid) ? null : _handleRegister,
+              onPressed: (_selectedRole == 'owner' && (!_isPasswordValid || !_acceptedTerms)) ? null : _handleRegister,
             ),
             const SizedBox(height: 16),
           ],
