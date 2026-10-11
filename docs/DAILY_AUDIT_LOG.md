@@ -2821,3 +2821,184 @@ hubo cambios de código.
 - Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
   recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
   si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+
+---
+
+## 2026-10-11 — Eliminación de cuenta y bloqueo de identidad (nombre/apellido/fecha de
+## nacimiento) — 3 hallazgos de alto riesgo, sin fix de bajo riesgo hoy
+
+**Commit de referencia al iniciar la auditoría:** `2878108` (chore: registrar auditoría diaria —
+funciones de negocio, equipo/recepción). `git log` mostró 32 commits nuevos desde esa referencia
+hasta `ae9996b` (HEAD actual) sin pasar por esta auditoría — en su gran mayoría UI/Flutter
+(mapas, splash, cámara de registro, chat en tiempo real, rediseño del perfil del cuidador, subida
+de versión a 1.4.0/1.4.1/1.4.2). De esos 32, se priorizaron por riesgo los 3 que tocan
+seguridad/identidad de cuenta, categoría (a) de CLAUDE.md:
+- `6a45b05` fix: eliminar cuenta funciona (dueño, cuidador y ambos) y los botones ya no parten el
+  texto.
+- `f24f503` fix: eliminar cuenta con Google exige proveedor, correo verificado y sesión reciente.
+- `ed23c39` feat: nombre, apellido y fecha de nacimiento bloqueados; solo un admin los cambia.
+
+Delegado a un subagente de exploración de solo lectura para el primer barrido; cada hallazgo se
+re-verificó leyendo el código fuente real (`auth.controller.ts`, `auth.service.ts`,
+`admin.service.ts`, `admin.controller.ts`, `wallet.routes.ts`) antes de clasificar riesgo — no se
+aplicó ningún cambio.
+
+### Sin hallazgos — bien implementado
+
+**`f24f503` (Google exige proveedor/correo verificado/sesión reciente):** la protección es real en
+el backend, no depende de la UI de Flutter. `auth.controller.ts:600-621` exige
+`sign_in_provider ∈ ['google.com','apple.com']`, `email_verified === true`, el email exacto de la
+cuenta, y `auth_time` dentro de los últimos 5 minutos — los 4 claims vienen de
+`admin.auth().verifyIdToken(idToken)` (`social-auth.controller.ts:58`), verificado
+criptográficamente contra Firebase, no de un JWT decodificado sin validar firma. Un curl directo
+con un `idToken` fabricado a mano no puede falsificar esos claims. Tests en
+`delete-account.test.ts:91-111` cubren los 5 casos de rechazo y son consistentes con el código.
+
+**`ed23c39` (bloqueo de identidad), bloqueo en sí:** real en el backend, no solo en la UI.
+`identity-lock.service.ts:47-71` (`assertIdentityEditable`) se invoca antes de persistir en
+`PATCH /api/auth/me` (`auth.controller.ts:421`) y `PATCH /api/caregiver/user-info`
+(`caregiver-profile.service.ts:59-60`) — un curl directo cambiando `firstName` recibe 403
+`IDENTITY_LOCKED` igual que la UI. `PATCH /api/caregiver/profile` no acepta estos 3 campos en
+absoluto (no existen en `CaregiverProfile`), así que no hay ruta alternativa. El endpoint de admin
+(`PATCH /api/admin/users/:userId/identity`, `admin.routes.ts:274`) está protegido por
+`requireRole('ADMIN')` (`admin.routes.ts:16-17`), exige `reason` ≥ 5 caracteres y valida la fecha
+(`admin.service.ts:4160-4196`), y audita con `AdminAction{actionType:'UPDATE_USER_IDENTITY',
+notes: {reason, before, after}}`. El caso "completar un placeholder una sola vez sin admin"
+(Google sin apellido, fecha vacía) está correctamente acotado — no hay forma de vaciar el campo
+vía estos endpoints para "reabrirlo". 9 tests en `identity-lock.test.ts` consistentes con el
+código real.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): eliminar la cuenta puede "donar" a
+GARDEN el dinero de un retiro ya solicitado y dejarlo varado para siempre
+
+**Dónde:**
+- `garden-api/src/modules/auth/auth.controller.ts:669-705` (`deleteAccount`, chequeo de
+  obligaciones pendientes antes de eliminar) — solo cuenta `Booking` en estados activos y
+  `Dispute` en `OPEN`/`IN_REVIEW`. **No existe ningún chequeo de `WalletTransaction` con
+  `type:'WITHDRAWAL'` y `status` en `['PENDING','PROCESSING']`.**
+- `garden-api/src/modules/admin/admin.service.ts:4134-4150` (`approveCaregiverAccountDeletion`,
+  camino de baja de cuidador aprobada por admin) — mismo vacío: solo valida que
+  `accountDeletionRequestedAt` no sea null.
+- Confirmado en `garden-api/src/modules/wallet/wallet.routes.ts:280-287` que al solicitar un
+  retiro (`POST /wallet/withdraw`) **el balance no se decrementa** — solo se calcula
+  `availableBalance = balance - pendingAmount` para evitar sobregiro. El monto del retiro sigue
+  íntegro en `User.balance` hasta que un admin ejecuta `completeWithdrawal`.
+- `auth.service.ts:1457-1519` (`finalizeAccountDeletion`) transfiere el balance **completo** a
+  GARDEN (correctamente, con lock de fila — el fix del 2026-09-24 sigue intacto), sin saber que
+  parte de ese balance ya tenía un retiro pendiente reclamándolo.
+
+**Qué pasa:** un usuario solicita un retiro de Bs X → queda `WalletTransaction` PENDING, pero
+`balance` sigue íntegro (es solo una reserva lógica). Antes de que un admin lo complete, el usuario
+elimina su cuenta (dueño: al instante; cuidador: cuando el admin aprueba la solicitud de baja).
+`finalizeAccountDeletion` lee el balance completo (que todavía "contiene" los Bs X del retiro) y lo
+transfiere entero a GARDEN, dejando `balance = 0`. Cuando el admin después intenta
+`completeWithdrawal` sobre esa solicitud ya aprobada por el usuario, el decremento condicional
+(`admin.controller.ts:621-626`, `balance: { gte: tx.amount }`) falla con `INSUFFICIENT_BALANCE` y
+revierte — el retiro queda varado en PENDING/PROCESSING para siempre (no se corrompe nada, pero
+tampoco se repara) y el dinero que le correspondía al usuario ya fue transferido a GARDEN. Es
+pérdida real de fondos del usuario, no solo un dato incorrecto en el ledger.
+
+**Propuesta de fix (no aplicada):** agregar a los dos chequeos de obligaciones pendientes
+(`deleteAccount` y `approveCaregiverAccountDeletion`) una consulta de
+`WalletTransaction` con `type:'WITHDRAWAL', status: {in:['PENDING','PROCESSING']}` para ese
+usuario, y rechazar la eliminación (o la aprobación) mientras exista uno — mismo criterio que ya
+se usa para reservas y disputas activas.
+
+### Hallazgo 2 (ALTO RIESGO — no aplicado, solo reportado): la aprobación admin de baja de
+cuidador no re-valida reservas/disputas/custodia de la mascota, contradiciendo el propio propósito
+de seguridad que el código declara
+
+**Dónde:**
+- `garden-api/src/modules/admin/admin.service.ts:4092-4123` (`listPendingCaregiverDeletionRequests`)
+  — solo devuelve `name/email/phone/requestedAt/lastKnownLat/lastKnownLng`, sin ningún indicador de
+  reservas activas.
+- `garden-api/src/modules/admin/admin.service.ts:4134-4150` (`approveCaregiverAccountDeletion`) —
+  solo valida `accountDeletionRequestedAt != null` antes de anonimizar/suspender.
+- El propio comentario en el código (`admin.service.ts:4086-4091`) dice explícitamente que esta
+  aprobación manual es una "medida de seguridad ante posible robo/retención indebida de la
+  mascota (Sección 16 de T&C)" — pero no hay ningún dato en pantalla ni validación que impida
+  aprobar mientras el cuidador tiene un servicio `IN_PROGRESS` (una mascota a su cargo en ese
+  momento) o una disputa abierta.
+- Tampoco se notifica a ningún admin cuando se crea la solicitud
+  (`requestCaregiverAccountDeletion`, `auth.service.ts:1430-1448`) — se entera solo si alguien
+  revisa el panel manualmente.
+
+**Qué pasa:** un admin puede aprobar a ciegas la baja de un cuidador que en ese momento tiene una
+mascota bajo su cuidado (`IN_PROGRESS`) o una disputa sin resolver, exactamente el escenario que la
+revisión manual dice estar diseñada para prevenir, porque el panel no le muestra esa información y
+el código no la valida.
+
+**Propuesta de fix (no aplicada):** en `listPendingCaregiverDeletionRequests`, agregar el conteo de
+reservas `CONFIRMED`/`IN_PROGRESS` y disputas abiertas del cuidador; en
+`approveCaregiverAccountDeletion`, rechazar la aprobación (o exigir una confirmación explícita)
+mientras existan. Considerar también una `AdminNotification` al crear la solicitud, en vez de
+depender de que un admin la busque manualmente.
+
+### Hallazgo 3 (ALTO RIESGO — no aplicado, solo reportado): corregir nombre/apellido/fecha de
+nacimiento desde el panel de admin no invalida ni re-dispara la verificación de identidad de un
+cuidador ya `VERIFIED`
+
+**Dónde:**
+- `garden-api/src/modules/admin/admin.service.ts:4157-4161` (comentario) y `4160-4196`
+  (`updateUserIdentity`) — actualiza `User.firstName/lastName/dateOfBirth` y audita el cambio
+  (`AdminAction`), pero no toca `CaregiverProfile.identityVerificationStatus` ni dispara ninguna
+  re-verificación o notificación al equipo de verificación.
+- `garden-api/src/modules/verification/verification.service.ts` (líneas 486-487, 570, 597-601) —
+  la verificación de identidad (OCR + comparación facial) compara `user.firstName/lastName/
+  dateOfBirth` **en el momento de verificar** contra el carnet, y fija
+  `identityVerificationStatus = 'VERIFIED'` como un estado puntual — no existe ningún campo en el
+  schema que congele "el nombre con el que efectivamente se verificó" (`ocrFirstName`/
+  `verifiedName` o similar).
+- El propio comentario de `updateUserIdentity` dice que estos datos "respaldan el registro
+  on-chain" — un cambio posterior tampoco reconcilia eso contra lo ya registrado en blockchain.
+
+**Qué pasa:** un cuidador se verifica con nombre "Ana Pérez" → queda `VERIFIED`. Después, un admin
+usa `PATCH /admin/users/:id/identity` para corregir un typo (o un dato mal ingresado) a "Ana Pérez
+Gómez". El cuidador sigue mostrándose `VERIFIED` en el marketplace con un nombre que nunca fue
+cotejado contra el documento de identidad ni contra el rostro verificado — el estado "verificado"
+deja de significar lo que la app le promete al cliente que confía en ese sello.
+
+**Propuesta de fix (no aplicada):** decidir la política (¿todo cambio de nombre/apellido/fecha de
+nacimiento por admin sobre un cuidador `VERIFIED` debe volver el estado a `PENDING` y notificar al
+equipo de verificación para revisar manualmente? ¿o alcanza con un flag de "identidad editada tras
+verificar" visible en el panel sin bloquear al cuidador?) y aplicar el cambio correspondiente en
+`updateUserIdentity`. Cualquiera de las dos direcciones afecta a cuidadores ya operando en el
+marketplace, así que queda para el dueño del proyecto.
+
+### Observaciones menores (sin acción, no son bugs de alto riesgo ni bajo riesgo claro)
+
+- `DELETE /api/auth/account` no tiene rate limiter sobre los intentos de contraseña (a diferencia
+  de `changePasswordLimiter` en `/change-password`, `auth.routes.ts:126`) — un access token robado
+  permitiría probar contraseñas sin bloqueo de intentos. No se aplicó (cae en la categoría de
+  seguridad/auth de alto riesgo de esta rutina, aunque el fix en sí sería acotado — mismo criterio
+  ya usado el 2026-09-26 con `check-blink`: simplicidad del fix no exime de revisión humana en esta
+  categoría).
+- El camino `scope=CLIENT` de `deleteAccount` (quitar solo la cara de dueño) valida reservas
+  pendientes como cliente pero no disputas abiertas como cliente. Impacto verificado como bajo:
+  `removeClientSide` (`auth.service.ts:1408-1414`) no anonimiza ni borra ningún dato, solo pone
+  `activeRole: null` y deja un `AuditLog` — no hay pérdida de datos ni de dinero, solo que el
+  usuario podría dejar de ver su rol de dueño mientras una disputa como cliente sigue abierta. No
+  se aplicó un fix porque no representa un bug real (nada se rompe ni se pierde), solo una
+  inconsistencia menor de UX.
+
+### Sin cambios aplicados hoy
+Los 3 hallazgos son de alto riesgo (dinero/retiros, seguridad del proceso de baja de cuidador, y
+verificación de identidad) — no se tocó código. Solo se actualiza este log. No aplica `tsc`/tests
+porque no hubo cambios de código.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó;
+  el ejemplo numérico (Bs. 100 → 110 → +18 % → 128) sigue repetido tal cual en `legal_screen.dart`.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+- La ventana de aceptación de 3h (`caregiver-accept-expiry.job.ts`) no se extiende para empresas
+  con equipo activo, pese a lo que promete el mensaje del commit `1f73564` (2026-10-10) — sigue sin
+  decisión de producto.
+- El cupo combinado recepción+marketplace (`walk-in-capacity.ts`, commit `1f73564`) no es atómico
+  entre `caregiver-crm.service.ts` (sí bloquea la fila) y `booking.service.ts` (no la bloquea) —
+  puede sobrevender `maxPets` en una carrera entre un check-in de recepción y una reserva del
+  marketplace simultáneos (2026-10-10) — sigue sin aplicar.
