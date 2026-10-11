@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
+import '../../design/garden_service_icon.dart';
 import '../../design/garden_trust_seals.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_logo_loader.dart';
@@ -753,98 +754,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           const SizedBox(height: 32),
                         ],
 
-                        // Experiencia
-                        if (_caregiver!['experienceYears'] != null) ...[
-                          Divider(color: borderColor),
-                          const SizedBox(height: 28),
-                          Text('Experiencia', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: GardenColors.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
-                            ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              const GardenIcon(GIcon.destacado, size: GIconSize.sm, color: GardenColors.primary),
-                              const SizedBox(width: 8),
-                              Text('${_caregiver!['experienceYears']} años de experiencia', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 14)),
-                            ]),
-                          ),
-                          if ((_caregiver!['experienceDescription'] as String? ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            _ExpandableText(
-                              text: _caregiver!['experienceDescription'] as String,
-                              style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7),
-                              maxLines: 3,
-                            ),
-                          ],
-                        ],
-
-                        // Por qué cuidador / Qué lo diferencia
-                        if ((_caregiver!['whyCaregiver'] as String? ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          _infoCard('¿Por qué soy cuidador?', _caregiver!['whyCaregiver'] as String, GIcon.favorito, GardenColors.error, surface, textColor, subtextColor, borderColor),
-                        ],
-                        if ((_caregiver!['whatDiffers'] as String? ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _infoCard('¿Qué me diferencia?', _caregiver!['whatDiffers'] as String, GIcon.estrella, GardenColors.star, surface, textColor, subtextColor, borderColor),
-                        ],
-
-                        const SizedBox(height: 32),
-                        Divider(color: borderColor),
-                        const SizedBox(height: 28),
-
-                        // Políticas de mascotas
-                        Text('Políticas de cuidado', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 14),
-                        if ((_caregiver!['sizesAccepted'] as List? ?? []).isNotEmpty) ...[
-                          Text('Tamaños aceptados', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8, runSpacing: 6,
-                            children: {
-                              'PEQUEÑO': 'Pequeño',
-                              'MEDIANO': 'Mediano',
-                              'GRANDE': 'Grande',
-                              'GIGANTE': 'Gigante',
-                            }.entries
-                              .where((e) => (_caregiver!['sizesAccepted'] as List).contains(e.key))
-                              .map((e) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.success.withValues(alpha: 0.3))),
-                                child: Text(e.value, style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w500)),
-                              )).toList(),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        Wrap(
-                          spacing: 8, runSpacing: 8,
-                          children: [
-                            _policyChip('Cachorros', _caregiver!['acceptPuppies'] == true),
-                            _policyChip('Mascotas seniors', _caregiver!['acceptSeniors'] == true),
-                            _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
-                          ],
-                        ),
-                        if (_acceptedSpecies().isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          Text('Recibe', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 8),
-                          _speciesChips(subtextColor),
-                        ],
-                        const SizedBox(height: 14),
-                        Text('Mascotas por servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        _capacityChips(services, subtextColor),
-                        if ((_caregiver!['handleAnxious'] as String? ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, GIcon.salud, GardenColors.warning, surface, textColor, subtextColor, borderColor),
-                        ],
-                        if ((_caregiver!['emergencyResponse'] as String? ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _infoCard('Protocolo de emergencias', _caregiver!['emergencyResponse'] as String, GIcon.emergencia, GardenColors.error, surface, textColor, subtextColor, borderColor),
-                        ],
+                        // Experiencia + políticas de cuidado (ver _experienceSection).
+                        ..._experienceSection(wide: true, surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                        ..._policiesSection(wide: true, services: services, surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
 
                         // Mi espacio (solo hospedaje)
                         if (offersHospedaje && (_caregiver!['homeType'] != null || _caregiver!['hasYard'] == true)) ...[
@@ -1253,80 +1165,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 3),
                         const SizedBox(height: 24),
                       ],
-                      // Experiencia
-                      if (_caregiver!['experienceYears'] != null) ...[
-                        Divider(color: borderColor), const SizedBox(height: 20),
-                        Text('Experiencia', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3))),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const GardenIcon(GIcon.destacado, size: GIconSize.sm, color: GardenColors.primary),
-                            const SizedBox(width: 6),
-                            Text('${_caregiver!['experienceYears']} años de experiencia', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-                          ]),
-                        ),
-                        if ((_caregiver!['experienceDescription'] as String? ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _ExpandableText(
-                            text: _caregiver!['experienceDescription'] as String,
-                            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
-                            maxLines: 3,
-                          ),
-                        ],
-                      ],
-                      if ((_caregiver!['whyCaregiver'] as String? ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        _infoCard('¿Por qué soy cuidador?', _caregiver!['whyCaregiver'] as String, GIcon.favorito, GardenColors.error, surface, textColor, subtextColor, borderColor),
-                      ],
-                      if ((_caregiver!['whatDiffers'] as String? ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _infoCard('¿Qué me diferencia?', _caregiver!['whatDiffers'] as String, GIcon.estrella, GardenColors.star, surface, textColor, subtextColor, borderColor),
-                      ],
-                      Divider(color: borderColor), const SizedBox(height: 20),
-                      Text('Políticas de cuidado', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 12),
-                      if ((_caregiver!['sizesAccepted'] as List? ?? []).isNotEmpty) ...[
-                        Text('Tamaños aceptados', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        Wrap(spacing: 8, runSpacing: 6, children: const {
-                          'PEQUEÑO': ('Pequeño', GIconSize.xs), 'MEDIANO': ('Mediano', GIconSize.sm),
-                          'GRANDE': ('Grande', GIconSize.md), 'GIGANTE': ('Gigante', GIconSize.lg),
-                        }.entries.where((e) => (_caregiver!['sizesAccepted'] as List).contains(e.key)).map((e) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25))),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(width: 22, child: Center(child: GardenIcon(GIcon.huella, size: e.value.$2, state: GIconState.active))),
-                            const SizedBox(width: 4),
-                            Text(e.value.$1, style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                          ]),
-                        )).toList()),
-                        const SizedBox(height: 16),
-                      ],
-                      Wrap(spacing: 8, runSpacing: 8, children: [
-                        _policyChip('Cachorros', _caregiver!['acceptPuppies'] == true),
-                        _policyChip('Mascotas seniors', _caregiver!['acceptSeniors'] == true),
-                        _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
-                      ]),
-                      if (_acceptedSpecies().isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Text('Recibe', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        _speciesChips(subtextColor),
-                      ],
-                      const SizedBox(height: 14),
-                      Text('Mascotas por servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      _capacityChips(services, subtextColor),
-                      if ((_caregiver!['handleAnxious'] as String? ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, GIcon.salud, GardenColors.warning, surface, textColor, subtextColor, borderColor),
-                      ],
-                      if ((_caregiver!['emergencyResponse'] as String? ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _infoCard('Protocolo de emergencias', _caregiver!['emergencyResponse'] as String, GIcon.emergencia, GardenColors.error, surface, textColor, subtextColor, borderColor),
-                      ],
+                      // Experiencia + políticas de cuidado (ver _experienceSection).
+                      ..._experienceSection(wide: false, surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                      ..._policiesSection(wide: false, services: services, surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                      const SizedBox(height: 24),
                       if (offersHospedaje && (_caregiver!['homeType'] != null || _caregiver!['hasYard'] == true)) ...[
                         Divider(color: borderColor), const SizedBox(height: 20),
                         Text('Mi espacio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
@@ -1833,40 +1675,360 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     } catch (_) { return iso.length >= 10 ? iso.substring(0, 10) : iso; }
   }
 
-  Widget _infoCard(String title, String content, GIcon icon, Color color, Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.2))),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        GardenIcon(icon, color: color, state: GIconState.active),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 4),
-          _ExpandableText(
-            text: content,
-            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
-            maxLines: 3,
+  // ── Experiencia y políticas de cuidado (rediseño) ─────────────────────────
+  // Mismas secciones en la vista ancha y en la móvil. Plano (sin sombras, ver
+  // estilo visual): jerarquía con tarjetas, una cifra grande de años y una
+  // franja de color por pregunta. El verde vivo de `success` se dejó de usar
+  // acá: sobre crema no tenía contraste — los estados van en oliva oscuro.
+
+  Color _ink(bool isDark) => isDark ? GardenColors.primaryLight : GardenColors.primaryDark;
+
+  Widget _sectionTitle(String title, Color textColor, bool wide) =>
+      Text(title, style: TextStyle(color: textColor, fontSize: wide ? 20 : 18, fontWeight: FontWeight.w800));
+
+  Widget _sectionLabel(String text, Color subtextColor) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(text.toUpperCase(),
+            style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+      );
+
+  BoxDecoration _cardDecoration(Color surface, Color borderColor) => BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.xl),
+        border: Border.all(color: borderColor),
+      );
+
+  List<Widget> _experienceSection({
+    required bool wide,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final isDark = themeNotifier.isDark;
+    final ink = _ink(isDark);
+    final years = (_caregiver!['experienceYears'] as num?)?.toInt();
+    final description = (_caregiver!['experienceDescription'] as String? ?? '').trim();
+    final why = (_caregiver!['whyCaregiver'] as String? ?? '').trim();
+    final differs = (_caregiver!['whatDiffers'] as String? ?? '').trim();
+    if (years == null && description.isEmpty && why.isEmpty && differs.isEmpty) return const [];
+
+    final headline = years == null
+        ? 'Su experiencia'
+        : years <= 0
+            ? 'Dando sus primeros pasos'
+            : 'Cuida mascotas desde ${DateTime.now().year - years}';
+    final subline = years == null
+        ? 'En sus propias palabras'
+        : years <= 0
+            ? 'Recién empieza como cuidador'
+            : '$years ${years == 1 ? 'año' : 'años'} de experiencia';
+
+    return [
+      Divider(color: borderColor),
+      SizedBox(height: wide ? 28 : 20),
+      _sectionTitle('Experiencia', textColor, wide),
+      const SizedBox(height: 14),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: _cardDecoration(surface, borderColor),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: isDark ? 0.22 : 0.12),
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+              ),
+              child: years == null || years <= 0
+                  ? Center(child: GardenIcon(GIcon.huella, size: GIconSize.xl, state: GIconState.active, color: ink))
+                  : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Text('$years',
+                          style: TextStyle(color: ink, fontSize: 28, fontWeight: FontWeight.w900, height: 1)),
+                      const SizedBox(height: 2),
+                      Text(years == 1 ? 'año' : 'años',
+                          style: TextStyle(color: ink, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                    ]),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(headline, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  GardenIcon(GIcon.destacado, size: GIconSize.xs, color: ink),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(subline,
+                        style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ]),
+              ]),
+            ),
+          ]),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Divider(color: borderColor, height: 1),
+            const SizedBox(height: 14),
+            _ExpandableText(
+              text: description,
+              style: TextStyle(color: textColor.withValues(alpha: 0.86), fontSize: 14.5, height: 1.65),
+              maxLines: 4,
+            ),
+          ],
+        ]),
+      ),
+      if (why.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _storyCard('¿Por qué soy cuidador?', why, GIcon.favorito, GardenColors.error, surface, textColor, subtextColor, borderColor),
+      ],
+      if (differs.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _storyCard('¿Qué me diferencia?', differs, GIcon.estrella, GardenColors.star, surface, textColor, subtextColor, borderColor),
+      ],
+      SizedBox(height: wide ? 32 : 24),
+    ];
+  }
+
+  /// Tarjeta de una respuesta del cuidador: franja de color a la izquierda,
+  /// insignia con icono y texto expandible.
+  Widget _storyCard(String title, String content, GIcon icon, Color color, Color surface, Color textColor,
+      Color subtextColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(GardenRadius.lg),
+      child: Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(GardenRadius.lg),
+          border: Border.all(color: borderColor),
+        ),
+        child: Stack(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: color.withValues(alpha: isDark ? 0.2 : 0.12), shape: BoxShape.circle),
+                  child: Center(child: GardenIcon(icon, size: GIconSize.sm, state: GIconState.active, color: color)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(title, style: TextStyle(color: textColor, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              _ExpandableText(text: content, style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6), maxLines: 3),
+            ]),
           ),
-        ])),
+          Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 4, color: color)),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _policiesSection({
+    required bool wide,
+    required List<String> services,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final sizes = (_caregiver!['sizesAccepted'] as List? ?? []).cast<String>();
+    final species = _acceptedSpecies();
+    final anxious = (_caregiver!['handleAnxious'] as String? ?? '').trim();
+    final emergency = (_caregiver!['emergencyResponse'] as String? ?? '').trim();
+    final capacity = _capacityRows(services, textColor, subtextColor, borderColor);
+
+    return [
+      Divider(color: borderColor),
+      SizedBox(height: wide ? 28 : 20),
+      _sectionTitle('Políticas de cuidado', textColor, wide),
+      const SizedBox(height: 14),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: _cardDecoration(surface, borderColor),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (sizes.isNotEmpty) ...[
+            _sectionLabel('Tamaños que recibe', subtextColor),
+            Row(children: [
+              for (final (key, label, size) in const [
+                ('PEQUEÑO', 'Pequeño', GIconSize.sm),
+                ('MEDIANO', 'Mediano', GIconSize.md),
+                ('GRANDE', 'Grande', GIconSize.lg),
+                ('GIGANTE', 'Gigante', GIconSize.xl),
+              ]) ...[
+                if (key != 'PEQUEÑO') const SizedBox(width: 8),
+                Expanded(child: _sizeTile(label, size, sizes.contains(key), textColor, borderColor)),
+              ],
+            ]),
+            const SizedBox(height: 20),
+          ],
+          _sectionLabel('Acepta', subtextColor),
+          LayoutBuilder(builder: (context, constraints) {
+            final tileWidth = (constraints.maxWidth - 10) / 2;
+            final tiles = <Widget>[
+              if (species.isNotEmpty) ...[
+                _acceptTile('Perros', GIcon.perro, species.contains('DOGS'), textColor, subtextColor, borderColor),
+                _acceptTile('Gatos', GIcon.gato, species.contains('CATS'), textColor, subtextColor, borderColor),
+              ],
+              _acceptTile('Cachorros', GIcon.cachorro, _caregiver!['acceptPuppies'] == true, textColor, subtextColor, borderColor),
+              _acceptTile('Seniors', GIcon.reloj, _caregiver!['acceptSeniors'] == true, textColor, subtextColor, borderColor),
+              _acceptTile('Agresivas', GIcon.advertencia, _caregiver!['acceptAggressive'] == true, textColor, subtextColor, borderColor),
+            ];
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [for (final t in tiles) SizedBox(width: tileWidth, child: t)],
+            );
+          }),
+          if (capacity.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _sectionLabel('Mascotas a la vez', subtextColor),
+            ...capacity,
+          ],
+        ]),
+      ),
+      if (anxious.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _storyCard('Mascotas con ansiedad', anxious, GIcon.salud, GardenColors.warning, surface, textColor, subtextColor, borderColor),
+      ],
+      if (emergency.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _storyCard('Protocolo de emergencias', emergency, GIcon.emergencia, GardenColors.error, surface, textColor, subtextColor, borderColor),
+      ],
+    ];
+  }
+
+  /// Tamaño: la huella crece con el tamaño; los que no recibe quedan atenuados
+  /// (se ven los cuatro, así se entiende la escala de un vistazo).
+  Widget _sizeTile(String label, GIconSize size, bool accepted, Color textColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final ink = _ink(isDark);
+    final hint = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      decoration: BoxDecoration(
+        color: accepted ? GardenColors.primary.withValues(alpha: isDark ? 0.2 : 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        border: Border.all(color: accepted ? GardenColors.primary.withValues(alpha: 0.45) : borderColor),
+      ),
+      child: Column(children: [
+        SizedBox(
+          height: 34,
+          child: Center(
+            child: GardenIcon(GIcon.huella, size: size, state: accepted ? GIconState.active : GIconState.idle, color: accepted ? ink : hint),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: accepted ? textColor : hint, fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(accepted ? 'Sí' : 'No',
+            style: TextStyle(color: accepted ? ink : hint, fontSize: 11, fontWeight: FontWeight.w700)),
       ]),
     );
   }
 
-  Widget _policyChip(String label, bool accepted) {
+  Widget _acceptTile(String label, GIcon icon, bool accepted, Color textColor, Color subtextColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final ink = _ink(isDark);
+    final hint = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: accepted ? GardenColors.success.withValues(alpha: 0.1) : GardenColors.error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accepted ? GardenColors.success.withValues(alpha: 0.3) : GardenColors.error.withValues(alpha: 0.2)),
+        color: accepted ? GardenColors.primary.withValues(alpha: isDark ? 0.16 : 0.08) : Colors.transparent,
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        border: Border.all(color: accepted ? GardenColors.primary.withValues(alpha: 0.35) : borderColor),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        GardenIcon(accepted ? GIcon.confirmado : GIcon.cancelado, size: GIconSize.xs, color: accepted ? GardenColors.success : GardenColors.error),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: accepted ? GardenColors.success : GardenColors.error, fontSize: 12, fontWeight: FontWeight.w500)),
+      child: Row(children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: accepted ? GardenColors.primary.withValues(alpha: isDark ? 0.28 : 0.16) : borderColor.withValues(alpha: 0.5),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: GardenIcon(icon, size: GIconSize.md, state: accepted ? GIconState.active : GIconState.idle, color: accepted ? ink : hint),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: accepted ? textColor : subtextColor, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Row(children: [
+              GardenIcon(accepted ? GIcon.confirmado : GIcon.cancelado, size: GIconSize.xs, color: accepted ? ink : hint),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(accepted ? 'Acepta' : 'No acepta',
+                    style: TextStyle(color: accepted ? ink : hint, fontSize: 11.5, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ]),
+        ),
       ]),
     );
+  }
+
+  /// Capacidad por servicio — mismas reglas que tenía _capacityChips
+  /// (Hospedaje y Guardería comparten un solo cupo combinado).
+  List<Widget> _capacityRows(List<String> services, Color textColor, Color subtextColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final ink = _ink(isDark);
+    String count(int n) => n == 1 ? '1 mascota' : 'Hasta $n';
+    Widget row(List<GardenService> icons, String label, String? sub, int maxP) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(children: [
+            for (final s in icons) ...[
+              GardenServiceIcon(s, size: 30),
+              const SizedBox(width: 6),
+            ],
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                if (sub != null) Text(sub, style: TextStyle(color: subtextColor, fontSize: 12)),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(GardenRadius.full),
+              ),
+              child: Text(count(maxP), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w800)),
+            ),
+          ]),
+        );
+
+    final rows = <Widget>[];
+    if (services.contains('PASEO')) {
+      rows.add(row([GardenService.paseo], 'Paseo', null, _maxPetsForService('PASEO')));
+    }
+    final offersHospedaje = services.contains('HOSPEDAJE');
+    final offersGuarderia = services.contains('GUARDERIA');
+    if (offersHospedaje && offersGuarderia) {
+      rows.add(row([GardenService.hospedaje, GardenService.guarderia], 'Hospedaje + Guardería',
+          'Un solo cupo compartido', _maxPetsForService('HOSPEDAJE')));
+    } else if (offersHospedaje) {
+      rows.add(row([GardenService.hospedaje], 'Hospedaje', null, _maxPetsForService('HOSPEDAJE')));
+    } else if (offersGuarderia) {
+      rows.add(row([GardenService.guarderia], 'Guardería', null, _maxPetsForService('GUARDERIA')));
+    }
+    return rows;
   }
 
   /// Tipo de casa + jardín como UNA sola línea (antes eran 2 chips separados
@@ -1903,44 +2065,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     return byService?.toInt() ?? (_caregiver!['maxPets'] as num?)?.toInt() ?? 1;
   }
 
-  /// Capacidad por servicio ofrecido — reemplaza el viejo bloque único de
-  /// "capacidad simultánea" (que mostraba un solo número sin decir para cuál
-  /// servicio), ya que un cuidador puede aceptar, por ejemplo, 1 mascota por
-  /// paseo pero 3 en hospedaje al mismo tiempo. Hospedaje y Guardería
-  /// comparten un solo cupo combinado (no uno cada uno) — si el cuidador
-  /// ofrece ambos, se muestra UN chip conjunto en vez de dos números que se
-  /// podrían malinterpretar como sumables.
-  Widget _capacityChips(List<String> services, Color subtextColor) {
-    final chip = (String label) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: GardenColors.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
-      ),
-      child: Text(label, style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-    );
-    final chips = <Widget>[];
-    if (services.contains('PASEO')) {
-      final maxP = _maxPetsForService('PASEO');
-      chips.add(chip('Paseo: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
-    }
-    final offersHospedaje = services.contains('HOSPEDAJE');
-    final offersGuarderia = services.contains('GUARDERIA');
-    if (offersHospedaje && offersGuarderia) {
-      final maxP = _maxPetsForService('HOSPEDAJE'); // mismo valor combinado en ambos campos
-      chips.add(chip('Hospedaje + Guardería (compartido): ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
-    } else if (offersHospedaje) {
-      final maxP = _maxPetsForService('HOSPEDAJE');
-      chips.add(chip('Hospedaje: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
-    } else if (offersGuarderia) {
-      final maxP = _maxPetsForService('GUARDERIA');
-      chips.add(chip('Guardería: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
-    }
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(spacing: 8, runSpacing: 8, children: chips);
-  }
-
   /// Especies que acepta (perro/gato) — filtra el enum animalTypes a solo los
   /// dos valores de especie real (el resto de valores del enum se solapan
   /// con sizesAccepted/acceptPuppies/acceptSeniors, que ya se muestran
@@ -1948,20 +2072,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   List<String> _acceptedSpecies() {
     final raw = (_caregiver!['animalTypes'] as List? ?? []).cast<String>();
     return raw.where((t) => t == 'DOGS' || t == 'CATS').toList();
-  }
-
-  Widget _speciesChips(Color subtextColor) {
-    final species = _acceptedSpecies();
-    if (species.isEmpty) return const SizedBox.shrink();
-    const labels = {'DOGS': 'Perros', 'CATS': 'Gatos'};
-    return Wrap(
-      spacing: 8, runSpacing: 8,
-      children: species.map((s) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.success.withValues(alpha: 0.3))),
-        child: Text(labels[s] ?? s, style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w500)),
-      )).toList(),
-    );
   }
 
   String _homeTypeLabel(String type) {
@@ -2038,10 +2148,16 @@ class _ExpandableTextState extends State<_ExpandableText> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Se mide con el MISMO estilo efectivo (fuente del tema) y la misma escala
+        // de texto del teléfono que usa el Text de abajo. Antes se medía con la
+        // fuente por defecto y escala 1: el texto se cortaba en pantalla pero el
+        // cálculo decía que entraba, y no aparecía "Ver más".
+        final effectiveStyle = DefaultTextStyle.of(context).style.merge(widget.style);
         final tp = TextPainter(
-          text: TextSpan(text: widget.text, style: widget.style),
+          text: TextSpan(text: widget.text, style: effectiveStyle),
           maxLines: widget.maxLines,
-          textDirection: TextDirection.ltr,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
         )..layout(maxWidth: constraints.maxWidth);
 
         final overflows = tp.didExceedMaxLines;
