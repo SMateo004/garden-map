@@ -5,10 +5,10 @@ import 'package:flutter_map/flutter_map.dart';
 /// Todas las pantallas lo usan con `children: [...GardenBaseMap.layers(isDark), ...tusCapas]`.
 ///
 /// Estilo: minimalista, blanco puro y el verde de Garden. Se parte del mapa base gris claro de Esri
-/// ("Light Gray Canvas", diseñado justamente como lienzo neutro) y se recolorea con una matriz de color:
-/// el suelo (gris ≈239) queda blanco puro y las calles (blancas, 255) pasan a verde salvia de Garden. Los
-/// nombres de calles/barrios van en una capa aparte (transparente) que se tiñe con el verde de la marca.
-/// En tema oscuro, la misma idea sobre el fondo bosque de la app.
+/// ("Light Gray Canvas", diseñado justamente como lienzo neutro) y se recolorea con matrices de color: el
+/// campo queda blanco puro, la ciudad en un salvia muy suave, las calles en verde Garden y los nombres de
+/// calles/barrios (capa aparte, transparente) en el verde de la marca. En tema oscuro, la misma idea sobre
+/// el fondo bosque de la app.
 ///
 /// Historia de proveedores (para no repetir errores):
 /// - CARTO: pasó a exigir clave y los mosaicos mostraban "API KEY REQUIRED".
@@ -37,14 +37,42 @@ class GardenBaseMap {
   static const attribution = 'Esri, HERE, Garmin, © OpenStreetMap';
 
   // ── Matrices de color ─────────────────────────────────────────────────────────────────────────
-  // Cada fila: R, G, B, A, desfase (0–255). L = 0.2126R + 0.7152G + 0.0722B.
-  // Base clara: t = (L − 241) / 14 → suelo (≈239) blanco puro, calles (255) verde salvia #ADBA8E
-  // (el verde de Garden #778C43 al 60 % sobre blanco: se lee como calle sin ensuciar el mapa).
-  static const List<double> lightBaseMatrix = <double>[
-    -1.2452, -4.1890, -0.4229, 0, 1666.6, //
-    -1.0478, -3.5249, -0.3558, 0, 1442.8, //
-    -1.7160, -5.7727, -0.5828, 0, 2200.2, //
+  // Cada fila: R, G, B, A, desfase (0–255). L = 0.2126R + 0.7152G + 0.0722B. El lienzo gris trae:
+  // campo ≈239, mancha urbana ≈232 (zoom bajo), calles 255 (solo desde zoom ~11) y agua/límites más
+  // oscuros. Una sola matriz no puede pintar a la vez "más claro" y "más oscuro" que el campo, así que
+  // el mismo mosaico se dibuja dos veces: el SUELO y, encima, solo las CALLES (con transparencia).
+
+  /// Suelo claro: campo (239) blanco puro; ciudad (232) salvia muy suave #E7EADD; agua y ríos en salvia.
+  static const List<double> lightGroundMatrix = <double>[
+    0.7289, 2.4521, 0.2475, 0, -564.4, //
+    0.6378, 2.1456, 0.2166, 0, -462.0, //
+    1.0326, 3.4738, 0.3507, 0, -905.9, //
     0, 0, 0, 1, 0,
+  ];
+
+  /// Calles claras: color fijo verde Garden suavizado #92A369; opacas donde L = 255 y transparentes
+  /// bajo 250 (el resto del mosaico no se dibuja en esta capa).
+  static const List<double> lightRoadsMatrix = <double>[
+    0, 0, 0, 0, 146, //
+    0, 0, 0, 0, 163, //
+    0, 0, 0, 0, 105, //
+    10.8426, 36.4752, 3.6822, 0, -12750,
+  ];
+
+  /// Suelo oscuro: campo → fondo bosque #0D1A07, ciudad → superficie bosque #162610.
+  static const List<double> darkGroundMatrix = <double>[
+    -0.2733, -0.9195, -0.0928, 0, 320.3, //
+    -0.3645, -1.2261, -0.1238, 0, 435.7, //
+    -0.2733, -0.9195, -0.0928, 0, 314.3, //
+    0, 0, 0, 1, 0,
+  ];
+
+  /// Calles oscuras: verde Garden #778C43, misma transparencia que en claro.
+  static const List<double> darkRoadsMatrix = <double>[
+    0, 0, 0, 0, 119, //
+    0, 0, 0, 0, 140, //
+    0, 0, 0, 0, 67, //
+    10.8426, 36.4752, 3.6822, 0, -12750,
   ];
 
   /// Nombres: texto gris (51) → verde Garden #778C43, halo blanco → blanco. Conserva la transparencia.
@@ -83,7 +111,14 @@ class GardenBaseMap {
           urlTemplate: tileUrl,
           userAgentPackageName: userAgentPackage,
           maxNativeZoom: maxNativeZoom,
-          tileBuilder: _tinted(isDark ? darkBaseMatrix : lightBaseMatrix),
+          tileBuilder: _tinted(isDark ? darkGroundMatrix : lightGroundMatrix),
+        ),
+        // Mismos mosaicos (el navegador/la caché los reutiliza): solo las calles, en verde.
+        TileLayer(
+          urlTemplate: tileUrl,
+          userAgentPackageName: userAgentPackage,
+          maxNativeZoom: maxNativeZoom,
+          tileBuilder: _tinted(isDark ? darkRoadsMatrix : lightRoadsMatrix),
         ),
         TileLayer(
           urlTemplate: labelsUrl,

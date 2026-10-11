@@ -14,6 +14,9 @@ List<int> _apply(List<double> m, int v, {int a = 255}) {
   return out;
 }
 
+int _alpha(List<double> m, int v) =>
+    (m[15] * v + m[16] * v + m[17] * v + m[18] * 255 + m[19]).clamp(0, 255).round();
+
 void main() {
   test('mosaicos sin clave y con CORS: ni CARTO (pide clave) ni OpenStreetMap (bloquea flutter_map)', () {
     expect(GardenBaseMap.tileUrl, contains('World_Light_Gray_Base'));
@@ -24,11 +27,13 @@ void main() {
     }
   });
 
-  test('estilo claro: suelo blanco puro, calles verde Garden', () {
-    expect(_apply(GardenBaseMap.lightBaseMatrix, 239), [255, 255, 255]); // suelo del lienzo gris
-    expect(_apply(GardenBaseMap.lightBaseMatrix, 237), [255, 255, 255]);
-    final street = _apply(GardenBaseMap.lightBaseMatrix, 255);
-    expect(street, [173, 186, 142]); // #ADBA8E: verde Garden suavizado
+  test('estilo claro: campo blanco puro, ciudad salvia suave, calles verde Garden', () {
+    expect(_apply(GardenBaseMap.lightGroundMatrix, 239), [255, 255, 255]); // campo
+    expect(_apply(GardenBaseMap.lightGroundMatrix, 255), [255, 255, 255]); // calles: el suelo no las tiñe
+    expect(_apply(GardenBaseMap.lightGroundMatrix, 232), [231, 234, 221]); // mancha urbana #E7EADD
+    expect(_alpha(GardenBaseMap.lightRoadsMatrix, 255), 255); // calle opaca…
+    expect(_alpha(GardenBaseMap.lightRoadsMatrix, 239), 0); // …y el resto transparente
+    expect(_apply(GardenBaseMap.lightRoadsMatrix, 255), [146, 163, 105]); // #92A369
   });
 
   test('nombres: texto en verde Garden, halo blanco', () {
@@ -36,17 +41,17 @@ void main() {
     expect(_apply(GardenBaseMap.lightLabelsMatrix, 255), [255, 255, 255]);
   });
 
-  test('estilo oscuro: suelo fondo bosque, calles verde Garden', () {
-    final ground = _apply(GardenBaseMap.darkBaseMatrix, 239);
-    expect(ground.every((c) => c < 20), isTrue);
-    expect(_apply(GardenBaseMap.darkBaseMatrix, 255), [119, 140, 67]);
+  test('estilo oscuro: campo fondo bosque, calles verde Garden', () {
+    expect(_apply(GardenBaseMap.darkGroundMatrix, 239), [13, 26, 7]); // #0D1A07
+    expect(_apply(GardenBaseMap.darkRoadsMatrix, 255), [119, 140, 67]); // #778C43
+    expect(_alpha(GardenBaseMap.darkRoadsMatrix, 239), 0);
   });
 
   test('cada capa lleva su filtro y está la atribución', () {
     for (final dark in [false, true]) {
       final layers = GardenBaseMap.layers(dark);
       final tiles = layers.whereType<TileLayer>().toList();
-      expect(tiles, hasLength(2));
+      expect(tiles, hasLength(3)); // suelo, calles, nombres
       expect(tiles.every((t) => t.tileBuilder != null), isTrue);
       expect(layers.whereType<SimpleAttributionWidget>(), hasLength(1));
     }
