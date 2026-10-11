@@ -555,7 +555,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
 
   if (missing.length > 0) {
     const fieldLabels: Record<string, string> = {
-      bio: 'descripción del perfil (paso 7)',
+      bio: 'tu presentación (paso 2, junto a tu foto de perfil)',
       zone: 'zona de servicio (paso 1)',
       servicesOffered: 'servicios ofrecidos (paso 3)',
       photos: 'fotos del cuidador en acción (paso 6) — mínimo 2',

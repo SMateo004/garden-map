@@ -164,8 +164,9 @@ function calculatePercentage(profile: any, minPhotos: number): number {
         // Tipos y tamaños
         Array.isArray(profile.animalTypes) && profile.animalTypes.length > 0,
         Array.isArray(profile.sizesAccepted) && profile.sizesAccepted.length > 0,
-        // Kit de bienvenida (polera/gorra) — se pide en el mismo paso
-        Boolean(profile.shirtSize),
+        // Kit de bienvenida (polera/gorra) — solo se pide al registrarse: un perfil ya
+        // aprobado no necesita volver a darla para estar completo.
+        Boolean(profile.shirtSize) || profile.status === 'APPROVED',
         // Políticas
         profile.acceptAggressive !== null && profile.acceptAggressive !== undefined,
         profile.acceptPuppies   !== null && profile.acceptPuppies   !== undefined,

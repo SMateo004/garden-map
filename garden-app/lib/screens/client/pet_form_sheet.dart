@@ -12,6 +12,7 @@ import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/web_file_picker.dart';
+import '../../widgets/ai_write_assist.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../utils/input_formatters.dart';
 import '../../utils/photo_picker.dart';
@@ -693,6 +694,12 @@ class _PetFormSheetState extends State<PetFormSheet> {
           style: TextStyle(color: c.text),
           decoration: _deco(c, 'Ej: come a las 8 y a las 19, le asustan los truenos, ama la pelota'),
         ),
+        AiWriteAssist(
+          controller: _notesCtrl,
+          field: 'petRoutine',
+          endpoint: AiWriteAssist.generalEndpoint,
+          onApplied: () => setState(() {}),
+        ),
         const SizedBox(height: 6),
         _label(c, 'Salud y cuidados especiales'),
         TextFormField(
@@ -701,6 +708,12 @@ class _PetFormSheetState extends State<PetFormSheet> {
           maxLength: 500,
           style: TextStyle(color: c.text),
           decoration: _deco(c, 'Ej: medicación, alergias, dieta especial'),
+        ),
+        AiWriteAssist(
+          controller: _specialCtrl,
+          field: 'petHealth',
+          endpoint: AiWriteAssist.generalEndpoint,
+          onApplied: () => setState(() {}),
         ),
         const SizedBox(height: 6),
         _label(c, 'Número de microchip'),

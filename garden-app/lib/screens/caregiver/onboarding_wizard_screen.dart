@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart' as image_picker_pkg;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -25,6 +25,7 @@ import '../../design/garden_service.dart';
 import '../../theme/garden_motion.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
+import '../../widgets/ai_write_assist.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import '../../utils/person_validators.dart';
@@ -73,6 +74,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     RegistrationPhase(name: 'Contrato', icon: GIcon.documento, startStep: 10, endStep: 10),
     RegistrationPhase(name: 'Seguridad', icon: GIcon.seguridad, startStep: 11, endStep: 11),
   ];
+
+  // Presentación del cuidador (bio) — se pide en el paso 2, junto a la foto de perfil: ahí ya
+  // existe la cuenta (el asistente de IA necesita sesión) y es parte de "Tu perfil", no del
+  // perfil profesional del paso 7.
+  final _bioController = TextEditingController();
+  static const int _bioMin = 50;
+  static const int _bioMax = 500;
+
+  /// La cuenta ya existe: se creó en el paso 1 de esta sesión, o se retomó el registro, o viene
+  /// de ser dueño. Volver al paso 1 NO debe volver a registrar (daría "correo ya registrado").
+  bool _accountCreated = false;
+  bool get _accountExists => widget.clientConversionMode || _accountCreated;
 
   // Paso 1: Datos personales
   final _firstNameController = TextEditingController();
@@ -194,7 +207,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       _firstNameController, _lastNameController, _emailController,
       _passwordController, _phoneController, _addressStreetController,
       ..._emergencyNameControllers, ..._emergencyPhoneControllers,
-      _pinController, _pinConfirmController,
+      _pinController, _pinConfirmController, _bioController,
     ]) {
       c.addListener(_onFormFieldChanged);
     }
@@ -271,10 +284,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Only compute resume step when explicitly navigating back from home screen.
-    // This prevents overriding the user's manual step navigation mid-wizard.
-    if (token.isNotEmpty && widget.resumeMode) {
-      await _computeAndSetResumeStep(token);
+    // Con sesión iniciada la cuenta ya existe: se retoma donde quedó el registro. Antes solo se
+    // hacía con resumeMode (botón "Continuar registro"), así que al volver a abrir la app o
+    // recargar la página —cuando se pierde el `extra` de la ruta— arrancaba desde el paso 1
+    // con todo vacío. Solo el flujo explícito de "continuar" envía el registro solo si ya está
+    // completo; una visita suelta a la pantalla nunca lo hace.
+    if (token.isNotEmpty) {
+      await _computeAndSetResumeStep(token, autoSubmit: widget.resumeMode);
     }
   }
 
@@ -383,8 +399,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       _precioGuarderia       = pGuar > 0 ? pGuar : 50.0;
       _guarderiaIncludeWalk  = profile['guarderiaIncludeWalk'] == true;
 
-      // Step 5: Profile photo
+      // Step 5: Profile photo + presentación
       _profilePhotoUrl = profile['profilePhoto'] as String?;
+      _bioController.text = (profile['bio'] as String?) ?? '';
 
       // Step 9: Contactos de emergencia — rellenar si ya existen (parcial o completo)
       final emergencyContacts = (profile['emergencyContacts'] as List?) ?? [];
@@ -398,17 +415,51 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     });
   }
 
-  Future<void> _computeAndSetResumeStep(String token) async {
+  /// Rellena el paso 1 (datos personales y ubicación) con lo ya guardado, para que al volver a
+  /// él —o al retomar el registro— no haya que escribirlo otra vez.
+  void _restoreStepZero(Map<String, dynamic> profile) {
+    final user = profile['user'] as Map<String, dynamic>? ?? const {};
+    String str(dynamic v) => (v as String?)?.trim() ?? '';
+    setState(() {
+      if (str(user['firstName']).isNotEmpty) _firstNameController.text = str(user['firstName']);
+      if (str(user['lastName']).isNotEmpty) _lastNameController.text = str(user['lastName']);
+      if (str(user['email']).isNotEmpty) _emailController.text = str(user['email']);
+      if (str(user['phone']).isNotEmpty && _phoneController.text.isEmpty) {
+        _phoneController.text = str(user['phone']);
+      }
+      final dob = user['dateOfBirth'] as String?;
+      if (dob != null && _dateOfBirth == null) _dateOfBirth = DateTime.tryParse(dob);
+
+      _addressController.text = str(profile['address']);
+      _addressStreetController.text = str(profile['addressStreet']);
+      _addressNumberController.text = str(profile['addressNumber']);
+      _addressApartmentController.text = str(profile['addressApartment']);
+      _addressCondominioController.text = str(profile['addressCondominio']);
+      _addressReferenceController.text = str(profile['addressReference']);
+      _isApartment = str(profile['addressApartment']).isNotEmpty || str(profile['addressCondominio']).isNotEmpty;
+      _addressZone = profile['addressZone'] as String? ?? _addressZone;
+      _gardenCityId = profile['cityId'] as String? ?? _gardenCityId;
+      _addressLat = (profile['addressLat'] as num?)?.toDouble() ?? _addressLat;
+      _addressLng = (profile['addressLng'] as num?)?.toDouble() ?? _addressLng;
+    });
+  }
+
+  Future<void> _computeAndSetResumeStep(String token, {bool autoSubmit = true}) async {
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/caregiver/my-profile'),
         headers: {'Authorization': 'Bearer $token'},
       );
       final data = jsonDecode(res.body);
+      // Sin perfil de cuidador (p. ej. un dueño que solo pasó por acá): registro nuevo.
       if (data['success'] != true) return;
       final profile = data['data'] as Map<String, dynamic>;
 
+      // La cuenta ya existe: el paso 1 no vuelve a registrar y se salta la pantalla de bienvenida.
+      if (mounted) setState(() { _accountCreated = true; _showIntro = false; });
+
       // Pre-populate all wizard state variables from the saved profile
+      _restoreStepZero(profile);
       _populateStateFromProfile(profile);
       if (mounted) setState(() => _phoneVerifiedLocked = profile['phoneVerified'] == true);
 
@@ -419,8 +470,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         setState(() => _phoneController.text = savedPhone);
       }
 
-      // Step 1: Foto de perfil
-      if (profile['profilePhoto'] == null) {
+      // Step 1: Foto de perfil + presentación
+      if (profile['profilePhoto'] == null ||
+          ((profile['bio'] as String?) ?? '').trim().length < _bioMin) {
         setState(() => _currentStep = 1);
         return;
       }
@@ -472,9 +524,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       // termsAccepted se auto-guarda en true al completar el paso 6 en modo
       // embedded, lo usamos como señal definitiva de "paso 6 guardado".
       final termsAccepted = profile['termsAccepted'] == true;
-      final bio = (profile['bio'] as String? ?? '').trim();
-      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
-      final bioOk = bio.length >= 10 || bioDetail.length >= 10;
       final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
       final animalTypes = (profile['animalTypes'] as List?) ?? [];
       // BUG (reportado): el paso 6 nunca envía `isAmateur` al backend — solo
@@ -492,7 +541,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
 
       final step6Complete = termsAccepted &&
-          bioOk &&
           sizesAccepted.isNotEmpty &&
           animalTypes.isNotEmpty &&
           experienceOk &&
@@ -544,9 +592,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
 
       // All steps complete — attempt submit (handles already-approved case)
-      await _completeWizard();
-    } catch (_) {
-      // If error, stay at step 0 (new registration)
+      if (autoSubmit) await _completeWizard();
+    } catch (e) {
+      // Antes esto se tragaba el error y dejaba al usuario en el paso 1 con todo vacío, como si
+      // el registro no existiera. Ahora se avisa y se puede reintentar.
+      debugPrint('Wizard: no se pudo retomar el registro: $e');
+      if (mounted) {
+        GardenErrorDialog.show(
+          context,
+          'No pudimos recuperar tu avance. Revisa tu conexión e intenta de nuevo.',
+          actionLabel: 'Reintentar',
+          onAction: () => _computeAndSetResumeStep(token, autoSubmit: autoSubmit),
+        );
+      }
     }
   }
 
@@ -632,6 +690,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _breedsWhyController.dispose();
     _typicalDayController.dispose();
     _bioDetailController.dispose();
+    _bioController.dispose();
     for (final c in _emergencyNameControllers) { c.dispose(); }
     for (final c in _emergencyPhoneControllers) { c.dispose(); }
     super.dispose();
@@ -693,7 +752,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           (PersonValidators.name(_lastNameController.text, label: 'apellido'), _keyStep0Name),
           // Quien ya es dueño (clientConversionMode) ya tiene cuenta: su correo
           // y contraseña no se tocan acá.
-          if (!widget.clientConversionMode) ...[
+          if (!_accountExists) ...[
             (PersonValidators.email(_emailController.text), _keyStep0Email),
             (PersonValidators.password(_passwordController.text), _keyStep0Password),
           ],
@@ -709,9 +768,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           }
         }
         return true;
-      case 1: // Foto de perfil
+      case 1: // Foto de perfil + presentación
         if (_profilePhotoUrl == null && _localProfilePhoto == null) {
           _showStepError('Por favor, sube una foto de perfil para continuar');
+          return false;
+        }
+        final bioLen = _bioController.text.trim().length;
+        if (bioLen < _bioMin) {
+          _showStepError('Cuéntales un poco sobre ti: escribe al menos $_bioMin caracteres ($bioLen de $_bioMin)');
           return false;
         }
         return true;
@@ -811,14 +875,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       case 0:
         return _firstNameController.text.trim().isNotEmpty &&
             _lastNameController.text.trim().isNotEmpty &&
-            (widget.clientConversionMode ||
+            (_accountExists ||
                 (_emailController.text.trim().isNotEmpty && _passwordController.text.isNotEmpty)) &&
             _phoneController.text.trim().isNotEmpty &&
             _addressStreetController.text.trim().isNotEmpty &&
             _addressZone != null &&
             _dateOfBirth != null;
       case 1:
-        return _profilePhotoUrl != null || _localProfilePhoto != null;
+        return (_profilePhotoUrl != null || _localProfilePhoto != null) &&
+            _bioController.text.trim().length >= _bioMin;
       case 2:
         if (_servicesOffered.isEmpty) return false;
         if (_servicesOffered.contains('HOSPEDAJE') && _homeType == null) return false;
@@ -868,7 +933,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     // esos datos cargados. Antes se saltaba la validación acá y el dato faltante
     // recién se detectaba al enviar el perfil completo, muchos pasos después,
     // sin forma de volver a corregirlo.
-    if (_currentStep == 0 && widget.clientConversionMode) {
+    if (_currentStep == 0 && _accountExists) {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
       // BUG (encontrado en producción): antes esto solo validaba y avanzaba
@@ -953,6 +1018,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
       if (!await _patchProfile({
         if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
+        'bio': _bioController.text.trim(),
       })) return;
       setState(() { _isLoading = false; _currentStep++; });
       return;
@@ -1173,6 +1239,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         await authService.saveUserData(data['data']['user']);
         setState(() {
           _authToken = data['data']['accessToken'] as String? ?? _authToken;
+          _accountCreated = true;
           _currentStep = 1;
         });
       } else {
@@ -1251,7 +1318,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     return body['message']?.toString();
   }
 
-  /// Step 6 → next: verify bio was saved, then auto-skip steps 7/8/9 if already done.
+  /// Step 6 → next: auto-skip steps 7/8/9 if already done. La presentación (bio) se pide y se
+  /// valida en el paso 2, no acá: este paso es el perfil profesional.
   Future<void> _afterStep6Save() async {
     setState(() => _isLoading = true);
     try {
@@ -1261,16 +1329,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final profile = data['data'] as Map<String, dynamic>? ?? {};
-
-      // Catch missing bio HERE (paso 7) before advancing, not at final submit.
-      final bio = (profile['bio'] as String? ?? '').trim();
-      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
-      if (bio.length < 10 && bioDetail.length < 10) {
-        if (mounted) {
-          GardenErrorDialog.show(context, 'Falta completar: descripción de tu perfil (mínimo 10 caracteres)');
-        }
-        return; // Stay on step 6 (paso 7)
-      }
 
       final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
       final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
@@ -1516,13 +1574,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           SizedBox(key: _keyStep0Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
               // Quien ya es dueño entra con su cuenta: el correo se muestra, no se cambia acá.
-              readOnly: widget.clientConversionMode,
+              readOnly: _accountExists,
               autocorrect: false,
-              style: TextStyle(color: widget.clientConversionMode ? subtextColor : textColor),
+              style: TextStyle(color: _accountExists ? subtextColor : textColor),
               decoration: _field('Correo electrónico', GIcon.correo)),
           const SizedBox(height: 16),
 
-          if (!widget.clientConversionMode) ...[
+          if (!_accountExists) ...[
             SizedBox(key: _keyStep0Password, height: 0),
             TextFormField(controller: _passwordController, obscureText: !_showPassword,
                 style: TextStyle(color: textColor),
@@ -2843,10 +2901,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text('Tu foto de perfil', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          Text('Tu foto y tu presentación', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 10),
           Text(
-            'Es lo primero que verán los dueños de mascotas. Sube una foto clara, sonriendo — idealmente con una mascota.',
+            'Es lo primero que verán los dueños de mascotas. Sube una foto clara, sonriendo — idealmente con una mascota — y cuéntales quién eres.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
@@ -2896,6 +2954,45 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     style: TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w600)),
               ]),
             ),
+          const SizedBox(height: 32),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Sobre ti', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Tu experiencia con mascotas, cómo cuidas y por qué confiar en ti. Mínimo $_bioMin caracteres.',
+              style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _bioController,
+            maxLines: 5,
+            maxLength: _bioMax,
+            keyboardType: TextInputType.multiline,
+            textCapitalization: TextCapitalization.sentences,
+            style: TextStyle(color: textColor),
+            decoration: InputDecoration(
+              hintText: 'Ej: Llevo 3 años cuidando perros en mi casa, que tiene patio. Me encantan los cachorros...',
+              hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+              filled: true,
+              fillColor: surfaceEl,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+              ),
+              contentPadding: const EdgeInsets.all(14),
+            ),
+          ),
+          AiWriteAssist(
+            controller: _bioController,
+            field: 'bio',
+            onApplied: () { if (mounted) setState(() {}); },
+          ),
         ],
       ),
     );
@@ -2965,7 +3062,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     final stepTitles = [
       'Datos básicos',
-      'Foto de perfil',
+      'Foto y presentación',
       'Servicios',
       'Precio',
       'Disponibilidad',
@@ -2981,7 +3078,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     // Qué gana el cuidador con cada paso — una línea, sin cifras inventadas.
     const stepWhy = <(GIcon, String)>[
       (GIcon.perfil, 'Así las familias saben con quién hablan'),
-      (GIcon.foto, 'Una foto clara genera confianza desde el primer vistazo'),
+      (GIcon.foto, 'Una foto clara y unas líneas sobre ti generan confianza desde el primer vistazo'),
       (GIcon.huella, 'Elige solo lo que de verdad vas a ofrecer'),
       (GIcon.billetera, 'Puedes cambiarlo cuando quieras'),
       (GIcon.disponibilidad, 'Solo te llegan solicitudes en estos horarios'),

@@ -77,6 +77,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _keyPolicies = GlobalKey();
   final _keyHandleAnxious = GlobalKey();
   final _keyEmergencyResponse = GlobalKey();
+  final _keyShirt = GlobalKey();
 
   // Controllers
   final _bioController = TextEditingController();
@@ -192,6 +193,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   /// Talla de la polera/gorra del kit de bienvenida (XS-XXL) — distinto de
   /// _acceptedSizes, que son los tamaños de MASCOTA que el cuidador acepta.
   String? _shirtSize;
+  /// La talla del kit de bienvenida se pide solo al registrarse: una vez aprobado el perfil
+  /// ya no se muestra ni cuenta como dato faltante al editar.
+  bool _alreadyApproved = false;
+  bool get _showShirtSize => widget.embeddedMode || !_alreadyApproved;
   static const List<String> _shirtSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   bool _weekdays = true;
   bool _weekends = false;
@@ -371,6 +376,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         : List<String>.from(details['acceptedPetTypes'] ?? []);
     _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
     _shirtSize = profile['shirtSize'] as String?;
+    _alreadyApproved = const {'APPROVED', 'SUSPENDED'}.contains(profile['status']);
     _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
     _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
     _holidays = availability['holidays'] ?? defaultSchedule['holidays'] ?? false;
@@ -509,7 +515,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       _whatDiffersController.text.trim().length >= 3,
       _acceptedPetTypes.isNotEmpty,
       _acceptedSizes.isNotEmpty,
-      _shirtSize != null,
+      !_showShirtSize || _shirtSize != null,
       true, // acceptAggressive (bool no-nullable en Dart, siempre "definido")
       true, // acceptPuppies
       true, // acceptSeniors
@@ -549,7 +555,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       ('¿Qué te diferencia?', _whatDiffersController.text.trim().length >= 3),
       ('Tipos de mascota que aceptas', _acceptedPetTypes.isNotEmpty),
       ('Tamaños que aceptas', _acceptedSizes.isNotEmpty),
-      ('Talla de tu kit de bienvenida', _shirtSize != null),
+      if (_showShirtSize) ('Talla de tu kit de bienvenida', _shirtSize != null),
     ];
   }
 
@@ -736,6 +742,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     }
 
+    // Talla del kit de bienvenida: se exige al registrarse (no al editar un perfil ya aprobado).
+    if (_showShirtSize && _shirtSize == null) {
+      return _showValidationError('Elige la talla de tu polera y gorra (Kit de bienvenida)', scrollTo: _keyShirt);
+    }
+
     setState(() => _isSaving = true);
     try {
       String? hType;
@@ -754,7 +765,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       final pricePerGuarderia = parseDecimal(_pricePerGuarderiaController.text);
 
       final body = <String, dynamic>{
-        'bio': _bioController.text.trim(),
+        // La presentación se escribe en el paso 2 del registro; acá solo se conserva.
+        if (_bioController.text.trim().isNotEmpty) 'bio': _bioController.text.trim(),
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
@@ -1669,12 +1681,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   const SizedBox(height: 6),
                                   _viewOrInput(_includesController, 'Ej: Paseos diarios, fotos del recorrido, reportes de salud...',
                                     maxLines: 2, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
+                                  if (_isEditing)
+                                    AiWriteAssist(controller: _includesController, field: 'faqIncludes', onApplied: () { setState(() {}); _computeCompletion(); }),
                                   const SizedBox(height: 14),
                                   Text('¿Qué necesitas del dueño?',
                                     style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 6),
                                   _viewOrInput(_requirementsController, 'Ej: Correa, vacunas al día, bolsas para recoger...',
                                     maxLines: 2, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
+                                  if (_isEditing)
+                                    AiWriteAssist(controller: _requirementsController, field: 'faqRequirements', onApplied: () { setState(() {}); _computeCompletion(); }),
                                 ],
                               )),
                             const SizedBox(height: 14),
@@ -2199,6 +2215,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 maxLines: 2,
               ),
             ),
+            if (widget.embeddedMode || _isEditing)
+              AiWriteAssist(controller: _includesController, field: 'faqIncludes', onApplied: () { setState(() {}); _computeCompletion(); }),
             const SizedBox(height: 12),
             const SizedBox(height: 12),
             IgnorePointer(
@@ -2210,6 +2228,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 maxLines: 2,
               ),
             ),
+            if (widget.embeddedMode || _isEditing)
+              AiWriteAssist(controller: _requirementsController, field: 'faqRequirements', onApplied: () { setState(() {}); _computeCompletion(); }),
 
             const Divider(height: 48),
 
@@ -2324,7 +2344,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Kit de bienvenida — polera + gorra Garden. La talla es lo único
-            // que se pide acá; el envío se coordina después por separado.
+            // que se pide acá; el envío se coordina después por separado. Solo en el
+            // registro: con el perfil ya aprobado no tiene sentido volver a pedirla.
+            if (_showShirtSize) ...[
+            SizedBox(key: _keyShirt, height: 0),
             _sectionTitle('Kit de bienvenida', textColor),
             Text(
               'Te vamos a enviar una polera y una gorra oficiales de Garden a tu domicilio, sin costo. '
@@ -2362,6 +2385,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
 
             const Divider(height: 48),
+            ],
 
             if (!widget.embeddedMode) ...[
               _sectionTitle('Documentos', textColor),

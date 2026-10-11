@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
+import '../../widgets/ai_write_assist.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -636,6 +637,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   decoration: fieldDeco('Una breve descripción de ti', GIcon.documento, missing: _bioCtrl.text.trim().isEmpty).copyWith(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   ),
+                ),
+                AiWriteAssist(
+                  controller: _bioCtrl,
+                  field: 'ownerBio',
+                  endpoint: AiWriteAssist.generalEndpoint,
+                  onApplied: () => setState(() {}),
                 ),
                 const SizedBox(height: 20),
               ],

@@ -5,7 +5,8 @@ import '../design/garden_icons.dart';
 import '../services/auth_state.dart';
 import '../theme/garden_theme.dart';
 
-/// Botón "Mejorar con IA" para los campos de texto libre del registro del cuidador.
+/// Botón "Mejorar con IA" para los campos de texto libre (registro y perfil del cuidador,
+/// y datos del dueño y de su mascota).
 ///
 /// - Con texto escrito: la IA lo mejora (ortografía, claridad) sin cambiar lo que dice.
 /// - Sin texto: pide unas notas cortas y redacta el párrafo.
@@ -15,10 +16,15 @@ import '../theme/garden_theme.dart';
 ///
 /// [field] es la clave del campo en el backend (bio, bioDetail, experienceDescription,
 /// whyCaregiver, whatDiffers, handleAnxious, emergencyResponse, spaceDescription,
-/// typicalDay, breedsWhy).
+/// typicalDay, breedsWhy, faqIncludes, faqRequirements, ownerBio, petRoutine, petHealth).
 class AiWriteAssist extends StatefulWidget {
   final TextEditingController controller;
   final String field;
+
+  /// Ruta del backend. Por defecto la del cuidador; los campos del dueño usan [generalEndpoint]
+  /// (cualquier usuario con sesión).
+  final String endpoint;
+  static const generalEndpoint = '/ai/improve-text';
 
   /// Se llama después de aplicar el texto (para que la pantalla recalcule su estado).
   final VoidCallback? onApplied;
@@ -27,6 +33,7 @@ class AiWriteAssist extends StatefulWidget {
     super.key,
     required this.controller,
     required this.field,
+    this.endpoint = '/caregiver/profile/improve-text',
     this.onApplied,
   });
 
@@ -52,7 +59,7 @@ class _AiWriteAssistState extends State<AiWriteAssist> {
     setState(() => _loading = true);
     try {
       final res = await http.post(
-        Uri.parse('$_baseUrl/caregiver/profile/improve-text'),
+        Uri.parse('$_baseUrl${widget.endpoint}'),
         headers: {'Authorization': 'Bearer ${AuthState.token}', 'Content-Type': 'application/json'},
         body: jsonEncode({
           'field': widget.field,

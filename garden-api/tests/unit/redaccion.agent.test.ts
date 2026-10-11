@@ -36,6 +36,18 @@ describe('mejorarRedaccion', () => {
     expect(mockCallClaude.mock.calls[0][1]).toContain('esperiencia');
   });
 
+  it('admite las preguntas frecuentes del cuidador y los datos del dueño y su mascota', async () => {
+    mockCallClaude.mockResolvedValue({ texto: 'Paseos diarios con fotos del recorrido.' });
+    for (const campo of ['faqIncludes', 'faqRequirements']) {
+      await expect(mejorarRedaccion({ campo, texto: 'paseos diarios con fotos del recorrido' })).resolves.toMatchObject({ modo: 'mejorado' });
+      expect(mockCallClaude.mock.calls.at(-1)![1]).toContain('del cuidador');
+    }
+    for (const campo of ['ownerBio', 'petRoutine', 'petHealth']) {
+      await expect(mejorarRedaccion({ campo, texto: 'come a las ocho y le asustan los truenos' })).resolves.toMatchObject({ modo: 'mejorado' });
+      expect(mockCallClaude.mock.calls.at(-1)![1]).toContain('del dueño');
+    }
+  });
+
   it('sin texto pero con notas redacta (modo generado)', async () => {
     mockCallClaude.mockResolvedValue({ texto: 'Cuido perros en mi casa con patio.' });
     const out = await mejorarRedaccion({ campo: 'bio', notas: 'cuido perros en casa con patio' });
