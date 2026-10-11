@@ -258,7 +258,12 @@ router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHan
 
     // Push notification al destinatario (siempre, no solo el primer mensaje)
     const senderName = payload.senderName;
-    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, message.trim()).catch(() => {});
+    // Con tipo y reserva: tocar la notificación abre ESE chat (antes iba sin
+    // datos y la app no sabía a dónde llevar).
+    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, message.trim(), {
+        type: 'CHAT_MESSAGE',
+        bookingId: bookingId!,
+    }).catch(() => {});
     // Empresas: el mensaje del cliente también les llega a los empleados con permiso de chat.
     if (isClient) {
         notifyStaffWithPermission(booking.caregiverId, 'canChat', {

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'local_notification_service.dart';
 
 class ChatMessage {
   final String id;
@@ -71,10 +70,27 @@ class ChatService extends ChangeNotifier {
   // socket no esté llegando. Se cancela apenas el socket reconecta.
   Timer? _pollTimer;
   bool _hasConnectedOnce = false;
-  // El ChatScreen setea esto en didChangeAppLifecycleState — evita mostrar una
-  // notificación local por un mensaje que ya se ve en pantalla porque el chat
-  // está abierto y en primer plano ahora mismo.
-  bool isForeground = true;
+  /// Reserva del chat que está abierto y a la vista ahora mismo (o null).
+  /// FcmService no muestra aviso de los mensajes de ese chat.
+  static String? visibleChatBookingId;
+
+  // El ChatScreen setea esto en didChangeAppLifecycleState.
+  bool _isForeground = true;
+  bool get isForeground => _isForeground;
+  set isForeground(bool value) {
+    _isForeground = value;
+    _syncVisible();
+  }
+
+  void _syncVisible() {
+    final id = _pendingBookingId;
+    if (id == null) return;
+    if (_isForeground && !_isDisposed) {
+      visibleChatBookingId = id;
+    } else if (visibleChatBookingId == id) {
+      visibleChatBookingId = null;
+    }
+  }
 
   List<ChatMessage> get messages => _messages;
   bool get connected => _connected;
@@ -189,15 +205,8 @@ class ChatService extends ChangeNotifier {
             // Llegó lo que estaba escribiendo.
             _otherTypingTimer?.cancel();
             otherTyping = false;
-            // Solo notificar si el chat NO está en primer plano — si está
-            // abierto y visible el mensaje ya aparece en la lista, una
-            // notificación local ahí encima es puro ruido duplicado.
-            if (!isForeground) {
-              LocalNotificationService.show(
-                title: msg.senderName,
-                body: msg.message,
-              );
-            }
+            // El aviso con la app en segundo plano lo da la notificación push
+            // del servidor (antes acá se mostraba otro y llegaba doble).
           }
           notifyListeners();
         } catch (e) {
@@ -292,6 +301,7 @@ class ChatService extends ChangeNotifier {
 
   void joinBooking(String bookingId) {
     _pendingBookingId = bookingId;
+    _syncVisible();
     if (_connected) {
       _socket?.emit('join_booking', bookingId);
     }
@@ -385,6 +395,7 @@ class ChatService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _syncVisible();
     _otherTypingTimer?.cancel();
     _stopPolling();
     _socket?.disconnect();

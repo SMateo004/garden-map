@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'local_notification_service.dart';
 import 'secure_storage_service.dart';
 import 'auth_state.dart';
+import 'chat_service.dart';
 
 /// Responde al push silencioso horario de Hospedaje/Guardería
 /// (hospedaje-location-ping.job.ts en el backend) mandando un punto de
@@ -84,11 +85,19 @@ class FcmService {
         if (bookingId != null) _handleSilentLocationPing(bookingId);
         return; // completamente silencioso, sin notificación local
       }
+      // Mensaje del chat que la persona tiene abierto delante: ya lo está
+      // viendo, un aviso encima es ruido.
+      if (message.data['type'] == 'CHAT_MESSAGE' &&
+          message.data['bookingId'] != null &&
+          message.data['bookingId'] == ChatService.visibleChatBookingId) {
+        return;
+      }
       final notification = message.notification;
       if (notification != null) {
         LocalNotificationService.show(
           title: notification.title ?? 'GARDEN',
           body: notification.body ?? '',
+          data: message.data,
         );
       }
       if (message.data['type'] == 'SERVICE_INCIDENT_URGENT') {
@@ -98,6 +107,8 @@ class FcmService {
 
     // Tap en notificación con app en segundo plano
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    // Tocar un aviso local (app abierta) navega igual que una push.
+    LocalNotificationService.onTap = _handleData;
 
     // Tap en notificación con app terminada
     final initial = await _fcm.getInitialMessage();
@@ -137,8 +148,9 @@ class FcmService {
   /// usa el rol actual de la sesión (`AuthState.effectiveRole`) en vez de
   /// que el backend intente adivinarlo — es más robusto porque el rol
   /// correcto siempre es el de quien está mirando el teléfono en este momento.
-  static void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
+  static void _handleNotificationTap(RemoteMessage message) => _handleData(message.data);
+
+  static void _handleData(Map<String, dynamic> data) {
     final type = data['type'] as String?;
     final bookingId = data['bookingId'] as String?;
 

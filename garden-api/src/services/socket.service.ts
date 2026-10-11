@@ -360,7 +360,10 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                             });
                         }
                     }
-                    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, savedMessage.message).catch(() => {});
+                    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, savedMessage.message, {
+                        type: 'CHAT_MESSAGE',
+                        bookingId,
+                    }).catch(() => {});
                 } catch (notifErr) {
                     logger.error('Error notifying chat message (socket path)', { notifErr });
                 }
