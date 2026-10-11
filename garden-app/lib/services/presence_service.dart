@@ -43,6 +43,10 @@ class PresenceService {
       _socket = IO.io(wsUrl, <String, dynamic>{
         'transports': ['polling', 'websocket'],
         'autoConnect': false,
+        // Conexión propia: sin esto socket_io_client devuelve el socket YA abierto
+        // por otra pantalla para la misma URL (el de presencia), y al cerrarse uno
+        // se cerraba el otro. Ver ChatService.connect.
+        'forceNew': true,
         'auth': {'token': AuthState.token},
         'reconnection': true,
         'reconnectionDelay': 2000,

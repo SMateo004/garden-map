@@ -145,30 +145,15 @@ class ChatService extends ChangeNotifier {
       _socket = IO.io(wsUrl, <String, dynamic>{
         'transports': ['polling', 'websocket'],
         'autoConnect': false,
+        // Conexión propia: sin esto socket_io_client devuelve el socket YA abierto
+        // por otra pantalla para la misma URL (el de presencia), y al cerrarse uno
+        // se cerraba el otro. Ver ChatService.connect.
+        'forceNew': true,
         'auth': {'token': _token},
         'timeout': 10000,
       });
 
-      _socket!.onConnect((_) {
-        _connected = true;
-        debugPrint('Chat: Socket connected');
-        // Auto-join the room if joinBooking was called before connection was ready
-        if (_pendingBookingId != null) {
-          _socket!.emit('join_booking', _pendingBookingId!);
-          debugPrint('Chat: Auto-joined room $_pendingBookingId on connect');
-        }
-        // Ya no hace falta pollear por HTTP — el socket vuelve a entregar en tiempo real.
-        _stopPolling();
-        // Si esto es una RECONEXIÓN (no la primera conexión), puede que se hayan
-        // perdido mensajes mientras estuvo desconectado — traemos el historial
-        // completo de nuevo para no dejar huecos (antes esto no se hacía y un
-        // socket que se caía por red/background nunca recuperaba lo perdido).
-        if (_hasConnectedOnce && _pendingBookingId != null) {
-          loadHistory(_pendingBookingId!);
-        }
-        _hasConnectedOnce = true;
-        if (!_isDisposed) notifyListeners();
-      });
+      _socket!.onConnect((_) => _onSocketConnected());
 
       _socket!.onDisconnect((_) {
         _connected = false;
@@ -260,9 +245,36 @@ class ChatService extends ChangeNotifier {
       });
 
       _socket!.connect();
+      // Si el socket ya venía conectado, onConnect no se dispara nunca más:
+      // sin esto el chat no se unía a la sala (era el error de fondo antes
+      // de forceNew, cuando recibía el socket de presencia ya abierto).
+      if (_socket!.connected && !_connected) _onSocketConnected();
     } catch (e) {
       debugPrint('Chat: Failed to initialize socket: $e');
     }
+  }
+
+  /// Al conectar: se une a la sala de la reserva, deja de consultar por HTTP
+  /// y, si es una reconexión, recupera lo que se haya perdido.
+  void _onSocketConnected() {
+    _connected = true;
+    debugPrint('Chat: Socket connected');
+    // Auto-join the room if joinBooking was called before connection was ready
+    if (_pendingBookingId != null) {
+      _socket!.emit('join_booking', _pendingBookingId!);
+      debugPrint('Chat: Auto-joined room $_pendingBookingId on connect');
+    }
+    // Ya no hace falta pollear por HTTP — el socket vuelve a entregar en tiempo real.
+    _stopPolling();
+    // Si esto es una RECONEXIÓN (no la primera conexión), puede que se hayan
+    // perdido mensajes mientras estuvo desconectado — traemos el historial
+    // completo de nuevo para no dejar huecos (antes esto no se hacía y un
+    // socket que se caía por red/background nunca recuperaba lo perdido).
+    if (_hasConnectedOnce && _pendingBookingId != null) {
+      loadHistory(_pendingBookingId!);
+    }
+    _hasConnectedOnce = true;
+    if (!_isDisposed) notifyListeners();
   }
 
   void _startPolling() {

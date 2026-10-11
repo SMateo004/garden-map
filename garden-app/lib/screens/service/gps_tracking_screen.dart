@@ -229,6 +229,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
           .setTransports(['polling', 'websocket'])
           .setAuth({'token': widget.token})
           .disableAutoConnect()
+          .enableForceNew() // conexión propia, no la de presencia (ver ChatService.connect)
           .setTimeout(15000)
           .setReconnectionAttempts(3)
           .build(),

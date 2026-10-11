@@ -206,6 +206,16 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             logger.info('User joined booking room', { userId, bookingId });
             // Avisar al otro participante ya presente en la sala que este usuario está en línea.
             socket.to(`booking:${bookingId}`).emit('user_online', { userId });
+            // Y al que entra, el estado actual de la otra parte: así "En línea"
+            // no depende solo de la foto que trajo GET /other-participant.
+            const parties = await prisma.booking.findUnique({
+                where: { id: bookingId },
+                select: { clientId: true, caregiver: { select: { userId: true } } },
+            }).catch(() => null);
+            for (const other of [parties?.clientId, parties?.caregiver?.userId]) {
+                if (!other || other === userId) continue;
+                socket.emit(isUserOnline(other) ? 'user_online' : 'user_offline', { userId: other });
+            }
         });
 
         // "Escribiendo…": solo se reenvía dentro de la sala de una reserva a la
