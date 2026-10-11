@@ -532,9 +532,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       hasPhotos,
       hasPlacePhotos,
       expYears >= 0,
+      // Con 0 años las preguntas de experiencia ni se muestran: no pueden
+      // trabar el botón (antes "¿Por qué eres cuidador?" y "¿Qué te
+      // diferencia?" se exigían siempre y el principiante quedaba atascado).
       _isAmateur || _experienceDescController.text.trim().length >= 15,
-      _whyCaregiverController.text.trim().length >= 3,
-      _whatDiffersController.text.trim().length >= 3,
+      _isAmateur || _whyCaregiverController.text.trim().length >= 3,
+      _isAmateur || _whatDiffersController.text.trim().length >= 3,
       _acceptedPetTypes.isNotEmpty,
       _acceptedSizes.isNotEmpty,
       !_showShirtSize || _shirtSize != null,
@@ -572,9 +575,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       ('Fotos tuyas ($minPhotos mín.)', hasPhotos),
       if (needsSpace) ('Fotos del lugar (sala, descanso, alimentación)', hasPlacePhotos),
       ('Años de experiencia', expYears >= 0),
-      if (!_isAmateur) ('Descripción de tu experiencia', _experienceDescController.text.trim().length >= 15),
-      ('¿Por qué eres cuidador?', _whyCaregiverController.text.trim().length >= 3),
-      ('¿Qué te diferencia?', _whatDiffersController.text.trim().length >= 3),
+      if (!_isAmateur) ...[
+        ('Descripción de tu experiencia', _experienceDescController.text.trim().length >= 15),
+        ('¿Por qué eres cuidador?', _whyCaregiverController.text.trim().length >= 3),
+        ('¿Qué te diferencia?', _whatDiffersController.text.trim().length >= 3),
+      ],
       ('Tipos de mascota que aceptas', _acceptedPetTypes.isNotEmpty),
       ('Tamaños que aceptas', _acceptedSizes.isNotEmpty),
       if (_showShirtSize) ('Talla de tu kit de bienvenida', _shirtSize != null),

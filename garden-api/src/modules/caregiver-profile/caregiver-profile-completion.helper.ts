@@ -48,12 +48,21 @@ export async function checkAndAutoSubmitProfile(userId: string) {
     // Validaciones detalladas para evitar fallos silenciosos
     const hasBio = Boolean(profile.bio && profile.bio.trim().length >= 50); // Matches submitProfile minimum (50 chars)
     const hasBioDetail = Boolean(profile.bioDetail && profile.bioDetail.trim().length >= 3);
-    const hasExperience = Boolean(profile.experienceYears && profile.experienceDescription && profile.experienceDescription.trim().length >= 15);
-    const hasRequiredQuestions = Boolean(
+    // Principiante (0 años): las preguntas de experiencia no se le muestran en
+    // el registro, así que tampoco se le exigen — mismo criterio que
+    // getMissingRequiredFieldsForSubmit (validation.ts). Antes "0" contaba como
+    // experiencia sin cargar y el perfil nunca quedaba completo.
+    const isAmateurProfile = profile.experienceYears === 0;
+    const hasExperience = isAmateurProfile ||
+        Boolean(profile.experienceYears && profile.experienceDescription && profile.experienceDescription.trim().length >= 15);
+    const hasExperienceAnswers = isAmateurProfile || Boolean(
         profile.whyCaregiver && profile.whyCaregiver.trim().length >= 3 &&
         profile.whatDiffers && profile.whatDiffers.trim().length >= 3 &&
         profile.handleAnxious &&
-        profile.emergencyResponse &&
+        profile.emergencyResponse
+    );
+    const hasRequiredQuestions = Boolean(
+        hasExperienceAnswers &&
         profile.acceptAggressive !== null &&
         profile.acceptPuppies !== null &&
         profile.acceptSeniors !== null
@@ -158,9 +167,9 @@ function calculatePercentage(profile: any, minPhotos: number): number {
         // Experiencia
         profile.experienceYears != null,
         hasExperienceDesc,
-        // Preguntas clave
-        profile.whyCaregiver?.length >= 3,
-        profile.whatDiffers?.length >= 3,
+        // Preguntas clave — no se le hacen al principiante (0 años)
+        isAmateur || profile.whyCaregiver?.length >= 3,
+        isAmateur || profile.whatDiffers?.length >= 3,
         // Tipos y tamaños
         Array.isArray(profile.animalTypes) && profile.animalTypes.length > 0,
         Array.isArray(profile.sizesAccepted) && profile.sizesAccepted.length > 0,
