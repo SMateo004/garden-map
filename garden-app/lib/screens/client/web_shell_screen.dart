@@ -174,34 +174,30 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           isDark
                               ? 'assets/images/logo-horizontal-dark.png'
                               : 'assets/images/logo-horizontal.png',
-                          height: 125,
+                          // El PNG trae mucho margen transparente: en teléfono se dibuja más bajo para
+                          // dejar lugar a los botones (en escritorio se ve igual que antes).
+                          height: compact ? 44 : 125,
                         ),
                       ),
                       const Spacer(),
                       // Teléfono sin sesión: Ingresar + Registrarse y el resto en el menú "más".
-                      if (_authToken.isEmpty && compact)
+                      if (_authToken.isEmpty && compact) ...[
                         Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              OutlinedButton(
-                                onPressed: () => context.push('/login'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                                  shape: const StadiumBorder(),
-                                  side: BorderSide(color: GardenColors.primary.withValues(alpha: 0.5)),
-                                ),
-                                child: const Text('Ingresar',
-                                    style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
-                              ),
-                              const SizedBox(width: 6),
-                              GardenButton(label: 'Registrarse', width: 116, height: 36, onPressed: () => context.push('/register')),
-                              _CompactMenu(guest: true, textColor: textColor),
-                            ]),
+                          child: TextButton(
+                            onPressed: () => context.push('/login'),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 36),
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                            ),
+                            child: const Text('Ingresar',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13.5)),
                           ),
-                        )
+                        ),
+                        GardenButton(label: 'Registrarse', width: 108, height: 36, onPressed: () => context.push('/register')),
+                        _CompactMenu(guest: true, textColor: textColor),
+                      ]
                       // Header público (sin sesión) — igual al home
                       else if (_authToken.isEmpty) ...[
                         TextButton(
