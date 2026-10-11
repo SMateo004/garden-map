@@ -128,6 +128,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── UI state ──
   bool _showFilters = true;
+  bool _webPanelsInitialized = false;
   bool _showMap = false;      // se activa en desktop en el primer frame
   bool _appBannerDismissed = false;
   String _authToken = '';
@@ -282,17 +283,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       });
     });
     if (kIsWeb) _checkOnboarding();
-    // Web de escritorio: con pantalla ancha se abre el mapa; en una intermedia (laptop chica,
-    // tablet horizontal) los filtros arrancan plegados para que la lista no quede apretada.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !kIsWeb) return;
-      final w = MediaQuery.of(context).size.width;
-      if (w < _kMobileBreakpoint) return;
-      setState(() {
-        if (w >= _kWideBreakpoint && !_showMap) _showMap = true;
-        if (w < _kWideBreakpoint) _showFilters = false;
-      });
-    });
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
           !_isLoading && _hasMore) {
@@ -655,7 +645,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // Teléfono y tablet vertical usan el diseño móvil; el de tres columnas (filtros · lista · mapa)
     // solo entra bien desde ~900 px. Antes el corte era 700 y una tablet de 768 recibía las tres
     // columnas apretadas, con la barra de herramientas cortada.
-    final isMobile = !kIsWeb || MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = !kIsWeb || width < _kMobileBreakpoint;
+
+    // Web de escritorio, una sola vez y con el ancho real (en el primer frame de la web el ancho
+    // puede llegar en 0, por eso no se hace en initState): pantalla ancha → mapa abierto; pantalla
+    // intermedia (laptop chica, tablet horizontal) → filtros plegados para no apretar la lista.
+    if (kIsWeb && !_webPanelsInitialized && width >= _kMobileBreakpoint) {
+      _webPanelsInitialized = true;
+      if (width >= _kWideBreakpoint) _showMap = true;
+      if (width < _kWideBreakpoint) _showFilters = false;
+    }
 
     if (isMobile) {
       return _buildMobileLayout(theme, isDark, bg, surface, border);
