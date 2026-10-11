@@ -578,8 +578,21 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
   if (typeof idToken === 'string' && idToken) {
     const { verifyFirebaseToken } = await import('./social-auth.controller.js');
     const claims = await verifyFirebaseToken(idToken);
+    // Es una acción destructiva: el token tiene que ser de Google/Apple, con correo VERIFICADO por el
+    // proveedor y de un inicio de sesión reciente (no un token viejo reutilizado). Solo comparar el
+    // texto del correo permitía confirmar con un token de otro tipo de cuenta o con un correo sin verificar.
+    if (!claims.sign_in_provider || !['google.com', 'apple.com'].includes(claims.sign_in_provider)) {
+      return res.status(400).json({ success: false, error: { code: 'WRONG_PROVIDER', message: 'Confirma con tu cuenta de Google o Apple, o con tu contraseña' } });
+    }
+    if (claims.email_verified !== true) {
+      return res.status(400).json({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Tu correo de Google no está verificado. Confirma con tu contraseña' } });
+    }
     if (!claims.email || claims.email.toLowerCase().trim() !== user.email.toLowerCase().trim()) {
       return res.status(400).json({ success: false, error: { code: 'WRONG_ACCOUNT', message: 'La cuenta de Google no coincide con tu cuenta de Garden' } });
+    }
+    const REAUTH_WINDOW_SECONDS = 5 * 60;
+    if (!claims.auth_time || Date.now() / 1000 - claims.auth_time > REAUTH_WINDOW_SECONDS) {
+      return res.status(401).json({ success: false, error: { code: 'REAUTH_REQUIRED', message: 'Vuelve a iniciar sesión con Google para confirmar y reintenta' } });
     }
   } else {
     const bcrypt = await import('bcrypt');

@@ -47,6 +47,10 @@ export async function verifyFirebaseToken(idToken: string): Promise<{
   name?: string;
   picture?: string;
   email_verified?: boolean;
+  /** Segundos desde epoch del último inicio de sesión real en el proveedor (para exigir reautenticación reciente). */
+  auth_time?: number;
+  /** 'google.com' | 'apple.com' | 'password' | 'anonymous'… (firebase.sign_in_provider). */
+  sign_in_provider?: string;
 }> {
   const admin = await getFirebaseAdmin();
 
@@ -65,6 +69,8 @@ export async function verifyFirebaseToken(idToken: string): Promise<{
     name: decoded.name,
     picture: decoded.picture,
     email_verified: decoded.email_verified,
+    auth_time: typeof decoded.auth_time === 'number' ? decoded.auth_time : undefined,
+    sign_in_provider: decoded.firebase?.sign_in_provider,
   };
 }
 

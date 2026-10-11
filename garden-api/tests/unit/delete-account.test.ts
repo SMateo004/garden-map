@@ -43,6 +43,15 @@ const resMock = () => {
   res.json = jest.fn(() => res);
   return res;
 };
+/** Claims de un inicio de sesión de Google reciente y con correo verificado. */
+const googleClaims = (over: Record<string, unknown> = {}) => ({
+  uid: 'x',
+  email: 'Ana@Gmail.com',
+  email_verified: true,
+  sign_in_provider: 'google.com',
+  auth_time: Math.floor(Date.now() / 1000) - 30,
+  ...over,
+});
 const reqOf = (body: unknown) => ({ body, user: { userId: 'u1' } }) as any;
 const userOf = (role: string) => ({ id: 'u1', email: 'ana@gmail.com', passwordHash: 'h', role });
 const call = async (body: unknown) => {
@@ -83,15 +92,31 @@ describe('eliminar cuenta', () => {
 
   it('dueño que entra con Google confirma con su idToken (no tiene contraseña)', async () => {
     mockUserFind.mockResolvedValue(userOf('CLIENT'));
-    mockVerifyToken.mockResolvedValue({ uid: 'x', email: 'Ana@Gmail.com' });
+    mockVerifyToken.mockResolvedValue(googleClaims());
     const { payload } = await call({ idToken: 'tok' });
     expect(mockFinalize).toHaveBeenCalledWith('u1');
     expect(payload.data.deleted).toBe(true);
   });
 
+  it.each([
+    ['correo sin verificar por el proveedor', { email_verified: false }, 400, 'EMAIL_NOT_VERIFIED'],
+    ['token que no es de Google/Apple (p. ej. email-contraseña de Firebase)', { sign_in_provider: 'password' }, 400, 'WRONG_PROVIDER'],
+    ['token sin proveedor', { sign_in_provider: undefined }, 400, 'WRONG_PROVIDER'],
+    ['inicio de sesión de hace más de 5 minutos', { auth_time: Math.floor(Date.now() / 1000) - 600 }, 401, 'REAUTH_REQUIRED'],
+    ['token sin auth_time', { auth_time: undefined }, 401, 'REAUTH_REQUIRED'],
+  ])('idToken rechazado: %s', async (_t, over, expectedStatus, code) => {
+    mockUserFind.mockResolvedValue(userOf('CLIENT'));
+    mockVerifyToken.mockResolvedValue(googleClaims(over as Record<string, unknown>));
+    const { status, payload } = await call({ idToken: 'tok' });
+    expect(status).toBe(expectedStatus);
+    expect(payload.error.code).toBe(code);
+    expect(mockFinalize).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it('un idToken de OTRA cuenta de Google se rechaza', async () => {
     mockUserFind.mockResolvedValue(userOf('CLIENT'));
-    mockVerifyToken.mockResolvedValue({ uid: 'x', email: 'otra@gmail.com' });
+    mockVerifyToken.mockResolvedValue(googleClaims({ email: 'otra@gmail.com' }));
     const { status, payload } = await call({ idToken: 'tok' });
     expect(status).toBe(400);
     expect(payload.error.code).toBe('WRONG_ACCOUNT');
