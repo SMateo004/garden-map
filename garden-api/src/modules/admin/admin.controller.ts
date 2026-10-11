@@ -1467,6 +1467,14 @@ export const approveCaregiverAccountDeletion = asyncHandler(async (req: Request,
   res.json({ success: true });
 });
 
+/** PATCH /api/admin/users/:userId/identity — corrige nombre / apellido / fecha de nacimiento (con motivo). */
+export const updateUserIdentity = asyncHandler(async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const result = await adminService.updateUserIdentity(userId!, req.user!.userId, req.body ?? {});
+  auditLog({ userId: req.user!.userId, action: 'UPDATE_USER_IDENTITY', entity: 'User', entityId: userId, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
 /** POST /api/admin/caregiver-deletion-requests/:userId/dismiss — descarta la solicitud, la cuenta sigue activa. */
 export const dismissCaregiverAccountDeletionRequest = asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.params;

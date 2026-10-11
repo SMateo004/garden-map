@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import prisma from '../../config/database.js';
 import { auditLog } from '../../services/audit.service.js';
 import * as authService from './auth.service.js';
+import { assertIdentityEditable, getIdentityLock } from './identity-lock.service.js';
 import * as userService from '../user-service/user.service.js';
 import {
   loginSchema,
@@ -51,7 +52,12 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
     // bloquear el campo, encender el aviso de "verifica tu teléfono" y saber si
     // hay un cambio autorizado en curso.
     const phoneInfo = phoneChange.toPublicPhoneState(await phoneChange.getPhoneState(user.id));
-    const phoneFields = { phoneVerified: phoneInfo.verified, phoneChange: phoneInfo };
+    const phoneFields = {
+      phoneVerified: phoneInfo.verified,
+      phoneChange: phoneInfo,
+      // Nombre, apellido y fecha de nacimiento ya verificados: la app los muestra sin edición.
+      identityLock: await getIdentityLock(user.id),
+    };
     // Para CLIENT, incluir clientProfile con datos extendidos
     if (effectiveRole === 'CLIENT') {
       const clientProfile = await prisma.clientProfile.findUnique({
@@ -390,6 +396,9 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     /** Ciudad real (multi-ciudad) — id de City, no el enum legado. */
     cityId?: string;
   };
+  // Identidad verificada (y registrada en la blockchain): solo un administrador la cambia.
+  await assertIdentityEditable(userId, { firstName, lastName, dateOfBirth });
+
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
   if (lastName && lastName.trim()) userData.lastName = lastName.trim();

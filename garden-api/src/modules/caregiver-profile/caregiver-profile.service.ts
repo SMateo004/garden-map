@@ -55,6 +55,10 @@ export async function patchUserInfo(
     select: { email: true, phone: true },
   });
 
+  // Nombre y apellido verificados: solo un administrador los cambia (ver identity-lock.service.ts).
+  const { assertIdentityEditable } = await import('../auth/identity-lock.service.js');
+  await assertIdentityEditable(userId, { firstName: body.firstName, lastName: body.lastName });
+
   const userUpdateData: Record<string, unknown> = {};
   if (body.firstName !== undefined && body.firstName.trim()) {
     userUpdateData.firstName = body.firstName.trim();

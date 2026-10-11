@@ -4155,6 +4155,51 @@ export async function approveCaregiverAccountDeletion(userId: string, adminId: s
 }
 
 /**
+ * PATCH /api/admin/users/:userId/identity — corrección de nombre, apellido y/o fecha de nacimiento.
+ * Son datos verificados con el carnet y respaldan el registro on-chain, así que solo un administrador los
+ * cambia, siempre con un motivo, y queda constancia (AdminAction con el antes y el después).
+ */
+export async function updateUserIdentity(
+  userId: string,
+  adminId: string,
+  input: { firstName?: string; lastName?: string; dateOfBirth?: string; reason?: string }
+): Promise<{ firstName: string; lastName: string; dateOfBirth: Date | null }> {
+  const reason = (input.reason ?? '').trim();
+  if (reason.length < 5) throw new BadRequestError('Indica el motivo del cambio (mínimo 5 caracteres)');
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { firstName: true, lastName: true, dateOfBirth: true, isDeleted: true },
+  });
+  if (!user || user.isDeleted) throw new BadRequestError('Usuario no encontrado');
+
+  const data: { firstName?: string; lastName?: string; dateOfBirth?: Date } = {};
+  if (input.firstName?.trim()) data.firstName = input.firstName.trim();
+  if (input.lastName?.trim()) data.lastName = input.lastName.trim();
+  if (input.dateOfBirth) {
+    const d = new Date(input.dateOfBirth);
+    if (isNaN(d.getTime()) || d > new Date()) throw new BadRequestError('Fecha de nacimiento inválida');
+    data.dateOfBirth = d;
+  }
+  if (Object.keys(data).length === 0) throw new BadRequestError('Nada que actualizar');
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data,
+    select: { firstName: true, lastName: true, dateOfBirth: true },
+  });
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'UPDATE_USER_IDENTITY',
+      targetId: userId,
+      notes: JSON.stringify({ reason, before: user, after: updated }),
+    },
+  });
+  logger.info('Admin updated user identity', { userId, adminId, fields: Object.keys(data) });
+  return updated;
+}
+
+/**
  * POST /api/admin/caregiver-deletion-requests/:userId/dismiss — el admin
  * decide NO eliminar la cuenta (ej. contactó al cuidador y se resolvió lo
  * que motivó el pedido) — limpia la solicitud sin tocar la cuenta.

@@ -370,9 +370,24 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     }
   }
 
+  /// Nombre y apellido ya cargados = identidad verificada: no se editan (solo soporte/admin). Se pueden
+  /// corregir únicamente mientras el cuidador aún está terminando su registro y no verificó su identidad.
+  /// Mismo criterio que el servidor (identity-lock.service.ts).
+  bool get _identityLocked {
+    final p = _profile;
+    if (p == null) return false;
+    final verified = p['identityVerificationStatus'] == 'VERIFIED';
+    final registrationOpen = (p['profileStatus'] as String? ?? 'INCOMPLETE') == 'INCOMPLETE' && !verified;
+    if (registrationOpen) return false;
+    final u = p['user'] as Map<String, dynamic>?;
+    final first = (u?['firstName'] as String? ?? '').trim();
+    final last = (u?['lastName'] as String? ?? '').trim();
+    return (first.isNotEmpty && first != '-') || (last.isNotEmpty && last != '-');
+  }
+
   Future<void> _saveProfile() async {
     // ── Validación de campos obligatorios ──
-    final isVerifiedCheck = _profile?['identityVerificationStatus'] == 'VERIFIED';
+    final isVerifiedCheck = _identityLocked;
     if (!isVerifiedCheck) {
       if (_firstNameController.text.trim().isEmpty) {
         GardenErrorDialog.show(context, 'El nombre es obligatorio');
@@ -493,7 +508,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
   }
 
   Future<void> _saveUserInfo() async {
-    final isVerified = _profile?['identityVerificationStatus'] == 'VERIFIED';
+    final isVerified = _identityLocked;
     final isPhoneVerified = _profile?['phoneVerified'] == true;
 
     final Map<String, dynamic> body = {
@@ -1381,6 +1396,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
 
   Widget _buildPersonalInfoSection(Color textColor, Color subtextColor, bool isDark) {
     bool isVerified = _profile?['identityVerificationStatus'] == 'VERIFIED';
+    final identityLocked = _identityLocked;
     bool isPhoneVerified = _profile?['phoneVerified'] == true;
 
     return Column(
@@ -1408,10 +1424,10 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
               ),
           ],
         ),
-        if (isVerified) ...[
+        if (identityLocked) ...[
           const SizedBox(height: 8),
           Text(
-            'Tu identidad ha sido verificada. Estos datos ya no pueden ser modificados para garantizar la seguridad de la plataforma.',
+            'Tu nombre y apellido están verificados y no se pueden modificar. Si hay un error, escríbenos por soporte y un administrador lo corrige.',
             style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
           ),
         ],
@@ -1420,18 +1436,18 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           children: [
             Expanded(
               child: TextField(
-                enabled: !isVerified,
+                enabled: !identityLocked,
                 controller: _firstNameController,
-                style: TextStyle(color: isVerified ? subtextColor : textColor),
+                style: TextStyle(color: identityLocked ? subtextColor : textColor),
                 decoration: _inputDecoration('Nombre', isDark),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: TextField(
-                enabled: !isVerified,
+                enabled: !identityLocked,
                 controller: _lastNameController,
-                style: TextStyle(color: isVerified ? subtextColor : textColor),
+                style: TextStyle(color: identityLocked ? subtextColor : textColor),
                 decoration: _inputDecoration('Apellido', isDark),
               ),
             ),

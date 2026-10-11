@@ -27,6 +27,10 @@ class MyDataScreen extends StatefulWidget {
 
 class _MyDataScreenState extends State<MyDataScreen> {
   Map<String, dynamic>? _userData;
+
+  /// Datos de identidad ya verificados (los marca el servidor): se muestran sin edición; solo un admin los cambia.
+  bool _locked(String field) => (_userData?['identityLock'] as Map?)?[field] == true;
+  bool get _identityAnyLocked => _locked('firstName') || _locked('lastName') || _locked('dateOfBirth');
   bool _isLoading = true;
   bool _saving = false;
   bool _uploadingPhoto = false;
@@ -356,8 +360,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
         if (match != null) cityName = match.name;
       }
       final body = <String, dynamic>{
-        'firstName': _firstCtrl.text.trim(),
-        'lastName': _lastCtrl.text.trim(),
+        // Identidad verificada: no se manda (el servidor tampoco la acepta por esta vía).
+        if (!_locked('firstName')) 'firstName': _firstCtrl.text.trim(),
+        if (!_locked('lastName')) 'lastName': _lastCtrl.text.trim(),
         // Verificado = no se manda: el servidor tampoco lo acepta por esta vía. El
         // cambio autorizado va por PhoneChangeFlow.
         if (!_phoneVerified) 'phone': _phoneCtrl.text.trim(),
@@ -365,7 +370,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
         'country': 'Bolivia',
         'address': _buildFullAddress(),
         'bio': _bioCtrl.text.trim(),
-        if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
+        if (_dateOfBirth != null && !_locked('dateOfBirth')) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
         if (!emailVerified && _emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
         if (_addressLat != null) 'addressLat': _addressLat,
         if (_addressLng != null) 'addressLng': _addressLng,
@@ -576,12 +581,14 @@ class _MyDataScreenState extends State<MyDataScreen> {
               children: [
                 // Name
                 Row(children: [
-                  Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
+                  Expanded(child: TextField(controller: _firstCtrl, enabled: !_locked('firstName'),
+                      style: TextStyle(color: _locked('firstName') ? subtextColor : textColor),
                       inputFormatters: [noDigitsFormatter],
                       onChanged: (_) => setState(() {}),
                       decoration: fieldDeco('Nombre *', GIcon.perfil, missing: _firstCtrl.text.trim().isEmpty))),
                   const SizedBox(width: 12),
-                  Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
+                  Expanded(child: TextField(controller: _lastCtrl, enabled: !_locked('lastName'),
+                      style: TextStyle(color: _locked('lastName') ? subtextColor : textColor),
                       inputFormatters: [noDigitsFormatter],
                       onChanged: (_) => setState(() {}),
                       decoration: fieldDeco('Apellido *', GIcon.perfil, missing: _lastCtrl.text.trim().isEmpty))),
@@ -591,7 +598,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
                 GestureDetector(
-                  onTap: () async {
+                  onTap: _locked('dateOfBirth') ? null : () async {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: _dateOfBirth ?? DateTime(1995),
@@ -620,6 +627,20 @@ class _MyDataScreenState extends State<MyDataScreen> {
                     ]),
                   ),
                 ),
+                if (_identityAnyLocked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      GardenIcon(GIcon.seguridad, size: GIconSize.sm, color: subtextColor),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Tu nombre, apellido y fecha de nacimiento están verificados y no se pueden modificar. Si hay un error, escríbenos por soporte y un administrador lo corrige.',
+                          style: TextStyle(color: subtextColor, fontSize: 12, height: 1.35),
+                        ),
+                      ),
+                    ]),
+                  ),
                 if (_showErrors && _dateOfBirth == null)
                   const Padding(
                     padding: EdgeInsets.only(top: 4, left: 4),

@@ -270,6 +270,9 @@ router.get('/caregiver-deletion-requests', adminController.getPendingCaregiverDe
 /** POST /api/admin/caregiver-deletion-requests/:userId/approve — ejecuta la eliminación real. */
 router.post('/caregiver-deletion-requests/:userId/approve', adminController.approveCaregiverAccountDeletion);
 
+/** PATCH /api/admin/users/:userId/identity — único camino para cambiar nombre, apellido o fecha de nacimiento. */
+router.patch('/users/:userId/identity', adminController.updateUserIdentity);
+
 /** POST /api/admin/caregiver-deletion-requests/:userId/dismiss — descarta la solicitud. */
 router.post('/caregiver-deletion-requests/:userId/dismiss', adminController.dismissCaregiverAccountDeletionRequest);
 
