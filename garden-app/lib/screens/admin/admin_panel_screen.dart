@@ -5692,11 +5692,24 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
             ),
             const SizedBox(height: 14),
 
-            TextField(controller: _titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
+            // Límites de lo que entra en la franja sin cortarse (con contador).
+            TextField(
+              controller: _titleCtrl,
+              maxLength: GardenMarketplaceBanner.maxTitle,
+              decoration: const InputDecoration(labelText: 'Título *', helperText: 'Corto: entra en una línea'),
+            ),
             const SizedBox(height: 10),
-            TextField(controller: _subtitleCtrl, decoration: const InputDecoration(labelText: 'Subtítulo')),
+            TextField(
+              controller: _subtitleCtrl,
+              maxLength: GardenMarketplaceBanner.maxSubtitle,
+              decoration: const InputDecoration(labelText: 'Subtítulo'),
+            ),
             const SizedBox(height: 10),
-            TextField(controller: _btnCtrl, decoration: const InputDecoration(labelText: 'Texto del botón')),
+            TextField(
+              controller: _btnCtrl,
+              maxLength: GardenMarketplaceBanner.maxButton,
+              decoration: const InputDecoration(labelText: 'Texto del botón'),
+            ),
             const SizedBox(height: 10),
             TextField(controller: _posCtrl, decoration: const InputDecoration(labelText: 'Posición (0 = inicio)'), keyboardType: TextInputType.number),
             const SizedBox(height: 10),

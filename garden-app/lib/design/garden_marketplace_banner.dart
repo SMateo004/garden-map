@@ -24,6 +24,13 @@ class GardenMarketplaceBanner extends StatelessWidget {
 
   static const double height = 96;
 
+  /// Lo que entra en la franja sin cortarse (en un teléfono de 375 px):
+  /// título en una línea, subtítulo en dos, botón corto. El formulario del
+  /// admin y el servidor (admin.routes.ts) usan los mismos límites.
+  static const int maxTitle = 28;
+  static const int maxSubtitle = 70;
+  static const int maxButton = 14;
+
   /// Guía para quien sube la imagen (se muestra en el formulario del admin).
   static const String imageGuide =
       'Tamaño recomendado: 1200×320 px (franja, ~3,75:1), JPG/PNG/WEBP, máx. 5 MB. '

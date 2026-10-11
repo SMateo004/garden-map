@@ -696,8 +696,26 @@ router.get('/banners', asyncHandler(async (_req, res) => {
   res.json({ success: true, data: banners });
 }));
 
+// Lo que entra en la franja del marketplace sin cortarse (mismos límites que
+// GardenMarketplaceBanner en la app). Solo se valida lo que viene en el body,
+// así activar/desactivar un banner viejo con título largo sigue funcionando.
+const BANNER_LIMITS: Record<string, [number, string]> = {
+  title: [28, 'El título'],
+  subtitle: [70, 'El subtítulo'],
+  buttonText: [14, 'El texto del botón'],
+};
+function bannerTextError(body: Record<string, unknown>): string | null {
+  for (const [key, [max, label]] of Object.entries(BANNER_LIMITS)) {
+    const v = body[key];
+    if (typeof v === 'string' && v.trim().length > max) return `${label} puede tener hasta ${max} caracteres.`;
+  }
+  return null;
+}
+
 /** POST /api/admin/banners */
 router.post('/banners', asyncHandler(async (req, res) => {
+  const tooLong = bannerTextError(req.body as Record<string, unknown>);
+  if (tooLong) return res.status(400).json({ success: false, error: { code: 'BANNER_TEXT_TOO_LONG', message: tooLong } });
   const body = req.body as {
     title: string; subtitle?: string; imageUrl?: string;
     position?: number; sortOrder?: number; active?: boolean;
@@ -722,6 +740,8 @@ router.post('/banners', asyncHandler(async (req, res) => {
 /** PATCH /api/admin/banners/:id */
 router.patch('/banners/:id', asyncHandler(async (req, res) => {
   const b = req.body as Record<string, unknown>;
+  const tooLong = bannerTextError(b);
+  if (tooLong) return res.status(400).json({ success: false, error: { code: 'BANNER_TEXT_TOO_LONG', message: tooLong } });
   // Filtrar solo campos editables — nunca permitir id, createdAt, updatedAt
   const data: Record<string, unknown> = {};
   const allowed = ['active','position','sortOrder','imageUrl','title','subtitle','buttonText','actionType','actionValue'];

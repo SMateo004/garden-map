@@ -535,7 +535,7 @@ class _CatalogPageState extends State<_CatalogPage> {
               constraints: const BoxConstraints(maxWidth: 380),
               child: Column(children: [
                 GardenMarketplaceBanner(
-                  title: 'Primer paseo con 20% de descuento',
+                  title: 'Paseo con 20% de descuento',
                   subtitle: 'Solo esta semana, con cuidadores verificados.',
                   buttonText: 'Ver más',
                   onTap: () {},
