@@ -966,10 +966,13 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     Analytics.instance.onLifecycle(state);
     if (state == AppLifecycleState.resumed) {
+      _onAppResumedForNetwork();
       PresenceService.instance.connect();
       _refreshNextBookingWidget();
       _refreshMonthlyStatsWidget();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _inForeground = false;
+      _networkErrorTimer?.cancel();
       PresenceService.instance.disconnect();
     }
   }
@@ -1071,6 +1074,25 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
   // tiempo — solo puede haber una instancia visible.
   bool _offlineDialogOpen = false;
 
+  // El aviso solo tiene sentido con la app en pantalla: al volver de segundo
+  // plano el teléfono tarda un momento en reactivar la red, y antes el diálogo
+  // aparecía apenas se entraba (el timer de 5s había vencido en segundo plano)
+  // y se cerraba solo un segundo después. Ahora exige 3s seguidos en primer
+  // plano y una comprobación fresca justo antes de mostrarse.
+  static const _minForegroundBeforeOffline = Duration(seconds: 3);
+  bool _inForeground = true;
+  DateTime _foregroundSince = DateTime.now();
+
+  void _onAppResumedForNetwork() {
+    _inForeground = true;
+    _foregroundSince = DateTime.now();
+    // Lo que falló en segundo plano no cuenta (red suspendida por el sistema):
+    // se limpia y solo un fallo nuevo, ya en pantalla, vuelve a armar el aviso.
+    if (networkErrorNotifier.value != null && !_offlineDialogOpen) {
+      networkErrorNotifier.value = null;
+    }
+  }
+
   void _onNetworkError() {
     final message = networkErrorNotifier.value;
     _networkErrorTimer?.cancel();
@@ -1081,13 +1103,28 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
       return;
     }
     if (_offlineDialogOpen) return; // ya se está mostrando, no reprogramar
-    _networkErrorTimer = Timer(const Duration(seconds: 5), () {
-      // Puede haber cambiado (o recuperado) mientras esperábamos — solo
-      // mostrar si la falla sigue siendo la misma que disparó el timer.
-      final stillFailing = networkErrorNotifier.value;
-      if (stillFailing == null || _offlineDialogOpen) return;
-      _showOfflineDialog(stillFailing);
-    });
+    _scheduleOfflineCheck(const Duration(seconds: 5));
+  }
+
+  void _scheduleOfflineCheck(Duration delay) {
+    _networkErrorTimer?.cancel();
+    _networkErrorTimer = Timer(delay, _maybeShowOfflineDialog);
+  }
+
+  Future<void> _maybeShowOfflineDialog() async {
+    // Puede haber cambiado (o recuperado) mientras esperábamos.
+    if (networkErrorNotifier.value == null || _offlineDialogOpen || !mounted) return;
+    if (!_inForeground) return; // al volver se limpia y se reevalúa
+    final inApp = DateTime.now().difference(_foregroundSince);
+    if (inApp < _minForegroundBeforeOffline) {
+      _scheduleOfflineCheck(_minForegroundBeforeOffline - inApp);
+      return;
+    }
+    // Comprobación fresca: si la conexión ya volvió, no se muestra nada.
+    final restored = await ConnectivityMonitor.instance.checkNow();
+    final stillFailing = networkErrorNotifier.value;
+    if (restored || stillFailing == null || _offlineDialogOpen || !_inForeground || !mounted) return;
+    _showOfflineDialog(stillFailing);
   }
 
   void _showOfflineDialog(String message) {
