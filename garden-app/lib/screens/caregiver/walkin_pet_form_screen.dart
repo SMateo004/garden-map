@@ -12,6 +12,7 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../utils/input_formatters.dart';
 import '../client/pet_form_sheet.dart' show PetFormSheet;
+import '../../utils/photo_picker.dart';
 
 /// Ficha completa de una mascota walk-in — mismos campos/agrupamiento que
 /// el formulario de mascota real (my_pets_screen.dart _PetFormSheet), pero
@@ -133,21 +134,15 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
   }
 
   Future<void> _pickInto(List<String> Function() get, void Function(List<String>) set, void Function(bool) setUploading, int maxCount, String label, {int quality = 80}) async {
-    if (get().length >= maxCount) {
-      GardenSnackBar.warning(context, 'Máximo $maxCount $label');
-      return;
-    }
-    final img = await _pickImageBytes(quality: quality);
-    if (img == null) return;
+    // Varias de una vez, hasta [maxCount] en total.
+    final picked = await GardenPhotoPicker.pick(context, remaining: maxCount - get().length, quality: quality, what: label);
+    if (picked.isEmpty || !mounted) return;
     setState(() => setUploading(true));
-    try {
-      final url = await widget.service.uploadPetPhoto(img.bytes, img.name);
+    await GardenPhotoPicker.uploadAll(context, picked, (p) async {
+      final url = await widget.service.uploadPetPhoto(p.bytes, p.name);
       if (mounted) setState(() => set([...get(), url]));
-    } catch (e) {
-      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => setUploading(false));
-    }
+    });
+    if (mounted) setState(() => setUploading(false));
   }
 
   bool get _anyUploading => _uploadingPhoto || _uploadingExtra || _uploadingVaccine || _uploadingDocument;

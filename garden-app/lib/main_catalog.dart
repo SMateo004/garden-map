@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'design/garden_photo_tile.dart';
 import 'design/garden_code_input.dart';
 import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
@@ -511,6 +512,14 @@ class _CatalogPageState extends State<_CatalogPage> {
                 Center(child: GardenNewMessagesPill(count: 2, onTap: () {})),
               ]),
             ),
+          ]),
+          _Section('Agregar fotos (se eligen varias de una vez)', [
+            Wrap(spacing: 16, runSpacing: 16, children: [
+              _Labeled('quedan 4', GardenAddPhotoTile(size: 96, remaining: 4, onTap: () {})),
+              _Labeled('queda 1', GardenAddPhotoTile(size: 96, remaining: 1, onTap: () {})),
+              _Labeled('subiendo', GardenAddPhotoTile(size: 96, remaining: 2, uploading: true, onTap: () {})),
+              _Labeled('obligatoria', GardenAddPhotoTile(size: 96, remaining: 3, highlight: true, onTap: () {})),
+            ]),
           ]),
           _Section('Código de verificación (pegar, borrar y autocompletar del SMS)', [
             Wrap(spacing: 24, runSpacing: 16, children: [

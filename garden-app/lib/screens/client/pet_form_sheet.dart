@@ -14,6 +14,8 @@ import '../../theme/garden_theme.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../utils/input_formatters.dart';
+import '../../utils/photo_picker.dart';
+import '../../design/garden_photo_tile.dart';
 
 /// Presentar (o editar) una mascota en tres pasos cortos:
 ///   1. Quién es — foto, nombre y especie.
@@ -177,6 +179,19 @@ class _PetFormSheetState extends State<PetFormSheet> {
     throw Exception((data['error'] as Map<String, dynamic>?)?['message'] ??
         data['message'] ??
         'No pudimos subir la foto (error ${res.statusCode})');
+  }
+
+  /// Varias imágenes de una vez (hasta [remaining]); cada una se sube y se
+  /// entrega a [onDone]. Mientras suben, no se puede guardar.
+  Future<void> _addImages(int remaining, void Function(String url) onDone, {int quality = 85}) async {
+    final picked = await GardenPhotoPicker.pick(context, remaining: remaining, quality: quality);
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _uploading++);
+    await GardenPhotoPicker.uploadAll(context, picked, (p) async {
+      final url = await _uploadFile(p.bytes, p.name);
+      if (mounted) setState(() => onDone(url));
+    });
+    if (mounted) setState(() => _uploading--);
   }
 
   /// Sube una imagen y la entrega a [onDone]. Mientras sube, no se puede guardar.
@@ -888,18 +903,11 @@ class _PetFormSheetState extends State<PetFormSheet> {
               ),
             ]),
           if (photos.length < max)
-            GestureDetector(
-              onTap: _uploading > 0 ? null : () => _addImage(onAdd, quality: 80),
-              child: Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: GardenColors.primary.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-                ),
-                child: const Center(child: GardenIcon(GIcon.agregar, color: GardenColors.primary, semanticLabel: 'Agregar foto')),
-              ),
+            GardenAddPhotoTile(
+              size: 68,
+              remaining: max - photos.length,
+              uploading: _uploading > 0,
+              onTap: () => _addImages(max - photos.length, onAdd, quality: 80),
             ),
         ]),
       ]),

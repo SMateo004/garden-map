@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import '../../utils/photo_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/ai_write_assist.dart';
@@ -15,6 +16,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 import '../../utils/input_formatters.dart';
+import '../../design/garden_photo_tile.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -878,54 +880,30 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
   }
 
+  /// Fotos de servicio: se eligen varias de una vez (hasta 6 en total).
   Future<void> _addPhoto() async {
+    if (_isSaving) return;
     const maxPhotos = 6;
-    if (_photos.length >= maxPhotos) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo $maxPhotos fotos permitidas')));
-      return;
-    }
-
-    // Skip imageQuality on web — canvas-based compression uses createObjectURL
-    // which throws TypeError in Flutter web (CanvasKit).
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: kIsWeb ? null : 85,
-    );
-    if (picked == null) return;
-    final bytes = Uint8List.fromList(await picked.readAsBytes());
-    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
-
+    final picked = await GardenPhotoPicker.pick(context, remaining: maxPhotos - _photos.length, quality: 85);
+    if (picked.isEmpty || !mounted) return;
     setState(() => _isSaving = true);
-    try {
+    await GardenPhotoPicker.uploadAll(context, picked, (p) async {
       final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/service-photo'));
       request.headers['Authorization'] = 'Bearer $_caregiverToken';
-      request.files.add(http.MultipartFile.fromBytes(
-        'servicePhoto',
-        bytes,
-        filename: fileName,
-        contentType: MediaType('image', 'jpeg'),
-      ));
-
-      final response = await request.send();
-      final respBody = await response.stream.bytesToString();
-      final data = jsonDecode(respBody);
-
-      if (!mounted) return;
-      if (data['success'] == true) {
-        setState(() {
-          _photos.add(data['data']['photoUrl'] as String? ?? '');
-          _localPhotoData.add(bytes);
-        });
-        _computeCompletion();
-      } else {
-        GardenErrorDialog.show(context, data['error']?['message'] ?? data['message'] ?? 'Error al subir foto');
+      request.files.add(http.MultipartFile.fromBytes('servicePhoto', p.bytes,
+          filename: p.name, contentType: MediaType('image', 'jpeg')));
+      final data = jsonDecode(await (await request.send()).stream.bytesToString());
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'No pudimos subir la foto.');
       }
-    } catch (e) {
       if (!mounted) return;
-      GardenErrorDialog.show(context, 'No pudimos subir la foto. Revisa tu conexión e intenta de nuevo.');
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
+      setState(() {
+        _photos.add(data['data']['photoUrl'] as String? ?? '');
+        _localPhotoData.add(p.bytes);
+      });
+      _computeCompletion();
+    });
+    if (mounted) setState(() => _isSaving = false);
   }
 
   void _deletePhoto(int index) async {
@@ -936,33 +914,22 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     });
   }
 
+  /// Fotos del cuidador: varias de una vez (hasta 6 en total).
   Future<void> _addCaregiverPhoto() async {
-    if (_caregiverPhotoUrls.length >= 6) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 6 fotos permitidas')));
-      return;
-    }
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
-    if (picked == null) return;
-    final bytes = Uint8List.fromList(await picked.readAsBytes());
-    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+    if (_uploadingCaregiverPhoto) return;
+    final picked = await GardenPhotoPicker.pick(context, remaining: 6 - _caregiverPhotoUrls.length, quality: 85);
+    if (picked.isEmpty || !mounted) return;
     setState(() => _uploadingCaregiverPhoto = true);
-    try {
+    await GardenPhotoPicker.uploadAll(context, picked, (p) async {
       final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/caregiver-photo'));
       request.headers['Authorization'] = 'Bearer $_caregiverToken';
-      request.files.add(http.MultipartFile.fromBytes('caregiverPhoto', bytes, filename: fileName, contentType: MediaType('image', 'jpeg')));
-      final resp = await request.send();
-      final data = jsonDecode(await resp.stream.bytesToString());
-      if (!mounted) return;
-      if (data['success'] == true) {
-        setState(() => _caregiverPhotoUrls.add(data['data']['photoUrl'] as String));
-      } else {
-        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
-      }
-    } catch (e) {
-      GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
-    } finally {
-      if (mounted) setState(() => _uploadingCaregiverPhoto = false);
-    }
+      request.files.add(http.MultipartFile.fromBytes('caregiverPhoto', p.bytes,
+          filename: p.name, contentType: MediaType('image', 'jpeg')));
+      final data = jsonDecode(await (await request.send()).stream.bytesToString());
+      if (data['success'] != true) throw Exception(data['error']?['message'] ?? 'No pudimos subir la foto.');
+      if (mounted) setState(() => _caregiverPhotoUrls.add(data['data']['photoUrl'] as String));
+    });
+    if (mounted) setState(() => _uploadingCaregiverPhoto = false);
   }
 
   Future<void> _deleteCaregiverPhoto(int index) async {
@@ -1359,41 +1326,32 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
+  /// Fotos del lugar: varias de una vez (hasta 3 por sección).
   Future<void> _addPlacePhoto(String section) async {
     // Evita disparar subidas concurrentes (doble-tap o tocar otra sección
     // mientras una subida sigue en vuelo). El backend ya es atómico, pero
     // esto además evita gastar cuota/ancho de banda con subidas duplicadas.
     if (_uploadingPlacePhoto) return;
     final current = _placePhotoUrls[section] ?? [];
-    if (current.length >= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 3 fotos por sección')));
-      return;
-    }
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
-    if (picked == null) return;
-    final bytes = Uint8List.fromList(await picked.readAsBytes());
-    final fileName = picked.name.isEmpty ? 'place_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+    final picked = await GardenPhotoPicker.pick(context,
+        remaining: 3 - current.length, quality: 85, what: 'fotos de esta sección');
+    if (picked.isEmpty || !mounted) return;
     setState(() => _uploadingPlacePhoto = true);
-    try {
+    await GardenPhotoPicker.uploadAll(context, picked, (p) async {
       final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/place-photo'));
       request.headers['Authorization'] = 'Bearer $_caregiverToken';
       request.fields['section'] = section;
-      request.files.add(http.MultipartFile.fromBytes('placePhoto', bytes, filename: fileName, contentType: MediaType('image', 'jpeg')));
-      final resp = await request.send();
-      final data = jsonDecode(await resp.stream.bytesToString());
+      request.files.add(http.MultipartFile.fromBytes('placePhoto', p.bytes,
+          filename: p.name, contentType: MediaType('image', 'jpeg')));
+      final data = jsonDecode(await (await request.send()).stream.bytesToString());
+      if (data['success'] != true) throw Exception(data['error']?['message'] ?? 'No pudimos subir la foto.');
       if (!mounted) return;
-      if (data['success'] == true) {
-        setState(() {
-          _placePhotoUrls[section] = List<String>.from(_placePhotoUrls[section] ?? [])..add(data['data']['photoUrl'] as String);
-        });
-      } else {
-        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
-      }
-    } catch (e) {
-      GardenErrorDialog.show(context, 'No pudimos subir el archivo. Revisa tu conexión e intenta de nuevo.');
-    } finally {
-      if (mounted) setState(() => _uploadingPlacePhoto = false);
-    }
+      setState(() {
+        _placePhotoUrls[section] = List<String>.from(_placePhotoUrls[section] ?? [])
+          ..add(data['data']['photoUrl'] as String);
+      });
+    });
+    if (mounted) setState(() => _uploadingPlacePhoto = false);
   }
 
   Future<void> _deletePlacePhoto(String section, int index) async {
@@ -2832,12 +2790,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       itemCount: showAdd ? count + 1 : count,
       itemBuilder: (context, index) {
         if (index == count && showAdd) {
-          return GestureDetector(
+          return GardenAddPhotoTile(
+            remaining: 6 - count,
+            uploading: _uploadingCaregiverPhoto,
             onTap: _addCaregiverPhoto,
-            child: Container(
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), style: BorderStyle.solid)),
-              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
-            ),
           );
         }
         return Stack(
@@ -2918,20 +2874,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   ),
                 ),
               if (canAdd)
-                GestureDetector(
-                  // Deshabilitado mientras hay una subida en curso (cualquier sección) —
-                  // evita disparar subidas concurrentes por doble-tap o tocar otra sección.
-                  onTap: _uploadingPlacePhoto ? null : () => _addPlacePhoto(key),
-                  child: Opacity(
-                    opacity: _uploadingPlacePhoto ? 0.4 : 1.0,
-                    child: Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: required && photos.isEmpty ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
-                      ),
-                      child: GardenIcon(GIcon.galeria, size: GIconSize.lg, color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary),
-                    ),
+                // Deshabilitado mientras hay una subida en curso (cualquier sección) —
+                // evita disparar subidas concurrentes por doble-tap o tocar otra sección.
+                Opacity(
+                  opacity: _uploadingPlacePhoto ? 0.6 : 1.0,
+                  child: GardenAddPhotoTile(
+                    size: 80,
+                    remaining: 3 - photos.length,
+                    uploading: _uploadingPlacePhoto,
+                    highlight: required && photos.isEmpty,
+                    onTap: () => _addPlacePhoto(key),
                   ),
                 ),
             ],
@@ -2949,12 +2901,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       itemCount: (_photos.length < 6) ? _photos.length + 1 : 6,
       itemBuilder: (context, index) {
         if (index == _photos.length && _photos.length < 6) {
-          return GestureDetector(
+          return GardenAddPhotoTile(
+            remaining: 6 - _photos.length,
+            uploading: _isSaving,
             onTap: _addPhoto,
-            child: Container(
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor, style: BorderStyle.solid)),
-              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
-            ),
           );
         }
         final localBytes = index < _localPhotoData.length ? _localPhotoData[index] : null;

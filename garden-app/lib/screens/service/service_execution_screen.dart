@@ -39,6 +39,7 @@ import '../../design/garden_depth.dart';
 import '../../design/garden_service_clock.dart';
 import '../../design/garden_story_progress.dart';
 import '../../widgets/garden_base_map.dart';
+import '../../utils/photo_picker.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -4620,50 +4621,41 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     if (source == null) return;
     if (!mounted) return;
 
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
-    if (picked == null) return;
-    if (!mounted) return;
+    // Cámara: una foto del momento. Galería: varias de una vez (hasta 5).
+    final List<PickedPhoto> picked;
+    if (source == ImageSource.camera) {
+      final shot = await ImagePicker().pickImage(source: source, imageQuality: 85);
+      picked = shot == null
+          ? const []
+          : [(bytes: await shot.readAsBytes(), name: shot.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : shot.name)];
+    } else {
+      if (!mounted) return;
+      picked = await GardenPhotoPicker.pick(context, remaining: 5, quality: 85);
+    }
+    if (picked.isEmpty || !mounted) return;
 
     setState(() => _isSendingPhoto = true);
-
-    try {
-      final bytes = await picked.readAsBytes();
-      final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
-
-      final uri = Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event');
-      final request = http.MultipartRequest('POST', uri);
+    final sent = await GardenPhotoPicker.uploadAll(context, picked, (p) async {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'));
       request.headers['Authorization'] = 'Bearer $_token';
       request.fields['type'] = 'PHOTO';
       request.fields['description'] = 'Foto del servicio';
-      request.files.add(http.MultipartFile.fromBytes(
-        'photo', bytes,
-        filename: fileName,
-        contentType: MediaType('image', 'jpeg'),
-      ));
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
+      request.files.add(http.MultipartFile.fromBytes('photo', p.bytes,
+          filename: p.name, contentType: MediaType('image', 'jpeg')));
+      final response = await http.Response.fromStream(await request.send());
       final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadBooking();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Foto enviada al dueño'), backgroundColor: GardenColors.success),
-          );
-        }
-      } else {
-        if (mounted) {
-          final msg = data['error']?['message'] as String? ?? 'Error al enviar la foto';
-          GardenErrorDialog.show(context, msg);
-        }
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] as String? ?? 'No se pudo enviar la foto. Intenta de nuevo.');
       }
-    } catch (e) {
-      debugPrint('Error sending photo: $e');
-      if (mounted) {
-        GardenErrorDialog.show(context, 'No se pudo enviar la foto. Intenta de nuevo.');
+    });
+    if (sent > 0) await _loadBooking();
+    if (mounted) {
+      if (sent == 1 && picked.length == 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto enviada al dueño'), backgroundColor: GardenColors.success),
+        );
       }
-    } finally {
-      if (mounted) setState(() => _isSendingPhoto = false);
+      setState(() => _isSendingPhoto = false);
     }
   }
 

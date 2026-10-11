@@ -30,6 +30,8 @@ import '../../utils/input_formatters.dart';
 import '../../utils/person_validators.dart';
 import '../../widgets/password_rules.dart';
 import '../../design/garden_depth.dart';
+import '../../utils/photo_picker.dart';
+import '../../design/garden_photo_tile.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -1364,19 +1366,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   static const _apiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
-  /// Agrega foto al buffer local del cuidador (máx 6)
+  /// Agrega fotos al buffer local del cuidador: varias de una vez (máx 6).
   Future<void> _pickCaregiverPhoto() async {
-    if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length >= 6) return;
-    final picked = await image_picker_pkg.ImagePicker()
-        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
-    if (picked == null || !mounted) return;
-    try {
-      final bytes = await picked.readAsBytes();
-      final name = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
-      setState(() => _localCaregiverPhotos.add((bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')));
-    } catch (e) {
-      GardenErrorDialog.show(context, 'Error: $e');
-    }
+    final picked = await GardenPhotoPicker.pick(context,
+        remaining: 6 - _caregiverPhotoUrls.length - _localCaregiverPhotos.length);
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _localCaregiverPhotos.addAll([
+          for (final p in picked) (bytes: p.bytes, name: p.name, mimeType: 'image/jpeg'),
+        ]));
   }
 
   /// Sube fotos del cuidador pendientes al backend (una a una)
@@ -1420,22 +1417,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// Agrega foto al buffer local de una sección del lugar (máx 3)
+  /// Agrega fotos al buffer local de una sección del lugar: varias de una vez (máx 3).
   Future<void> _pickPlacePhoto(String section) async {
     final current = (_placePhotoUrls[section]?.length ?? 0) + (_localPlacePhotos[section]?.length ?? 0);
-    if (current >= 3) return;
-    final picked = await image_picker_pkg.ImagePicker()
-        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
-    if (picked == null || !mounted) return;
-    try {
-      final bytes = await picked.readAsBytes();
-      final name = picked.name.isEmpty ? 'place_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
-      setState(() {
-        _localPlacePhotos[section] = [...(_localPlacePhotos[section] ?? []), (bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')];
-      });
-    } catch (e) {
-      GardenErrorDialog.show(context, 'Error: $e');
-    }
+    final picked = await GardenPhotoPicker.pick(context, remaining: 3 - current, what: 'fotos de esta sección');
+    if (picked.isEmpty || !mounted) return;
+    setState(() {
+      _localPlacePhotos[section] = [
+        ...(_localPlacePhotos[section] ?? []),
+        for (final p in picked) (bytes: p.bytes, name: p.name, mimeType: 'image/jpeg'),
+      ];
+    });
   }
 
   /// Sube todas las fotos de lugar pendientes al backend
@@ -2154,20 +2146,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           onRemove: () => onRemoveLocal(e.key),
         )),
         if (uploaded.length + local.length < maxPhotos)
-          GestureDetector(
+          GardenAddPhotoTile(
+            remaining: maxPhotos - uploaded.length - local.length,
             onTap: onAdd,
-            child: Container(
-              decoration: BoxDecoration(
-                color: surfaceEl,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-              ),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const GardenIcon(GIcon.galeria, size: GIconSize.lg, color: GardenColors.primary),
-                const SizedBox(height: 4),
-                Text('Añadir', style: TextStyle(color: subtextColor, fontSize: 10)),
-              ]),
-            ),
           ),
       ],
     );
@@ -2201,21 +2182,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         )),
       )),
       if (uploaded.length + local.length < 3)
-        SizedBox(width: 72, height: 72, child: GestureDetector(
-          onTap: _uploadingPlacePhotos || _isLoading ? null : () => _pickPlacePhoto(section),
-          child: Container(
-            decoration: BoxDecoration(
-              color: surfaceEl,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-            ),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const GardenIcon(GIcon.foto, size: GIconSize.md, color: GardenColors.primary),
-              const SizedBox(height: 3),
-              Text('Foto', style: TextStyle(color: subtextColor, fontSize: 9)),
-            ]),
-          ),
-        )),
+        GardenAddPhotoTile(
+          size: 72,
+          remaining: 3 - uploaded.length - local.length,
+          uploading: _uploadingPlacePhotos,
+          onTap: _isLoading ? null : () => _pickPlacePhoto(section),
+        ),
     ]);
   }
 

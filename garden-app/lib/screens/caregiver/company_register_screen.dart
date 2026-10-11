@@ -45,6 +45,8 @@ import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 import '../../utils/person_validators.dart';
 import '../../widgets/password_rules.dart';
+import '../../utils/photo_picker.dart';
+import '../../design/garden_photo_tile.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
   /// When true, the screen queries the backend on load to jump straight to
@@ -685,14 +687,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   }
 
   // ── Photo upload helpers ───────────────────────────────────────────────────
+  /// Varias de una vez, hasta 6 en total; se suben al continuar.
   Future<void> _pickCaregiverPhoto() async {
     final total = _caregiverPhotoUrls.length + _localCaregiverPhotos.length;
-    if (total >= 6) { _showError('Máximo 6 fotos de servicios'); return; }
-    final picked = await image_picker_pkg.ImagePicker().pickImage(
-        source: image_picker_pkg.ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
-    if (picked == null) return;
-    final bytes = Uint8List.fromList(await picked.readAsBytes());
-    setState(() => _localCaregiverPhotos.add((bytes: bytes, name: picked.name, mimeType: 'image/jpeg')));
+    final picked = await GardenPhotoPicker.pick(context, remaining: 6 - total, what: 'fotos de servicios');
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _localCaregiverPhotos.addAll([
+          for (final p in picked) (bytes: p.bytes, name: p.name, mimeType: 'image/jpeg'),
+        ]));
   }
 
   Future<bool> _uploadPendingCaregiverPhotos() async {
@@ -732,14 +734,13 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
 
   Future<void> _pickPlacePhoto(String section) async {
     final total = (_placePhotoUrls[section]?.length ?? 0) + (_localPlacePhotos[section]?.length ?? 0);
-    if (total >= 3) { _showError('Máximo 3 fotos por sección'); return; }
-    final picked = await image_picker_pkg.ImagePicker().pickImage(
-        source: image_picker_pkg.ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
-    if (picked == null) return;
-    final bytes = Uint8List.fromList(await picked.readAsBytes());
+    final picked = await GardenPhotoPicker.pick(context, remaining: 3 - total, what: 'fotos de esta sección');
+    if (picked.isEmpty || !mounted) return;
     setState(() {
-      _localPlacePhotos[section] = [...(_localPlacePhotos[section] ?? []),
-        (bytes: bytes, name: picked.name, mimeType: 'image/jpeg')];
+      _localPlacePhotos[section] = [
+        ...(_localPlacePhotos[section] ?? []),
+        for (final p in picked) (bytes: p.bytes, name: p.name, mimeType: 'image/jpeg'),
+      ];
     });
   }
 
@@ -1309,14 +1310,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
       itemCount: canAdd ? total + 1 : total,
       itemBuilder: (_, i) {
         if (i == total && canAdd) {
-          return GestureDetector(
-            onTap: _pickCaregiverPhoto,
-            child: Container(
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4))),
-              child: const GardenIcon(GIcon.foto, size: GIconSize.lg, color: GardenColors.primary),
-            ),
-          );
+          return GardenAddPhotoTile(remaining: 6 - total, onTap: _pickCaregiverPhoto);
         }
         if (i < urls.length) {
           return Stack(children: [
@@ -1384,16 +1378,11 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
                   )),
                 ])),
               if (canAdd)
-                GestureDetector(
+                GardenAddPhotoTile(
+                  size: 80,
+                  remaining: 3 - total,
+                  highlight: required && total == 0,
                   onTap: () => _pickPlacePhoto(key),
-                  child: Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: required && total == 0 ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
-                    ),
-                    child: GardenIcon(GIcon.galeria, size: GIconSize.lg, color: required && total == 0 ? GardenColors.error : GardenColors.primary),
-                  ),
                 ),
             ],
           ),

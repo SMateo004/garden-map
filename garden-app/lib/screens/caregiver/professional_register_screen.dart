@@ -39,6 +39,8 @@ import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 import '../../utils/person_validators.dart';
 import '../../widgets/password_rules.dart';
+import '../../utils/photo_picker.dart';
+import '../../design/garden_photo_tile.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -625,22 +627,13 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   Future<void> _pickPhoto() async {
     final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final maxFotos = isHospedaje ? 6 : 4;
-    if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
-    final picked = await image_picker_pkg.ImagePicker()
-        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
-    if (picked == null || !mounted) return;
-    try {
-      final bytes = await picked.readAsBytes();
-      final name = picked.name.isEmpty
-          ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : picked.name;
-      final mimeType = picked.mimeType ?? 'image/jpeg';
-      setState(() { _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType)); });
-    } catch (e) {
-      if (mounted) {
-        GardenErrorDialog.show(context, 'No pudimos abrir esa imagen. Prueba con otra.');
-      }
-    }
+    // Varias de una vez, hasta el máximo según los servicios.
+    final picked = await GardenPhotoPicker.pick(context,
+        remaining: maxFotos - _localPhotos.length - _photoUrls.length);
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _localPhotos.addAll([
+          for (final p in picked) (bytes: p.bytes, name: p.name, mimeType: 'image/jpeg'),
+        ]));
   }
 
   /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
@@ -1201,20 +1194,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                     )),
               ]);
             }
-            return GestureDetector(
-              onTap: (_isLoading || _uploadingPhotos) ? null : _pickPhoto,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: surfaceEl,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-                ),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const GardenIcon(GIcon.galeria, size: GIconSize.xl, color: GardenColors.primary),
-                  const SizedBox(height: 8),
-                  Text('Añadir foto', style: TextStyle(color: subtextColor, fontSize: 12)),
-                ]),
-              ),
+            return GardenAddPhotoTile(
+              remaining: (_servicesOffered.contains('HOSPEDAJE') ? 6 : 4) - _localPhotos.length - _photoUrls.length,
+              uploading: _uploadingPhotos,
+              onTap: _isLoading ? null : _pickPhoto,
             );
           }),
         ),
