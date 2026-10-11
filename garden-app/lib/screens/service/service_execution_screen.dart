@@ -4234,7 +4234,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         children: [
                           ...GardenBaseMap.layers(isDark),
                           PolylineLayer(polylines: [
-                            Polyline(points: track, strokeWidth: 4, color: GardenColors.secondary),
+                            Polyline(points: track, strokeWidth: 4, color: GardenColors.primaryDark),
                           ]),
                           MarkerLayer(markers: [
                             Marker(

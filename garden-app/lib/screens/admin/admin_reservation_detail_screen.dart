@@ -1506,7 +1506,7 @@ class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
         ...GardenBaseMap.layers(isDark),
         if (_track.length > 1)
           PolylineLayer(polylines: [
-            Polyline(points: _track, strokeWidth: 4, color: GardenColors.primary),
+            Polyline(points: _track, strokeWidth: 4, color: GardenColors.primaryDark),
           ]),
         MarkerLayer(markers: [
           Marker(

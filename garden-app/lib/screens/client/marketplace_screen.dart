@@ -2036,8 +2036,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     // Las zonas deshabilitadas por un admin desaparecen del mapa — ni su
     // polígono ni su marcador se dibujan mientras estén bloqueadas.
+    // Mapa minimalista (blanco + verde Garden): todas las zonas en el verde de la marca; la
+    // seleccionada se distingue por intensidad, no por otro color.
+    const color = GardenColors.primary;
     final polygons = _zonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-      final color = _zoneColors[e.key] ?? GardenColors.primary;
       final isSelected = _selectedZone == e.key;
       return Polygon(
         points: e.value,
@@ -2048,7 +2050,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }).toList();
 
     final markers = _zoneCenters.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-      final color = _zoneColors[e.key] ?? GardenColors.primary;
       final label = _zoneLabels[e.key] ?? e.key;
       final isSelected = _selectedZone == e.key;
       // Count caregivers in this zone
@@ -2158,7 +2159,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-                final color = _zoneColors[e.key] ?? GardenColors.primary;
+                const color = GardenColors.primary; // mismo verde que el mapa
                 final isSelected = _selectedZone == e.key;
                 final count = zoneCount(e.key);
                 return GestureDetector(
@@ -2209,6 +2210,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 initialCameraFit: initialFit,
                 minZoom: 10,
                 maxZoom: 17,
+                backgroundColor: GardenBaseMap.background(isDark),
                 onTap: (_, __) {
                   // Deselect zone on empty map tap
                   if (_selectedZone != null) setState(() => _selectedZone = null);
@@ -2221,7 +2223,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ],
             )),
 
-              // Aviso de que las zonas son aproximadas (la atribución de OpenStreetMap la dibuja el propio mapa).
+              // Aviso de que las zonas son aproximadas (la atribución de los mosaicos la dibuja el propio mapa).
               Positioned(
                 left: 8,
                 bottom: 6,

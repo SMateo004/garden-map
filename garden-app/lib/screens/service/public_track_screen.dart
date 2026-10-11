@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_base_map.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 
@@ -219,15 +220,13 @@ class _PublicTrackScreenState extends State<PublicTrackScreen> {
                   options: MapOptions(
                     initialCenter: _track.last,
                     initialZoom: 15,
+                    backgroundColor: GardenBaseMap.background(themeNotifier.isDark),
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.garden.bolivia',
-                    ),
+                    ...GardenBaseMap.layers(themeNotifier.isDark),
                     if (_track.length > 1)
                       PolylineLayer(polylines: [
-                        Polyline(points: _track, strokeWidth: 4, color: GardenColors.primary),
+                        Polyline(points: _track, strokeWidth: 4, color: GardenColors.primaryDark),
                       ]),
                     MarkerLayer(markers: [
                       Marker(

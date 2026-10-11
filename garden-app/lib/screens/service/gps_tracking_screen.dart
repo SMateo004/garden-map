@@ -718,7 +718,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               Polyline(
                 points: _track,
                 strokeWidth: 4.5,
-                color: GardenService.paseo.ink(false).withValues(alpha: 0.55),
+                color: GardenColors.primaryDark.withValues(alpha: 0.75), // verde Garden sobre el mapa blanco
               ),
             ],
           ),
