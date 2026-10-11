@@ -75,9 +75,10 @@ class GardenCaregiverCard extends StatelessWidget {
     final isCompany = c['isCompany'] == true;
     final company = (c['companyName'] as String?)?.trim();
     final name = isCompany && (company?.isNotEmpty ?? false) ? company! : '$first $last'.trim();
-    final initials = isCompany && (company?.isNotEmpty ?? false)
-        ? company![0]
-        : '${first.isNotEmpty ? first[0] : 'C'}${last.isNotEmpty ? last[0] : ''}';
+    final initials =
+        isCompany && (company?.isNotEmpty ?? false)
+            ? company![0]
+            : '${first.isNotEmpty ? first[0] : 'C'}${last.isNotEmpty ? last[0] : ''}';
     final verified = c['verified'] == true;
     final antecedentes = c['antecedentesVerified'] == true;
     final reviews = c['reviewCount'] as int? ?? 0;
@@ -88,139 +89,191 @@ class GardenCaregiverCard extends StatelessWidget {
     final prices = caregiverPrices(c, only: onlyService);
 
     final trust = <(GIcon, String)>[
-      if (verified) (GIcon.identidadVerificada, 'Identidad verificada'),
+      if (verified) (GIcon.identidadVerificada, 'ID verificada'),
       if (antecedentes) (GIcon.antecedentes, 'Antecedentes revisados'),
       if (isCompany) (GIcon.empresa, 'Empresa'),
     ];
 
+    // Compacta (~110 px en vez de ~180): todo a la derecha de la foto en
+    // cuatro renglones — nombre; calificación, zona y años; sellos de
+    // confianza; precios y "Reservar" — así entran más cuidadores en pantalla.
+    final meta = <InlineSpan>[
+      if (reviews > 0) ...[
+        const WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: EdgeInsets.only(right: 3),
+            child: GardenIcon(GIcon.estrella, color: GardenColors.star, size: GIconSize.xs, state: GIconState.active),
+          ),
+        ),
+        TextSpan(
+          text: rating.toStringAsFixed(1).replaceAll('.', ','),
+          style: TextStyle(color: text, fontWeight: FontWeight.w800),
+        ),
+        TextSpan(text: ' ($reviews)'),
+      ] else
+        const TextSpan(text: 'Nuevo en GARDEN', style: TextStyle(color: GardenColors.info, fontWeight: FontWeight.w800)),
+      if (zone != null && zone.isNotEmpty) ...[
+        const TextSpan(text: '  ·  '),
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(color: zoneColor ?? GardenColors.primary, shape: BoxShape.circle),
+          ),
+        ),
+        TextSpan(text: zone),
+      ],
+      if (years != null && years > 0) TextSpan(text: '  ·  $years ${years == 1 ? 'año' : 'años'}'),
+    ];
+
     return Material(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(GardenRadius.lg),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(GardenRadius.lg),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(GardenRadius.lg),
             border: Border.all(color: verified ? GardenColors.primary.withValues(alpha: 0.3) : border),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Stack(clipBehavior: Clip.none, children: [
-                Hero(
-                  tag: 'caregiver-${c['id']}',
-                  child: GardenAvatar(imageUrl: c['profilePicture'] as String?, size: 60, initials: initials),
-                ),
-                if (verified)
-                  Positioned(
-                    bottom: -2,
-                    right: -2,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface, width: 2),
-                      ),
-                      child: const GardenIcon(GIcon.verificado,
-                          size: GIconSize.xs, color: Colors.white, state: GIconState.active, semanticLabel: 'Verificado'),
-                    ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Hero(
+                    tag: 'caregiver-${c['id']}',
+                    child: GardenAvatar(imageUrl: c['profilePicture'] as String?, size: 52, initials: initials),
                   ),
-              ]),
+                  if (verified)
+                    Positioned(
+                      bottom: -2,
+                      right: -2,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface, width: 2),
+                        ),
+                        child: const GardenIcon(
+                          GIcon.verificado,
+                          size: GIconSize.xs,
+                          color: Colors.white,
+                          state: GIconState.active,
+                          semanticLabel: 'Verificado',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // "Reservar" junto al nombre: así los precios tienen todo el
+                    // ancho (en un teléfono de 320 px no entraban al lado).
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                          decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(999)),
+                          child: const Text(
+                            'Reservar',
+                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(children: meta),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 3),
-                  Wrap(spacing: 10, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    if (reviews > 0)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        const GardenIcon(GIcon.estrella, color: GardenColors.star, size: GIconSize.xs, state: GIconState.active),
-                        const SizedBox(width: 3),
-                        Text(rating.toStringAsFixed(1).replaceAll('.', ','),
-                            style: TextStyle(color: text, fontSize: 12.5, fontWeight: FontWeight.w800)),
-                        const SizedBox(width: 3),
-                        Text('($reviews)', style: TextStyle(color: sub, fontSize: 11.5)),
-                      ])
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: GardenColors.info.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
+                      style: TextStyle(color: sub, fontSize: 12),
+                    ),
+                    if (trust.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            for (var i = 0; i < trust.length; i++) ...[
+                              if (i > 0) const TextSpan(text: '  ·  '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 3),
+                                  child: GardenIcon(
+                                    trust[i].$1,
+                                    size: GIconSize.xs,
+                                    state: GIconState.active,
+                                    color: GardenColors.successDark,
+                                  ),
+                                ),
+                              ),
+                              TextSpan(text: trust[i].$2),
+                            ],
+                          ],
                         ),
-                        child: const Text('Nuevo en GARDEN',
-                            style: TextStyle(color: GardenColors.info, fontSize: 11, fontWeight: FontWeight.w800)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: GardenColors.successDark, fontSize: 11, fontWeight: FontWeight.w700),
                       ),
-                    if (zone != null && zone.isNotEmpty)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(color: zoneColor ?? GardenColors.primary, shape: BoxShape.circle),
+                    ],
+                    const SizedBox(height: 8),
+                    // Precio por servicio, cada uno con su color.
+                    prices.isEmpty
+                        ? Text('Consulta precios en su perfil', style: TextStyle(color: sub, fontSize: 12))
+                        : Wrap(
+                          spacing: 5,
+                          runSpacing: 5,
+                          children: [
+                            for (final pr in prices)
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(5, 3, 8, 3),
+                                decoration: BoxDecoration(
+                                  color: pr.service.soft(isDark),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GardenIcon(GIcon.forService(pr.service), size: GIconSize.xs, state: GIconState.active),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Bs ${pr.amount % 1 == 0 ? pr.amount.toInt() : pr.amount}',
+                                      style: TextStyle(color: pr.service.ink(isDark), fontSize: 12, fontWeight: FontWeight.w900),
+                                    ),
+                                    Text(' / ${pr.unit}', style: TextStyle(color: pr.service.ink(isDark), fontSize: 10.5)),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(zone, style: TextStyle(color: sub, fontSize: 12)),
-                      ]),
-                    if (years != null && years > 0)
-                      Text('$years ${years == 1 ? 'año' : 'años'} cuidando',
-                          style: TextStyle(color: sub, fontSize: 12)),
-                  ]),
-                  if (trust.isNotEmpty) ...[
-                    const SizedBox(height: 7),
-                    Wrap(spacing: 6, runSpacing: 4, children: [
-                      for (final (icon, label) in trust)
-                        Row(mainAxisSize: MainAxisSize.min, children: [
-                          GardenIcon(icon, size: GIconSize.xs, state: GIconState.active, color: GardenColors.successDark),
-                          const SizedBox(width: 3),
-                          Text(label,
-                              style: const TextStyle(color: GardenColors.successDark, fontSize: 11, fontWeight: FontWeight.w700)),
-                        ]),
-                    ]),
                   ],
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            // Precio por servicio, cada uno con su color — y la acción.
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(
-                child: prices.isEmpty
-                    ? Text('Consulta precios en su perfil', style: TextStyle(color: sub, fontSize: 12))
-                    : Wrap(spacing: 6, runSpacing: 6, children: [
-                        for (final pr in prices)
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(6, 4, 9, 4),
-                            decoration: BoxDecoration(
-                              color: pr.service.soft(isDark),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              GardenIcon(GIcon.forService(pr.service), size: GIconSize.sm, state: GIconState.active),
-                              const SizedBox(width: 4),
-                              Text('Bs ${pr.amount % 1 == 0 ? pr.amount.toInt() : pr.amount}',
-                                  style: TextStyle(color: pr.service.ink(isDark), fontSize: 13, fontWeight: FontWeight.w900)),
-                              Text(' / ${pr.unit}', style: TextStyle(color: pr.service.ink(isDark), fontSize: 11)),
-                            ]),
-                          ),
-                      ]),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: GardenColors.primary,
-                  borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text('Reservar', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800)),
               ),
-            ]),
-          ]),
+            ],
+          ),
         ),
       ),
     );
@@ -242,43 +295,54 @@ class GardenStatTiles extends StatelessWidget {
     final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    return Row(children: [
-      for (var i = 0; i < tiles.length; i++) ...[
-        if (i > 0) const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-            decoration: BoxDecoration(
-              color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: border),
-            ),
-            child: Column(children: [
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (i == 0 && highlightFirst) ...[
-                  const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
-                  const SizedBox(width: 3),
-                ],
-                // Se achica en vez de cortarse ("mar 20…").
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(tiles[i].$1,
-                        maxLines: 1,
-                        style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)),
+    return Row(
+      children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+              decoration: BoxDecoration(
+                color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: border),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (i == 0 && highlightFirst) ...[
+                        const GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
+                        const SizedBox(width: 3),
+                      ],
+                      // Se achica en vez de cortarse ("mar 20…").
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            tiles[i].$1,
+                            maxLines: 1,
+                            style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ]),
-              const SizedBox(height: 2),
-              Text(tiles[i].$2,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: sub, fontSize: 11, fontWeight: FontWeight.w600)),
-            ]),
+                  const SizedBox(height: 2),
+                  Text(
+                    tiles[i].$2,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: sub, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ],
-    ]);
+    );
   }
 }

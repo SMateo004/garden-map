@@ -39,6 +39,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../narrative/booking_story.dart';
 import '../../theme/garden_motion.dart';
+import '../../design/garden_marketplace_banner.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -5513,14 +5514,10 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// FORMULARIO DE BANNER — con subida real de imagen + preview idéntico al que
-// ve el cliente en el marketplace (ver _buildBannerCard en
-// marketplace_screen.dart: tarjeta de 180px de alto, ancho completo de la
-// lista, BoxFit.cover). El recorte de "cover" es el motivo de la guía de
-// tamaño de abajo: el mismo banner se ve en celulares angostos (~340dp de
-// ancho visible) y en la lista del panel web de escritorio (bastante más
-// ancha) con el mismo alto fijo — una imagen panorámica con el contenido
-// importante centrado sobrevive el recorte en ambos extremos.
+// FORMULARIO DE BANNER — con subida real de imagen y la vista previa con el
+// MISMO widget que ve el cliente (GardenMarketplaceBanner): franja de 96 px,
+// texto a la izquierda sobre un velo y la imagen recortada con "cover". De ahí
+// la guía de tamaño (GardenMarketplaceBanner.imageGuide).
 // ────────────────────────────────────────────────────────────────────────────
 
 class _BannerFormDialog extends StatefulWidget {
@@ -5645,7 +5642,7 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
             const SizedBox(height: 6),
             AnimatedBuilder(
               animation: Listenable.merge([_titleCtrl, _subtitleCtrl, _btnCtrl]),
-              builder: (_, __) => _BannerPreview(
+              builder: (_, __) => GardenMarketplaceBanner(
                 imageUrl: _imageUrl,
                 title: _titleCtrl.text,
                 subtitle: _subtitleCtrl.text,
@@ -5687,9 +5684,7 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Tamaño recomendado: 1600×600px (panorámica, ~2.7:1), JPG/PNG/WEBP, máx. 5MB. '
-                    'La tarjeta se recorta a un alto fijo tanto en celular como en escritorio — '
-                    'mantén el texto o logo importante centrado en la imagen para que no quede cortado.',
+                    GardenMarketplaceBanner.imageGuide,
                     style: TextStyle(color: subtextColor, fontSize: 11.5, height: 1.4),
                   ),
                 ),
@@ -5738,72 +5733,6 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
               : const Text('Guardar'),
         ),
       ],
-    );
-  }
-}
-
-/// Réplica EXACTA de `_buildBannerCard` (marketplace_screen.dart) — mismo
-/// alto (180px), mismo overlay degradado, misma tipografía. A propósito una
-/// copia y no un widget compartido: si el diseño del banner real cambia algún
-/// día, esto se nota enseguida (el preview del admin deja de coincidir) en
-/// vez de arrastrar un import cruzado entre la pantalla de admin y la de cliente.
-class _BannerPreview extends StatelessWidget {
-  final String? imageUrl;
-  final String title;
-  final String subtitle;
-  final String buttonText;
-
-  const _BannerPreview({
-    required this.imageUrl,
-    required this.title,
-    required this.subtitle,
-    required this.buttonText,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: GardenColors.darkSurface,
-        image: imageUrl != null && imageUrl!.isNotEmpty
-            ? DecorationImage(image: NetworkImage(imageUrl!), fit: BoxFit.cover)
-            : null,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.black.withValues(alpha: 0.15), Colors.black.withValues(alpha: 0.65)],
-          ),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              title.isEmpty ? 'Título del banner' : title,
-              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-            ),
-            if (subtitle.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.88), fontSize: 13, height: 1.4)),
-            ],
-            if (buttonText.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(GardenRadius.full)),
-                child: Text(buttonText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

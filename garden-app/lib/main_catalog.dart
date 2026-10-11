@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'design/garden_marketplace_banner.dart';
 import 'design/garden_booking_carousel.dart';
 import 'design/garden_photo_tile.dart';
 import 'design/garden_code_input.dart';
@@ -527,6 +528,21 @@ class _CatalogPageState extends State<_CatalogPage> {
                 ],
                 itemBuilder: (_, b) => GardenBookingMiniCard(booking: b, onTap: () {}, onAction: (_) {}),
               ),
+            ),
+          ]),
+          _Section('Banner del marketplace (Admin > Banners)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(children: [
+                GardenMarketplaceBanner(
+                  title: 'Primer paseo con 20% de descuento',
+                  subtitle: 'Solo esta semana, con cuidadores verificados.',
+                  buttonText: 'Ver más',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 10),
+                GardenMarketplaceBanner(title: 'Nuevos cuidadores en Equipetrol', onTap: () {}),
+              ]),
             ),
           ]),
           _Section('Agregar fotos (se eligen varias de una vez)', [

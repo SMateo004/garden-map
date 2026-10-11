@@ -32,6 +32,7 @@ import '../../services/referral_invite.dart';
 import '../../utils/web_redirect.dart';
 import 'nearby_vets_screen.dart';
 import '../../widgets/garden_base_map.dart';
+import '../../design/garden_marketplace_banner.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -1904,7 +1905,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     return Container(
       margin: const EdgeInsets.only(bottom: GardenSpacing.md),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: GardenRadius.lg_,
@@ -1913,7 +1914,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const GardenSkeleton(width: 58, height: 58, radius: 29),
+          const GardenSkeleton(width: 52, height: 52, radius: 26),
           const SizedBox(width: GardenSpacing.md),
           Expanded(
             child: Column(
@@ -1942,7 +1943,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Widget _buildBannerCard(Map<String, dynamic> banner) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final imageUrl = banner['imageUrl'] as String?;
     final title = banner['title'] as String? ?? '';
     final subtitle = banner['subtitle'] as String?;
@@ -1970,78 +1970,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       }
     }
 
-    return GardenPressable(
-      pressedScale: 0.97,
-      onTap: actionType != 'none'
-          ? () {
-              HapticFeedback.selectionClick();
-              handleTap();
-            }
-          : null,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        height: 180, // mismo alto que tarjeta de cuidador
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-          image: imageUrl != null && imageUrl.isNotEmpty
-              ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
-              : null,
-          boxShadow: GardenShadows.card,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.15),
-                Colors.black.withValues(alpha: 0.65),
-              ],
-            ),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text(title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                  shadows: [Shadow(color: Colors.black38, blurRadius: 4)],
-                )),
-              if (subtitle != null && subtitle.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    fontSize: 13,
-                    height: 1.4,
-                  )),
-              ],
-              if (buttonText != null && buttonText.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary,
-                    borderRadius: BorderRadius.circular(GardenRadius.full),
-                  ),
-                  child: Text(buttonText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    )),
-                ),
-              ],
-            ],
-          ),
-        ),
+    // Franja baja intercalada (antes una tarjeta de 180 px con sombra).
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GardenMarketplaceBanner(
+        imageUrl: imageUrl,
+        title: title,
+        subtitle: subtitle,
+        buttonText: buttonText,
+        onTap: actionType != 'none'
+            ? () {
+                HapticFeedback.selectionClick();
+                handleTap();
+              }
+            : null,
       ),
     );
   }

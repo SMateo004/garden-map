@@ -40,10 +40,12 @@ void main() {
         ),
       ),
     ));
-    expect(find.text('Nuevo en GARDEN'), findsOneWidget);
-    expect(find.text('Identidad verificada'), findsOneWidget);
-    expect(find.text('Antecedentes revisados'), findsOneWidget);
-    expect(find.text('Norte'), findsOneWidget);
+    // La tarjeta compacta junta datos y sellos en un renglón cada uno.
+    Finder has(String t) => find.textContaining(t, findRichText: true);
+    expect(has('Nuevo en GARDEN'), findsOneWidget);
+    expect(has('ID verificada'), findsOneWidget);
+    expect(has('Antecedentes revisados'), findsOneWidget);
+    expect(has('Norte'), findsOneWidget);
   });
 
   testWidgets('cifras del perfil en recuadros', (tester) async {
