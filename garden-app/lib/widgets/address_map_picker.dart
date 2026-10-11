@@ -87,6 +87,14 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
   /// [_reverseAddress] que es la dirección completa mostrada como preview.
   String? _reverseStreet;
   bool _reversing = false;
+  /// Posición a la que corresponde [_reverseStreet]/[_reverseAddress]. Si al
+  /// confirmar el pin ya no está ahí (o la búsqueda sigue en curso), se espera
+  /// una búsqueda fresca antes de cerrar — si no, la primera vez que se abre
+  /// el mapa la calle llegaba vacía.
+  LatLng? _geocodedPos;
+  Future<void>? _pendingReverse;
+  int _reverseSeq = 0;
+  bool _confirming = false;
   DateTime? _lastOutOfBoundsWarning;
 
   @override
@@ -98,7 +106,9 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
       widget.initialLat ?? widget.cityLat,
       widget.initialLng ?? widget.cityLng,
     );
-    if (widget.initialLat != null) _reverseGeocode(_pinPosition);
+    // Siempre, también la primera vez (sin ubicación previa): el pin ya
+    // apunta a un lugar y puede confirmarse sin mover el mapa.
+    _reverseGeocode(_pinPosition);
   }
 
   bool _isWithinCity(LatLng point) =>
@@ -172,7 +182,15 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
     }
   }
 
-  Future<void> _reverseGeocode(LatLng pos) async {
+  Future<void> _reverseGeocode(LatLng pos) {
+    final f = _doReverseGeocode(pos, ++_reverseSeq);
+    _pendingReverse = f;
+    return f;
+  }
+
+  /// [seq] descarta respuestas viejas: si el mapa se movió de nuevo mientras
+  /// Nominatim respondía, solo cuenta la búsqueda más reciente.
+  Future<void> _doReverseGeocode(LatLng pos, int seq) async {
     setState(() {
       _reversing = true;
       _reverseAddress = null;
@@ -195,18 +213,37 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
         final street = road == null
             ? null
             : (houseNumber != null ? '$road $houseNumber' : road);
-        if (mounted && display != null) {
+        if (mounted && seq == _reverseSeq && display != null) {
           setState(() {
             _reverseAddress = display;
             _reverseStreet = street;
+            _geocodedPos = pos;
           });
         }
       }
     } catch (_) {
       // No bloquear el flujo si Nominatim falla
     } finally {
-      if (mounted) setState(() => _reversing = false);
+      if (mounted && seq == _reverseSeq) setState(() => _reversing = false);
     }
+  }
+
+  Future<void> _confirm() async {
+    if (_confirming) return;
+    setState(() => _confirming = true);
+    final pos = _pinPosition;
+    if (_geocodedPos != pos) {
+      // Si ya hay una búsqueda en curso para este mismo punto, esperarla;
+      // si no, lanzar una nueva.
+      if (_reversing && _pendingReverse != null) await _pendingReverse;
+      if (mounted && _geocodedPos != pos) await _reverseGeocode(pos);
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(AddressMapResult(
+      lat: pos.latitude,
+      lng: pos.longitude,
+      formattedAddress: _geocodedPos == pos ? _reverseStreet : null,
+    ));
   }
 
   @override
@@ -387,8 +424,10 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const GardenIcon(GIcon.confirmado, size: GIconSize.lg, inheritColor: true),
-                        label: const Text('Confirmar ubicación'),
+                        icon: _confirming
+                            ? const GardenLoadingIndicator(size: 18)
+                            : const GardenIcon(GIcon.confirmado, size: GIconSize.lg, inheritColor: true),
+                        label: Text(_confirming ? 'Detectando dirección...' : 'Confirmar ubicación'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF16a34a),
                           foregroundColor: Colors.white,
@@ -397,13 +436,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        onPressed: () => Navigator.of(context).pop(
-                          AddressMapResult(
-                            lat: _pinPosition.latitude,
-                            lng: _pinPosition.longitude,
-                            formattedAddress: _reverseStreet,
-                          ),
-                        ),
+                        onPressed: _confirming ? null : _confirm,
                       ),
                     ),
                   ],

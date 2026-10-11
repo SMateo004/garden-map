@@ -360,7 +360,13 @@ class _AddressSectionState extends State<AddressSection> {
                 cityLng: selectedCity?.centerLng ?? -63.175,
                 cityName: selectedCity?.name ?? 'tu ciudad',
               );
-              if (result != null) widget.onMapResult(result);
+              if (result == null) return;
+              // La calle detectada se escribe acá, para todas las pantallas
+              // que usan esta sección (algunas no la rellenaban nunca).
+              final street = result.formattedAddress?.trim() ?? '';
+              if (street.isNotEmpty) widget.streetController.text = street;
+              widget.onMapResult(result);
+              widget.onFieldsChanged?.call();
             },
           ),
         ),
@@ -496,7 +502,7 @@ class _AddressSectionState extends State<AddressSection> {
                           child: TextFormField(
                             controller: widget.apartmentController,
                             style: TextStyle(color: widget.textColor),
-                            decoration: _field('Número de dpto.', GIcon.habitacion),
+                            decoration: _field('# Dep.', GIcon.habitacion),
                             keyboardType: TextInputType.text,
                           ),
                         ),
@@ -505,7 +511,7 @@ class _AddressSectionState extends State<AddressSection> {
                           child: TextFormField(
                             controller: widget.condominioController,
                             style: TextStyle(color: widget.textColor),
-                            decoration: _field('Nombre del condominio', GIcon.edificio),
+                            decoration: _field('Condominio', GIcon.edificio),
                           ),
                         ),
                       ]),
