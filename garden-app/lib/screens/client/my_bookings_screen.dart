@@ -13,6 +13,7 @@ import '../../design/garden_pet_avatar.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_status_pill.dart';
 import '../../narrative/booking_story.dart';
+import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/booking_history_detail.dart';
 import '../../widgets/garden_empty_state.dart';
@@ -42,6 +43,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   // (dos taps rápidos, o un reintento antes de que llegue la respuesta)
   // disparando dos POST /cancel para la misma reserva.
   final Set<String> _cancellingIds = {};
+  /// Reservas pasadas desplegadas: solo ahí se muestra (y se pide a la API)
+  /// el pago e historial — la lista queda corta al entrar.
+  final Set<String> _expandedIds = {};
+
+  void _toggleExpanded(String id) => setState(() {
+        if (!_expandedIds.remove(id)) _expandedIds.add(id);
+      });
 
   String? _highlightBookingId;
   Timer? _highlightClearTimer;
@@ -571,6 +579,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final story = BookingStory.of(status, storyCtx);
     final svc = storyCtx.service;
     final statusColor = StoryColors.of(story.tone, isDark: isDark, service: svc).ink;
+    final bookingId = booking['id'] as String;
+    final expandable = BookingHistoryDetail.appliesTo(status);
+    final expanded = expandable && _expandedIds.contains(bookingId);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 600),
@@ -599,7 +610,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 ),
               ),
             ),
-            Padding(
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: expandable ? () => _toggleExpanded(bookingId) : null,
+              child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
@@ -741,6 +755,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 ],
               ),
             ),
+            ),
             Divider(height: 1, color: borderColor),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -749,7 +764,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   // Qué, cuándo y cuánto en una sola fila. Antes: el nombre de
                   // la mascota repetido (ya está en el titular), la fecha en
                   // otra columna y el total en una caja aparte.
-                  Row(
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: expandable ? () => _toggleExpanded(bookingId) : null,
+                    child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(7),
@@ -785,7 +803,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         color: textColor,
                         animate: false,
                       ),
+                      if (expandable) ...[
+                        const SizedBox(width: 6),
+                        AnimatedRotation(
+                          turns: expanded ? 0.5 : 0,
+                          duration: GardenMotion.resolve(context, GardenMotion.quick),
+                          curve: GardenMotion.move,
+                          child: GardenIcon(GIcon.desplegar, size: GIconSize.sm, color: subtextColor,
+                              semanticLabel: expanded ? 'Ocultar detalle' : 'Ver detalle'),
+                        ),
+                      ],
                     ],
+                  ),
                   ),
                 Builder(builder: (_) {
                   final exts = (booking['serviceEvents'] as List<dynamic>? ?? [])
@@ -1277,11 +1306,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               ],
             ),
           ),
-          if (BookingHistoryDetail.appliesTo(status))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: BookingHistoryDetail(bookingId: booking['id'] as String, token: _clientToken, isDark: isDark),
-            ),
+          // Pago e historial: solo con la reserva desplegada.
+          AnimatedSize(
+            duration: GardenMotion.resolve(context, GardenMotion.standard),
+            curve: GardenMotion.enter,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: BookingHistoryDetail(bookingId: bookingId, token: _clientToken, isDark: isDark),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     ),
