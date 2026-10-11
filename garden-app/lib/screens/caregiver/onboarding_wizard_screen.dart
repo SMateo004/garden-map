@@ -206,6 +206,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     for (final c in [
       _firstNameController, _lastNameController, _emailController,
       _passwordController, _phoneController, _addressStreetController,
+      _addressNumberController, _addressApartmentController,
+      _addressCondominioController, _addressReferenceController,
       ..._emergencyNameControllers, ..._emergencyPhoneControllers,
       _pinController, _pinConfirmController, _bioController,
     ]) {
@@ -280,7 +282,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (token.isNotEmpty && widget.clientConversionMode) {
       await _prefillFromExistingUser(token);
       await _tryPopulateCaregiverProfile(token);
-      if (_addressZone != null) setState(() => _currentStep = 1);
+      // Saltar el paso 0 solo si la dirección vino completa del perfil de
+      // dueño; si falta algo, se queda acá con "Siguiente" deshabilitado y el
+      // aviso de lo que falta (antes bastaba con tener zona).
+      if (_missingAddress.isEmpty && _canProceed) setState(() => _currentStep = 1);
       return;
     }
 
@@ -320,6 +325,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if ((user['address'] as String? ?? '').isNotEmpty) {
             _addressController.text = user['address'] as String;
           }
+          // Dirección exacta: init-caregiver-profile ya la copió del perfil de
+          // dueño al de cuidador, y /auth/me (rol cuidador) la devuelve campo
+          // por campo. Antes solo se cargaba el texto completo de arriba, que el
+          // formulario no muestra: calle, número, zona y pin quedaban vacíos y
+          // había que volver a cargarlos.
+          _addressStreetController.text = user['addressStreet'] as String? ?? '';
+          _addressNumberController.text = user['addressNumber'] as String? ?? '';
+          _addressApartmentController.text = user['addressApartment'] as String? ?? '';
+          _addressCondominioController.text = user['addressCondominio'] as String? ?? '';
+          _addressReferenceController.text = user['addressReference'] as String? ?? '';
+          _isApartment = (user['addressApartment'] as String? ?? '').isNotEmpty ||
+              (user['addressCondominio'] as String? ?? '').isNotEmpty;
+          if (user['addressZone'] != null) _addressZone = user['addressZone'] as String?;
+          if (user['cityId'] != null) _gardenCityId = user['cityId'] as String?;
+          _addressLat = (user['addressLat'] as num?)?.toDouble() ?? _addressLat;
+          _addressLng = (user['addressLng'] as num?)?.toDouble() ?? _addressLng;
           if (user['dateOfBirth'] != null) {
             try {
               _dateOfBirth = DateTime.parse(user['dateOfBirth'] as String);
@@ -757,8 +778,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             (PersonValidators.password(_passwordController.text), _keyStep0Password),
           ],
           (_phoneVerifiedLocked ? null : PersonValidators.boPhone(_phoneController.text), _keyStep0Phone),
-          (_addressStreetController.text.trim().isEmpty ? 'Escribe la calle de tu dirección' : null, _keyStep0Address),
-          (_addressZone == null ? 'Selecciona tu zona / barrio' : null, _keyStep0Address),
+          (_missingAddress.isEmpty ? null : 'Completa tu dirección: falta ${_missingAddress.join(', ').toLowerCase()}', _keyStep0Address),
           (PersonValidators.adultBirthDate(_dateOfBirth), _keyStep0Dob),
         ];
         for (final (error, key) in checks) {
@@ -867,6 +887,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
+  /// Lo que falta de la dirección exacta (paso 0), con el mismo criterio que
+  /// "Mis datos" (my_data_screen.dart): el cuidador recibe mascotas en su
+  /// casa o sale a buscarlas, así que la dirección tiene que estar completa
+  /// para seguir — "Siguiente" queda deshabilitado mientras falte algo.
+  List<String> get _missingAddress => [
+        if (_gardenCityId == null) 'Ciudad',
+        if (_addressZone == null) 'Zona',
+        if (_addressStreetController.text.trim().isEmpty) 'Calle',
+        if (_addressNumberController.text.trim().isEmpty) 'Número',
+        if (_isApartment && _addressApartmentController.text.trim().isEmpty) 'Departamento',
+        if (_isApartment && _addressCondominioController.text.trim().isEmpty) 'Condominio o edificio',
+        if (_addressReferenceController.text.trim().isEmpty) 'Referencia',
+        if (_addressLat == null || _addressLng == null) 'Ubicación en el mapa',
+      ];
+
   /// Espejo silencioso de `_validateCurrentStep()` (sin SnackBars ni scroll)
   /// para habilitar/deshabilitar el botón de forma reactiva, en vez de
   /// dejarlo siempre tocable y mostrar el error recién después del tap.
@@ -878,8 +913,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             (_accountExists ||
                 (_emailController.text.trim().isNotEmpty && _passwordController.text.isNotEmpty)) &&
             _phoneController.text.trim().isNotEmpty &&
-            _addressStreetController.text.trim().isNotEmpty &&
-            _addressZone != null &&
+            _missingAddress.isEmpty &&
             _dateOfBirth != null;
       case 1:
         return (_profilePhotoUrl != null || _localProfilePhoto != null) &&
@@ -1661,6 +1695,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             }),
             onApartmentToggle: (val) => setState(() => _isApartment = val),
           ),
+          // Con "Siguiente" deshabilitado, decir qué falta en vez de dejar adivinar.
+          if (_missingAddress.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Para seguir, completa tu dirección: ${_missingAddress.join(' · ')}',
+                    style: TextStyle(fontSize: 12.5, color: subtextColor, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Date of birth
