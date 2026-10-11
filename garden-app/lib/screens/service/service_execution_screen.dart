@@ -41,6 +41,7 @@ import '../../design/garden_service_clock.dart';
 import '../../design/garden_story_progress.dart';
 import '../../widgets/garden_base_map.dart';
 import '../../utils/photo_picker.dart';
+import '../../design/garden_service_icon.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -132,6 +133,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _gpsHasSignal = false;
   DateTime? _gpsLastPoint;
   Timer? _gpsInfoTimer;
+  /// Dueño esperando (reserva confirmada): refresca para ver al cuidador
+  /// salir o llegar, y pasar solo a "en curso" cuando empieza.
+  Timer? _waitingRefreshTimer;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   // ownerRated también queda en true cuando el pago se libera solo (sin nota):
@@ -194,6 +198,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
     _gpsInfoTimer?.cancel();
+    _waitingRefreshTimer?.cancel();
     GardenLiveActivity.instance.endActivity();
     super.dispose();
   }
@@ -256,6 +261,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         
         _scheduleWindowRefresh();
 
+        if (_booking?['status'] == 'CONFIRMED' && widget.role == 'CLIENT') {
+          _waitingRefreshTimer ??= Timer.periodic(const Duration(seconds: 20), (_) => _loadBooking());
+        } else {
+          _waitingRefreshTimer?.cancel();
+          _waitingRefreshTimer = null;
+        }
         if (_booking?['status'] == 'IN_PROGRESS') {
           if (_serviceTimer == null || !_serviceTimer!.isActive) {
             // First time — start the ticker and calibrate from server timestamp.
@@ -2287,7 +2298,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
     final isPaseo = _booking?['serviceType'] == 'PASEO';
     final isGuarderia = _booking?['serviceType'] == 'GUARDERIA';
-    final heroColors = _svc.hero;
 
     final caregiverName = _booking?['caregiverName'] as String? ?? 'Tu cuidador';
     final caregiverPhoto = _booking?['caregiverPhoto'] as String?;
@@ -2318,82 +2328,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: Stack(
-              children: [
-                Container(
-                  height: 240,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: heroColors,
-                    ),
-                  ),
-                ),
-                Container(
-                  height: 240,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.15)],
-                    ),
-                  ),
-                ),
-                SafeArea(
-                  bottom: false,
-                  child: SizedBox(
-                    height: 240,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          GestureDetector(
-                            onTap: _exitServiceScreen,
-                            child: Container(
-                              width: 40, height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                              ),
-                              child: const GardenIcon(GIcon.atras, size: GIconSize.sm, color: Colors.white),
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(GardenRadius.full),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GardenIcon(GIcon.forService(_svc),
-                                    size: GIconSize.sm, color: Colors.white, state: GIconState.active),
-                                const SizedBox(width: 6),
-                                Text(serviceLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            petName,
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, height: 1.05),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            when.isEmpty ? 'Con $caregiverFirst' : '$when · con $caregiverFirst',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: _buildClientWaitingHeader(
+              serviceLabel: serviceLabel,
+              petName: petName,
+              when: when,
+              caregiverName: caregiverName,
+              caregiverFirst: caregiverFirst,
+              isPaseo: isPaseo,
             ),
           ),
 
@@ -2501,6 +2442,182 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Inicio a la hora pactada (día de la reserva + startTime), si se sabe.
+  DateTime? get _scheduledStart {
+    final raw = (_booking?['walkDate'] ?? _booking?['startDate']) as String?;
+    final d = raw == null ? null : DateTime.tryParse(raw);
+    final parts = (_booking?['startTime'] as String?)?.split(':');
+    final h = int.tryParse(parts?.first ?? '');
+    if (d == null || h == null) return null;
+    final m = parts!.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    return DateTime(d.year, d.month, d.day, h, m);
+  }
+
+  /// Qué está pasando ahora, en una línea y su detalle: cuenta regresiva hasta
+  /// la hora, o el cuidador en camino / en la puerta.
+  (GIcon, String, String) _waitingNow(String caregiverFirst, bool isPaseo) {
+    String? at(String key) {
+      final d = DateTime.tryParse(_booking?[key] as String? ?? '');
+      return d == null ? null : _formatClockTime(d);
+    }
+
+    if (isPaseo && _hasArrived) {
+      return (GIcon.ubicacion, '$caregiverFirst llegó', 'Está por empezar el paseo.');
+    }
+    if (_hasEnRoute) {
+      final t = at('enRouteAt');
+      return (GIcon.auto, '$caregiverFirst va en camino', t == null ? 'Ya salió hacia ti.' : 'Salió a las $t.');
+    }
+    final start = _scheduledStart;
+    if (start == null) {
+      return (GIcon.reloj, 'Todo listo', 'Te avisamos cuando $caregiverFirst salga hacia ti.');
+    }
+    final now = DateTime.now();
+    final left = start.difference(now);
+    final String title;
+    if (left.inMinutes <= 0) {
+      title = 'Ya es la hora';
+    } else if (left.inMinutes < 60) {
+      title = 'Empieza en ${left.inMinutes} min';
+    } else if (left.inHours < 24) {
+      final m = left.inMinutes % 60;
+      title = 'Empieza en ${left.inHours} h${m > 0 ? ' $m min' : ''}';
+    } else {
+      final days = DateTime(start.year, start.month, start.day)
+          .difference(DateTime(now.year, now.month, now.day))
+          .inDays;
+      title = days == 1 ? 'Es mañana' : 'Faltan $days días';
+    }
+    return (GIcon.reloj, title, 'Te avisamos cuando $caregiverFirst salga hacia ti.');
+  }
+
+  /// Encabezado del dueño mientras espera: la reserva como tarjeta plana (el
+  /// mismo lenguaje que el resto de la pantalla), qué está pasando ahora con
+  /// cuenta regresiva viva, y escribirle al cuidador. Antes: un bloque de
+  /// degradado de alto fijo donde el texto quedaba cortado bajo la barra de
+  /// estado.
+  Widget _buildClientWaitingHeader({
+    required String serviceLabel,
+    required String petName,
+    required String when,
+    required String caregiverName,
+    required String caregiverFirst,
+    required bool isPaseo,
+  }) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final ink = _svc.ink(isDark);
+
+    void openChat() => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            bookingId: widget.bookingId,
+            otherPersonName: caregiverName,
+            token: _token,
+            role: 'CLIENT',
+            bookingStatus: _booking?['status'] as String?,
+          ),
+        ));
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // ── Barra: volver y qué es ──
+          Row(children: [
+            Semantics(
+              button: true,
+              label: 'Volver',
+              excludeSemantics: true,
+              child: GestureDetector(
+                onTap: _exitServiceScreen,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: surface, shape: BoxShape.circle, border: Border.all(color: borderColor)),
+                  child: GardenIcon(GIcon.atras, size: GIconSize.sm, color: textColor),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text('Tu reserva', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+          ]),
+          const SizedBox(height: 16),
+
+          // ── La reserva ──
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: _svc.soft(isDark),
+              borderRadius: BorderRadius.circular(GardenRadius.xl),
+              border: Border.all(color: ink.withValues(alpha: 0.25)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(GardenRadius.full)),
+                      child: Text(serviceLabel, style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(petName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.w900, height: 1.05)),
+                    const SizedBox(height: 4),
+                    Text(
+                      when.isEmpty ? 'Con $caregiverFirst' : '$when · con $caregiverFirst',
+                      style: TextStyle(color: subtextColor, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ]),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 64,
+                  height: 64,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: surface, shape: BoxShape.circle),
+                  child: GardenServiceIcon(_svc, size: 36, active: true),
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              // Qué está pasando ahora (se recalcula cada 30 s).
+              StreamBuilder<int>(
+                stream: Stream.periodic(const Duration(seconds: 30), (i) => i),
+                builder: (context, _) {
+                  final (icon, title, detail) = _waitingNow(caregiverFirst, isPaseo);
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(GardenRadius.lg)),
+                    child: Row(children: [
+                      GardenIcon(icon, color: ink, state: GIconState.active),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(title, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 2),
+                          Text(detail, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.3)),
+                        ]),
+                      ),
+                    ]),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              GardenButton(label: 'Escribir a $caregiverFirst', gIcon: GIcon.chat, height: 46, onPressed: openChat),
+            ]),
+          ),
+        ]),
       ),
     );
   }
