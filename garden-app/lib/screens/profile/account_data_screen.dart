@@ -2,15 +2,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
-import '../../design/garden_depth.dart';
+import 'delete_account_flow.dart';
 
 class AccountDataScreen extends StatefulWidget {
   const AccountDataScreen({super.key});
@@ -91,142 +89,6 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$label copiado al portapapeles'), backgroundColor: GardenColors.success, duration: const Duration(seconds: 2)),
-    );
-  }
-
-  Future<void> _showDeleteAccountDialog() async {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-
-    final passwordCtrl = TextEditingController();
-    bool obscure = true;
-    bool loading = false;
-    String? errorMsg;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setS) => Dialog(
-          backgroundColor: surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GardenClay(size: 60, tint: GardenColors.error.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.eliminar, size: GIconSize.xl, color: GardenColors.error)),
-                const SizedBox(height: 16),
-                Text(_role == 'CAREGIVER' ? 'Solicitar eliminación de cuenta' : 'Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 10),
-                Text(
-                  _role == 'CAREGIVER'
-                      ? 'Por seguridad, los cuidadores no pueden eliminar su cuenta directamente. Tu solicitud será enviada a un administrador, que la revisará antes de procesarla — tu cuenta sigue activa mientras tanto.\n\nSi tienes saldo en tu billetera, pasará a ser propiedad de GARDEN cuando se apruebe la eliminación.'
-                      : 'Esta accion es permanente. Tu perfil sera eliminado del marketplace y ya no podras iniciar sesion.\n\nTus reservas e historial se conservaran como datos historicos.\n\nSi tienes saldo en tu billetera, pasara a ser propiedad de GARDEN.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: passwordCtrl,
-                  obscureText: obscure,
-                  style: TextStyle(color: textColor),
-                  decoration: InputDecoration(
-                    hintText: 'Ingresa tu contrasena',
-                    hintStyle: TextStyle(color: subtextColor),
-                    errorText: errorMsg,
-                    filled: true,
-                    fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: GardenColors.error, width: 2),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: GardenIcon(obscure ? GIcon.ver : GIcon.ocultar, size: GIconSize.lg, color: subtextColor),
-                      onPressed: () => setS(() => obscure = !obscure),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: loading ? null : () => Navigator.pop(ctx),
-                      child: const Text('Cancelar'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white, elevation: 0),
-                      onPressed: loading ? null : () async {
-                        final pw = passwordCtrl.text.trim();
-                        if (pw.isEmpty) { setS(() => errorMsg = 'Ingresa tu contrasena'); return; }
-                        setS(() { loading = true; errorMsg = null; });
-                        final nav = Navigator.of(ctx);
-                        final scaffoldMsg = ScaffoldMessenger.of(context);
-                        final router = GoRouter.of(context);
-                        try {
-                          // Para cuidadores: captura la ubicación actual (best-effort,
-                          // nunca bloquea el envío) — queda como último punto conocido
-                          // si un admin tiene que investigar la solicitud.
-                          Map<String, dynamic> body = {'password': pw};
-                          if (_role == 'CAREGIVER') {
-                            try {
-                              final permission = await Geolocator.checkPermission();
-                              if (permission != LocationPermission.denied && permission != LocationPermission.deniedForever) {
-                                final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium)
-                                    .timeout(const Duration(seconds: 8));
-                                body = {...body, 'lat': pos.latitude, 'lng': pos.longitude};
-                              }
-                            } catch (_) {}
-                          }
-                          final res = await http.delete(
-                            Uri.parse('$_baseUrl/auth/account'),
-                            headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-                            body: jsonEncode(body),
-                          );
-                          final data = jsonDecode(res.body);
-                          if (data['success'] == true) {
-                            nav.pop();
-                            if (_role == 'CAREGIVER') {
-                              // La cuenta sigue activa — solo se envió la solicitud,
-                              // no hay que cerrar sesión ni limpiar nada.
-                              if (!mounted) return;
-                              scaffoldMsg.showSnackBar(
-                                const SnackBar(content: Text('Solicitud enviada. Un administrador la revisará.'), backgroundColor: GardenColors.warning),
-                              );
-                              return;
-                            }
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.clear();
-                            if (!mounted) return;
-                            scaffoldMsg.showSnackBar(
-                              const SnackBar(content: Text('Cuenta eliminada. Hasta pronto.'), backgroundColor: GardenColors.success),
-                            );
-                            router.go('/login');
-                          } else {
-                            final msg = data['error']?['message'] ?? 'Error al eliminar cuenta';
-                            setS(() { loading = false; errorMsg = msg; });
-                          }
-                        } catch (e) {
-                          setS(() { loading = false; errorMsg = 'Error de conexion'; });
-                        }
-                      },
-                      child: loading
-                        ? const GardenLoadingIndicator(size: 20, color: Colors.white)
-                        : Text(_role == 'CAREGIVER' ? 'Enviar solicitud' : 'Eliminar', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -377,7 +239,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
-                          onPressed: _isDeletingAccount ? null : _showDeleteAccountDialog,
+                          onPressed: _isDeletingAccount ? null : () => DeleteAccountFlow.run(context),
                         ),
                       ),
                     ],

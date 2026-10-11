@@ -541,39 +541,86 @@ export const patchProfile = asyncHandler(async (req: Request, res: Response) => 
   res.json({ success: true, data: result });
 });
 
-/** DELETE /api/auth/account — soft-delete: anonymize auth data, transfer balance to Garden, keep history */
+/**
+ * GET /api/auth/account/deletion-options — qué caras tiene la cuenta (cuidador / dueño), para que la app
+ * pregunte "¿eliminar ambas o solo una?" cuando corresponde.
+ */
+export const getDeletionOptions = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await authService.getAccountDeletionOptions(req.user!.userId) });
+});
+
+/**
+ * DELETE /api/auth/account — body: { password | idToken, scope?: 'ALL'|'CLIENT'|'CAREGIVER', lat?, lng? }
+ *
+ * - Dueño puro: se elimina al instante (soft-delete: anonimiza, saldo a Garden, historial se conserva).
+ * - Cuidador: nunca al instante — solo solicita la baja y un admin la aprueba.
+ *   · scope ALL: se elimina toda la cuenta al aprobarse.
+ *   · scope CAREGIVER: al aprobarse solo se elimina la cara de cuidador; la cuenta sigue como dueño.
+ *   · scope CLIENT: deja solo la cara de dueño (al instante, sin admin); sigue como cuidador.
+ * - Confirmación: contraseña, o idToken reciente de Google/Apple para cuentas creadas con ellos (no tienen
+ *   una contraseña que la persona conozca).
+ */
 export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.userId ?? (req.user as { id?: string })?.id;
   if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'No autenticado' } });
 
-  const { password, lat, lng } = req.body;
-  if (!password) return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Contraseña requerida' } });
+  const { password, idToken, lat, lng } = req.body ?? {};
+  const scope: authService.AccountDeletionScope = ['CLIENT', 'CAREGIVER'].includes(req.body?.scope) ? req.body.scope : 'ALL';
+  if (!password && !idToken) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Confirma con tu contraseña' } });
+  }
 
   // 1. Load user
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Usuario no encontrado' } });
 
-  // 2. Verify password
-  const bcrypt = await import('bcrypt');
-  const valid = await bcrypt.default.compare(password, user.passwordHash);
-  if (!valid) return res.status(400).json({ success: false, error: { code: 'WRONG_PASSWORD', message: 'Contraseña incorrecta' } });
+  // 2. Confirmar identidad
+  if (typeof idToken === 'string' && idToken) {
+    const { verifyFirebaseToken } = await import('./social-auth.controller.js');
+    const claims = await verifyFirebaseToken(idToken);
+    if (!claims.email || claims.email.toLowerCase().trim() !== user.email.toLowerCase().trim()) {
+      return res.status(400).json({ success: false, error: { code: 'WRONG_ACCOUNT', message: 'La cuenta de Google no coincide con tu cuenta de Garden' } });
+    }
+  } else {
+    const bcrypt = await import('bcrypt');
+    const valid = typeof password === 'string' && (await bcrypt.default.compare(password, user.passwordHash));
+    if (!valid) return res.status(400).json({ success: false, error: { code: 'WRONG_PASSWORD', message: 'Contraseña incorrecta' } });
+  }
 
-  // Un cuidador no puede autoeliminarse — solo puede solicitarlo. La cuenta
-  // sigue activa hasta que un admin la procese (ver
-  // admin.service.ts approveCaregiverAccountDeletion). Medida de seguridad
-  // ante un posible robo/retención indebida de la mascota: no queremos que
-  // un cuidador borre su rastro de inmediato. Se captura su última ubicación
-  // conocida (best-effort) para dejar constancia.
+  // Cuidador (rol permanente) — incluye a quien también es dueño.
   if (user.role === 'CAREGIVER') {
+    if (scope === 'CLIENT') {
+      // Solo la cara de dueño: sin reservas de dueño abiertas.
+      const clientPending = await prisma.booking.count({
+        where: { clientId: userId, status: { in: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'] } },
+      });
+      if (clientPending > 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'PENDING_BOOKINGS', message: 'Tienes reservas activas como dueño. Espera a que finalicen para eliminar tu perfil de dueño.' },
+        });
+      }
+      await authService.removeClientSide(userId);
+      return res.json({
+        success: true,
+        data: { deleted: false, pendingApproval: false, scope, message: 'Tu perfil de dueño fue eliminado. Sigues como cuidador.' },
+      });
+    }
     await authService.requestCaregiverAccountDeletion(
       userId,
       typeof lat === 'number' ? lat : undefined,
-      typeof lng === 'number' ? lng : undefined
+      typeof lng === 'number' ? lng : undefined,
+      scope === 'CAREGIVER' ? 'CAREGIVER' : 'ALL'
     );
-    logger.info('Caregiver account deletion requested (pending admin approval)', { userId });
+    logger.info('Caregiver account deletion requested (pending admin approval)', { userId, scope });
     return res.json({
       success: true,
-      data: { message: 'Tu solicitud fue enviada. Un administrador la revisará antes de eliminar tu cuenta.' },
+      data: {
+        deleted: false,
+        pendingApproval: true,
+        scope,
+        message: 'Tu solicitud fue enviada. Un administrador la revisará antes de eliminar tu cuenta.',
+      },
     });
   }
 
@@ -620,7 +667,7 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
   // (ver admin.service.ts approveCaregiverAccountDeletion).
   await authService.finalizeAccountDeletion(userId);
 
-  res.json({ success: true, data: { message: 'Cuenta eliminada correctamente' } });
+  res.json({ success: true, data: { deleted: true, pendingApproval: false, scope: 'ALL', message: 'Cuenta eliminada correctamente' } });
 });
 
 /** PUT /api/auth/fcm-token — saves or updates the FCM device token for push notifications. */

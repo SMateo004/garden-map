@@ -1111,6 +1111,14 @@ export async function switchRole(userId: string, targetRole: UserRole): Promise<
     throw new ForbiddenError('Rol de destino no válido.', 'INVALID_TARGET_ROLE');
   }
 
+  // Un cuidador que eliminó su perfil de dueño ya no puede volver a ese modo.
+  if (!isRestoringOwnRole && user.role === UserRole.CAREGIVER && targetRole === UserRole.CLIENT) {
+    const removed = await prisma.auditLog.count({ where: { userId, action: CLIENT_SIDE_REMOVED_ACTION } });
+    if (removed > 0) {
+      throw new ForbiddenError('Eliminaste tu perfil de dueño. Escríbenos si quieres volver a usarlo.', 'CLIENT_SIDE_REMOVED');
+    }
+  }
+
   // Un CLIENT no puede activar rol CAREGIVER sin onboarding
   if (!isRestoringOwnRole && user.role === UserRole.CLIENT && targetRole === UserRole.CAREGIVER) {
     throw new ForbiddenError(
@@ -1350,11 +1358,84 @@ export async function abandonCaregiverProfile(userId: string): Promise<SwitchRol
  * de la mascota: si el cuidador "desaparece", queda un rastro de dónde
  * estaba al momento de pedir la baja.
  */
+export type AccountDeletionScope = 'ALL' | 'CLIENT' | 'CAREGIVER';
+export const ACCOUNT_DELETION_SCOPE_ACTION = 'ACCOUNT_DELETION_SCOPE';
+export const CLIENT_SIDE_REMOVED_ACTION = 'CLIENT_SIDE_REMOVED';
+
+/** Alcance con el que el usuario pidió la baja (el último registro manda). Sin registro = toda la cuenta. */
+export async function latestDeletionScope(userId: string): Promise<'ALL' | 'CAREGIVER'> {
+  const last = await prisma.auditLog.findFirst({
+    where: { userId, action: ACCOUNT_DELETION_SCOPE_ACTION },
+    orderBy: { createdAt: 'desc' },
+    select: { details: true },
+  });
+  try {
+    return last?.details && JSON.parse(last.details).scope === 'CAREGIVER' ? 'CAREGIVER' : 'ALL';
+  } catch {
+    return 'ALL';
+  }
+}
+
+/**
+ * ¿Tiene esta cuenta las dos caras (cuidador y dueño)? Se considera dueño si ya usó esa cara de verdad:
+ * tiene mascotas, dirección guardada o reservas como cliente — un ClientProfile vacío no cuenta.
+ */
+export async function getAccountDeletionOptions(userId: string): Promise<{
+  role: string;
+  hasCaregiverSide: boolean;
+  hasClientSide: boolean;
+  pendingRequest: boolean;
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, accountDeletionRequestedAt: true, clientProfile: { select: { id: true, addressStreet: true } } },
+  });
+  if (!user) throw new BadRequestError('Usuario no encontrado');
+  const hasCaregiverSide = user.role === 'CAREGIVER';
+  let hasClientSide = user.role !== 'CAREGIVER';
+  if (hasCaregiverSide && user.clientProfile) {
+    const [pets, bookings, removed] = await Promise.all([
+      prisma.pet.count({ where: { clientProfileId: user.clientProfile.id } }),
+      prisma.booking.count({ where: { clientId: userId } }),
+      prisma.auditLog.count({ where: { userId, action: CLIENT_SIDE_REMOVED_ACTION } }),
+    ]);
+    hasClientSide = removed === 0 && (pets > 0 || bookings > 0 || user.clientProfile.addressStreet != null);
+  }
+  return { role: user.role, hasCaregiverSide, hasClientSide, pendingRequest: !!user.accountDeletionRequestedAt };
+}
+
+/** Cuidador que también es dueño y quiere dejar SOLO la cara de dueño: queda como cuidador. */
+export async function removeClientSide(userId: string): Promise<void> {
+  await prisma.auditLog.create({
+    data: { userId, action: CLIENT_SIDE_REMOVED_ACTION, entity: 'User', entityId: userId, details: JSON.stringify({ at: new Date().toISOString() }) },
+  });
+  await prisma.user.update({ where: { id: userId }, data: { activeRole: null } });
+  logger.info('auth.service: client side removed', { userId });
+}
+
+/** Aprobada por un admin la baja de SOLO la cara de cuidador: la cuenta sigue, como dueño. */
+export async function finalizeCaregiverSideDeletion(userId: string): Promise<void> {
+  await prisma.caregiverProfile.updateMany({
+    where: { userId },
+    data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
+  });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role: 'CLIENT', activeRole: null, accountDeletionRequestedAt: null, deletionRequestLat: null, deletionRequestLng: null } as any,
+  });
+  await revokeAllRefreshTokens(userId);
+  logger.info('auth.service: caregiver side deleted, account kept as client', { userId });
+}
+
 export async function requestCaregiverAccountDeletion(
   userId: string,
   lat?: number,
-  lng?: number
+  lng?: number,
+  scope: 'ALL' | 'CAREGIVER' = 'ALL'
 ): Promise<void> {
+  await prisma.auditLog.create({
+    data: { userId, action: ACCOUNT_DELETION_SCOPE_ACTION, entity: 'User', entityId: userId, details: JSON.stringify({ scope }) },
+  });
   await prisma.user.update({
     where: { id: userId },
     data: {

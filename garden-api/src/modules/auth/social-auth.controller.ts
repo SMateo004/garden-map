@@ -41,7 +41,7 @@ export async function warmupFirebaseAdmin(): Promise<void> {
 }
 
 /** Verifica un Firebase ID token usando firebase-admin y devuelve los claims del usuario. */
-async function verifyFirebaseToken(idToken: string): Promise<{
+export async function verifyFirebaseToken(idToken: string): Promise<{
   uid: string;
   email?: string;
   name?: string;

@@ -155,6 +155,7 @@ router.post('/send-verification-email', authMiddleware, emailCodeLimiter, authCo
 router.post('/verify-email', authMiddleware, otpVerifyLimiter, authController.verifyEmail);
 
 /** DELETE /api/auth/account — authenticated user deletes their own account */
+router.get('/account/deletion-options', authMiddleware, authController.getDeletionOptions);
 router.delete('/account', authMiddleware, authController.deleteAccount);
 
 /** PUT /api/auth/fcm-token — saves FCM device token for push notifications */

@@ -12,6 +12,7 @@ import '../client/nearby_vets_screen.dart';
 import 'blocked_users_screen.dart';
 import 'notification_settings_screen.dart';
 import 'change_pin_dialog.dart';
+import 'delete_account_flow.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/phone_change_flow.dart';
 import '../../design/garden_icons.dart';
@@ -348,105 +349,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _deleteAccount() async {
-    HapticFeedback.mediumImpact();
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final passwordController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
-          backgroundColor: surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GardenClay(size: 56, tint: GardenColors.error.withValues(alpha: 0.1), interactive: false, child: const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error)),
-                const SizedBox(height: 16),
-                Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 8),
-                Text(
-                  'Esta acción es irreversible. Perderás tus calificaciones, historial y cualquier saldo en tu billetera (transferido a Garden).\n\nIngresa tu contraseña para confirmar.',
-                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  style: TextStyle(color: textColor),
-                  decoration: InputDecoration(
-                    hintText: 'Contraseña',
-                    hintStyle: TextStyle(color: subtextColor),
-                    filled: true,
-                    fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.error, width: 2)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text('Cancelar', style: TextStyle(color: subtextColor)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: GardenColors.error,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    final password = passwordController.text.trim();
-    if (password.isEmpty) return;
-
+    if (_isDeletingAccount) return;
     setState(() => _isDeletingAccount = true);
     try {
-      final res = await http.delete(
-        Uri.parse('$_baseUrl/auth/account'),
-        headers: {
-          'Authorization': 'Bearer $_token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'password': password}),
-      );
-      final data = jsonDecode(res.body);
-      if (!mounted) return;
-      if (data['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        if (mounted) context.go('/login');
-      } else {
-        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al eliminar la cuenta');
-      }
-    } catch (e) {
-      GardenErrorDialog.show(context, 'Error de conexión: $e');
+      await DeleteAccountFlow.run(context);
     } finally {
       if (mounted) setState(() => _isDeletingAccount = false);
     }

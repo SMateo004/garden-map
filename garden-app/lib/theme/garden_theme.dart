@@ -1245,7 +1245,15 @@ class GardenButton extends StatelessWidget {
         ],
       );
     }
-    return Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10));
+    // Una sola línea siempre: si la etiqueta no cabe (botón angosto, letra grande del sistema) se achica en vez de
+    // partirse en dos renglones — "Anterior" se veía como "Anterio" / "r".
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(label,
+          maxLines: 1,
+          softWrap: false,
+          style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10)),
+    );
   }
 }
 

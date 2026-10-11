@@ -4139,7 +4139,12 @@ export async function approveCaregiverAccountDeletion(userId: string, adminId: s
     throw new BadRequestError('Este cuidador no solicitó eliminar su cuenta');
   }
 
-  await authService.finalizeAccountDeletion(userId);
+  // Si pidió dejar solo la cara de cuidador (y seguir como dueño), la cuenta se conserva.
+  if ((await authService.latestDeletionScope(userId)) === 'CAREGIVER') {
+    await authService.finalizeCaregiverSideDeletion(userId);
+  } else {
+    await authService.finalizeAccountDeletion(userId);
+  }
 
   await prisma.adminAction.create({
     data: { adminId, actionType: 'APPROVE_CAREGIVER_ACCOUNT_DELETION', targetId: userId },
