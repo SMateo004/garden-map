@@ -18,8 +18,9 @@ import '../../theme/garden_motion.dart';
 
 /// Primera pantalla del teléfono (invitados y recién logueados): elegir qué
 /// necesita la mascota. Tres tarjetas planas con el icono y color de cada
-/// servicio, y lo que falta para reservar dicho ahí mismo (antes salía una
-/// ventana emergente al segundo de entrar).
+/// servicio. Lo que falta para reservar (perfil, mascota) no ocupa la
+/// pantalla: es un aviso discreto en la barra que abre una hoja al tocarlo —
+/// ni tarjeta encima de los servicios ni ventana automática al entrar.
 class MobileServiceSelectorScreen extends StatefulWidget {
   const MobileServiceSelectorScreen({super.key});
 
@@ -115,8 +116,19 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
     context.go('/marketplace?service=${service.apiValue.toLowerCase()}');
   }
 
-  Future<void> _fixMissing() async {
+  Future<void> _showMissingSheet() async {
     HapticFeedback.selectionClick();
+    final missing = _missing;
+    if (missing == null) return;
+    final fix = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MissingSheet(missing: missing),
+    );
+    if (fix == true && mounted) await _fixMissing();
+  }
+
+  Future<void> _fixMissing() async {
     if (_missing == _Missing.profile) {
       await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
       if (mounted) _checkWhatsMissing();
@@ -168,6 +180,8 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
                 Row(children: [
                   Image.asset(isDark ? 'assets/images/logo-horizontal-dark.png' : 'assets/images/logo-horizontal.png', height: 48),
                   const Spacer(),
+                  if (hasSession && _missing != null)
+                    _MissingBadge(missing: _missing!, onTap: _showMissingSheet),
                   if (!hasSession) ...[
                     TextButton(
                       onPressed: () => context.push('/login'),
@@ -197,12 +211,6 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
                 ),
                 const SizedBox(height: 20),
 
-                // ── Lo que falta para reservar ──
-                if (_missing != null) ...[
-                  enter(_MissingCard(missing: _missing!, onTap: _fixMissing), 1),
-                  const SizedBox(height: 14),
-                ],
-
                 // ── Servicios (día → noche) ──
                 for (final (i, s) in GardenService.values.indexed) ...[
                   enter(
@@ -230,8 +238,8 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
 
                 // ── Entrada al registro de cuidador: no hay otra desde la
                 // primera pantalla de la app. ──
-                const SizedBox(height: 22),
-                _CaregiverInvite(onTap: () => context.push('/become-caregiver')),
+                const SizedBox(height: 20),
+                Center(child: _CaregiverInvite(onTap: () => context.push('/become-caregiver'))),
               ],
             ),
           ),
@@ -332,49 +340,100 @@ class _ServiceCard extends StatelessWidget {
 
 // ── Lo que falta para reservar ───────────────────────────────────────────────
 
-class _MissingCard extends StatelessWidget {
+(GIcon, String, String, String) _missingCopy(_Missing missing) => missing == _Missing.profile
+    ? (GIcon.perfil, 'Completa tu perfil', 'Lo necesitas para hacer tu primera reserva.', 'Completar perfil')
+    : (GIcon.mascotas, 'Agrega a tu mascota', 'Los cuidadores necesitan conocerla antes de reservar.', 'Agregar mascota');
+
+/// Aviso en la barra superior: el icono de lo que falta con un punto.
+class _MissingBadge extends StatelessWidget {
   final _Missing missing;
   final VoidCallback onTap;
-  const _MissingCard({required this.missing, required this.onTap});
+  const _MissingBadge({required this.missing, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final (icon, title, _, _) = _missingCopy(missing);
+
+    return Semantics(
+      button: true,
+      label: '$title, pendiente',
+      excludeSemantics: true,
+      child: IconButton(
+        onPressed: onTap,
+        tooltip: title,
+        icon: Stack(clipBehavior: Clip.none, children: [
+          GardenIcon(icon, color: subtextColor),
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: GardenColors.warning,
+                shape: BoxShape.circle,
+                border: Border.all(color: bg, width: 2),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Hoja que explica lo que falta. Devuelve true si el dueño quiere resolverlo.
+class _MissingSheet extends StatelessWidget {
+  final _Missing missing;
+  const _MissingSheet({required this.missing});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final profile = missing == _Missing.profile;
-    final (icon, title, body, cta) = profile
-        ? (GIcon.perfil, 'Completa tu perfil', 'Lo necesitas para tu primera reserva.', 'Completar')
-        : (GIcon.mascotas, 'Agrega a tu mascota', 'Los cuidadores necesitan conocerla antes de reservar.', 'Agregar');
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final (icon, title, body, cta) = _missingCopy(missing);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-      decoration: BoxDecoration(
-        color: GardenColors.warning.withValues(alpha: isDark ? 0.14 : 0.10),
-        borderRadius: BorderRadius.circular(GardenRadius.lg),
-        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(GardenRadius.xl),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 18),
+          GardenIcon(icon, size: GIconSize.xl, color: GardenColors.primary, state: GIconState.active),
+          const SizedBox(height: 10),
+          Text(title, textAlign: TextAlign.center,
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(body, textAlign: TextAlign.center,
+              style: TextStyle(color: subtextColor, fontSize: 13.5, height: 1.35)),
+          const SizedBox(height: 18),
+          GardenButton(label: cta, onPressed: () => Navigator.pop(context, true)),
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Ahora no', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w700)),
+          ),
+        ]),
       ),
-      child: Row(children: [
-        GardenIcon(icon, color: GardenColors.warning, state: GIconState.active),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: TextStyle(color: textColor, fontSize: 14.5, fontWeight: FontWeight.w800)),
-            Text(body, style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.3)),
-          ]),
-        ),
-        const SizedBox(width: 8),
-        TextButton(
-          onPressed: onTap,
-          child: Text(cta, style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800)),
-        ),
-      ]),
     );
   }
 }
 
 // ── ¿Quieres cuidar mascotas? ────────────────────────────────────────────────
 
+/// Píldora pequeña al pie: entrada secundaria al registro de cuidador.
 class _CaregiverInvite extends StatelessWidget {
   final VoidCallback onTap;
   const _CaregiverInvite({required this.onTap});
@@ -382,8 +441,6 @@ class _CaregiverInvite extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     return Semantics(
@@ -391,25 +448,18 @@ class _CaregiverInvite extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: GardenPress(
-          radius: BorderRadius.circular(GardenRadius.lg),
+          radius: BorderRadius.circular(GardenRadius.full),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(GardenRadius.lg),
+              borderRadius: BorderRadius.circular(GardenRadius.full),
               border: Border.all(color: border),
             ),
-            child: Row(children: [
-              const GardenIcon(GIcon.huella, color: GardenColors.primary, state: GIconState.active),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('¿Te gustaría cuidar mascotas?',
-                      style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
-                  Text('Gana dinero con paseos, guardería u hospedaje.',
-                      style: TextStyle(color: subtextColor, fontSize: 12.5)),
-                ]),
-              ),
-              const GardenIcon(GIcon.siguiente, size: GIconSize.sm, color: GardenColors.primary),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              GardenIcon(GIcon.huella, size: GIconSize.sm, color: GardenColors.primary),
+              SizedBox(width: 6),
+              Text('¿Quieres cuidar mascotas?',
+                  style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w700)),
             ]),
           ),
         ),
