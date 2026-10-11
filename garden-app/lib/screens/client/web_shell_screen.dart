@@ -179,11 +179,15 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           height: compact ? 44 : 125,
                         ),
                       ),
-                      const Spacer(),
+                      // En teléfono no hay Spacer: lo reemplaza el Flexible de "Ingresar" (dos flex
+                      // se repartían el espacio a medias y "Ingresar" quedaba cortado).
+                      if (!compact) const Spacer(),
                       // Teléfono sin sesión: Ingresar + Registrarse y el resto en el menú "más".
                       if (_authToken.isEmpty && compact) ...[
                         Flexible(
-                          child: TextButton(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
                             onPressed: () => context.push('/login'),
                             style: TextButton.styleFrom(
                               minimumSize: const Size(0, 36),
@@ -193,6 +197,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          ),
                           ),
                         ),
                         GardenButton(label: 'Registrarse', width: 108, height: 36, onPressed: () => context.push('/register')),
@@ -236,6 +241,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           ),
                         ),
                       ] else ...[
+                        if (compact) const Spacer(),
                         // Header logueado — notificaciones + tabs + perfil
                         NotificationBell(token: _authToken, baseUrl: _baseUrl),
                         const SizedBox(width: 4),
