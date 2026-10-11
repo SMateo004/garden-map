@@ -18,6 +18,8 @@ jest.mock('../../src/config/database', () => {
     walletTransaction: { aggregate: jest.fn(), create: jest.fn() },
     caregiverCommissionOverride: { findMany: jest.fn().mockResolvedValue([]) },
     appSettings: { findUnique: jest.fn() },
+    // Al generar el QR se deja un aviso para los admins (recordQrRequestedForAdmins).
+    adminNotification: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };

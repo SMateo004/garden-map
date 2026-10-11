@@ -1,5 +1,6 @@
 import type { Booking, ServiceType } from '@prisma/client';
 import type { BookingGroupSummary } from './booking-group.service.js';
+import { ARRIVAL_OPENS_MINUTES_BEFORE, EN_ROUTE_OPENS_MINUTES_BEFORE, preStartOpensAtMs } from '../../utils/service-window.js';
 
 export interface BookingCreateResult {
   id: string;
@@ -122,6 +123,9 @@ export interface BookingCreateResult {
   walletPaymentAmount?: number;
   donationAmount?: number;
   serviceReport?: any;
+  /** Desde cuándo el cuidador puede avisar "en camino" / "ya llegué" (ISO). null = sin restricción. */
+  enRouteOpensAt?: string | null;
+  arrivalOpensAt?: string | null;
   /** Mascotas #2 y #3 de una reserva multi-mascota (petIndex 2, 3) — la
    * mascota #1 ya viene en petName/petBreed/petAge/specialNeeds arriba.
    * Antes esta info se guardaba en BookingPet pero nunca se devolvía al
@@ -162,6 +166,11 @@ function derivedTaxRatePct(b: any): number {
   const tax = Number(b.taxAmount ?? 0);
   const preBase = total + Number(b.promoDiscountAmount ?? 0) - tax;
   return tax > 0 && preBase > 0 ? Math.round((tax / preBase) * 1000) / 10 : 0;
+}
+
+function opensAtIso(b: any, minutesBefore: number): string | null {
+  const ms = preStartOpensAtMs(b, minutesBefore);
+  return ms === null ? null : new Date(ms).toISOString();
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -233,6 +242,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     donationAmount: Number(b.donationAmount ?? 0),
     serviceReport: b.serviceReport ?? null,
     bookingGroupId: b.bookingGroupId ?? null,
+    enRouteOpensAt: opensAtIso(b, EN_ROUTE_OPENS_MINUTES_BEFORE),
+    arrivalOpensAt: opensAtIso(b, ARRIVAL_OPENS_MINUTES_BEFORE),
   };
 
   // Servicios extra contratados (snapshot al reservar) — el cuidador/empresa

@@ -31,6 +31,12 @@ import {
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
 import { boliviaDateTimeToMs, boliviaDateAndTimeToMs } from '../../utils/bolivia-time.js';
+import {
+  ARRIVAL_OPENS_MINUTES_BEFORE,
+  EN_ROUTE_OPENS_MINUTES_BEFORE,
+  describeOpening,
+  preStartOpensAtMs,
+} from '../../utils/service-window.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
 import * as paymentQrAmountService from '../../services/payment-qr-amount.service.js';
@@ -1493,6 +1499,26 @@ export async function cancelMGBooking(bookingId: string, userId: string): Promis
   });
 }
 
+/**
+ * Deja constancia para los admins de que un cliente generó el QR de pago de una reserva
+ * (campana del panel; el push lo manda initPayment después del commit). Usa el mismo tipo que el
+ * pedido de aprobación manual para que el panel lo muestre igual. No duplica: si ya hay un
+ * aviso reciente de esa reserva (cliente que regenera el QR varias veces), no crea otro.
+ * Devuelve true si creó el aviso.
+ */
+export async function recordQrRequestedForAdmins(tx: Prisma.TransactionClient, bookingId: string, caregiverId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 30 * 60 * 1000);
+  const recent = await tx.adminNotification.findFirst({
+    where: { type: ADMIN_NOTIFICATION_PAYMENT_APPROVAL, bookingId, createdAt: { gte: since } },
+    select: { id: true },
+  });
+  if (recent) return false;
+  await tx.adminNotification.create({
+    data: { type: ADMIN_NOTIFICATION_PAYMENT_APPROVAL, caregiverId, bookingId },
+  });
+  return true;
+}
+
 export async function initPayment(
   bookingId: string,
   clientId: string,
@@ -1509,6 +1535,9 @@ export async function initPayment(
   // Paseo o guardería de varios días: se paga siempre sobre el primer día sin pagar
   // del grupo, sin importar desde cuál se abrió el pago (un solo QR por grupo).
   bookingId = await resolvePaymentLeadId(bookingId, clientId);
+  // Se llena dentro de la transacción cuando se generó un QR y hay que avisar a los admins
+  // (el push sale después del commit, nunca dentro de los locks).
+  let qrAdminAlert = null as { qrExpiresAt: Date } | null;
   const result = await prisma.$transaction(async (tx) => {
     // Bloquea la reserva antes de leer su estado — sin esto, dos pagos casi
     // simultáneos de la misma reserva (doble tap en "Pagar con billetera")
@@ -1818,6 +1847,7 @@ export async function initPayment(
           paymentApprovalRequestedAt: new Date(),
         },
       });
+      if (await recordQrRequestedForAdmins(tx, bookingId, booking.caregiverId)) qrAdminAlert = { qrExpiresAt: qrResult.qrExpiresAt };
       logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount, effectiveDonation, debtAmount, qrMonto });
       return {
         qrId: qrResult.qrId,
@@ -1848,6 +1878,7 @@ export async function initPayment(
           paymentApprovalRequestedAt: new Date(),
         },
       });
+      if (await recordQrRequestedForAdmins(tx, bookingId, booking.caregiverId)) qrAdminAlert = { qrExpiresAt: qrResult.qrExpiresAt };
       logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId, totalAmount, effectiveDonation, debtAmount, qrMonto });
       return {
         qrId: qrResult.qrId,
@@ -1905,6 +1936,16 @@ export async function initPayment(
     sendPushToAdmins(
       '💳 Pago pendiente de aprobación',
       `Reserva ${bookingId.slice(0, 8).toUpperCase()} necesita revisión manual.`
+    ).catch(() => {});
+  }
+  // El cliente pidió el QR de pago: los admins quedan al tanto desde ese momento, sin esperar a
+  // que el cliente avise que pagó. La reserva ya aparece en "Pagos por aprobar" (getPaymentsPending
+  // lista PENDING_PAYMENT con QR) y se puede aprobar apenas llegue el depósito.
+  if (qrAdminAlert) {
+    const hhmm = new Date(qrAdminAlert.qrExpiresAt.getTime() - 4 * 60 * 60 * 1000).toISOString().slice(11, 16);
+    sendPushToAdmins(
+      '💳 Un cliente generó su QR de pago',
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: espera el depósito (el QR vence a las ${hhmm}). Ya está en Pagos por aprobar — revísala cuando llegue el pago.`
     ).catch(() => {});
   }
   return result;
@@ -4119,6 +4160,19 @@ export async function startService(bookingId: string, caregiverUserId: string, p
   });
 }
 
+/** No deja avisar "en camino"/"llegué" antes de que se acerque la hora del servicio (ver
+ * utils/service-window.ts). Sin hora conocida no restringe. */
+function assertPreStartWindowOpen(
+  booking: { serviceType: ServiceType; startDate: Date | null; walkDate: Date | null; startTime: string | null; timeSlot: string | null },
+  minutesBefore: number,
+  actionLabel: string
+): void {
+  const opensAt = preStartOpensAtMs(booking, minutesBefore);
+  if (opensAt === null || Date.now() >= opensAt) return;
+  const when = describeOpening(opensAt, Date.now(), booking.serviceType === ServiceType.HOSPEDAJE);
+  throw new BadRequestError(`Todavía es pronto para ${actionLabel}. Podrás hacerlo ${when}.`);
+}
+
 /** Cuidador marca que salió hacia el punto de encuentro/domicilio del dueño —
  * los 3 tipos de servicio, solo antes de iniciar (CONFIRMED). Paso opcional,
  * previo a arrivedAt/startService: no toca ningún campo que alimente
@@ -4138,6 +4192,8 @@ export async function markEnRoute(bookingId: string, caregiverUserId: string): P
     if (booking.enRouteAt) {
       return bookingToResponse(booking);
     }
+
+    assertPreStartWindowOpen(booking, EN_ROUTE_OPENS_MINUTES_BEFORE, 'avisar que vas en camino');
 
     // Guard atómico — evita que una carrera con cancelBooking()/
     // requestCancellationByCaregiver() escriba enRouteAt (y dispare la
@@ -4189,6 +4245,8 @@ export async function markArrived(bookingId: string, caregiverUserId: string): P
     if (booking.arrivedAt) {
       return bookingToResponse(booking);
     }
+
+    assertPreStartWindowOpen(booking, ARRIVAL_OPENS_MINUTES_BEFORE, 'marcar que llegaste');
 
     // Guard atómico — mismo motivo que markEnRoute(): evita pisar una reserva
     // que dejó de estar CONFIRMED entre el findFirst y este UPDATE.

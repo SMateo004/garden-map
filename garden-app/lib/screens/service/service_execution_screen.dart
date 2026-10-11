@@ -32,6 +32,7 @@ import 'meet_and_greet_screen.dart';
 import '../../services/gps_tracking_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
+import '../../services/service_window.dart';
 import '../../services/garden_live_activity.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/pin_gate.dart';
@@ -64,6 +65,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Timer? _serviceTimer;
   Timer? _photoRefreshTimer;
   Timer? _caregiverRefreshTimer;
+  Timer? _windowTimer;
   Duration _elapsed = Duration.zero;
   List<Map<String, dynamic>> _serviceEvents = [];
 
@@ -187,6 +189,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
     _caregiverRefreshTimer?.cancel();
+    _windowTimer?.cancel();
     _surveyCommentController.dispose();
     _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
@@ -251,6 +254,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           _isLoading = false;
         });
         
+        _scheduleWindowRefresh();
+
         if (_booking?['status'] == 'IN_PROGRESS') {
           if (_serviceTimer == null || !_serviceTimer!.isActive) {
             // First time — start the ticker and calibrate from server timestamp.
@@ -1418,11 +1423,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             // tapar el botón principal (Llegué/Iniciar). Se muestra como chip
             // chico arriba del CTA, no como pantalla propia a completar u
             // omitir (eso sí sería fricción evasiva innecesaria).
+            final enRouteBlocked = _enRouteBlockReason();
+            final arrivalBlocked = _arrivalBlockReason();
             final enRouteChip = !_hasEnRoute
                 ? Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: GestureDetector(
-                      onTap: _isMarkingEnRoute ? null : _markEnRoute,
+                      onTap: (_isMarkingEnRoute || enRouteBlocked != null) ? null : _markEnRoute,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
@@ -1442,7 +1449,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                               const GardenIcon(GIcon.auto, size: GIconSize.xs, color: GardenColors.primary),
                             const SizedBox(width: 6),
                             Text(
-                              _isMarkingEnRoute ? 'Avisando...' : 'Avisar que voy en camino',
+                              _isMarkingEnRoute ? 'Avisando...' : (enRouteBlocked ?? 'Avisar que voy en camino'),
                               style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
                             ),
                           ],
@@ -1465,11 +1472,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     label: _isMarkingArrived ? 'Marcando llegada...' : 'Ya llegué',
                     loading: _isMarkingArrived,
                     color: GardenColors.secondary,
-                    onPressed: _isMarkingArrived ? null : _markArrived,
+                    onPressed: (_isMarkingArrived || arrivalBlocked != null) ? null : _markArrived,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Marca tu llegada al punto de encuentro para poder iniciar el paseo.',
+                    arrivalBlocked ?? 'Marca tu llegada al punto de encuentro para poder iniciar el paseo.',
                     style: TextStyle(color: subtextColor, fontSize: 11),
                     textAlign: TextAlign.center,
                     maxLines: 2,
@@ -4371,6 +4378,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     return null; // Sin restricciones
   }
 
+  // --- AVISOS PREVIOS AL INICIO (en camino / ya llegué) ---
+
+  /// El servidor manda desde qué hora se habilitan (ver ServiceWindow); antes de eso el
+  /// botón queda deshabilitado con el motivo, no se deja tocar para fallar después.
+  String? _enRouteBlockReason() =>
+      ServiceWindow.blockReason(_booking, 'enRouteOpensAt', 'avisar que vas en camino');
+  String? _arrivalBlockReason() =>
+      ServiceWindow.blockReason(_booking, 'arrivalOpensAt', 'marcar tu llegada');
+
+  /// Refresca la pantalla justo cuando se habilita el siguiente aviso.
+  void _scheduleWindowRefresh() {
+    _windowTimer?.cancel();
+    final next = ServiceWindow.nextOpening(_booking);
+    if (next == null) return;
+    _windowTimer = Timer(next.difference(DateTime.now()) + const Duration(seconds: 1), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleWindowRefresh();
+    });
+  }
+
   // --- LOGICA DE ACCIONES ---
 
   /// Los 3 tipos de servicio: el cuidador avisa que salió hacia el servicio,
@@ -6962,7 +6990,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
                 children: [
                   Text('¿Qué sigue?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(height: 16),
-                  _waitStep('1', widget.method == 'qr' ? 'GARDEN verifica tu pago QR' : 'El admin aprueba tu transferencia', GardenColors.warning, textColor),
+                  _waitStep('1', widget.method == 'qr' ? 'GARDEN verifica tu pago QR' : 'Verificamos tu transferencia', GardenColors.warning, textColor),
                   const SizedBox(height: 12),
                   _waitStep('2', 'Los minutos se agregan al paseo', GardenColors.primary, textColor),
                   const SizedBox(height: 12),

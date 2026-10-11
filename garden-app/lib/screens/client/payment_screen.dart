@@ -1890,7 +1890,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               step(1, 'Abre tu banco y elige pagar con QR', false),
               step(2, 'Escanea o sube este QR', false),
-              step(3, 'Vuelve y toca "Ya realicé el pago"', true),
+              step(3, 'Vuelve aquí: revisamos tu pago automáticamente', true),
             ]),
             const SizedBox(height: 18),
 
@@ -2289,7 +2289,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text('Un administrador verificará tu pago manualmente. Esto puede tardar más que el pago por QR.',
+                  Text('Revisaremos tu pago manualmente. Esto puede tardar más que el pago por QR.',
                     style: TextStyle(color: subtextColor, fontSize: 11)),
                 ],
               ),
@@ -2705,9 +2705,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               const SizedBox(height: 16),
               Text(
                 _paymentDeclared
-                    ? 'Recibimos tu aviso de pago y un administrador de GARDEN lo está verificando. Tu reserva no se cancelará: '
+                    ? 'Recibimos tu aviso de pago y nuestro sistema lo está revisando. Tu reserva no se cancelará: '
                         'si no alcanzamos a verificarlo antes de que venza el código, continúa igual y lo revisamos después.'
-                    : 'Enviamos tu solicitud a un administrador de GARDEN. Te avisaremos apenas se confirme tu pago — no cierres ni canceles la reserva mientras tanto.',
+                    : 'Nuestro sistema está revisando tu pago. Te avisaremos apenas se confirme — no cierres ni canceles la reserva mientras tanto.',
                 style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
                 textAlign: TextAlign.center,
               ),

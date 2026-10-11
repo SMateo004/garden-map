@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../services/service_window.dart';
 import '../../services/auth_service.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../services/business_features.dart';
@@ -497,10 +498,36 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                 ],
 
                 if (status == 'CONFIRMED') ...[
-                  GardenButton(label: 'Avisar que voy en camino', outline: true, loading: _isActing, onPressed: _isActing ? null : _markEnRoute),
+                  // Antes de que se acerque la hora del servicio los avisos no se habilitan
+                  // (no tiene sentido llegar antes de tiempo); el servidor manda la hora exacta.
+                  GardenButton(
+                    label: 'Avisar que voy en camino',
+                    outline: true,
+                    loading: _isActing,
+                    onPressed: (_isActing || ServiceWindow.blockReason(b, 'enRouteOpensAt', 'avisar que vas en camino') != null)
+                        ? null
+                        : _markEnRoute,
+                  ),
+                  if (ServiceWindow.blockReason(b, 'enRouteOpensAt', 'avisar que vas en camino') case final reason?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(reason, style: TextStyle(color: subtextColor, fontSize: 12)),
+                    ),
                   const SizedBox(height: 10),
                   if (isPaseo) ...[
-                    GardenButton(label: 'Ya llegué', outline: true, loading: _isActing, onPressed: _isActing ? null : _markArrived),
+                    GardenButton(
+                      label: 'Ya llegué',
+                      outline: true,
+                      loading: _isActing,
+                      onPressed: (_isActing || ServiceWindow.blockReason(b, 'arrivalOpensAt', 'marcar tu llegada') != null)
+                          ? null
+                          : _markArrived,
+                    ),
+                    if (ServiceWindow.blockReason(b, 'arrivalOpensAt', 'marcar tu llegada') case final reason?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(reason, style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ),
                     const SizedBox(height: 10),
                   ],
                   GardenButton(label: 'Iniciar servicio (foto)', loading: _isActing, onPressed: _isActing ? null : _startService),
