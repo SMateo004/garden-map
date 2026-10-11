@@ -104,6 +104,12 @@ class ChatService extends ChangeNotifier {
   // eventos de socket user_online/user_offline emitidos por el backend.
   String? _otherUserId;
   bool otherOnline = false;
+  // Último aviso de presencia recibido por persona. Al entrar a la sala el
+  // servidor manda enseguida el estado del otro, casi siempre ANTES de que
+  // ChatScreen sepa quién es (llega con GET /other-participant, después del
+  // historial): sin guardarlo, ese aviso se descartaba y el chat quedaba en
+  // "No está en línea ahora" aunque la otra persona estuviera conectada.
+  final Map<String, bool> _presenceByUser = {};
 
   /// La otra persona está escribiendo (evento de socket "typing"). Se apaga
   /// sola a los 6 s sin novedades o cuando llega su mensaje.
@@ -143,8 +149,18 @@ class ChatService extends ChangeNotifier {
 
   void setOtherUserId(String userId, {required bool initialOnline}) {
     _otherUserId = userId;
-    otherOnline = initialOnline;
+    // La foto del servidor o un aviso del socket alcanzan para decir "en
+    // línea"; el refresco periódico (setOtherOnline) corrige si ya se fue.
+    otherOnline = initialOnline || (_presenceByUser[userId] ?? false);
     if (!_isDisposed) notifyListeners();
+  }
+
+  /// Estado confirmado por el servidor (refresco periódico de ChatScreen).
+  void setOtherOnline(String userId, bool online) {
+    _presenceByUser[userId] = online;
+    if (userId != _otherUserId || otherOnline == online || _isDisposed) return;
+    otherOnline = online;
+    notifyListeners();
   }
 
   ChatService({
@@ -224,6 +240,7 @@ class ChatService extends ChangeNotifier {
         if (_isDisposed) return;
         final raw = (data is List && data.isNotEmpty) ? data.first : data;
         final userId = (raw is Map) ? raw['userId'] as String? : null;
+        if (userId != null) _presenceByUser[userId] = true;
         if (userId != null && userId == _otherUserId) {
           otherOnline = true;
           notifyListeners();
@@ -243,6 +260,7 @@ class ChatService extends ChangeNotifier {
         if (_isDisposed) return;
         final raw = (data is List && data.isNotEmpty) ? data.first : data;
         final userId = (raw is Map) ? raw['userId'] as String? : null;
+        if (userId != null) _presenceByUser[userId] = false;
         if (userId != null && userId == _otherUserId) {
           otherOnline = false;
           notifyListeners();

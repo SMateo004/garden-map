@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -81,6 +82,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Bloqueo/reporte de chat
   String? _otherPersonId;
+  // Corrige el "en línea" cada 30 s con la foto del servidor, por si se
+  // perdió algún aviso del socket (red, segundo plano, reconexión).
+  Timer? _presenceTimer;
   bool _iBlockedThem = false;
   bool _theyBlockedMe = false;
   bool _sendBlockedByServer = false; // se activa si un envío devuelve 403 USER_BLOCKED
@@ -102,6 +106,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_chatService == null) return;
     if (state == AppLifecycleState.resumed) {
       _chatService!.isForeground = true;
+      _refreshPresence();
       // Un socket desconectado (fondo/red) no reintenta el historial perdido
       // al reconectar — sin esto, mensajes enviados mientras la app estaba en
       // segundo plano quedaban ausentes hasta cerrar y reabrir la pantalla.
@@ -150,6 +155,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _chatService!.markRead(widget.bookingId);
     _lastCount = _chatService!.messages.length;
     setState(() => _initialized = true);
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refreshPresence());
     _scrollToBottom();
   }
 
@@ -166,6 +172,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } catch (_) {
       // Sin contexto el chat funciona igual, solo sin la franja de la reserva.
     }
+  }
+
+  Future<void> _refreshPresence() async {
+    final otherId = _otherPersonId;
+    if (otherId == null || _chatService == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/chat/${widget.bookingId}/other-participant'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted || data['success'] != true) return;
+      _chatService?.setOtherOnline(otherId, (data['data'] as Map<String, dynamic>)['isOnline'] as bool? ?? false);
+    } catch (_) {}
   }
 
   Future<void> _loadOtherParticipant() async {
@@ -775,6 +795,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _presenceTimer?.cancel();
     _messageController.removeListener(_onTyping);
     _scrollController.removeListener(_onScroll);
     _chatService?.removeListener(_onChatUpdate);

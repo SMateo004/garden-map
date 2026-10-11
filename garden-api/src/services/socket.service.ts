@@ -43,8 +43,9 @@ async function broadcastPresenceToActiveBookingRooms(userId: string, event: 'use
     try {
         const bookings = await prisma.booking.findMany({
             where: {
+                // Sin filtrar por estado: el chat también se usa con la reserva
+                // esperando pago o aprobación, y ahí el aviso no llegaba.
                 OR: [{ clientId: userId }, { caregiver: { userId } }],
-                status: { in: ['PENDING_MG', 'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
             },
             select: { id: true },
             orderBy: { updatedAt: 'desc' },

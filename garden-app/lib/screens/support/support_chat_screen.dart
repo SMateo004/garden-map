@@ -96,10 +96,20 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Soporte Garden', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(
-                  _service.status == 'ESCALATED' ? 'Un asesor va a revisar tu caso' : 'El asistente te responde al instante',
-                  style: TextStyle(color: subtext, fontSize: 11.5),
-                ),
+                // Soporte siempre figura en línea: el asistente responde a
+                // cualquier hora y los casos escalados quedan en la cola.
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _service.status == 'ESCALATED' ? 'En línea · un asesor va a revisar tu caso' : 'En línea · te responde al instante',
+                    style: const TextStyle(color: GardenColors.success, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+                ]),
               ],
             ),
           ],

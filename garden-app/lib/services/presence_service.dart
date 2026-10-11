@@ -17,7 +17,7 @@
 /// cualquier socket autenticado como "en línea" apenas se conecta.
 library;
 
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'auth_state.dart';
 
@@ -33,7 +33,8 @@ class PresenceService {
   /// conectado. Llamar al iniciar la app (si ya hay sesión), justo después
   /// de un login exitoso, y al volver del background.
   void connect() {
-    if (kIsWeb) return; // presencia solo tiene sentido en mobile por ahora
+    // También en la web: antes se saltaba, y quien usaba gardenbo.com solo
+    // figuraba "en línea" con ese chat exacto abierto.
     if (!AuthState.hasSession) return;
     if (_socket?.connected == true) return;
 
