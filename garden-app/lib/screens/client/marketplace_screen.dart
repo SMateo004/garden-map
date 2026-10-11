@@ -45,6 +45,12 @@ const _kDefaultZoom = kZoneMapDefaultZoom;
 
 // ── Widget principal ──────────────────────────────────────────────────────
 
+/// Debajo de esto la web usa el diseño móvil (teléfono y tablet vertical).
+const double _kMobileBreakpoint = 900;
+
+/// Desde acá entran filtros + lista + mapa abiertos a la vez.
+const double _kWideBreakpoint = 1280;
+
 class MarketplaceScreen extends StatefulWidget {
   final String? initialService;
   final String? initialZone;
@@ -276,13 +282,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       });
     });
     if (kIsWeb) _checkOnboarding();
-    // Abrir mapa por defecto en desktop web
+    // Web de escritorio: con pantalla ancha se abre el mapa; en una intermedia (laptop chica,
+    // tablet horizontal) los filtros arrancan plegados para que la lista no quede apretada.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !kIsWeb) return;
       final w = MediaQuery.of(context).size.width;
-      if (kIsWeb && w >= 700 && !_showMap) {
-        setState(() => _showMap = true);
-      }
+      if (w < _kMobileBreakpoint) return;
+      setState(() {
+        if (w >= _kWideBreakpoint && !_showMap) _showMap = true;
+        if (w < _kWideBreakpoint) _showFilters = false;
+      });
     });
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
@@ -643,7 +652,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    final isMobile = !kIsWeb || MediaQuery.of(context).size.width < 700;
+    // Teléfono y tablet vertical usan el diseño móvil; el de tres columnas (filtros · lista · mapa)
+    // solo entra bien desde ~900 px. Antes el corte era 700 y una tablet de 768 recibía las tres
+    // columnas apretadas, con la barra de herramientas cortada.
+    final isMobile = !kIsWeb || MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
     if (isMobile) {
       return _buildMobileLayout(theme, isDark, bg, surface, border);
@@ -732,11 +744,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildGreeting(textColor, subtextColor),
-            Expanded(child: _buildCaregiverList(theme, isDark, header: header)),
-          ],
+        // En tablet (web) el diseño móvil no se estira de borde a borde: columna centrada.
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Column(
+              children: [
+                _buildGreeting(textColor, subtextColor),
+                Expanded(child: _buildCaregiverList(theme, isDark, header: header)),
+              ],
+            ),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.small(
@@ -1310,15 +1328,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             textColor: textColor),
           const SizedBox(width: 12),
 
-          // Result count
-          Text(
-            _isLoading && _caregivers.isEmpty
-                ? 'Buscando...'
-                : '$displayed cuidador${displayed != 1 ? 'es' : ''}',
-            style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500),
+          // Result count — ocupa el espacio libre y se recorta si la lista queda angosta (mapa
+          // abierto en una pantalla intermedia), en vez de desbordar y cortar "Ver mapa".
+          Expanded(
+            child: Text(
+              _isLoading && _caregivers.isEmpty
+                  ? 'Buscando...'
+                  : '$displayed cuidador${displayed != 1 ? 'es' : ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500),
+            ),
           ),
-
-          const Spacer(),
+          const SizedBox(width: 8),
 
           // Sort dropdown
           PopupMenuButton<String>(

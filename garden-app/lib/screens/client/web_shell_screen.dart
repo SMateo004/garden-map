@@ -141,6 +141,10 @@ class _WebShellScreenState extends State<WebShellScreen> {
         final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
         final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        // Teléfono (web en pantalla angosta): cabecera compacta y sin el pie fijo — el header de
+        // escritorio no entraba y cortaba "Iniciar sesión"/"Registrarse".
+        final compact = MediaQuery.sizeOf(context).width < 700;
 
         return Scaffold(
           backgroundColor: bg,
@@ -160,7 +164,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
               ),
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24),
                   child: Row(
                     children: [
                       // Logo → siempre vuelve al landing de React
@@ -174,8 +178,32 @@ class _WebShellScreenState extends State<WebShellScreen> {
                         ),
                       ),
                       const Spacer(),
+                      // Teléfono sin sesión: Ingresar + Registrarse y el resto en el menú "más".
+                      if (_authToken.isEmpty && compact)
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              OutlinedButton(
+                                onPressed: () => context.push('/login'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 36),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  shape: const StadiumBorder(),
+                                  side: BorderSide(color: GardenColors.primary.withValues(alpha: 0.5)),
+                                ),
+                                child: const Text('Ingresar',
+                                    style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                              ),
+                              const SizedBox(width: 6),
+                              GardenButton(label: 'Registrarse', width: 116, height: 36, onPressed: () => context.push('/register')),
+                              _CompactMenu(guest: true, textColor: textColor),
+                            ]),
+                          ),
+                        )
                       // Header público (sin sesión) — igual al home
-                      if (_authToken.isEmpty) ...[
+                      else if (_authToken.isEmpty) ...[
                         TextButton(
                           onPressed: () => context.push('/become-caregiver'),
                           style: TextButton.styleFrom(
@@ -250,24 +278,27 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           child: SizedBox(
                             key: _profileKey,
                             child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 6),
                             decoration: BoxDecoration(
                               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(
-                                _authToken.isNotEmpty
-                                    ? (_userName?.split(' ').first ?? 'Perfil')
-                                    : 'Iniciar sesión',
-                                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              const SizedBox(width: 6),
+                              if (!compact) ...[
+                                Text(
+                                  _authToken.isNotEmpty
+                                      ? (_userName?.split(' ').first ?? 'Perfil')
+                                      : 'Iniciar sesión',
+                                  style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
                               GardenIcon(_authToken.isNotEmpty ? GIcon.perfil : GIcon.entrar, size: GIconSize.sm, color: GardenColors.primary),
                             ]),
                           ),
                         ),
                       ),
+                        if (compact) _CompactMenu(guest: false, textColor: textColor),
                       ],
                     ],
                   ),
@@ -276,7 +307,8 @@ class _WebShellScreenState extends State<WebShellScreen> {
             ),
           ),
           body: _buildBody(),
-          bottomNavigationBar: _HelpFooterBar(isDark: isDark),
+          // En teléfono el pie fijo le quitaba alto a la lista; el Centro de Ayuda está en el menú.
+          bottomNavigationBar: compact ? null : _HelpFooterBar(isDark: isDark),
         );
       },
     );
@@ -324,6 +356,29 @@ class _HelpFooterBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Menú "más" de la cabecera compacta (teléfono): lo que no entra en la barra.
+class _CompactMenu extends StatelessWidget {
+  final bool guest;
+  final Color textColor;
+  const _CompactMenu({required this.guest, required this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Más opciones',
+      icon: GardenIcon(GIcon.masOpciones, color: textColor),
+      onSelected: (v) {
+        if (v == 'caregiver') context.push('/become-caregiver');
+        if (v == 'help') context.push('/help-center');
+      },
+      itemBuilder: (_) => [
+        if (guest) const PopupMenuItem(value: 'caregiver', child: Text('Convertirse en cuidador')),
+        const PopupMenuItem(value: 'help', child: Text('Centro de Ayuda')),
+      ],
     );
   }
 }
