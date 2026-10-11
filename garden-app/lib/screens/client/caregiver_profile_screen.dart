@@ -148,10 +148,23 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     return services.contains('PASEO');
   }
 
-  Map<String, String> get _socialLinks {
-    final raw = _caregiver?['socialLinks'] as Map<String, dynamic>? ?? {};
-    return raw.map((k, v) => MapEntry(k, v.toString())).cast<String, String>()
-      ..removeWhere((_, v) => v.isEmpty);
+  /// Redes del cuidador: el servidor manda el @usuario (socialHandles) y el
+  /// link ya armado (socialLinks) — la app no arma links ni abre lo que el
+  /// cuidador haya escrito.
+  static const _socialNetworks = [
+    ('instagram', GIcon.marcaInstagram),
+    ('facebook', GIcon.marcaFacebook),
+    ('tiktok', GIcon.marcaTiktok),
+  ];
+
+  List<(GIcon, String, String)> get _socialEntries {
+    final handles = _caregiver?['socialHandles'] as Map<String, dynamic>? ?? {};
+    final links = _caregiver?['socialLinks'] as Map<String, dynamic>? ?? {};
+    return [
+      for (final (network, icon) in _socialNetworks)
+        if ((handles[network] as String? ?? '').isNotEmpty && (links[network] as String? ?? '').isNotEmpty)
+          (icon, handles[network] as String, links[network] as String),
+    ];
   }
 
   Future<void> _openSocialUrl(String url) async {
@@ -161,18 +174,26 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     }
   }
 
-  Widget _socialIconButton(GIcon icon, String url, Color subtextColor, Color borderColor) {
+  Widget _socialChip(GIcon icon, String handle, String url, Color textColor, Color subtextColor, Color borderColor) {
     return InkWell(
       onTap: () => _openSocialUrl(url),
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        width: 40,
-        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: borderColor),
         ),
-        child: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          GardenIcon(icon, size: GIconSize.md, color: subtextColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text('@$handle',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+          ),
+        ]),
       ),
     );
   }
@@ -1174,19 +1195,15 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         _CaregiverIntroVideo(url: _caregiver!['videoUrl'] as String),
                         const SizedBox(height: 24),
                       ],
-                      // Redes sociales (opcional) — Instagram/Facebook del cuidador.
-                      if (_socialLinks.isNotEmpty) ...[
+                      // Redes sociales (opcional) — Instagram/Facebook/TikTok del cuidador.
+                      if (_socialEntries.isNotEmpty) ...[
                         Divider(color: borderColor),
                         const SizedBox(height: 20),
                         Text('Redes sociales', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
-                        Row(children: [
-                          if (_socialLinks['instagram'] != null)
-                            _socialIconButton(GIcon.foto, _socialLinks['instagram']!, subtextColor, borderColor),
-                          if (_socialLinks['facebook'] != null) ...[
-                            const SizedBox(width: 10),
-                            _socialIconButton(GIcon.marcaFacebook, _socialLinks['facebook']!, subtextColor, borderColor),
-                          ],
+                        Wrap(spacing: 10, runSpacing: 10, children: [
+                          for (final (icon, handle, url) in _socialEntries)
+                            _socialChip(icon, handle, url, textColor, subtextColor, borderColor),
                         ]),
                         const SizedBox(height: 24),
                       ],

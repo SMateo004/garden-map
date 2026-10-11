@@ -1,3 +1,5 @@
+import type { SocialHandles, SocialNetwork } from '../../shared/social-links.js';
+
 /** Item devuelto por GET /api/admin/payments-pending */
 export interface PendingPaymentItem {
   id: string;
@@ -141,7 +143,8 @@ export interface AdminCaregiverDetailDto {
   photos: string[]; // legacy — reemplazado por caregiverPhotos
   caregiverPhotos: string[];
   placePhotos: Record<string, string[]> | null;
-  socialLinks: { instagram?: string; facebook?: string } | null;
+  socialHandles: SocialHandles | null;
+  socialLinks: Partial<Record<SocialNetwork, string>> | null;
 
   // --- Servicios y disponibilidad ---
   servicesOffered: string[];

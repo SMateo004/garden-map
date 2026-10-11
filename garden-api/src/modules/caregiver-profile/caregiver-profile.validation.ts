@@ -52,8 +52,9 @@ export interface PatchCaregiverProfileBody {
   contractAccepted?: boolean;
   photos?: string[];
   profilePhoto?: string | null;
-  /** { instagram?: string, facebook?: string } — se muestran en el perfil público y en el detalle del admin. */
-  socialLinks?: { instagram?: string; facebook?: string } | null;
+  /** { instagram?, facebook?, tiktok? } — el @usuario (también se acepta el link de la red);
+   *  se guarda solo el usuario, ver shared/social-links.ts. */
+  socialLinks?: { instagram?: string; facebook?: string; tiktok?: string } | null;
   experienceYears?: any;
   isAmateur?: boolean;
   ownPets?: boolean;

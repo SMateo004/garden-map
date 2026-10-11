@@ -18,6 +18,7 @@ import type {
 import { type PaseoSlot, parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
 import { PHOTO_COUNT, MAX_BIO_CHARS } from './caregiver.validation.js';
 import logger from '../../shared/logger.js';
+import { socialForResponse } from '../../shared/social-links.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { getPricingConfig, resolveCommissionPct, walk30BasePrice, type PricedService } from '../pricing/pricing.service.js';
 
@@ -627,7 +628,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     acceptSeniors: profile.acceptSeniors,
     requireMeetAndGreet: (profile as any).requireMeetAndGreet ?? false,
     videoUrl: (profile as any).videoUrl ?? null,
-    socialLinks: (profile as any).socialLinks ?? null,
+    ...socialForResponse((profile as any).socialLinks),
     instantBookingEnabled: (profile as any).instantBookingEnabled ?? false,
     sizesAccepted: profile.sizesAccepted,
     animalTypes: profile.animalTypes,

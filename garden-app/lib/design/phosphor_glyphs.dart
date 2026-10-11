@@ -99,6 +99,7 @@ class Ph {
   static const image = PhGlyph(IconData(0xe2ca, fontFamily: _reg), IconData(0xe2cb, fontFamily: _duo), IconData(0xe2ca, fontFamily: _duo));
   static const imageBroken = PhGlyph(IconData(0xe7a8, fontFamily: _reg), IconData(0xe7a9, fontFamily: _duo), IconData(0xe7a8, fontFamily: _duo));
   static const info = PhGlyph(IconData(0xe2ce, fontFamily: _reg), IconData(0xe2cf, fontFamily: _duo), IconData(0xe2ce, fontFamily: _duo));
+  static const instagramLogo = PhGlyph(IconData(0xe2d0, fontFamily: _reg), IconData(0xe2d1, fontFamily: _duo), IconData(0xe2d0, fontFamily: _duo));
   static const lightbulb = PhGlyph(IconData(0xe2dc, fontFamily: _reg), IconData(0xe2dd, fontFamily: _duo), IconData(0xe2dc, fontFamily: _duo));
   static const linkBreak = PhGlyph(IconData(0xe2e4, fontFamily: _reg), IconData(0xe2e5, fontFamily: _duo), IconData(0xe2e4, fontFamily: _duo));
   static const list = PhGlyph(IconData(0xe2f0, fontFamily: _reg), IconData(0xe2f1, fontFamily: _duo), IconData(0xe2f0, fontFamily: _duo));
@@ -155,6 +156,7 @@ class Ph {
   static const tennisBall = PhGlyph(IconData(0xe720, fontFamily: _reg), IconData(0xe721, fontFamily: _duo), IconData(0xe720, fontFamily: _duo));
   static const thumbsDown = PhGlyph(IconData(0xe48c, fontFamily: _reg), IconData(0xe48d, fontFamily: _duo), IconData(0xe48c, fontFamily: _duo));
   static const thumbsUp = PhGlyph(IconData(0xe48e, fontFamily: _reg), IconData(0xe48f, fontFamily: _duo), IconData(0xe48e, fontFamily: _duo));
+  static const tiktokLogo = PhGlyph(IconData(0xeaf2, fontFamily: _reg), IconData(0xeaf3, fontFamily: _duo), IconData(0xeaf2, fontFamily: _duo));
   static const timer = PhGlyph(IconData(0xe492, fontFamily: _reg), IconData(0xe493, fontFamily: _duo), IconData(0xe492, fontFamily: _duo));
   static const trash = PhGlyph(IconData(0xe4a6, fontFamily: _reg), IconData(0xe4a7, fontFamily: _duo), IconData(0xe4a6, fontFamily: _duo));
   static const tree = PhGlyph(IconData(0xe6da, fontFamily: _reg), IconData(0xe6db, fontFamily: _duo), IconData(0xe6da, fontFamily: _duo));

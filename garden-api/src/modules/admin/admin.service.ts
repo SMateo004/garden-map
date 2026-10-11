@@ -9,6 +9,7 @@ import { getCache, delByPrefix } from '../../shared/cache.js';
 import { getBoolSetting } from '../../utils/settings-cache.js';
 import { computeTermsStatus, isTermsExemptEmail, listTermsAcceptances } from '../legal/caregiver-terms.service.js';
 import logger from '../../shared/logger.js';
+import { socialForResponse } from '../../shared/social-links.js';
 import { track } from '../../shared/analytics.js';
 import type {
   PendingCaregiversResult,
@@ -132,7 +133,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     photos: profile.photos ?? [],
     caregiverPhotos: (profile as any).caregiverPhotos ?? [],
     placePhotos: (profile as any).placePhotos as Record<string, string[]> | null,
-    socialLinks: (profile as any).socialLinks as { instagram?: string; facebook?: string } | null,
+    ...socialForResponse((profile as any).socialLinks),
     servicesOffered: profile.servicesOffered ?? [],
     serviceAvailability: profile.serviceAvailability as Record<string, unknown> | null,
     pricePerDay: profile.pricePerDay,

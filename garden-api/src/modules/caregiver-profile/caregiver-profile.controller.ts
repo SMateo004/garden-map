@@ -16,6 +16,7 @@ import {
   patchAvailabilityBodySchema,
   PatchCaregiverProfileBody,
 } from './caregiver-profile.validation.js';
+import { socialForResponse } from '../../shared/social-links.js';
 
 /** GET /api/caregiver/my-profile - Perfil del cuidador logueado (para cargar wizard). */
 export const getMyProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -32,6 +33,8 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
     success: true,
     data: {
       ...profile,
+      // Usuarios para precargar el formulario + links armados (shared/social-links.ts).
+      ...socialForResponse((profile as { socialLinks?: unknown }).socialLinks),
       termsStatus: computeTermsStatus(
         (profile as { termsAcceptedAt?: Date | null }).termsAcceptedAt,
         new Date(),

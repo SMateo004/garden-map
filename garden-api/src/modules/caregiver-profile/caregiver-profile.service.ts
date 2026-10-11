@@ -7,7 +7,7 @@
 
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
-import { CaregiverStatus } from '@prisma/client';
+import { CaregiverStatus, Prisma } from '@prisma/client';
 import { BadRequestError, ForbiddenError, ConflictError, AvailabilityConflictError } from '../../shared/errors.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
 import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils.js';
@@ -25,6 +25,7 @@ import { corregirCamposPerfil } from '../../agents/redaccion.agent.js';
 import { enqueueProfileSync, enqueueSafely } from '../../services/chain-registry.service.js';
 import { onCaregiverWelcome } from '../../services/notification.service.js';
 import { BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
+import { normalizeSocialInput } from '../../shared/social-links.js';
 import { resolveFeatures } from '../business-features/business-features.service.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
@@ -355,7 +356,11 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.requireMeetAndGreet !== undefined) updateData.requireMeetAndGreet = body.requireMeetAndGreet;
   if ((body as any).instantBookingEnabled !== undefined) updateData.instantBookingEnabled = (body as any).instantBookingEnabled;
   if ((body as any).videoUrl !== undefined) updateData.videoUrl = (body as any).videoUrl || null;
-  if (body.socialLinks !== undefined) updateData.socialLinks = body.socialLinks;
+  // Solo usuarios (sin @ ni link) — ver shared/social-links.ts. Antes se guardaba
+  // cualquier JSON que llegara y el perfil público lo abría como link.
+  if (body.socialLinks !== undefined) {
+    updateData.socialLinks = normalizeSocialInput(body.socialLinks) ?? Prisma.DbNull;
+  }
   if (body.sizesAccepted !== undefined) {
     updateData.sizesAccepted = { set: body.sizesAccepted as string[] };
     logger.info('patchProfile: saving sizesAccepted', { userId, sizesAccepted: body.sizesAccepted });

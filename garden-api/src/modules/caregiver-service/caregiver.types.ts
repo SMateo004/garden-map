@@ -1,4 +1,5 @@
 import type { ServiceType, TimeSlot } from '@prisma/client';
+import type { SocialHandles, SocialNetwork } from '../../shared/social-links.js';
 
 export interface CaregiverListItem {
   id: string;
@@ -51,8 +52,10 @@ export interface CaregiverDetail extends CaregiverListItem {
   bioDetail?: string | null;
   /** Video de presentación (link de YouTube), opcional. */
   videoUrl?: string | null;
-  /** Redes sociales del cuidador, mostradas en su perfil público. Ambas opcionales. */
-  socialLinks?: { instagram?: string; facebook?: string } | null;
+  /** Usuarios de redes del cuidador (sin @), para mostrar "@maria". Todos opcionales. */
+  socialHandles?: SocialHandles | null;
+  /** Links completos armados por el servidor desde socialHandles (los abre la app). */
+  socialLinks?: Partial<Record<SocialNetwork, string>> | null;
   /** Si es true, sus reservas pagadas se auto-aceptan sin esperar aprobación manual. */
   instantBookingEnabled?: boolean;
   photos: string[];

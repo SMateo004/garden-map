@@ -154,8 +154,29 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _requireMeetAndGreet = false;
   bool _instantBookingEnabled = false;
   final TextEditingController _videoUrlController = TextEditingController();
-  final TextEditingController _instagramController = TextEditingController();
-  final TextEditingController _facebookController = TextEditingController();
+  // Redes: solo el @usuario — el servidor guarda el usuario y arma el link
+  // del perfil público (garden-api/src/shared/social-links.ts).
+  static const _socialNetworks = [
+    ('instagram', 'Instagram', GIcon.marcaInstagram, r'^[A-Za-z0-9._]{1,30}$'),
+    ('facebook', 'Facebook', GIcon.marcaFacebook, r'^[A-Za-z0-9.]{3,50}$'),
+    ('tiktok', 'TikTok', GIcon.marcaTiktok, r'^[A-Za-z0-9._]{2,24}$'),
+  ];
+  final Map<String, TextEditingController> _socialControllers = {
+    for (final n in _socialNetworks) n.$1: TextEditingController(),
+  };
+
+  static String _cleanHandle(String raw) => raw.trim().replaceFirst(RegExp(r'^@+'), '');
+
+  /// Mismas reglas que el servidor; un link pegado se rechaza con un mensaje claro.
+  static String? _socialHandleError(String label, String pattern, String raw) {
+    final handle = _cleanHandle(raw);
+    if (handle.isEmpty) return null;
+    if (handle.contains('/') || handle.toLowerCase().contains('.com')) {
+      return 'Escribe solo tu usuario de $label, sin el link';
+    }
+    if (!RegExp(pattern).hasMatch(handle)) return 'Ese no parece un usuario de $label';
+    return null;
+  }
 
   // Selecciones
   List<String> _selectedHomeTypes = [];
@@ -414,9 +435,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _requireMeetAndGreet = profile['requireMeetAndGreet'] as bool? ?? false;
     _instantBookingEnabled = profile['instantBookingEnabled'] as bool? ?? false;
     _videoUrlController.text = profile['videoUrl'] as String? ?? '';
-    final socialLinks = profile['socialLinks'] as Map<String, dynamic>? ?? {};
-    _instagramController.text = socialLinks['instagram'] as String? ?? '';
-    _facebookController.text = socialLinks['facebook'] as String? ?? '';
+    final socialHandles = profile['socialHandles'] as Map<String, dynamic>? ?? {};
+    for (final entry in _socialControllers.entries) {
+      entry.value.text = socialHandles[entry.key] as String? ?? '';
+    }
 
     // Mapear texto guardado a chips predefinidas
     final anxiousText = profile['handleAnxious'] as String? ?? '';
@@ -648,13 +670,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (videoText.isNotEmpty && YoutubePlayerController.convertUrlToId(videoText) == null) {
       return _showValidationError('El link del video de presentación no parece de YouTube');
     }
-    final instagramText = _instagramController.text.trim();
-    if (instagramText.isNotEmpty && !instagramText.contains('instagram.com')) {
-      return _showValidationError('El link de Instagram no parece válido (debe ser instagram.com/...)');
-    }
-    final facebookText = _facebookController.text.trim();
-    if (facebookText.isNotEmpty && !facebookText.contains('facebook.com')) {
-      return _showValidationError('El link de Facebook no parece válido (debe ser facebook.com/...)');
+    for (final (network, label, _, pattern) in _socialNetworks) {
+      final error = _socialHandleError(label, pattern, _socialControllers[network]!.text);
+      if (error != null) return _showValidationError(error);
     }
 
     // Servicios y precios — si un servicio está activo, su precio y demás
@@ -780,8 +798,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'instantBookingEnabled': _instantBookingEnabled,
         'videoUrl': _videoUrlController.text.trim(),
         'socialLinks': {
-          if (_instagramController.text.trim().isNotEmpty) 'instagram': _instagramController.text.trim(),
-          if (_facebookController.text.trim().isNotEmpty) 'facebook': _facebookController.text.trim(),
+          for (final entry in _socialControllers.entries)
+            if (_cleanHandle(entry.value.text).isNotEmpty) entry.key: _cleanHandle(entry.value.text),
         },
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
@@ -2505,9 +2523,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   // Redes sociales (opcional) — se muestran con ícono en el perfil público
   // y también las ve el admin en el detalle del cuidador.
   Widget _socialLinksField(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    Widget field(TextEditingController ctrl, GIcon icon, String hint, String domain) {
-      final text = ctrl.text.trim();
-      final looksValid = text.isEmpty || text.contains(domain);
+    Widget field(String network, String label, GIcon icon, String pattern) {
+      final ctrl = _socialControllers[network]!;
+      final error = _socialHandleError(label, pattern, ctrl.text);
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: TextField(
@@ -2517,14 +2535,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           style: TextStyle(color: textColor, fontSize: 14),
           decoration: InputDecoration(
             prefixIcon: GardenIcon(icon, size: GIconSize.md, color: subtextColor),
-            hintText: hint,
+            prefixText: '@',
+            prefixStyle: TextStyle(color: subtextColor, fontSize: 14),
+            hintText: 'tu usuario de $label',
             hintStyle: TextStyle(color: subtextColor, fontSize: 12.5),
             filled: true,
             fillColor: surface,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
-            errorText: looksValid ? null : 'Ese link no parece de $domain',
+            errorText: error,
             errorStyle: const TextStyle(color: GardenColors.error, fontSize: 11),
           ),
         ),
@@ -2536,11 +2556,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       children: [
         Text('Redes sociales (opcional)', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('Se muestran en tu perfil público — genera más confianza en quien te busca.',
+        Text('Escribe solo tu @usuario, sin el link. Se muestran en tu perfil público y generan más confianza en quien te busca.',
             style: TextStyle(color: subtextColor, fontSize: 11.5)),
         const SizedBox(height: 8),
-        field(_instagramController, GIcon.foto, 'https://instagram.com/tu_usuario', 'instagram.com'),
-        field(_facebookController, GIcon.marcaFacebook, 'https://facebook.com/tu_pagina', 'facebook.com'),
+        for (final (network, label, icon, pattern) in _socialNetworks) field(network, label, icon, pattern),
       ],
     );
   }

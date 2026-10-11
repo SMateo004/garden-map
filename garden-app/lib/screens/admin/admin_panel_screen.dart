@@ -4757,8 +4757,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ],
                     row('¿Por qué ser cuidador?', detail?['whyCaregiver'] as String?),
                     row('¿Qué lo diferencia?', detail?['whatDiffers'] as String?),
-                    row('Instagram', (detail?['socialLinks'] as Map?)?['instagram'] as String?),
-                    row('Facebook', (detail?['socialLinks'] as Map?)?['facebook'] as String?),
+                    // Redes: el @usuario que escribió el cuidador (el link lo arma el servidor).
+                    for (final (network, label) in const [('instagram', 'Instagram'), ('facebook', 'Facebook'), ('tiktok', 'TikTok')])
+                      row(label, (detail?['socialHandles'] as Map?)?[network] == null
+                          ? null
+                          : '@${(detail?['socialHandles'] as Map?)?[network]}'),
                   ])),
 
                   // SERVICIOS Y PRECIOS

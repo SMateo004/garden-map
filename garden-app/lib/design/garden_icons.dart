@@ -210,7 +210,9 @@ enum GIcon {
   desvincular(Ph.linkBreak),
   marcaApple(Ph.appleLogo),
   marcaAndroid(Ph.androidLogo),
-  marcaFacebook(Ph.facebookLogo);
+  marcaFacebook(Ph.facebookLogo),
+  marcaInstagram(Ph.instagramLogo),
+  marcaTiktok(Ph.tiktokLogo);
 
   const GIcon(PhGlyph this.glyph) : service = null, solid = false;
   const GIcon.service(GardenService this.service) : glyph = null, solid = false;
