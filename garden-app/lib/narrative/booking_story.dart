@@ -498,6 +498,21 @@ Map<String, dynamic>? pickHeroBooking(List<Map<String, dynamic>> bookings, {requ
   return null;
 }
 
+/// Todas las reservas que merecen estar en el inicio del dueño, en el mismo
+/// orden de prioridad que [pickHeroBooking] (la primera es esa misma). El
+/// inicio muestra grande solo la que está en curso y el resto en un carrusel
+/// discreto.
+List<Map<String, dynamic>> pickHeroBookings(List<Map<String, dynamic>> bookings, {required DateTime now}) {
+  final out = <Map<String, dynamic>>[];
+  var rest = List<Map<String, dynamic>>.from(bookings);
+  while (true) {
+    final next = pickHeroBooking(rest, now: now);
+    if (next == null) return out;
+    out.add(next);
+    rest = [for (final b in rest) if (!identical(b, next)) b];
+  }
+}
+
 /// Reserva protagonista del inicio del cuidador: lo que lo necesita ahora.
 ///   en curso → solicitud por responder → Meet & Greet → la confirmada más
 ///   próxima (hasta 3 h después de su hora de inicio).

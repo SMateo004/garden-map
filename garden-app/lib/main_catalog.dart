@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'design/garden_booking_carousel.dart';
 import 'design/garden_photo_tile.dart';
 import 'design/garden_code_input.dart';
 import 'design/brote.dart';
@@ -511,6 +512,21 @@ class _CatalogPageState extends State<_CatalogPage> {
                 const SizedBox(height: 8),
                 Center(child: GardenNewMessagesPill(count: 2, onTap: () {})),
               ]),
+            ),
+          ]),
+          _Section('Reservas del inicio que no están en curso (carrusel: una a la vez)', [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: GardenBookingCarousel(
+                bookings: [
+                  for (final (id, st) in const [('k1', 'CONFIRMED'), ('k2', 'PENDING_PAYMENT'), ('k3', 'WAITING_CAREGIVER_APPROVAL')])
+                    {
+                      'id': id, 'status': st, 'serviceType': 'PASEO', 'petName': 'Toby', 'caregiverName': 'Andrea',
+                      'walkDate': DateTime.now().add(const Duration(days: 1)).toIso8601String().substring(0, 10), 'startTime': '09:00',
+                    },
+                ],
+                itemBuilder: (_, b) => GardenBookingMiniCard(booking: b, onTap: () {}, onAction: (_) {}),
+              ),
             ),
           ]),
           _Section('Agregar fotos (se eligen varias de una vez)', [

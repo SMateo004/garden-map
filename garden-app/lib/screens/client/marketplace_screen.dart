@@ -15,6 +15,7 @@ import '../../constants/zones.dart';
 import '../../services/zones_service.dart';
 import '../../services/cities_service.dart';
 import '../../design/brote.dart';
+import '../../design/garden_booking_carousel.dart';
 import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_icons.dart';
@@ -134,8 +135,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String _authToken = '';
   String? _userName;
 
-  // ── Reserva activa / próxima ──
-  Map<String, dynamic>? _activeBooking;
+  // ── Reservas del inicio (en curso primero, luego las próximas) ──
+  List<Map<String, dynamic>> _heroBookings = [];
 
   // ── Mascotas del cliente (saludo y foto de la reserva) ──
   List<Map<String, dynamic>> _clientPets = [];
@@ -472,15 +473,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_authToken.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
+        Uri.parse('$_baseUrl/bookings/my?limit=10&page=1'),
         headers: {'Authorization': 'Bearer $_authToken'},
       );
       if (response.statusCode != 200) return;
       final data = jsonDecode(response.body);
       if (data['success'] != true) return;
       final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
-      final found = pickHeroBooking(bookings, now: DateTime.now());
-      if (mounted) setState(() => _activeBooking = found);
+      final found = pickHeroBookings(bookings, now: DateTime.now());
+      if (mounted) setState(() => _heroBookings = found);
     } catch (_) {}
   }
 
@@ -727,8 +728,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     final header = <Widget>[
       if (kIsWeb) _buildMobileAppBanner(bg, border, textColor, subtextColor, isDark),
-      if (_activeBooking != null) ...[
-        _buildActiveBookingCard(),
+      if (_heroBookings.isNotEmpty) ...[
+        _buildBookingsArea(),
         const SizedBox(height: 14),
       ],
       _buildMobileSearchRow(theme, isDark, surface, border, textColor, subtextColor),
@@ -816,58 +817,86 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return '¿Qué hacen tus mascotas hoy?';
   }
 
-  // ── Reserva protagonista ─────────────────────────────────────────────────
-  Widget _buildActiveBookingCard() {
-    final b = _activeBooking!;
-    final id = b['id'] as String;
-    final pet = _clientPets.where((p) => p['id'] == b['petId']).firstOrNull;
+  // ── Reservas del inicio ──────────────────────────────────────────────
+  // Grande solo la que está en curso (la mascota está siendo cuidada ahora).
+  // El resto —confirmadas, por pagar, esperando al cuidador, por calificar—
+  // va en una tarjeta de una línea; si son varias, en un carrusel que muestra
+  // una a la vez y pasa sola.
+  Widget _buildBookingsArea() {
+    final live = _heroBookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
+    final rest = [for (final b in _heroBookings) if (!identical(b, live)) b];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (live != null) _buildActiveBookingCard(live),
+      if (live != null && rest.isNotEmpty) const SizedBox(height: 10),
+      if (rest.isNotEmpty)
+        GardenBookingCarousel(
+          bookings: rest,
+          itemBuilder: (_, b) => GardenBookingMiniCard(
+            booking: b,
+            onTap: _bookingTap(b),
+            onAction: (a) => _bookingAction(b, a),
+          ),
+        ),
+    ]);
+  }
+
+  void _openService(Map<String, dynamic> b) =>
+      context.push('/service/${b['id']}', extra: {'role': 'CLIENT', 'token': _authToken});
+
+  void _openChat(Map<String, dynamic> b) => context.push('/chat/${b['id']}', extra: {
+        'otherPersonName': b['caregiverName'] ?? 'Cuidador',
+        'otherPersonPhoto': b['caregiverPhoto'],
+      });
+
+  VoidCallback _bookingTap(Map<String, dynamic> b) {
     final status = b['status'] as String?;
-    final disputed = b['hasDisputePending'] == true;
-
-    void openService() => context.push('/service/$id', extra: {'role': 'CLIENT', 'token': _authToken});
-    void openChat() => context.push('/chat/$id', extra: {
-          'otherPersonName': b['caregiverName'] ?? 'Cuidador',
-          'otherPersonPhoto': b['caregiverPhoto'],
-        });
     final opensService = status == 'IN_PROGRESS' || status == 'CONFIRMED' || status == 'COMPLETED';
+    return opensService ? () => _openService(b) : () => context.push('/my-bookings');
+  }
 
+  void _bookingAction(Map<String, dynamic> b, StoryAction action) {
+    final id = b['id'] as String;
+    switch (action) {
+      case StoryAction.viewMap:
+      case StoryAction.viewNotes:
+        _openService(b);
+      case StoryAction.chat:
+        _openChat(b);
+      case StoryAction.pay:
+        context.push('/payment/$id');
+      case StoryAction.viewMeet:
+        context.push('/meet-and-greet/$id', extra: {'role': 'CLIENT'});
+      case StoryAction.chooseOtherTime:
+        context.push('/slot-conflict/$id', extra: {
+          'serviceType': b['serviceType'],
+          'caregiverId': b['caregiverId'],
+        });
+      case StoryAction.viewDetail:
+        if (b['hasDisputePending'] == true) {
+          context.push('/dispute/$id', extra: {'role': 'CLIENT'});
+        } else {
+          _openService(b);
+        }
+      case StoryAction.bookAgain:
+        context.push('/caregiver/${b['caregiverId']}');
+      case StoryAction.rate:
+      case StoryAction.respond:
+      case StoryAction.sendPhoto:
+      case StoryAction.findAnother:
+        context.push('/my-bookings');
+    }
+  }
+
+  /// La reserva en curso, grande.
+  Widget _buildActiveBookingCard(Map<String, dynamic> b) {
+    final pet = _clientPets.where((p) => p['id'] == b['petId']).firstOrNull;
     return GardenBookingHeroCard(
       booking: b,
       petPhotoUrl: pet?['photoUrl'] as String?,
       petSpecies: pet?['animalType'] as String?,
-      onTap: opensService ? openService : () => context.push('/my-bookings'),
-      onChat: status == 'COMPLETED' ? null : openChat,
-      onAction: (action) {
-        switch (action) {
-          case StoryAction.viewMap:
-          case StoryAction.viewNotes:
-            openService();
-          case StoryAction.chat:
-            openChat();
-          case StoryAction.pay:
-            context.push('/payment/$id');
-          case StoryAction.viewMeet:
-            context.push('/meet-and-greet/$id', extra: {'role': 'CLIENT'});
-          case StoryAction.chooseOtherTime:
-            context.push('/slot-conflict/$id', extra: {
-              'serviceType': b['serviceType'],
-              'caregiverId': b['caregiverId'],
-            });
-          case StoryAction.viewDetail:
-            if (disputed) {
-              context.push('/dispute/$id', extra: {'role': 'CLIENT'});
-            } else {
-              openService();
-            }
-          case StoryAction.bookAgain:
-            context.push('/caregiver/${b['caregiverId']}');
-          case StoryAction.rate:
-          case StoryAction.respond:
-          case StoryAction.sendPhoto:
-          case StoryAction.findAnother:
-            context.push('/my-bookings');
-        }
-      },
+      onTap: _bookingTap(b),
+      onChat: () => _openChat(b),
+      onAction: (a) => _bookingAction(b, a),
     );
   }
 
