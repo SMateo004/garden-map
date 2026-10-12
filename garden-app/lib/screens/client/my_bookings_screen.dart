@@ -83,10 +83,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final highlightId = prefs.getString('highlight_booking_id');
     if (highlightId != null && highlightId.isNotEmpty) {
       await prefs.remove('highlight_booking_id');
-      setState(() {
-        _highlightBookingId = highlightId;
-        _selectedFilter = 'activas';
-      });
+      // El filtro se elige al cargar, según el estado de ESA reserva (antes
+      // siempre "activas": una reserva cancelada abierta desde su
+      // notificación no aparecía y se veían las otras activas).
+      setState(() => _highlightBookingId = highlightId);
     }
 
     setState(() => _clientToken = token);
@@ -125,6 +125,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _highlightClearTimer?.cancel();
+    _listController.dispose();
     super.dispose();
   }
 
@@ -142,6 +143,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         final loaded = (data['data'] as List).cast<Map<String, dynamic>>();
         if (mounted) setState(() => _bookings = loaded);
         _checkMGDecisionNeeded();
+        await _revealHighlighted();
         // Schedule highlight clear after 5 seconds on first load
         if (_highlightBookingId != null) {
           _highlightClearTimer?.cancel();
@@ -155,6 +157,63 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Tarjeta de cada reserva, para desplazarse hasta la resaltada.
+  final Map<String, GlobalKey> _cardKeys = {};
+  final ScrollController _listController = ScrollController();
+  bool _highlightRevealed = false;
+
+  /// La lista solo construye las tarjetas cercanas a la pantalla: si la buscada
+  /// todavía no existe, baja por tramos hasta que aparezca y la centra.
+  void _scrollToCard(String id, [int attempt = 0]) {
+    if (!mounted) return;
+    final ctx = _cardKeys[id]?.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+          duration: GardenMotion.resolve(context, GardenMotion.standard), curve: GardenMotion.move, alignment: 0.1);
+      return;
+    }
+    if (attempt >= 30 || !_listController.hasClients) return;
+    final pos = _listController.position;
+    if (pos.pixels >= pos.maxScrollExtent) return;
+    _listController.jumpTo((pos.pixels + pos.viewportDimension * 0.8).clamp(0, pos.maxScrollExtent));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(id, attempt + 1));
+  }
+
+  /// Lleva a la reserva que se abrió desde una notificación o el pago: elige el
+  /// filtro donde está (activas / completadas / canceladas), la despliega si
+  /// tiene detalle y se desplaza hasta ella. Si es más vieja que la página que
+  /// trae la lista, la pide aparte.
+  Future<void> _revealHighlighted() async {
+    final id = _highlightBookingId;
+    if (id == null || _highlightRevealed || !mounted) return;
+    _highlightRevealed = true;
+    var booking = _bookings.where((b) => b['id'] == id).firstOrNull;
+    if (booking == null) {
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/bookings/$id'),
+          headers: {'Authorization': 'Bearer $_clientToken'},
+        );
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) booking = (body['data'] as Map).cast<String, dynamic>();
+      } catch (_) {}
+      if (booking == null || !mounted) return;
+      final found = booking;
+      setState(() => _bookings = [..._bookings, found]);
+    }
+    final status = booking['status'] as String? ?? '';
+    final filter = ['CANCELLED', 'REJECTED_BY_CAREGIVER'].contains(status)
+        ? 'canceladas'
+        : status == 'COMPLETED'
+            ? 'completadas'
+            : 'activas';
+    setState(() {
+      _selectedFilter = _bookingsFor(filter).any((b) => b['id'] == id) ? filter : 'todas';
+      if (BookingHistoryDetail.appliesTo(status)) _expandedIds.add(id);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(id));
   }
 
   Future<void> _checkMGDecisionNeeded() async {
@@ -584,6 +643,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final expanded = expandable && _expandedIds.contains(bookingId);
 
     return AnimatedContainer(
+      key: _cardKeys.putIfAbsent(bookingId, GlobalKey.new),
       duration: const Duration(milliseconds: 600),
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -1444,6 +1504,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                   color: GardenColors.primary,
                                   onRefresh: _loadBookings,
                                   child: ListView(
+                                    controller: _listController,
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 8, isWide ? 40 : 16, 24),
                                     children: [

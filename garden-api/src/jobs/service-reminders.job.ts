@@ -9,6 +9,7 @@ import prisma from '../config/database.js';
 import { onServiceReminder, getNotificationPrefs } from '../services/notification.service.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
+import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
 import { autoPayoutExpiredReviews, calcOvertimeMinutes } from '../modules/booking-service/booking.service.js';
 
 // Ventana alrededor de cada umbral (24h / 2h). Corre cada 15 min (ver
@@ -32,44 +33,84 @@ function reminderEventToken(hoursUntil: number): string {
   return hoursUntil < 1 ? `${Math.round(hoursUntil * 60)}MIN` : `${hoursUntil}H`;
 }
 
+/** Hora de inicio supuesta cuando la reserva no tiene una (hospedaje): solo
+ *  se usa para mandar el aviso del día anterior a una hora razonable. */
+const DEFAULT_START_TIME = '09:00';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const SERVICE_LABELS: Record<string, string> = { PASEO: 'Paseo', GUARDERIA: 'Guardería', HOSPEDAJE: 'Hospedaje' };
+
+/** Inicio real del servicio (fecha + hora de Bolivia). Las columnas walkDate/
+ *  startDate son DATE (medianoche UTC): compararlas directo contra "ahora + X h"
+ *  mandaba los avisos desde la medianoche, no desde la hora del servicio (un
+ *  paseo a las 13:00 recibía "empieza en 30 minutos" la noche anterior). */
+export function serviceStartMs(b: { walkDate: Date | null; startDate: Date | null; startTime: string | null }): number | null {
+  const date = b.walkDate ?? b.startDate;
+  if (!date) return null;
+  return boliviaDateAndTimeToMs(date, b.startTime ?? DEFAULT_START_TIME);
+}
+
+/** "hoy 13/10 a las 13:00" / "mañana 14/10 a las 09:00" (hora de Bolivia). */
+export function whenLabel(startMs: number, nowMs: number, hasTime: boolean): string {
+  const toBo = (ms: number) => new Date(ms - 4 * 60 * 60 * 1000); // UTC-4 todo el año
+  const s = toBo(startMs);
+  const dayDiff = Math.round(
+    (Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()) -
+      Date.UTC(toBo(nowMs).getUTCFullYear(), toBo(nowMs).getUTCMonth(), toBo(nowMs).getUTCDate())) / DAY_MS
+  );
+  const day = dayDiff === 0 ? 'hoy' : dayDiff === 1 ? 'mañana' : 'el';
+  const date = `${String(s.getUTCDate()).padStart(2, '0')}/${String(s.getUTCMonth() + 1).padStart(2, '0')}`;
+  const time = `${String(s.getUTCHours()).padStart(2, '0')}:${String(s.getUTCMinutes()).padStart(2, '0')}`;
+  return hasTime ? `${day} ${date} a las ${time}` : `${day} ${date}`;
+}
+
 async function procesarRecordatoriosDeServicio() {
-  const now = new Date();
+  const nowMs = Date.now();
+
+  // Candidatas: confirmadas cuyo día de servicio está entre ayer y dentro de
+  // 3 días; la ventana exacta se calcula abajo con la hora real de inicio.
+  const candidates = await prisma.booking.findMany({
+    where: {
+      status: 'CONFIRMED',
+      OR: [
+        { walkDate: { gte: new Date(nowMs - DAY_MS), lte: new Date(nowMs + 3 * DAY_MS) } },
+        { startDate: { gte: new Date(nowMs - DAY_MS), lte: new Date(nowMs + 3 * DAY_MS) } },
+      ],
+    },
+    select: {
+      id: true,
+      clientId: true,
+      petName: true,
+      serviceType: true,
+      walkDate: true,
+      startDate: true,
+      startTime: true,
+      serviceEvents: true,
+      caregiver: { select: { userId: true } },
+    },
+  });
+  if (candidates.length === 0) return;
 
   for (const hoursUntil of [24, 2, 0.5]) {
-    const windowStart = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 - REMINDER_WINDOW_MARGIN_MS);
-    const windowEnd = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 + REMINDER_WINDOW_MARGIN_MS);
+    const targetMs = nowMs + hoursUntil * 60 * 60 * 1000;
     const eventType = `SERVICE_REMINDER_${reminderEventToken(hoursUntil)}_SENT`;
 
-    const bookings = await prisma.booking.findMany({
-      where: {
-        status: 'CONFIRMED',
-        OR: [
-          { walkDate: { gte: windowStart, lte: windowEnd } },
-          { startDate: { gte: windowStart, lte: windowEnd } },
-        ],
-      },
-      select: {
-        id: true,
-        clientId: true,
-        petName: true,
-        startTime: true,
-        serviceEvents: true,
-        caregiver: { select: { userId: true } },
-      },
-    });
+    for (const booking of candidates) {
+      const startMs = serviceStartMs(booking);
+      if (startMs == null || Math.abs(startMs - targetMs) > REMINDER_WINDOW_MARGIN_MS) continue;
+      // Sin hora de inicio (hospedaje): solo el aviso del día anterior.
+      if (!booking.startTime && hoursUntil !== 24) continue;
 
-    if (bookings.length === 0) continue;
-
-    for (const booking of bookings) {
       try {
         // Idempotencia: cada (booking, umbral) solo se notifica una vez, sin
         // importar cuántas veces el cron vuelva a escanear la ventana (server
         // restart, tick perdido y recuperado, ventanas solapadas, etc.). Mismo
         // patrón de ledger en `serviceEvents` que ya usa el aviso de
-        // hospedaje-vencido más abajo.
-        const events = (booking.serviceEvents as any[]) ?? [];
-        const alreadyNotified = events.some((e: any) => e.type === eventType);
-        if (alreadyNotified) continue;
+        // hospedaje-vencido más abajo. Se relee para no pisar eventos nuevos.
+        const fresh = await prisma.booking.findUnique({ where: { id: booking.id }, select: { status: true, serviceEvents: true } });
+        if (!fresh || fresh.status !== 'CONFIRMED') continue; // se canceló en el medio
+        const events = (fresh.serviceEvents as any[]) ?? [];
+        if (events.some((e: any) => e.type === eventType)) continue;
 
         await prisma.booking.update({
           where: { id: booking.id },
@@ -80,13 +121,17 @@ async function procesarRecordatoriosDeServicio() {
 
         await onServiceReminder(booking.id, hoursUntil);
 
-        // Incluye mascota y hora para que dos recordatorios de bookings
-        // distintos no se lean como "la misma notificación repetida".
-        const timeLabel = booking.startTime ? ` (${booking.startTime})` : '';
-        const pushMsg = `El servicio de ${booking.petName ?? 'tu mascota'}${timeLabel} empieza en ${reminderLabel(hoursUntil)}. ¡Prepárate!`;
-        sendPushToUser(booking.clientId, '⏰ Recordatorio de servicio', pushMsg).catch(() => {});
+        // Servicio, mascota, día y hora: dos reservas de la misma mascota (ej.
+        // una cancelada y otra activa a la misma hora) no se confunden.
+        const svc = SERVICE_LABELS[booking.serviceType] ?? 'Servicio';
+        const when = whenLabel(startMs, nowMs, !!booking.startTime);
+        const pushMsg = hoursUntil === 24
+          ? `${svc} de ${booking.petName ?? 'tu mascota'} ${when}. ¡Prepárate!`
+          : `${svc} de ${booking.petName ?? 'tu mascota'} ${when} — empieza en ${reminderLabel(hoursUntil)}.`;
+        const data = { type: 'SERVICE_REMINDER', bookingId: booking.id };
+        sendPushToUser(booking.clientId, '⏰ Recordatorio de servicio', pushMsg, data).catch(() => {});
         if (booking.caregiver?.userId) {
-          sendPushToUser(booking.caregiver.userId, '⏰ Recordatorio de servicio', pushMsg).catch(() => {});
+          sendPushToUser(booking.caregiver.userId, '⏰ Recordatorio de servicio', pushMsg, data).catch(() => {});
         }
 
         logger.info(`[REMINDERS] Recordatorio ${hoursUntil}h enviado`, { bookingId: booking.id });

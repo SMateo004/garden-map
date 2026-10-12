@@ -192,6 +192,7 @@ class FcmService {
         break;
       case 'INCIDENT':
       case 'ACCIDENT':
+      case 'SERVICE_REMINDER': // "tu paseo empieza en…": abre ESA reserva
       case 'SERVICE_STARTED':
       case 'SERVICE_COMPLETED':
       case 'SERVICE_EXTENSION':
