@@ -784,21 +784,24 @@ export async function reviewCaregiver(
 // ---------------------------------------------------------------------------
 
 /** GET /api/admin/payments-pending — reservas en PAYMENT_PENDING_APPROVAL, paginadas. */
+/** Qué cuenta como "pago por aprobar": la lista de Pagos y su contador del menú. */
+const PAYMENTS_PENDING_WHERE: Prisma.BookingWhereInput = {
+  OR: [
+    { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
+    // PENDING_PAYMENT solo si tiene qrId activo (QR generado pero no aprobado aún)
+    // Si qrId es null, el pago fue rechazado y el cliente debe reiniciar el flujo
+    { status: BookingStatus.PENDING_PAYMENT, qrId: { not: null } },
+    // Aprobada automáticamente (nadie revisó el pago declarado a tiempo) y sin verificar:
+    // el admin confirma que llegó o la marca como no recibida (payment-review.service.ts).
+    { paymentAutoApprovedAt: { not: null }, paymentReviewedAt: null },
+  ],
+};
+
 export async function getPaymentsPending(
   page = 1,
   limit = 50
 ): Promise<PendingPaymentsResult & { pagination: { page: number; limit: number; total: number; pages: number } }> {
-  const where = {
-    OR: [
-      { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
-      // PENDING_PAYMENT solo si tiene qrId activo (QR generado pero no aprobado aún)
-      // Si qrId es null, el pago fue rechazado y el cliente debe reiniciar el flujo
-      { status: BookingStatus.PENDING_PAYMENT, qrId: { not: null } },
-      // Aprobada automáticamente (nadie revisó el pago declarado a tiempo) y sin verificar:
-      // el admin confirma que llegó o la marca como no recibida (payment-review.service.ts).
-      { paymentAutoApprovedAt: { not: null }, paymentReviewedAt: null },
-    ],
-  };
+  const where = PAYMENTS_PENDING_WHERE;
   const skip = (page - 1) * limit;
 
   const [bookings, total] = await Promise.all([
@@ -1678,20 +1681,33 @@ export async function getBookingGpsTrackAdmin(bookingId: string): Promise<any[]>
 }
 
 // ---------------------------------------------------------------------------
-// Pagos de extensión de paseo — aprobación/rechazo manual
+// Pagos de extensión (paseo y hospedaje) — aprobación/rechazo manual
 // ---------------------------------------------------------------------------
 
+/** Extensiones con pago pendiente de una lista de eventos (sin confirmar ni rechazar). */
+function pendingExtensionEvents(serviceEvents: unknown): any[] {
+  const events: any[] = Array.isArray(serviceEvents) ? (serviceEvents as any[]) : [];
+  const closed = new Set(
+    events
+      .filter((e: any) => e.type === 'EXTENSION_CONFIRMED' || e.type === 'EXTENSION_REJECTED')
+      .map((e: any) => e.extensionId)
+  );
+  return events.filter((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && !closed.has(e.extensionId));
+}
+
+/** Reservas con al menos un evento EXTENSION_PENDING_PAYMENT (jsonb @>). */
+const HAS_PENDING_EXTENSION = {
+  serviceEvents: { array_contains: [{ type: 'EXTENSION_PENDING_PAYMENT' }] },
+} as const;
+
 /** GET /api/admin/extension-payments-pending — extensiones pendientes de aprobación.
- *  Consulta directamente los bookings PASEO recientes (30 días) sin filtrar por status,
- *  para cubrir walks que ya terminaron pero tienen extensiones aún pendientes.
+ *  Paseo y hospedaje, sin límite de antigüedad: antes solo miraba paseos
+ *  creados en los últimos 30 días, así que una extensión de hospedaje (o de
+ *  una reserva hecha con anticipación) nunca aparecía para aprobar.
  */
 export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const bookings = await prisma.booking.findMany({
-    where: {
-      serviceType: 'PASEO',
-      createdAt: { gte: since },
-    },
+    where: HAS_PENDING_EXTENSION,
     include: {
       client: { select: { email: true, firstName: true, lastName: true } },
       caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
@@ -1702,26 +1718,20 @@ export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
 
   const items: any[] = [];
   for (const booking of bookings) {
-    const events: any[] = Array.isArray(booking.serviceEvents) ? booking.serviceEvents as any[] : [];
-    // Buscar eventos EXTENSION_PENDING_PAYMENT de cualquier método que no tengan ya un EXTENSION_CONFIRMED/REJECTED con el mismo extensionId
-    const confirmedIds = new Set(
-      events
-        .filter((e: any) => e.type === 'EXTENSION_CONFIRMED' || e.type === 'EXTENSION_REJECTED')
-        .map((e: any) => e.extensionId)
-    );
-    const pending = events.filter(
-      (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && !confirmedIds.has(e.extensionId)
-    );
-    for (const evt of pending) {
+    for (const evt of pendingExtensionEvents(booking.serviceEvents)) {
       items.push({
         bookingId: booking.id,
         extensionId: evt.extensionId,
+        serviceType: booking.serviceType,
         paymentId: evt.paymentId ?? evt.qrId ?? '—',
         method: evt.method,
-        additionalMinutes: evt.additionalMinutes,
+        additionalMinutes: evt.additionalMinutes ?? null,
+        additionalDays: evt.additionalDays ?? null,
         extraAmount: evt.extraAmount,
         petName: booking.petName,
         walkDate: booking.walkDate?.toISOString().slice(0, 10) ?? null,
+        startDate: booking.startDate?.toISOString().slice(0, 10) ?? null,
+        endDate: booking.endDate?.toISOString().slice(0, 10) ?? null,
         clientEmail: booking.client?.email,
         clientName: booking.client ? `${booking.client.firstName} ${booking.client.lastName}`.trim() : null,
         caregiverName: booking.caregiver?.user ? `${booking.caregiver.user.firstName} ${booking.caregiver.user.lastName}`.trim() : null,
@@ -1729,7 +1739,32 @@ export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
       });
     }
   }
+  items.sort((a, b) => String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')));
   return { items };
+}
+
+/** GET /api/admin/pending-counts — cuánto espera acción del admin en cada
+ *  pestaña del panel, para los contadores del menú. Mismos criterios que las
+ *  listas de cada pestaña (si cambia una, cambiar acá también). */
+export async function getAdminPendingCounts(): Promise<Record<string, number>> {
+  const [payments, extBookings, withdrawals, disputes, caregivers, identity, chatReports] = await Promise.all([
+    prisma.booking.count({ where: PAYMENTS_PENDING_WHERE }),
+    prisma.booking.findMany({ where: HAS_PENDING_EXTENSION, select: { serviceEvents: true }, take: 200 }),
+    prisma.walletTransaction.count({ where: { type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } } }),
+    prisma.dispute.count({ where: { status: { not: 'RESOLVED' } } }),
+    prisma.caregiverProfile.count({ where: { status: { in: [CaregiverStatus.PENDING_REVIEW, CaregiverStatus.NEEDS_REVISION] } } }),
+    prisma.identityVerificationSession.count({ where: { status: 'REVIEW' as any } }),
+    prisma.chatReport.count({ where: { status: 'PENDING' } }),
+  ]);
+  const extensions = extBookings.reduce((n, b) => n + pendingExtensionEvents(b.serviceEvents).length, 0);
+  return {
+    payments: payments + extensions,
+    withdrawals,
+    disputes,
+    caregivers,
+    identity,
+    chatReports,
+  };
 }
 
 /** POST /api/admin/bookings/:id/approve-extension-payment — aprueba extensión de paseo o hospedaje. */

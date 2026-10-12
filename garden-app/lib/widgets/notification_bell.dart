@@ -70,8 +70,13 @@ class AppNotification {
   final kind = NotificationKind.of(type);
   final role = AuthState.effectiveRole;
   final staff = AuthState.isCaregiverStaff;
-  if (role == 'ADMIN' && (kind.topic == NotificationTopic.problem || kind.topic == NotificationTopic.account)) {
-    return (label: 'Abrir panel admin', route: '/admin', extra: null, highlight: null);
+  if (role == 'ADMIN') {
+    // Alertas del admin: abren la pestaña del panel donde se resuelven.
+    final tab = adminTabFor(type);
+    if (tab != null) return (label: 'Ir a resolverlo', route: '/admin?tab=$tab', extra: null, highlight: null);
+    if (kind.topic == NotificationTopic.problem || kind.topic == NotificationTopic.account) {
+      return (label: 'Abrir panel admin', route: '/admin', extra: null, highlight: null);
+    }
   }
   // Mensaje del chat: abre esa conversación (el nombre lo trae el chat).
   if (bookingId != null && kind.topic == NotificationTopic.chat) {

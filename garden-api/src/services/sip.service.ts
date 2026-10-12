@@ -255,31 +255,16 @@ export async function getTransactionStatus(alias: string): Promise<SipTransactio
 // ── Alerta a admins cuando SIP falla en producción ──────────────────────────
 // Antes esto fallaba en silencio y el sistema mostraba un QR placeholder falso
 // al cliente. Ahora, además de bloquear el pago con un error claro, avisamos
-// a todos los administradores por email — igual que hace el propio banco
-// cuando su callback de confirmación falla.
+// a los administradores por la app (bandeja del panel + push), no por correo.
 
 export async function notifyAdminsSipFailure(context: string, bookingId: string, err: unknown): Promise<void> {
   try {
     const message = err instanceof Error ? err.message : String(err);
-    const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
-      select: { email: true },
-    });
-    if (admins.length === 0) {
-      logger.error('[SIP] Falla crítica sin admins registrados para notificar', { context, bookingId, message });
-      return;
-    }
-    const { sendTransactionalEmail } = await import('../modules/auth/email.service.js');
-    const subject = `⚠️ Falla del banco (SIP) — ${context}`;
-    const html = `
-      <p>La integración bancaria SIP falló al ejecutar <b>${context}</b> para la reserva <b>${bookingId}</b>.</p>
-      <p>El pago fue bloqueado (no se mostró un QR falso al cliente). Revisa las credenciales SIP y el estado del servicio del banco.</p>
-      <p><b>Error:</b> ${message}</p>
-    `;
-    await Promise.all(
-      admins.map((a) => sendTransactionalEmail(a.email, subject, html).catch((e) =>
-        logger.error('[SIP] No se pudo enviar email de alerta a admin', { email: a.email, e })
-      ))
+    const { notifyAdmins } = await import('./firebase.service.js');
+    await notifyAdmins(
+      '⚠️ Falla del banco (SIP)',
+      `${context} falló en la reserva ${bookingId.slice(0, 8).toUpperCase()}. El pago quedó bloqueado (no se mostró un QR falso). Error: ${message}`.slice(0, 500),
+      { type: 'SIP_FAILURE', bookingId }
     );
   } catch (notifyErr) {
     logger.error('[SIP] Error notificando falla crítica a admins', { context, bookingId, notifyErr });

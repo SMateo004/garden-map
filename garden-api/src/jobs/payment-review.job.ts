@@ -81,7 +81,10 @@ export async function aprobarPagosDeclaradosVencidos(now: Date = new Date()): Pr
         '✅ Pago aprobado automáticamente',
         approved.length === 1
           ? `Reserva ${approved[0]!.slice(0, 8).toUpperCase()}: nadie revisó el pago declarado a tiempo y se aprobó sola. Verifica si el dinero llegó.`
-          : `${approved.length} reservas se aprobaron solas con el pago declarado. Verifica si el dinero llegó.`
+          : `${approved.length} reservas se aprobaron solas con el pago declarado. Verifica si el dinero llegó.`,
+        approved.length === 1
+          ? { type: 'PAYMENT_AUTO_APPROVED', bookingId: approved[0]! }
+          : { type: 'PAYMENT_AUTO_APPROVED' }
       ).catch(() => {});
       logger.warn('[PAYMENT-REVIEW] pagos declarados aprobados automáticamente — pendientes de verificación', { bookings: approved });
     }
@@ -139,7 +142,8 @@ export async function recordarPagosSinVerificar(now: Date = new Date()): Promise
         '⏰ Pagos sin verificar',
         n === 1
           ? `La reserva ${alertedIds[0]!.slice(0, 8).toUpperCase()} lleva más de ${hours} h con el pago sin verificar.`
-          : `${n} reservas llevan más de ${hours} h con el pago sin verificar. Revísalas en Pagos pendientes.`
+          : `${n} reservas llevan más de ${hours} h con el pago sin verificar. Revísalas en Pagos pendientes.`,
+        n === 1 ? { type: 'PAYMENT_REVIEW_OVERDUE', bookingId: alertedIds[0]! } : { type: 'PAYMENT_REVIEW_OVERDUE' }
       ).catch(() => {});
       logger.warn('[PAYMENT-REVIEW] pagos sin verificar — admins avisados', { bookings: alertedIds, hours });
     }

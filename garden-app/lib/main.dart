@@ -420,7 +420,8 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/admin',
       name: 'admin',
-      builder: (context, state) => const AdminPanelScreen(),
+      // ?tab= — pestaña a abrir al tocar una alerta del admin (adminTabFor).
+      builder: (context, state) => AdminPanelScreen(initialTab: state.uri.queryParameters['tab']),
     ),
     GoRoute(
       path: '/admin/identity-reviews/:id',

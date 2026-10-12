@@ -1048,6 +1048,12 @@ export async function submitNitDocument(
       caregiverId: profile.id,
     },
   });
+  const { notifyAdmins } = await import('../../services/firebase.service.js');
+  notifyAdmins(
+    '🧾 NIT por verificar',
+    'Un cuidador subió su NIT. Revísalo en Verif. de NIT.',
+    { type: 'NIT_VERIFICATION_SUBMITTED' }
+  ).catch(() => {});
 
   return { nitStatus: 'EN_REVISION' };
 }

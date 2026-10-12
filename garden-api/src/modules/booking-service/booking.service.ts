@@ -1935,7 +1935,8 @@ export async function initPayment(
   if (result.status === BookingStatus.PAYMENT_PENDING_APPROVAL) {
     sendPushToAdmins(
       '💳 Pago pendiente de aprobación',
-      `Reserva ${bookingId.slice(0, 8).toUpperCase()} necesita revisión manual.`
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()} necesita revisión manual.`,
+      { type: 'PAYMENT_PENDING', bookingId }
     ).catch(() => {});
   }
   // El cliente pidió el QR de pago: los admins quedan al tanto desde ese momento, sin esperar a
@@ -1945,7 +1946,8 @@ export async function initPayment(
     const hhmm = new Date(qrAdminAlert.qrExpiresAt.getTime() - 4 * 60 * 60 * 1000).toISOString().slice(11, 16);
     sendPushToAdmins(
       '💳 Un cliente generó su QR de pago',
-      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: espera el depósito (el QR vence a las ${hhmm}). Ya está en Pagos por aprobar — revísala cuando llegue el pago.`
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: espera el depósito (el QR vence a las ${hhmm}). Ya está en Pagos por aprobar — revísala cuando llegue el pago.`,
+      { type: 'PAYMENT_QR_REQUESTED', bookingId }
     ).catch(() => {});
   }
   return result;
@@ -2057,7 +2059,8 @@ export async function declarePaymentMade(
     track(clientId, 'payment_declared', { bookingId });
     sendPushToAdmins(
       '💳 Pago declarado por el cliente',
-      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: el cliente dice que ya pagó. Verifica el depósito y aprueba o rechaza.`
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: el cliente dice que ya pagó. Verifica el depósito y aprueba o rechaza.`,
+      { type: 'PAYMENT_DECLARED', bookingId }
     ).catch(() => {});
   }
   return {
@@ -3054,6 +3057,11 @@ export async function requestWalkExtensionPayment(
   ]);
 
   logger.info('Walk extension manual payment requested', { bookingId, extensionId, manualPaymentId, extraTotal });
+  sendPushToAdmins(
+    '💳 Extensión de paseo por aprobar',
+    `Reserva ${bookingId.slice(0, 8).toUpperCase()}: +${additionalMinutes} min por Bs ${extraTotal}. Verifica el pago y apruébala en Pagos.`,
+    { type: 'EXTENSION_PAYMENT', bookingId }
+  ).catch(() => {});
   return { extensionId, extraAmount: extraTotal, status: 'PENDING_MANUAL', qrId: manualPaymentId };
 }
 
@@ -3329,6 +3337,11 @@ export async function requestHospedajeExtensionPayment(
   ]);
 
   logger.info('Hospedaje extension manual payment requested', { bookingId, extensionId, manualPaymentId, extraTotal });
+  sendPushToAdmins(
+    '💳 Extensión de hospedaje por aprobar',
+    `Reserva ${bookingId.slice(0, 8).toUpperCase()}: +${additionalDays} noche${additionalDays === 1 ? '' : 's'} por Bs ${extraTotal}. Verifica el pago y apruébala en Pagos.`,
+    { type: 'EXTENSION_PAYMENT', bookingId }
+  ).catch(() => {});
   return { extensionId, extraAmount: extraTotal, status: 'PENDING_MANUAL', qrId: manualPaymentId };
 }
 
@@ -5424,6 +5437,14 @@ export async function confirmReceiptByClient(
   // cliente prisma "de afuera" en vez del tx interno) — más simple y seguro
   // dejar que corra como una operación de nivel superior una vez que la
   // calificación ya quedó confirmada.
+  if (ratingNum < 3) {
+    // El pago al cuidador queda retenido hasta que alguien lo revise.
+    sendPushToAdmins(
+      '⭐ Calificación baja — pago retenido',
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()}: el dueño calificó ${ratingNum}★. El pago al cuidador quedó retenido para revisión.`,
+      { type: 'LOW_RATING', bookingId }
+    ).catch(() => {});
+  }
   await maybeAutoSuspendForLowRating(txResult.caregiverId).catch((err) => {
     logger.error('Error en chequeo de auto-suspensión por rating bajo', { caregiverId: txResult.caregiverId, err });
   });

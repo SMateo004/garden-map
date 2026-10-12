@@ -409,10 +409,15 @@ export const deleteTestBooking = asyncHandler(async (req: Request, res: Response
   res.json({ success: true, data: { id } });
 });
 
-/** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación */
+/** GET /api/admin/extension-payments-pending — extensiones de paseo y hospedaje pendientes de aprobación */
 export const getExtensionPaymentsPending = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.getExtensionPaymentsPending();
   res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/pending-counts — pendientes por pestaña, para los contadores del panel */
+export const getPendingCounts = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ success: true, data: await adminService.getAdminPendingCounts() });
 });
 
 /** POST /api/admin/bookings/:id/approve-extension-payment — aprobar extensión manual */

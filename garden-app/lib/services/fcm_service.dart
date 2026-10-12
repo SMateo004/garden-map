@@ -11,6 +11,7 @@ import 'local_notification_service.dart';
 import 'secure_storage_service.dart';
 import 'auth_state.dart';
 import 'chat_service.dart';
+import '../narrative/notification_kind.dart' show adminTabFor;
 
 /// Responde al push silencioso horario de Hospedaje/Guardería
 /// (hospedaje-location-ping.job.ts en el backend) mandando un punto de
@@ -212,7 +213,13 @@ class FcmService {
         _router!.go('/wallet');
         break;
       default:
-        // Sin navegación específica — el usuario ve la notificación en el drawer
+        // Alertas para el admin: abren el panel en la pestaña que corresponde.
+        final adminType = data['adminType'] as String?;
+        if (role == 'ADMIN' && adminType != null) {
+          final tab = adminTabFor(adminType);
+          _router!.go(tab == null ? '/admin' : '/admin?tab=$tab');
+        }
+        // Si no, sin navegación específica — se ve en la campana.
         break;
     }
   }
@@ -274,6 +281,33 @@ class FcmService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[FCM] Error al guardar token en backend: $e');
+    }
+  }
+
+  static bool _webAdminRegistered = false;
+
+  /// Push en el navegador, solo para el panel admin: pide permiso de
+  /// notificaciones y registra el token del navegador. Antes la web nunca
+  /// registraba token, y como el panel se usa desde el navegador ningún admin
+  /// recibía las alertas (pagos por aprobar, retiros, emergencias).
+  /// Necesita web/firebase-messaging-sw.js. [onMessage] se llama con cada
+  /// aviso que llega con la pestaña abierta (Firebase no lo muestra solo).
+  static Future<void> registerWebPushForAdmin({void Function(RemoteMessage)? onMessage}) async {
+    if (!kIsWeb || _webAdminRegistered) return;
+    _webAdminRegistered = true;
+    try {
+      final settings = await _fcm.requestPermission(alert: true, badge: true, sound: true);
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        if (kDebugMode) debugPrint('[FCM] El navegador no permite notificaciones');
+        return;
+      }
+      if (onMessage != null) FirebaseMessaging.onMessage.listen(onMessage);
+      final token = await _fcm.getToken();
+      if (token != null) await _saveTokenToBackend(token);
+      _fcm.onTokenRefresh.listen(_saveTokenToBackend);
+    } catch (e) {
+      _webAdminRegistered = false;
+      if (kDebugMode) debugPrint('[FCM] No se pudo registrar el push web del admin: $e');
     }
   }
 

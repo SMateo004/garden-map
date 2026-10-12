@@ -92,6 +92,21 @@ class NotificationKind {
     'PHONE_CHANGE_AUTHORIZED': NotificationKind(NotificationTopic.account, GIcon.telefono, StoryTone.good),
     'PHONE_OTP_MANUAL_HELP': NotificationKind(NotificationTopic.account, GIcon.telefono, StoryTone.waiting),
     'EMAIL_OTP_MANUAL_HELP': NotificationKind(NotificationTopic.account, GIcon.correo, StoryTone.waiting),
+    // Alertas para el admin (sendPushToAdmins → adminInboxType en el backend)
+    'ADMIN_PAYMENT': NotificationKind(NotificationTopic.money, GIcon.pagarQr, StoryTone.waiting),
+    'ADMIN_EXTENSION': NotificationKind(NotificationTopic.money, GIcon.pagarQr, StoryTone.waiting),
+    'ADMIN_WITHDRAWAL': NotificationKind(NotificationTopic.money, GIcon.retiro, StoryTone.waiting),
+    'ADMIN_URGENT': NotificationKind(NotificationTopic.problem, GIcon.emergencia, StoryTone.alert),
+    'ADMIN_INCIDENT': NotificationKind(NotificationTopic.problem, GIcon.advertencia, StoryTone.alert),
+    'ADMIN_DISPUTE': NotificationKind(NotificationTopic.problem, GIcon.enRevision, StoryTone.alert),
+    'ADMIN_RATING': NotificationKind(NotificationTopic.problem, GIcon.estrella, StoryTone.alert),
+    'ADMIN_CHAT_REPORT': NotificationKind(NotificationTopic.problem, GIcon.reportar, StoryTone.alert),
+    'ADMIN_BLOCKCHAIN': NotificationKind(NotificationTopic.problem, GIcon.advertencia, StoryTone.alert),
+    'ADMIN_VERIFY_PHONE': NotificationKind(NotificationTopic.account, GIcon.telefono, StoryTone.waiting),
+    'ADMIN_VERIFY_EMAIL': NotificationKind(NotificationTopic.account, GIcon.correo, StoryTone.waiting),
+    'ADMIN_NIT': NotificationKind(NotificationTopic.account, GIcon.documento, StoryTone.info),
+    'ADMIN_CAREGIVER': NotificationKind(NotificationTopic.account, GIcon.huella, StoryTone.info),
+    'ADMIN_ALERT': NotificationKind(NotificationTopic.problem, GIcon.notificaciones, StoryTone.info),
     // Novedades
     'ZONE_NOW_AVAILABLE': NotificationKind(NotificationTopic.news, GIcon.mapa, StoryTone.good),
     'INFO': NotificationKind(NotificationTopic.news, GIcon.info, StoryTone.info),
@@ -127,3 +142,20 @@ class NotificationKind {
     return out.toString().replaceAll(RegExp(r'\s{2,}'), ' ').trim();
   }
 }
+
+/// Pestaña del panel admin a la que lleva una alerta para el admin (el `type`
+/// ADMIN_* de su bandeja, o el `adminType` del push). Las claves las entiende
+/// AdminPanelScreen (`/admin?tab=…`). null = abrir el panel sin cambiar de pestaña.
+String? adminTabFor(String type) => switch (type) {
+      'ADMIN_PAYMENT' || 'ADMIN_EXTENSION' => 'pagos',
+      'ADMIN_WITHDRAWAL' => 'retiros',
+      'ADMIN_DISPUTE' || 'ADMIN_RATING' => 'disputas',
+      'ADMIN_URGENT' || 'ADMIN_INCIDENT' => 'en-vivo',
+      'ADMIN_CHAT_REPORT' => 'reportes-chat',
+      'ADMIN_BLOCKCHAIN' => 'blockchain',
+      'ADMIN_VERIFY_PHONE' => 'verif-telefono',
+      'ADMIN_VERIFY_EMAIL' => 'verif-correo',
+      'ADMIN_NIT' => 'verif-nit',
+      'ADMIN_CAREGIVER' => 'solicitudes',
+      _ => null,
+    };

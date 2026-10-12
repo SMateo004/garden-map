@@ -10,6 +10,7 @@ import { validateBankInfo, persistBankInfo, isPhoneBasedBankType } from './bank-
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { EARNING_FILTERS, SPENDING_FILTERS } from './wallet-filters.js';
 import { requirePinToken } from '../../middleware/require-pin.middleware.js';
+import { notifyAdmins } from '../../services/firebase.service.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -345,17 +346,11 @@ router.post(
     const requester = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
     const requesterName = requester ? `${requester.firstName} ${requester.lastName}` : 'Un usuario';
 
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
-    await Promise.all(admins.map(admin =>
-      prisma.notification.create({
-        data: {
-          userId: admin.id,
-          title: '💰 Solicitud de retiro',
-          message: `${requesterName} solicita retirar Bs ${parsedAmount} a ${destinationDetail!}`,
-          type: 'SYSTEM',
-        },
-      })
-    ));
+    await notifyAdmins(
+      '💰 Solicitud de retiro',
+      `${requesterName} solicita retirar Bs ${parsedAmount} a ${destinationDetail!}`,
+      { type: 'WITHDRAWAL_REQUEST' }
+    );
 
     await prisma.notification.create({
       data: {

@@ -127,8 +127,11 @@ router.post('/bookings/test', adminController.createTestBooking);
 /** DELETE /api/admin/bookings/:id/test — borra una reserva de prueba (createdByAdmin=true). */
 router.delete('/bookings/:id/test', adminController.deleteTestBooking);
 
-/** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación. */
+/** GET /api/admin/extension-payments-pending — extensiones de paseo y hospedaje pendientes de aprobación. */
 router.get('/extension-payments-pending', adminController.getExtensionPaymentsPending);
+
+/** GET /api/admin/pending-counts — pendientes por pestaña (contadores del menú del panel). */
+router.get('/pending-counts', adminController.getPendingCounts);
 
 /** POST /api/admin/bookings/:id/approve-extension-payment — aprobar extensión manual. */
 router.post('/bookings/:id/approve-extension-payment', adminController.approveExtensionPayment);

@@ -38,11 +38,19 @@ import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../narrative/booking_story.dart';
+import '../../narrative/notification_kind.dart';
+import '../../services/fcm_service.dart';
+import '../../widgets/notification_bell.dart';
+import 'package:firebase_messaging/firebase_messaging.dart' show RemoteMessage;
 import '../../theme/garden_motion.dart';
 import '../../design/garden_marketplace_banner.dart';
 
 class AdminPanelScreen extends StatefulWidget {
-  const AdminPanelScreen({super.key});
+  /// Clave de la pestaña a abrir (`/admin?tab=pagos`), la que manda tocar una
+  /// alerta del admin — ver adminTabFor en notification_kind.dart.
+  final String? initialTab;
+
+  const AdminPanelScreen({super.key, this.initialTab});
 
   @override
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
@@ -76,24 +84,158 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final TextEditingController _paymentsSearchCtrl = TextEditingController();
   Timer? _paymentsRefreshTimer;
 
+  /// Pendientes por pestaña (GET /admin/pending-counts): los contadores del
+  /// menú. Se consultan cada 20 s en cualquier pestaña — antes, un pago nuevo
+  /// solo se veía estando parado en "Pagos".
+  Map<String, int> _pendingCounts = const {};
+
+  /// Pestaña del menú → clave de /admin/pending-counts.
+  static const _countKeyByTab = {
+    'Pagos': 'payments',
+    'Retiros': 'withdrawals',
+    'Disputas': 'disputes',
+    'Solicitudes': 'caregivers',
+    'Identidad': 'identity',
+    'Reportes de chat': 'chatReports',
+  };
+
+  /// Clave de la URL (`/admin?tab=…`, ver adminTabFor) → pestaña del menú.
+  static const _tabBySlug = {
+    'pagos': 'Pagos',
+    'retiros': 'Retiros',
+    'disputas': 'Disputas',
+    'en-vivo': 'Administración',
+    'reportes-chat': 'Reportes de chat',
+    'blockchain': 'Blockchain',
+    'verif-telefono': 'Verif. telefónica',
+    'verif-correo': 'Verif. de correo',
+    'verif-nit': 'Verif. de NIT',
+    'solicitudes': 'Solicitudes',
+  };
+
+  static int _tabIndex(String label) => _tabs.indexWhere((t) => t.$1 == label);
+
+  int _countForTab(String label) => _pendingCounts[_countKeyByTab[label]] ?? 0;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {
     super.initState();
+    _openTabFromUrl(widget.initialTab);
     _initAdmin();
     // Pagos pendientes de aprobación manual deben verse sin que el admin
-    // tenga que refrescar la página — solo consulta mientras esa pestaña
-    // está activa, para no pegarle al backend de fondo sin necesidad.
+    // tenga que refrescar la página. Los contadores se consultan siempre;
+    // la lista de pagos completa, solo con esa pestaña abierta.
     _paymentsRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_selectedTab == 3 && mounted) _loadPayments();
+      if (!mounted) return;
+      _loadPendingCounts();
+      if (_selectedTab == 3) _loadPayments();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminPanelScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Tocar una alerta con el panel ya abierto navega a /admin?tab=… otra vez.
+    if (widget.initialTab != oldWidget.initialTab) {
+      setState(() => _openTabFromUrl(widget.initialTab));
+    }
+  }
+
+  void _openTabFromUrl(String? slug) {
+    final label = _tabBySlug[slug];
+    final i = label == null ? -1 : _tabIndex(label);
+    if (i >= 0) _selectedTab = i;
+  }
+
+  void _selectTab(int i) {
+    setState(() => _selectedTab = i);
+    _loadPendingCounts();
   }
 
   Future<void> _initAdmin() async {
     await _loadAdminToken();
-    await _loadAllData();
+    await Future.wait([_loadAllData(), _loadPendingCounts()]);
+    // Push en el navegador para el admin (antes la web nunca registraba
+    // token y las alertas no le llegaban a nadie).
+    FcmService.registerWebPushForAdmin(onMessage: _onForegroundAlert);
   }
+
+  /// Aviso que llega con el panel abierto: Firebase no lo muestra solo en web.
+  void _onForegroundAlert(RemoteMessage m) {
+    _loadPendingCounts();
+    final title = NotificationKind.clean(m.notification?.title ?? 'Nueva alerta');
+    final tab = adminTabFor(m.data['adminType'] as String? ?? '');
+    _showAlertSnack(title, m.notification?.body, tab == null ? null : _tabBySlug[tab]);
+  }
+
+  Future<void> _loadPendingCounts() async {
+    if (_adminToken.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/admin/pending-counts'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final body = jsonDecode(res.body);
+      if (body['success'] != true || !mounted) return;
+      final next = (body['data'] as Map).map((k, v) => MapEntry(k as String, (v as num).toInt()));
+      final prev = _pendingCounts;
+      setState(() => _pendingCounts = next);
+      if (prev.isEmpty) return; // primera carga: nada "nuevo" que avisar
+      final grew = next.keys.where((k) => next[k]! > (prev[k] ?? 0)).toList();
+      if (grew.isEmpty) return;
+      if (grew.contains('payments')) _loadPayments();
+      if (grew.contains('withdrawals')) _loadWithdrawals();
+      if (grew.contains('disputes')) _loadDisputes();
+      final key = grew.first;
+      final tabLabel = _countKeyByTab.entries.firstWhere((e) => e.value == key).key;
+      _showAlertSnack('Nuevo en $tabLabel', _pendingLabel(key, next[key]!), tabLabel);
+    } catch (e) {
+      debugPrint('Error loading pending counts: $e');
+    }
+  }
+
+  static String _pendingLabel(String key, int n) {
+    final (one, many) = switch (key) {
+      'payments' => ('pago por aprobar', 'pagos por aprobar'),
+      'withdrawals' => ('retiro por procesar', 'retiros por procesar'),
+      'disputes' => ('disputa abierta', 'disputas abiertas'),
+      'caregivers' => ('solicitud de cuidador', 'solicitudes de cuidador'),
+      'identity' => ('verificación de identidad', 'verificaciones de identidad'),
+      _ => ('reporte de chat', 'reportes de chat'),
+    };
+    return n == 1 ? 'Hay 1 $one' : 'Hay $n $many';
+  }
+
+  void _showAlertSnack(String title, String? body, String? tabLabel) {
+    if (!mounted) return;
+    final i = tabLabel == null ? -1 : _tabIndex(tabLabel);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 8),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+        if (body != null && body.isNotEmpty) Text(body, maxLines: 2, overflow: TextOverflow.ellipsis),
+      ]),
+      action: i < 0 ? null : SnackBarAction(label: 'Ver', onPressed: () => _selectTab(i)),
+    ));
+  }
+
+  /// Pastilla con la cantidad pendiente junto al nombre de la pestaña.
+  Widget _countPill(int n, {bool onPrimary = false}) => Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+        constraints: const BoxConstraints(minWidth: 20),
+        decoration: BoxDecoration(
+          color: onPrimary ? Colors.white : GardenColors.error,
+          borderRadius: BorderRadius.circular(GardenRadius.full),
+        ),
+        child: Text(n > 99 ? '99+' : '$n',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: onPrimary ? GardenColors.primary : Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+      );
 
   Future<void> _loadAdminToken() async {
     final token = AuthState.token;
@@ -969,6 +1111,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ],
             ),
             actions: [
+              // Bandeja de alertas del admin: pagos, retiros, emergencias…
+              // (sendPushToAdmins las deja acá aunque nadie tenga push).
+              if (_adminToken.isNotEmpty)
+                NotificationBell(key: ValueKey(_adminToken), token: _adminToken, baseUrl: _baseUrl),
               IconButton(
                 icon: const GardenIcon(GIcon.salir, size: GIconSize.md, inheritColor: true),
                 color: textColor,
@@ -1137,7 +1283,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         borderRadius: BorderRadius.circular(10),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(10),
-                          onTap: () => setState(() => _selectedTab = i),
+                          onTap: () => _selectTab(i),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1158,6 +1304,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   ),
                                 ),
                               ),
+                              if (_countForTab(label) > 0) _countPill(_countForTab(label)),
                             ]),
                           ),
                         ),
@@ -1188,7 +1335,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             final tab = entry.value;
             final selected = _selectedTab == i;
             return GestureDetector(
-              onTap: () => setState(() => _selectedTab = i),
+              onTap: () => _selectTab(i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.only(right: 8),
@@ -1211,6 +1358,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       fontSize: 12,
                       fontWeight: selected ? FontWeight.bold : FontWeight.w400,
                     )),
+                    if (_countForTab(tab.$1) > 0) _countPill(_countForTab(tab.$1), onPrimary: selected),
                   ],
                 ),
               ),
@@ -3052,7 +3200,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           Row(children: [
             const GardenIcon(GIcon.alarma, size: GIconSize.sm, color: Colors.deepOrange),
             const SizedBox(width: 6),
-            const Text('Extensiones de paseo', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
+            const Text('Extensiones por aprobar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -3079,12 +3227,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               final extensionId = ext['extensionId'] as String;
               final paymentId = ext['paymentId'] as String? ?? '—';
               final method = ext['method'] as String? ?? 'manual';
+              final isHospedaje = ext['serviceType'] == 'HOSPEDAJE';
               final minutes = (ext['additionalMinutes'] as num?)?.toInt() ?? 0;
+              final nights = (ext['additionalDays'] as num?)?.toInt() ?? 0;
+              final extra = isHospedaje ? '+$nights noche${nights == 1 ? '' : 's'}' : '+$minutes min';
               final amount = ext['extraAmount'];
               final petName = ext['petName'] as String? ?? '—';
               final client = ext['clientEmail'] as String? ?? ext['clientName'] as String? ?? '—';
               final caregiver = ext['caregiverName'] as String? ?? '—';
-              final walkDate = ext['walkDate'] as String? ?? '—';
+              final walkDate = isHospedaje
+                  ? '${ext['startDate'] ?? '—'} → ${ext['endDate'] ?? '—'}'
+                  : ext['walkDate'] as String? ?? '—';
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
@@ -3102,7 +3255,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     child: Row(children: [
                       const GardenIcon(GIcon.alarma, size: GIconSize.xs, color: Colors.deepOrange),
                       const SizedBox(width: 6),
-                      const Text('Extensión de paseo', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                      Text(isHospedaje ? 'Extensión de hospedaje' : 'Extensión de paseo', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -3127,7 +3280,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                           Text(walkDate, style: TextStyle(color: subtextColor, fontSize: 12)),
                         ])),
                         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                          Text('+$minutes min', style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.w900, fontSize: 18)),
+                          Text(extra, style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.w900, fontSize: 18)),
                           Text('Bs $amount', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 14)),
                         ]),
                       ]),

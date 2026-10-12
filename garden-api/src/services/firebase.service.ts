@@ -42,7 +42,8 @@ export async function sendPush(
   fcmToken: string,
   title: string,
   body: string,
-  data?: Record<string, string>
+  data?: Record<string, string>,
+  webLink?: string
 ): Promise<void> {
   if (!fcmToken) return;
   const messaging = await getMessaging();
@@ -53,6 +54,8 @@ export async function sendPush(
       token: fcmToken,
       notification: { title, body },
       ...(data ? { data } : {}),
+      // Tokens del navegador (panel admin): a dónde lleva tocar el aviso.
+      ...(webLink ? { webpush: { fcmOptions: { link: webLink } } } : {}),
       android: {
         priority: 'high',
         notification: { sound: 'default', channelId: 'garden_main' },
@@ -132,9 +135,38 @@ export async function sendPushToUser(
 }
 
 /**
- * Notifica a TODOS los usuarios con rol ADMIN (los que tengan token registrado).
- * Usado para alertas que requieren atención inmediata (ej. un pago quedó
- * pendiente de aprobación manual) — nunca bloquea el flujo que la dispara.
+ * Tipo con que el aviso queda en la bandeja del admin (Notification.type,
+ * VarChar 20). La app lo usa para el icono y para abrir la pestaña del panel
+ * que corresponde (ver adminTabFor en notification_bell.dart). El `type` del
+ * push NO cambia: la app del celular ya lo usa (ej. la alarma de emergencia).
+ */
+export function adminInboxType(pushType?: string): string {
+  const t = pushType ?? '';
+  if (t.startsWith('ADMIN_') && t.length <= 20) return t;
+  if (t === 'CLIENT_SOS_URGENT' || t === 'SERVICE_INCIDENT_URGENT') return 'ADMIN_URGENT';
+  if (t === 'WALKIN_INCIDENT') return 'ADMIN_INCIDENT';
+  if (t === 'EMAIL_OTP_MANUAL_HELP') return 'ADMIN_VERIFY_EMAIL';
+  if (t === 'PHONE_OTP_MANUAL_HELP') return 'ADMIN_VERIFY_PHONE';
+  if (t === 'CHAT_REPORT') return 'ADMIN_CHAT_REPORT';
+  if (t.startsWith('DISPUTE')) return 'ADMIN_DISPUTE';
+  if (t.startsWith('BLOCKCHAIN')) return 'ADMIN_BLOCKCHAIN';
+  if (t.startsWith('EXTENSION')) return 'ADMIN_EXTENSION';
+  if (t.startsWith('WITHDRAWAL')) return 'ADMIN_WITHDRAWAL';
+  if (t.startsWith('PAYMENT') || t.startsWith('SIP')) return 'ADMIN_PAYMENT';
+  if (t === 'CAREGIVER_SUBMIT') return 'ADMIN_CAREGIVER';
+  if (t.startsWith('NIT')) return 'ADMIN_NIT';
+  if (t === 'LOW_RATING') return 'ADMIN_RATING';
+  return 'ADMIN_ALERT';
+}
+
+/**
+ * Avisa a TODOS los admins por la app: deja el aviso en su bandeja (la
+ * campana del panel admin, que lo muestra aunque nadie tenga push activo) y
+ * manda push a los que tengan token — celular o navegador del panel.
+ *
+ * Antes solo mandaba push, y ningún admin tenía token (el panel se usa desde
+ * el navegador, que nunca registraba uno): todas las alertas se perdían.
+ * Nunca lanza ni bloquea el flujo que la dispara.
  */
 export async function sendPushToAdmins(
   title: string,
@@ -143,16 +175,40 @@ export async function sendPushToAdmins(
 ): Promise<void> {
   try {
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', fcmToken: { not: null } },
-      select: { fcmToken: true },
+      where: { role: 'ADMIN' },
+      select: { id: true, fcmToken: true },
     });
+    if (admins.length === 0) {
+      logger.error('[ADMIN-ALERT] No hay admins para avisar', { title });
+      return;
+    }
+    const inboxType = adminInboxType(data?.type);
+    await prisma.notification.createMany({
+      data: admins.map((a) => ({
+        userId: a.id,
+        title: title.slice(0, 200),
+        message: body,
+        type: inboxType,
+        bookingId: data?.bookingId ?? null,
+      })),
+    });
+    const pushData = { ...(data ?? {}), adminType: inboxType };
     await Promise.all(
       admins
         .map((a) => a.fcmToken)
         .filter((t): t is string => !!t)
-        .map((token) => sendPush(token, title, body, data))
+        .map((token) => sendPush(token, title, body, pushData, adminPanelLink()))
     );
   } catch (err: any) {
     logger.warn('[FCM] sendPushToAdmins error', { error: err.message });
   }
+}
+
+/** Alias con el nombre que describe lo que hace hoy (bandeja + push). */
+export const notifyAdmins = sendPushToAdmins;
+
+/** Al tocar el push en el navegador, abre el panel admin. */
+function adminPanelLink(): string | undefined {
+  const base = process.env.FRONTEND_URL ?? '';
+  return base.startsWith('https://') ? `${base.replace(/\/$/, '')}/app.html#/admin` : undefined;
 }

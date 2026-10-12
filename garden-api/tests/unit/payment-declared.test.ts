@@ -149,7 +149,11 @@ describe('aprobación automática al vencer la ventana', () => {
     expect(upd.where).toMatchObject({ status: 'PAYMENT_PENDING_APPROVAL', paymentDeclaredAt: { not: null }, paidAt: null });
     expect(upd.data).toMatchObject({ status: 'WAITING_CAREGIVER_APPROVAL' });
     expect(upd.data.paymentAutoApprovedAt).toBeInstanceOf(Date);
-    expect(firebase.sendPushToAdmins).toHaveBeenCalledWith(expect.stringMatching(/automáticamente/), expect.any(String));
+    expect(firebase.sendPushToAdmins).toHaveBeenCalledWith(
+      expect.stringMatching(/automáticamente/),
+      expect.any(String),
+      expect.objectContaining({ type: 'PAYMENT_AUTO_APPROVED', bookingId: 'b1' }),
+    );
   });
 
   it('si un admin o el banco la resolvió en el medio, no la cuenta como aprobada', async () => {

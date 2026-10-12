@@ -621,6 +621,12 @@ export async function addVisitEvent(ownerUserId: string, actingUserId: string, v
     await prisma.adminNotification.create({
       data: { type: 'WALKIN_INCIDENT', caregiverId: profile.id, bookingId: null },
     }).catch((err) => logger.error('No se pudo crear AdminNotification de incidente walk-in', { error: (err as Error).message }));
+    const { notifyAdmins } = await import('../../services/firebase.service.js');
+    notifyAdmins(
+      '⚠️ Incidente con un cliente walk-in',
+      `${profile.companyName ?? 'Una empresa'} reportó una novedad con ${petName}.${body.note ? ` ${body.note}` : ''}`.slice(0, 300),
+      { type: 'WALKIN_INCIDENT' }
+    ).catch(() => {});
   }
 
   if (body.type === 'INCIDENT_RESOLVED' && client.email) {
