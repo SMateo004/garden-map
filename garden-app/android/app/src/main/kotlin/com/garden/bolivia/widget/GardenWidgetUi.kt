@@ -19,17 +19,17 @@ import java.util.Calendar
 
 /**
  * Lenguaje visual de los widgets de Android, el mismo de la app (ver
- * lib/theme/garden_theme.dart y lib/design/garden_service.dart): crema con
- * texto bosque en modo claro, bosque profundo en oscuro — sigue el modo del
- * teléfono —, y cada servicio con su ícono propio (exportado de
+ * lib/theme/garden_theme.dart y lib/design/garden_service.dart): fondo
+ * crema / carbón según el modo del teléfono, textos secundarios en gris
+ * plomo, y cada servicio con su ícono propio (exportado de
  * GardenServiceIcon, res/drawable-nodpi + drawable-night-nodpi) y su color.
  * Antes: tarjeta gris #1C1C1C fija y emojis 🐕 😴 ✅ (guardería salía como paseo).
  */
 internal object GardenWidgetUi {
-    val surface = ColorProvider(day = Color(0xFFFAF7F2), night = Color(0xFF162610))
-    val text = ColorProvider(day = Color(0xFF1E2D0F), night = Color(0xFFF0F7E8))
-    val subtext = ColorProvider(day = Color(0xFF5C7238), night = Color(0xFFA9C48A))
-    val track = ColorProvider(day = Color(0xFFE6E0D4), night = Color(0xFF2B4220))
+    val surface = ColorProvider(day = Color(0xFFFAF7F2), night = Color(0xFF1A1D1B))
+    val text = ColorProvider(day = Color(0xFF1E2D0F), night = Color(0xFFEEF0EE))
+    val subtext = ColorProvider(day = Color(0xFF5F635E), night = Color(0xFFA3A9A4))
+    val track = ColorProvider(day = Color(0xFFE6E0D4), night = Color(0xFF333834))
     val overtime = ColorProvider(day = Color(0xFFB87800), night = Color(0xFFFFC24D))
     val primary = ColorProvider(day = Color(0xFF778C43), night = Color(0xFFA3BA62))
 

@@ -107,9 +107,11 @@ private struct QuickSearchProvider: TimelineProvider {
 
 private struct Palette {
     let dark: Bool
-    var surface: Color { dark ? .gardenForest : Color(red: 250/255, green: 247/255, blue: 242/255) }
-    var text: Color { dark ? .gardenTextOnDark : Color(red: 30/255, green: 45/255, blue: 15/255) }
-    var sub: Color { dark ? .gardenSubOnDark : Color(red: 92/255, green: 114/255, blue: 56/255) }
+    // Crema de siempre en claro, carbón en oscuro (prueba oct 2026); textos
+    // secundarios en gris plomo. El verde queda en íconos y acentos.
+    var surface: Color { dark ? Color(red: 26/255, green: 29/255, blue: 27/255) : Color(red: 250/255, green: 247/255, blue: 242/255) }
+    var text: Color { dark ? Color(red: 238/255, green: 240/255, blue: 238/255) : Color(red: 30/255, green: 45/255, blue: 15/255) }
+    var sub: Color { dark ? Color(red: 163/255, green: 169/255, blue: 164/255) : Color(red: 95/255, green: 99/255, blue: 94/255) }
     var primary: Color { dark ? Color(red: 163/255, green: 186/255, blue: 98/255) : .gardenOlive }
 }
 

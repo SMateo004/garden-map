@@ -1217,7 +1217,7 @@ class _GardenErrorWidget extends StatelessWidget {
     final isDark = themeNotifier.isDark;
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF121212) : const Color(0xFFF2EDE4),
+          isDark ? const Color(0xFF121212) : GardenColors.lightBackground,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

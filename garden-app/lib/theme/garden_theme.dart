@@ -17,19 +17,24 @@ class GardenColors {
   static const lightBackground      = Color(0xFFF2EDE4); // crema cálida profunda
   static const lightSurface         = Color(0xFFFAF7F2); // crema clara — reemplaza blanco puro
   static const lightSurfaceElevated = Color(0xFFF5F0E8); // crema beige — tarjetas elevadas
-  static const lightBorder          = Color(0xFFDDD5C8); // beige cálido (ligeramente más visible)
+  // Prueba (oct 2026): bordes grises y textos secundarios en gris plomo sobre
+  // el crema de siempre (antes: borde #DDD5C8 beige, secundario #5C7238 oliva,
+  // pista #99AC75 lima). El crema y el verde de marca no cambian.
+  static const lightBorder          = Color(0xFFD8D6D0); // gris cálido
   static const lightTextPrimary     = Color(0xFF1E2D0F); // casi negro con matiz verde
-  static const lightTextSecondary   = Color(0xFF5C7238); // oliva medio
-  static const lightTextHint        = Color(0xFF99AC75); // lima apagada
+  static const lightTextSecondary   = Color(0xFF5F635E); // gris plomo
+  static const lightTextHint        = Color(0xFFA0A29C); // gris apagado
 
   // ── DARK MODE ───────────────────────────────────────────────────────────
-  static const darkBackground       = Color(0xFF0D1A07); // verde bosque profundo
-  static const darkSurface          = Color(0xFF162610); // superficie bosque
-  static const darkSurfaceElevated  = Color(0xFF1F3317); // ligeramente más claro
-  static const darkBorder           = Color(0xFF334D24); // borde verde musgo
-  static const darkTextPrimary      = Color(0xFFF0F7E8); // blanco-crema con matiz verde
-  static const darkTextSecondary    = Color(0xFF8CAB6A); // lima apagada
-  static const darkTextHint         = Color(0xFF506038); // verde oscuro
+  // Prueba (oct 2026): carbón neutro en vez de bosque. Antes: #0D1A07,
+  // #162610, #1F3317, #334D24, textos #F0F7E8 / #8CAB6A / #506038.
+  static const darkBackground       = Color(0xFF121413); // carbón
+  static const darkSurface          = Color(0xFF1A1D1B); // superficie carbón
+  static const darkSurfaceElevated  = Color(0xFF222624); // ligeramente más claro
+  static const darkBorder           = Color(0xFF333834); // borde gris
+  static const darkTextPrimary      = Color(0xFFEEF0EE); // casi blanco
+  static const darkTextSecondary    = Color(0xFFA3A9A4); // gris claro
+  static const darkTextHint         = Color(0xFF5F6661); // gris oscuro
 
   // ── COLORES DE MARCA (shared) ───────────────────────────────────────────
   static const primary      = Color(0xFF778C43); // verde oliva — identidad GARDEN

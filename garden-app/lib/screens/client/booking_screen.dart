@@ -1216,7 +1216,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               : BoxDecoration(
                                   color: ((atMax && !isSelected) || sizeNotAccepted)
                                       ? (isDark ? Colors.white.withValues(alpha: 0.02) : const Color(0xFFF5F5F5))
-                                      : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFFAF7F2).withValues(alpha: 0.90)),
+                                      : (isDark ? Colors.white.withValues(alpha: 0.05) : GardenColors.lightSurface.withValues(alpha: 0.90)),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(color: ((atMax && !isSelected) || sizeNotAccepted) ? borderColor.withValues(alpha: 0.4) : borderColor, width: 1.0),
                                 ),
