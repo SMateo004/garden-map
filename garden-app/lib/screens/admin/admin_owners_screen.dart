@@ -7,6 +7,7 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_status_pill.dart';
 import '../../narrative/booking_story.dart';
 import '../../design/garden_service.dart';
+import 'admin_delete_account.dart';
 
 class AdminOwnersScreen extends StatefulWidget {
   final String adminToken;
@@ -110,8 +111,8 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
     }
   }
 
-  void _openOwnerDetail(Map<String, dynamic> owner) {
-    showModalBottomSheet(
+  Future<void> _openOwnerDetail(Map<String, dynamic> owner) async {
+    final deleted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -121,6 +122,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
         baseUrl: _baseUrl,
       ),
     );
+    if (deleted == true && mounted) _loadOwners(reset: true);
   }
 
   @override
@@ -504,6 +506,18 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
     }
   }
 
+  Future<void> _deleteAccount() async {
+    final name = (_data?['name'] as String? ?? '').trim();
+    final deleted = await deleteAccountFromAdmin(
+      context,
+      deletePath: 'admin/users/${widget.ownerId}',
+      name: name.isEmpty ? 'Este dueño' : name,
+      adminToken: widget.adminToken,
+      baseUrl: widget.baseUrl,
+    );
+    if (deleted && mounted) Navigator.pop(context, true);
+  }
+
   Future<void> _loadDetail() async {
     try {
       final res = await http.get(
@@ -575,9 +589,11 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   const SizedBox(height: 10),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                      OutlinedButton.icon(
                         onPressed: _resettingPin ? null : _confirmResetPin,
                         icon: _resettingPin
                             ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
@@ -588,6 +604,17 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         ),
                       ),
+                      OutlinedButton.icon(
+                        onPressed: _deleteAccount,
+                        icon: const GardenIcon(GIcon.eliminar, size: GIconSize.sm, inheritColor: true),
+                        label: const Text('Eliminar cuenta', style: TextStyle(fontSize: 12.5)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: GardenColors.error,
+                          side: const BorderSide(color: GardenColors.error),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        ),
+                      ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),

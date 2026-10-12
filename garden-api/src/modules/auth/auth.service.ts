@@ -1502,10 +1502,17 @@ export async function finalizeAccountDeletion(userId: string): Promise<void> {
       email: `${deletedTag}@garden.deleted`,
       passwordHash: '',
       phone: `${deletedTag}`,
+      fcmToken: null,
       isDeleted: true,
       deletedAt: new Date(),
     },
   });
+
+  // Cerrar todas las sesiones: antes los tokens de la cuenta eliminada
+  // seguían sirviendo hasta vencer (7 días el access, 30 el refresh).
+  await revokeAllRefreshTokens(userId);
+  const { revokeUserSessions } = await import('../../services/token-blacklist.service.js');
+  revokeUserSessions(userId);
 
   const caregiverProfile = await prisma.caregiverProfile.findUnique({ where: { userId } });
   if (caregiverProfile) {

@@ -176,6 +176,17 @@ export const deleteCaregiver = asyncHandler(async (req: Request, res: Response) 
   const body = deleteCaregiverSchema.parse(req.body);
   const adminId = req.user!.userId;
   const result = await adminService.deleteCaregiver(profileId, adminId, body as any);
+  auditLog({ userId: adminId, action: 'USER_DELETE', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/** DELETE /api/admin/users/:userId — eliminar la cuenta de un dueño o cuidador (contraseña de admin + motivo). */
+export const deleteUserAccount = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.params.userId!;
+  const body = deleteCaregiverSchema.parse(req.body);
+  const adminId = req.user!.userId;
+  const result = await adminService.deleteUserAccountByAdmin(userId, adminId, body as any);
+  auditLog({ userId: adminId, action: 'USER_DELETE', entity: 'User', entityId: userId, ip: req.ip });
   res.json({ success: true, data: result });
 });
 

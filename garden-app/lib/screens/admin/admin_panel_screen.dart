@@ -11,6 +11,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import 'admin_owners_screen.dart';
+import 'admin_delete_account.dart';
 import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
@@ -688,87 +689,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  /// Misma baja completa que la de un dueño (admin_delete_account.dart).
   Future<void> _deleteCaregiver(String id, String nombre) async {
-    final reasonController = TextEditingController();
-    final passwordController = TextEditingController();
-    bool obscure = true;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(children: [
-            const GardenIcon(GIcon.eliminar, size: GIconSize.lg, color: GardenColors.error),
-            const SizedBox(width: 8),
-            Expanded(child: Text('Eliminar cuidador', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 17, fontWeight: FontWeight.bold))),
-          ]),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Se eliminará permanentemente el perfil de $nombre y toda su información. Esta acción NO se puede deshacer.', style: TextStyle(color: GardenColors.error, fontSize: 13, height: 1.4)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: 'Motivo de eliminación',
-                    hintText: 'Ej: Perfil falso, incumplimiento de normas…',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: passwordController,
-                  obscureText: obscure,
-                  decoration: InputDecoration(
-                    labelText: 'Tu contraseña de admin',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    suffixIcon: IconButton(
-                      icon: GardenIcon(obscure ? GIcon.ocultar : GIcon.ver, size: GIconSize.lg, inheritColor: true),
-                      onPressed: () => setS(() => obscure = !obscure),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
-              onPressed: () {
-                if (reasonController.text.trim().isEmpty || passwordController.text.isEmpty) return;
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Eliminar definitivamente'),
-            ),
-          ],
-        ),
-      ),
+    final deleted = await deleteAccountFromAdmin(
+      context,
+      deletePath: 'admin/caregivers/$id',
+      name: nombre.isEmpty ? 'Este cuidador' : nombre,
+      adminToken: _adminToken,
+      baseUrl: _baseUrl,
     );
-
-    if (confirm != true) return;
-    try {
-      final response = await http.delete(
-        Uri.parse('$_baseUrl/admin/caregivers/$id'),
-        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'reason': reasonController.text.trim(), 'adminPassword': passwordController.text}),
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadCaregivers();
-        // La eliminación se completó tal cual la pidió el admin — no es un error.
-        GardenSnackBar.warning(context, 'Perfil de $nombre eliminado permanentemente');
-      } else {
-        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al eliminar');
-      }
-    } catch (e) {
-      GardenErrorDialog.show(context, 'Error: $e');
-    }
+    if (deleted) await _loadCaregivers();
   }
 
   Future<void> _revokeCaregiver(String id) async {
@@ -1784,7 +1714,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               const SizedBox(width: 8),
               IconButton(
                 icon: const GardenIcon(GIcon.eliminar, size: GIconSize.md, color: GardenColors.error),
-                tooltip: 'Eliminar perfil permanentemente',
+                tooltip: 'Eliminar cuenta',
                 style: IconButton.styleFrom(
                   side: const BorderSide(color: GardenColors.error),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

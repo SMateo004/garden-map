@@ -370,8 +370,8 @@ export async function listCaregivers(
   const skip = (page - 1) * limit;
   const where: {
     status?: { in?: CaregiverStatus[]; equals?: CaregiverStatus };
-    user?: { OR: Array<{ firstName?: object; lastName?: object; email?: object }> };
-  } = {};
+    user: { isDeleted: boolean; OR?: Array<{ firstName?: object; lastName?: object; email?: object }> };
+  } = { user: { isDeleted: false } }; // las cuentas eliminadas no se listan
   if (status === 'pendientes') {
     where.status = { in: [CaregiverStatus.PENDING_REVIEW, CaregiverStatus.NEEDS_REVISION] };
   } else if (status && Object.values(CaregiverStatus).includes(status as CaregiverStatus)) {
@@ -379,13 +379,11 @@ export async function listCaregivers(
   }
   if (search?.trim()) {
     const q = search.trim();
-    where.user = {
-      OR: [
-        { firstName: { contains: q, mode: 'insensitive' } },
-        { lastName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-      ],
-    };
+    where.user.OR = [
+      { firstName: { contains: q, mode: 'insensitive' } },
+      { lastName: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+    ];
   }
   const [caregivers, total] = await Promise.all([
     prisma.caregiverProfile.findMany({
@@ -2690,72 +2688,95 @@ export async function activateCaregiver(
   return { success: true, suspended: false };
 }
 
-/** Eliminar cuidador completamente (requiere contraseña admin) */
+/** Reservas que impiden eliminar una cuenta (mismas que en la baja propia). */
+const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.PENDING_PAYMENT,
+  BookingStatus.PAYMENT_PENDING_APPROVAL,
+  BookingStatus.WAITING_CAREGIVER_APPROVAL,
+  BookingStatus.CONFIRMED,
+  BookingStatus.IN_PROGRESS,
+];
+
+/**
+ * DELETE /api/admin/users/:userId — un admin elimina la cuenta de un dueño o
+ * de un cuidador. Misma baja que la que hace la persona desde la app
+ * (finalizeAccountDeletion: soft-delete + anonimizar + sacar del marketplace,
+ * cerrar sesiones; el historial de reservas y pagos se conserva).
+ *
+ * A diferencia de la baja propia, el saldo NO pasa a Garden: la persona no lo
+ * consintió. Por eso se bloquea si tiene saldo a favor, un retiro en curso o
+ * reservas activas — el admin las resuelve primero.
+ */
+export async function deleteUserAccountByAdmin(
+  userId: string,
+  adminId: string,
+  payload: { reason: string; adminPassword: string }
+): Promise<{ success: true }> {
+  const reason = (payload.reason ?? '').trim();
+  if (reason.length < 5) throw new BadRequestError('Indica el motivo de la eliminación (mínimo 5 caracteres)');
+  await assertAdminPassword(adminId, payload.adminPassword);
+
+  if (userId === adminId) throw new BadRequestError('No puedes eliminar tu propia cuenta desde el panel');
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, isDeleted: true, balance: true, caregiverProfile: { select: { id: true } } },
+  });
+  if (!user || user.isDeleted) throw new NotFoundError('Usuario no encontrado o ya eliminado');
+  if (user.role === 'ADMIN') throw new ForbiddenError('No se puede eliminar una cuenta de administrador');
+
+  const caregiverId = user.caregiverProfile?.id;
+  const [activeBookings, pendingWithdrawals] = await Promise.all([
+    prisma.booking.count({
+      where: {
+        status: { in: ACTIVE_BOOKING_STATUSES },
+        OR: [{ clientId: userId }, ...(caregiverId ? [{ caregiverId }] : [])],
+      },
+    }),
+    prisma.walletTransaction.count({
+      where: { userId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+    }),
+  ]);
+  if (activeBookings > 0) {
+    throw new BadRequestError(
+      `Tiene ${activeBookings} reserva${activeBookings === 1 ? '' : 's'} activa${activeBookings === 1 ? '' : 's'}. Cancélala${activeBookings === 1 ? '' : 's'} o espera a que termine${activeBookings === 1 ? '' : 'n'} antes de eliminar la cuenta.`
+    );
+  }
+  if (pendingWithdrawals > 0) {
+    throw new BadRequestError('Tiene un retiro en curso. Procésalo o recházalo antes de eliminar la cuenta.');
+  }
+  const balance = Number(user.balance ?? 0);
+  if (balance > 0) {
+    throw new BadRequestError(
+      `Tiene Bs ${balance.toFixed(2)} a favor en su billetera. Deposítaselo (retiro) antes de eliminar la cuenta.`
+    );
+  }
+
+  await authService.finalizeAccountDeletion(userId);
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'USER_DELETE', targetId: userId, notes: reason },
+  });
+  if (caregiverId) {
+    await getCache().del(`caregivers:detail:${caregiverId}`);
+    await delByPrefix('caregivers:list:');
+  }
+  logger.info('Admin: cuenta eliminada', { userId, adminId, role: user.role });
+  return { success: true };
+}
+
+/** DELETE /api/admin/caregivers/:id — eliminar un cuidador desde su tarjeta.
+ *  Usa la misma baja completa que deleteUserAccountByAdmin (antes era una
+ *  versión parcial: no cerraba sesiones ni revisaba reservas activas ni saldo). */
 export async function deleteCaregiver(
   profileId: string,
   adminId: string,
   payload: { reason: string; adminPassword: string }
 ) {
-  const { reason, adminPassword } = payload;
-  const admin = await prisma.user.findUnique({ where: { id: adminId } });
-  if (!admin) throw new UnauthorizedError('Admin no encontrado');
-
-  const { comparePassword } = await import('../auth/auth.service.js');
-  const isValid = await comparePassword(adminPassword, admin.passwordHash);
-  if (!isValid) throw new UnauthorizedError('Contraseña de administrador incorrecta', 'INVALID_ADMIN_PASSWORD');
-
   const profile = await prisma.caregiverProfile.findUnique({
     where: { id: profileId },
     select: { userId: true },
   });
   if (!profile) throw new CaregiverNotFoundError(profileId);
-
-  const userId = profile.userId;
-
-  await prisma.adminAction.create({
-    data: {
-      adminId,
-      actionType: 'CAREGIVER_DELETE',
-      targetId: profileId,
-      notes: reason,
-    },
-  });
-
-  // Mismo patrón que el borrado de cuenta propia (self-delete en
-  // auth.controller.ts): soft-delete + anonimizar + suspender del
-  // marketplace, en vez de borrar en duro. Antes esto borraba en cascada
-  // Booking, Review, Dispute, ChatMessage, Donation y WalletTransaction —
-  // destruyendo por completo el historial financiero y de servicio del
-  // cuidador (retiros, ganancias, reseñas de clientes) sin posibilidad de
-  // auditoría posterior. Ahora se conserva todo; solo se saca al cuidador
-  // del mercado y se anonimiza su PII para que no pueda volver a loguearse
-  // ni ser contactado.
-  const deletedTag = `deleted_admin_${Date.now()}`;
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        email: `${deletedTag}@garden.deleted`,
-        passwordHash: '',
-        phone: deletedTag,
-        isDeleted: true,
-        deletedAt: new Date(),
-      },
-    });
-    // ciNumber se libera (null) porque es único en la base — si no, el mismo
-    // documento real queda bloqueado para siempre y esa persona no podría
-    // volver a registrarse nunca más, aunque su cuenta anonimizada quede
-    // conservada solo para auditoría/historial financiero.
-    await tx.caregiverProfile.update({
-      where: { id: profileId },
-      data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
-    });
-  });
-
-  await getCache().del(`caregivers:detail:${profileId}`);
-  await delByPrefix('caregivers:list:');
-
-  return { success: true };
+  return deleteUserAccountByAdmin(profile.userId, adminId, payload);
 }
 
 export async function unlockVerification(profileId: string, adminId: string) {
@@ -2790,7 +2811,7 @@ export async function unlockVerification(profileId: string, adminId: string) {
 export async function listOwners(page = 1, limit = 30, search?: string) {
   const skip = (page - 1) * limit;
 
-  const where: any = { role: 'CLIENT' };
+  const where: any = { role: 'CLIENT', isDeleted: false };
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: 'insensitive' } },

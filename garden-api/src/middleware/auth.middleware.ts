@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { UnauthorizedError, ForbiddenError } from '../shared/errors.js';
 import logger from '../shared/logger.js';
-import { isTokenBlacklisted } from '../services/token-blacklist.service.js';
+import { isTokenBlacklisted, isUserRevoked } from '../services/token-blacklist.service.js';
 
 export interface JwtPayload {
   userId: string;
@@ -33,13 +33,19 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     req.user = payload;
     // Async blacklist check — run after basic JWT validation to avoid
     // hitting Redis on every invalid token
-    isTokenBlacklisted(token).then(revoked => {
+    isTokenBlacklisted(token).then(async (revoked) => {
       if (revoked) {
         logger.warn('Auth: 401 — token revocado', { path: req.path, userId: payload.userId });
         next(new UnauthorizedError('Sesión cerrada. Vuelve a iniciar sesión.'));
-      } else {
-        next();
+        return;
       }
+      // Cuenta eliminada (por la persona o por un admin): sus tokens dejan de servir.
+      if (await isUserRevoked(payload.userId)) {
+        logger.warn('Auth: 401 — cuenta eliminada', { path: req.path, userId: payload.userId });
+        next(new UnauthorizedError('Esta cuenta fue eliminada.'));
+        return;
+      }
+      next();
     }).catch((err) => {
       // Fail-closed: if the blacklist check throws (e.g., Redis configured but down),
       // block the request rather than silently allow a potentially revoked token.

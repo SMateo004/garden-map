@@ -80,8 +80,11 @@ router.get('/caregivers/:id/audit-log', adminController.getCaregiverAuditLog);
 /** PATCH /api/admin/caregivers/:id/flag-review — poner bajo revisión por actividad sospechosa. */
 router.patch('/caregivers/:id/flag-review', adminController.flagCaregiverForReview);
 
-/** DELETE /api/admin/caregivers/:id — absolute delete (removes User + Profile + all). */
+/** DELETE /api/admin/caregivers/:id — elimina la cuenta del cuidador (soft-delete, ver deleteUserAccountByAdmin). */
 router.delete('/caregivers/:id', adminController.deleteCaregiver);
+
+/** DELETE /api/admin/users/:userId — elimina la cuenta de un dueño o cuidador (soft-delete, cierra sesiones). */
+router.delete('/users/:userId', adminController.deleteUserAccount);
 
 /** PATCH /api/admin/caregivers/:id/toggle-professional — assign/remove professional flag. */
 router.patch('/caregivers/:id/toggle-professional', adminController.toggleProfessional);
