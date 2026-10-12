@@ -1,5 +1,8 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 
+import '../theme/garden_motion.dart';
 import '../theme/garden_theme.dart';
 import 'garden_icons.dart';
 import 'garden_service.dart';
@@ -194,14 +197,7 @@ class GardenCaregiverCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                          decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(999)),
-                          child: const Text(
-                            'Reservar',
-                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800),
-                          ),
-                        ),
+                        const _ReserveButton(),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -243,9 +239,7 @@ class GardenCaregiverCard extends StatelessWidget {
                     // Precio por servicio, cada uno con su color.
                     prices.isEmpty
                         ? Text('Consulta precios en su perfil', style: TextStyle(color: sub, fontSize: 12))
-                        : Wrap(
-                          spacing: 5,
-                          runSpacing: 5,
+                        : _PriceStrip(
                           children: [
                             for (final pr in prices)
                               Container(
@@ -273,6 +267,90 @@ class GardenCaregiverCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Reservar" con relieve, como [GardenButton]: la cara se apoya sobre un
+/// canto más oscuro con una sombra suave y se hunde al tocar. El toque lo
+/// recibe la tarjeta entera (el Listener solo anima, no se queda con él).
+class _ReserveButton extends StatefulWidget {
+  const _ReserveButton();
+
+  @override
+  State<_ReserveButton> createState() => _ReserveButtonState();
+}
+
+class _ReserveButtonState extends State<_ReserveButton> {
+  static const _lip = 3.0;
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = GardenMotion.reduced(context);
+    final radius = BorderRadius.circular(999);
+    return Listener(
+      onPointerDown: (_) => setState(() => _down = true),
+      onPointerUp: (_) => setState(() => _down = false),
+      onPointerCancel: (_) => setState(() => _down = false),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          color: Color.lerp(GardenColors.primary, Colors.black, 0.35),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: _down ? 0.10 : 0.18), blurRadius: _down ? 2 : 6, offset: Offset(0, _down ? 1 : 3)),
+          ],
+        ),
+        child: AnimatedPadding(
+          duration: reduced ? Duration.zero : GardenMotion.instant,
+          curve: GardenMotion.enter,
+          padding: EdgeInsets.only(top: _down ? _lip - 1 : 0, bottom: _down ? 1 : _lip),
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: GardenColors.primary, borderRadius: radius),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              child: Text(
+                'Reservar',
+                style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Precios en una sola fila que se desliza de costado (carrusel) en vez de
+/// bajar a otro renglón; el borde derecho se desvanece para avisar que hay más.
+class _PriceStrip extends StatelessWidget {
+  final List<Widget> children;
+  const _PriceStrip({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 24,
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          colors: [Colors.black, Colors.black, Colors.transparent],
+          stops: [0, 0.9, 1],
+        ).createShader(rect),
+        // En la web también se arrastra con el mouse (por defecto solo con el dedo).
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            // El final queda fuera del desvanecido cuando se llega al último.
+            padding: const EdgeInsets.only(right: 24),
+            itemCount: children.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 5),
+            itemBuilder: (_, i) => Center(child: children[i]),
           ),
         ),
       ),

@@ -48,6 +48,30 @@ void main() {
     expect(has('Norte'), findsOneWidget);
   });
 
+  testWidgets('precios en una sola fila que se desliza, aunque no entren', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var taps = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: GardenCaregiverCard(
+          caregiver: const {
+            'id': 'y', 'firstName': 'Patitas', 'lastName': 'SRL', 'verified': true, 'reviewCount': 58, 'rating': 4.8,
+            'services': ['PASEO', 'GUARDERIA', 'HOSPEDAJE'], 'pricePerWalk60': 40, 'pricePerGuarderia': 100, 'pricePerDay': 180,
+          },
+          onTap: () => taps++,
+        ),
+      ),
+    ));
+    expect(tester.takeException(), isNull);
+    final ys = {for (final t in ['Bs 40', 'Bs 100']) tester.getTopLeft(find.text(t)).dy};
+    expect(ys, hasLength(1), reason: 'los precios no bajan a otro renglón');
+    expect(find.byType(ListView), findsOneWidget);
+    await tester.tap(find.text('Reservar'));
+    expect(taps, 1, reason: 'Reservar abre el perfil, como el resto de la tarjeta');
+  });
+
   testWidgets('cifras del perfil en recuadros', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: GardenStatTiles(tiles: [('4,9', '3 reseñas'), ('41', 'servicios'), ('mar 2026', 'en GARDEN')], highlightFirst: true)),
