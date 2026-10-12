@@ -1,6 +1,8 @@
-# Agrega aquí tu archivo de sonido de éxito de pago
-# Nombre esperado: payment_success.mp3
-# Si no existe, el overlay funciona sin sonido (error silencioso)
+# Aviso de notificaciones: NO va acá — está en android/app/src/main/res/raw/
+# garden_arbusto.wav e ios/Runner/garden_arbusto.wav (el sistema lo reproduce).
+
+# Pago confirmado (check verde): payment_success.wav — "Brote", dos notas de
+# marimba que suben. Sintetizado para GARDEN (sin derechos de terceros).
 
 # Alarma de emergencia (incidente urgente reportado por un cuidador)
 # Nombre esperado: emergency_alert.mp3

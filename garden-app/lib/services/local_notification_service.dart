@@ -11,13 +11,25 @@ class LocalNotificationService {
   /// navegación que una notificación push). Antes tocarlo solo abría la app.
   static void Function(Map<String, dynamic> data)? onTap;
 
+  /// Sonido de GARDEN: tres roces de hojas, de suave a fuerte (un perro que
+  /// pasa entre los arbustos). Sintetizado para GARDEN, sin derechos de terceros.
+  /// Android: res/raw/garden_arbusto.wav · iOS: Runner/garden_arbusto.wav. El
+  /// backend pide el mismo sonido y canal en cada push (firebase.service.ts).
+  static const sound = 'garden_arbusto';
+
+  /// Android no deja cambiar el sonido de un canal ya creado: el sonido va en
+  /// un canal nuevo. El viejo ('garden_main', sonido del sistema) se borra.
+  static const channelId = 'garden_avisos';
+  static const _oldChannelId = 'garden_main';
+
   static const _androidChannel = AndroidNotificationDetails(
-    'garden_main',
-    'Garden',
-    channelDescription: 'Notificaciones de Garden',
+    channelId,
+    'Avisos de Garden',
+    channelDescription: 'Reservas, pagos, mensajes y servicios',
     importance: Importance.high,
     priority: Priority.high,
     icon: 'ic_stat_garden',
+    sound: RawResourceAndroidNotificationSound(sound),
   );
 
   static Future<void> init() async {
@@ -39,6 +51,22 @@ class LocalNotificationService {
         } catch (_) {}
       },
     );
+    // Crear el canal ya al arrancar (antes se creaba recién con el primer
+    // aviso con la app abierta): así las push que llegan con la app cerrada
+    // también usan el sonido.
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      try {
+        await androidImpl.createNotificationChannel(const AndroidNotificationChannel(
+          channelId,
+          'Avisos de Garden',
+          description: 'Reservas, pagos, mensajes y servicios',
+          importance: Importance.high,
+          sound: RawResourceAndroidNotificationSound(sound),
+        ));
+        await androidImpl.deleteNotificationChannel(_oldChannelId);
+      } catch (_) {}
+    }
     _initialized = true;
   }
 
@@ -65,7 +93,7 @@ class LocalNotificationService {
       body,
       const NotificationDetails(
         android: _androidChannel,
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(sound: '$sound.wav'),
       ),
       payload: data == null || data.isEmpty ? null : jsonEncode(data),
     );

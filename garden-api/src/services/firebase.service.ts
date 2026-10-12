@@ -56,12 +56,15 @@ export async function sendPush(
       ...(data ? { data } : {}),
       // Tokens del navegador (panel admin): a dónde lleva tocar el aviso.
       ...(webLink ? { webpush: { fcmOptions: { link: webLink } } } : {}),
+      // Sonido de GARDEN (roce de arbustos) y su canal de Android, definidos en
+      // la app (LocalNotificationService). Una versión vieja de la app que no
+      // los tenga usa el sonido normal del teléfono.
       android: {
         priority: 'high',
-        notification: { sound: 'default', channelId: 'garden_main' },
+        notification: { sound: 'garden_arbusto', channelId: 'garden_avisos' },
       },
       apns: {
-        payload: { aps: { sound: 'default', badge: 1 } },
+        payload: { aps: { sound: 'garden_arbusto.wav', badge: 1 } },
       },
     });
   } catch (err: any) {
