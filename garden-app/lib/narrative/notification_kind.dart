@@ -107,6 +107,11 @@ class NotificationKind {
     'ADMIN_NIT': NotificationKind(NotificationTopic.account, GIcon.documento, StoryTone.info),
     'ADMIN_CAREGIVER': NotificationKind(NotificationTopic.account, GIcon.huella, StoryTone.info),
     'ADMIN_ALERT': NotificationKind(NotificationTopic.problem, GIcon.notificaciones, StoryTone.info),
+    // Alertas operativas al admin (bandeja y push): saldo de la billetera de
+    // blockchain bajo, retiro por aprobar y falla del pago QR (SIP).
+    'BLOCKCHAIN_LOW_BALANCE': NotificationKind(NotificationTopic.problem, GIcon.advertencia, StoryTone.waiting),
+    'WITHDRAWAL_REQUEST': NotificationKind(NotificationTopic.money, GIcon.retiro, StoryTone.waiting),
+    'SIP_FAILURE': NotificationKind(NotificationTopic.problem, GIcon.pagarQr, StoryTone.alert),
     // Novedades
     'ZONE_NOW_AVAILABLE': NotificationKind(NotificationTopic.news, GIcon.mapa, StoryTone.good),
     'INFO': NotificationKind(NotificationTopic.news, GIcon.info, StoryTone.info),
