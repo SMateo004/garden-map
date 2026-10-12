@@ -1080,11 +1080,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _showPaymentSuccessOverlay() async {
     HapticFeedback.heavyImpact();
-    try {
-      final player = AudioPlayer();
-      await player.play(AssetSource('sounds/payment_success.mp3'));
-      player.onPlayerComplete.first.then((_) => player.dispose());
-    } catch (_) {}
+    // "Brote" (dos notas de marimba que suben) junto con el check verde: sin
+    // esperar a que cargue, así suenan a la vez. Antes apuntaba a un .mp3 que
+    // nunca se agregó y no sonaba nada. Respeta el modo silencio y no corta la
+    // música que esté sonando.
+    final player = AudioPlayer();
+    player
+        .setAudioContext(AudioContextConfig(respectSilence: true, focus: AudioContextConfigFocus.mixWithOthers).build())
+        .then((_) => player.play(AssetSource('sounds/payment_success.wav')))
+        .then((_) => player.onPlayerComplete.first)
+        .whenComplete(player.dispose)
+        .ignore();
 
     if (!mounted) return;
 
