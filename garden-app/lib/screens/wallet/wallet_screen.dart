@@ -127,16 +127,28 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _token.isNotEmpty) {
-      _loadWallet();
+      _refreshAll();
       if (_walletSocket != null && _walletSocket!.disconnected) {
         _walletSocket!.connect();
       }
     }
   }
 
-  Future<void> _loadDonorCard() async {
-    if (_donorCardData != null || _loadingDonorCard) return;
-    setState(() => _loadingDonorCard = true);
+  /// Saldo, historial y tarjeta de donador juntos. Antes la tarjeta se
+  /// cargaba una sola vez al abrir la billetera: una donación hecha con la
+  /// pantalla abierta (o al volver a la app) no se veía hasta salir y entrar.
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadWallet(),
+      if (_role == 'CLIENT') _loadDonorCard(force: true),
+    ]);
+  }
+
+  /// [force] vuelve a pedirla aunque ya esté cargada (sin parpadeo: los datos
+  /// anteriores se quedan en pantalla hasta que llegan los nuevos).
+  Future<void> _loadDonorCard({bool force = false}) async {
+    if (_loadingDonorCard || (_donorCardData != null && !force)) return;
+    if (_donorCardData == null) setState(() => _loadingDonorCard = true);
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/client/donor-card'),
@@ -222,7 +234,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       _walletSocket!.onConnectError((data) => debugPrint('Wallet: Connect error: $data'));
       _walletSocket!.on('wallet_updated', (_) {
         if (!mounted) return;
-        _loadWallet();
+        _refreshAll();
       });
       _walletSocket!.connect();
     } catch (e) {
@@ -423,7 +435,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 // algo desde otra pantalla y vuelve a la wallet, no hay ningún
                 // refresh automático. Pull-to-refresh es el escape manual mínimo
                 // hasta que la app tenga un RouteObserver para refrescar solo.
-                onRefresh: _loadWallet,
+                onRefresh: _refreshAll,
                 color: GardenColors.primary,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { scheduleWalletUpdated, walletUsersOf } from '../services/wallet-events.service.js';
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
@@ -30,10 +31,24 @@ function buildConnectionUrl(): string {
 }
 
 function createPrismaClient(): PrismaClient {
-  return new PrismaClient({
+  const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     datasources: { db: { url: buildConnectionUrl() } },
   });
+  // Cualquier cambio de saldo, movimiento de billetera o donación avisa a la
+  // app (`wallet_updated`) — ver services/wallet-events.service.ts. Corre
+  // también dentro de $transaction; el aviso sale con un pequeño retraso
+  // para que la transacción ya esté confirmada cuando la app relea.
+  client.$use(async (params, next) => {
+    const result = await next(params);
+    try {
+      for (const userId of walletUsersOf(params, result)) scheduleWalletUpdated(userId);
+    } catch {
+      // Nunca afecta a la consulta: el aviso es best-effort.
+    }
+    return result;
+  });
+  return client;
 }
 
 const prismaInstance = globalForPrisma.prisma ?? createPrismaClient();
