@@ -3002,3 +3002,120 @@ porque no hubo cambios de código.
   entre `caregiver-crm.service.ts` (sí bloquea la fila) y `booking.service.ts` (no la bloquea) —
   puede sobrevender `maxPets` en una carrera entre un check-in de recepción y una reserva del
   marketplace simultáneos (2026-10-10) — sigue sin aplicar.
+
+---
+
+## 2026-10-12 — Seguimiento: eliminación de cuenta desde el panel admin (commit `10f74ab`) deja
+## sin el mismo fix dos de los tres caminos de baja — el hallazgo del 2026-10-11 sigue abierto
+
+**Commit de referencia al iniciar la auditoría:** `63dec4d` (fix: todos los widgets abren la
+pantalla correcta según el rol). `git log` mostró 11 commits nuevos desde `ae9996b` (donde terminó
+la auditoría del 2026-10-11): banners/tarjetas del marketplace, alertas al admin, chat "en línea",
+widgets de Android/iOS rediseñados, billetera/donador con actualización instantánea, y **`10f74ab`
+— "el admin elimina cuentas de dueños y cuidadores desde el panel"**, que por su propio mensaje de
+commit dice resolver justo el **Hallazgo 1** reportado ayer (retiro pendiente varado al eliminar la
+cuenta): "a diferencia de la baja propia, no se queda con el saldo de nadie: se bloquea si hay
+reservas activas, saldo a favor o un retiro en curso". Se eligió este commit como foco de hoy
+precisamente para verificar si esa afirmación cierra el hallazgo de ayer — profundidad sobre el
+mismo módulo en vez de abrir un área nueva.
+
+**Qué agregó el commit, verificado leyendo el código (no solo el mensaje):** una función nueva,
+`deleteUserAccountByAdmin` (`garden-api/src/modules/admin/admin.service.ts:2691-2759`), usada por
+el endpoint nuevo `DELETE /api/admin/users/:userId` (dueños) y reescribe `deleteCaregiver` para que
+la reuse. Antes de llamar a `finalizeAccountDeletion`, SÍ valida: reservas activas (cliente o
+cuidador, estados `PENDING_PAYMENT`…`IN_PROGRESS`), un `WalletTransaction` tipo `WITHDRAWAL` en
+`PENDING`/`PROCESSING`, y `balance > 0` — rechaza la eliminación en los tres casos. Cubierto por 7
+tests nuevos en `admin-delete-account.test.ts` que confirman exactamente eso. También agrega
+revocación real de sesión: `isUserRevoked`/`revokeUserSessions`
+(`token-blacklist.service.ts:96-136`) hace que `authMiddleware` rechace tokens de una cuenta
+eliminada en vez de dejarlos servir hasta su vencimiento (hasta 7 días antes), y
+`finalizeAccountDeletion` ahora revoca los refresh tokens también en la baja que hace la propia
+persona — esto sí es una mejora de seguridad real y general, no acotada al panel admin.
+
+### Hallazgo (ALTO RIESGO — no aplicado, solo reportado): el fix nuevo solo cubre el camino de
+baja forzada por admin; los otros dos caminos de eliminación de cuenta —incluido el que señaló el
+Hallazgo 1 de ayer— siguen exactamente igual, sin ningún chequeo de retiro pendiente ni de saldo
+
+**Dónde — los dos caminos NO tocados por `10f74ab` (confirmado con `git show 10f74ab --stat`: ninguno
+de los dos archivos aparece en el diff):**
+
+1. **`garden-api/src/modules/auth/auth.controller.ts:670-713`** — baja propia de un dueño
+   (`DELETE /api/auth/account`, rol `CLIENT`). Solo cuenta `Booking` activos (líneas 671-689) y
+   `Dispute` abiertas (691-693) antes de llamar a `finalizeAccountDeletion(userId)` (711). **Sigue
+   sin ninguna consulta a `WalletTransaction`** — es el escenario exacto del Hallazgo 1 de ayer
+   (2026-10-11): un dueño pide un retiro, no se decrementa el `balance` hasta que un admin lo
+   completa (`wallet.routes.ts:280-287`, confirmado sin cambios), y si elimina su cuenta antes de
+   que el admin lo complete, `finalizeAccountDeletion` transfiere ese saldo íntegro a GARDEN con
+   lock de fila (correcto en sí, pero sobre un monto que no le correspondía transferir) y el retiro
+   queda varado en `PENDING`/`PROCESSING` para siempre cuando el admin intente completarlo
+   (`admin.controller.ts`, el decremento condicionado a `balance >= tx.amount` falla).
+2. **`garden-api/src/modules/admin/admin.service.ts:4190-4211`** (`approveCaregiverAccountDeletion`,
+   el admin aprueba la baja que un cuidador pidió desde la app) — confirmado sin cambios en el
+   commit. Solo valida `accountDeletionRequestedAt != null` (línea 4195-4197) antes de llamar a
+   `finalizeAccountDeletion`/`finalizeCaregiverSideDeletion`. Sigue sin chequear retiros pendientes
+   (Hallazgo 1 de ayer) **y** sin chequear reservas `IN_PROGRESS`/disputas abiertas del cuidador
+   (Hallazgo 2 de ayer, "aprobar a ciegas la baja de un cuidador con una mascota a su cargo en ese
+   momento") — ninguno de los dos huecos se tocó.
+
+**Lo que hace esto más urgente que ayer:** la función correcta ya existe, probada y lista para
+copiar — `deleteUserAccountByAdmin` resuelve exactamente el chequeo de retiro pendiente y de saldo
+que faltan en los otros dos caminos (y el de reservas activas que falta en el segundo). No es ya
+una propuesta en abstracto: es extraer esas 3-4 consultas (`ACTIVE_BOOKING_STATUSES` +
+`walletTransaction.count` + `balance`) a una función compartida y llamarla también desde
+`auth.controller.ts:deleteAccount` y desde `approveCaregiverAccountDeletion`, con la salvedad de
+que en la baja propia el usuario SÍ consiente ceder su saldo (a diferencia de la baja por admin),
+así que ahí el chequeo correcto es solo "bloquear si hay un retiro `PENDING`/`PROCESSING`" (no
+bloquear por `balance > 0`, que es la transferencia que la persona ya está aceptando al eliminar su
+cuenta).
+
+**Nota menor relacionada (no es el hallazgo principal, solo una observación):** incluso
+`deleteUserAccountByAdmin` en sí lee reservas/retiros/saldo y recién después llama a
+`finalizeAccountDeletion` sin un lock de fila que cubra todo el intervalo — un retiro pedido en el
+instante exacto entre ese chequeo y la transferencia de saldo no quedaría bloqueado. Impacto bajo
+(ventana muy chica, acción manual de un admin) comparado con los dos caminos de arriba, que están
+completamente sin chequeo; se menciona para que quede completo si se decide tocar este módulo.
+
+**Por qué no se aplicó:** mismo motivo que ayer — toca directamente `User.balance`,
+`WalletTransaction` y el flujo de baja de cuenta (seguridad de identidad/custodia de mascota en el
+caso del cuidador). Cae en dos categorías de alto riesgo a la vez según la política de esta
+auditoría. Queda para que el dueño del proyecto decida y aplique (lo más simple: extraer el bloque
+de validación de `deleteUserAccountByAdmin` a una función compartida y llamarla desde los otros dos
+puntos, con la variante de "saldo consentido" para la baja propia).
+
+### Observación (informativa, sin acción): el revocado instantáneo de sesión es solo por instancia
+
+`isUserRevoked`/`revokeUserSessions` (`token-blacklist.service.ts`) usa un `Map` en memoria del
+proceso, sin pasar por Redis — a diferencia de `isTokenBlacklisted`, en el mismo archivo y para el
+mismo propósito (invalidar sesiones ya), que sí usa `getRedisClient()` cuando está configurado
+(`REDIS_URL` está en `render.yaml`). El comentario del código promete bloqueo "al instante" en la
+instancia que elimina la cuenta, pero eso es literal: en un despliegue con más de una instancia de
+`garden-api`, las demás instancias seguirían aceptando el token viejo hasta que venza su propia
+caché de 5 minutos. Hoy no es explotable: `render.yaml` corre el plan `free` de Render, que es una
+sola instancia — se deja solo como nota para que, si algún día se escala a más de una instancia,
+esto se migre a Redis igual que `isTokenBlacklisted`. No se tocó código por esto (es código de
+seguridad/sesión, y el riesgo real hoy es nulo).
+
+### Sin cambios aplicados hoy
+El único hallazgo nuevo es continuación directa de uno de alto riesgo ya pendiente (dinero + baja
+de cuenta) — no se tocó código. Solo se actualiza este log.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó;
+  el ejemplo numérico (Bs. 100 → 110 → +18 % → 128) sigue repetido tal cual en `legal_screen.dart`.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet: el cliente
+  recibe un código de descuento, no dinero en su billetera, pero el contrato registra un monto como
+  si fuera efectivo (2026-10-05) — sin decisión de producto todavía.
+- La ventana de aceptación de 3h (`caregiver-accept-expiry.job.ts`) no se extiende para empresas
+  con equipo activo, pese a lo que promete el mensaje del commit `1f73564` (2026-10-10) — sigue sin
+  decisión de producto.
+- El cupo combinado recepción+marketplace (`walk-in-capacity.ts`, commit `1f73564`) no es atómico
+  entre `caregiver-crm.service.ts` (sí bloquea la fila) y `booking.service.ts` (no la bloquea) —
+  puede sobrevender `maxPets` en una carrera entre un check-in de recepción y una reserva del
+  marketplace simultáneos (2026-10-10) — sigue sin aplicar.
+- Eliminar cuenta puede aprobar a ciegas la baja de un cuidador con una reserva `IN_PROGRESS` o una
+  disputa abierta (sin chequeo en `approveCaregiverAccountDeletion`) y corregir nombre/apellido/
+  fecha de nacimiento desde el panel admin no re-dispara la verificación de identidad de un
+  cuidador ya `VERIFIED` (2026-10-11) — sigue sin aplicar.
