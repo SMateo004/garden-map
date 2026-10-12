@@ -6,6 +6,13 @@
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="false">
+        <!-- Ícono monocromo de las notificaciones push (FCM) en la barra de estado. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_garden" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/garden_notification_color" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

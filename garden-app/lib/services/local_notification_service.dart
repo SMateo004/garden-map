@@ -17,12 +17,13 @@ class LocalNotificationService {
     channelDescription: 'Notificaciones de Garden',
     importance: Importance.high,
     priority: Priority.high,
-    icon: '@mipmap/ic_launcher',
+    icon: 'ic_stat_garden',
   );
 
   static Future<void> init() async {
     if (_initialized || kIsWeb) return;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Silueta monocroma para la barra de estado (el ícono a color salía como un cuadrado).
+    const android = AndroidInitializationSettings('ic_stat_garden');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,

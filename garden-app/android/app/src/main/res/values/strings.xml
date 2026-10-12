@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Garden</string>
-    <string name="garden_widget_active_service_description">Seguimiento en vivo del servicio activo — paseo, guardería u hospedaje.</string>
-    <string name="garden_widget_quick_search_description">Buscá un cuidador de confianza cerca tuyo, directo desde tu pantalla de inicio.</string>
+    <string name="garden_widget_active_service_description">Tu mascota en vivo: cuándo vuelve, el avance y el mapa del paseo.</string>
+    <string name="garden_widget_quick_search_description">Busca un cuidador o mira tu próxima reserva desde la pantalla de inicio.</string>
 </resources>

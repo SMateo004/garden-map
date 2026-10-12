@@ -67,16 +67,17 @@ class GardenLiveActivity {
   }) async {
     if (kIsWeb) return;
 
-    final emoji = serviceType == 'PASEO'
-        ? '🐾'
-        : serviceType == 'GUARDERIA'
-            ? '🏡'
-            : '🏠';
-    final serviceLabel = serviceType == 'PASEO'
-        ? 'paseo'
-        : serviceType == 'GUARDERIA'
-            ? 'guardería'
-            : 'hospedaje';
+    // Mismos textos que el widget y la pantalla del servicio, sin emojis.
+    final ownerTitle = switch (serviceType) {
+      'GUARDERIA' => '$petName está en guardería',
+      'HOSPEDAJE' => '$petName está en hospedaje',
+      _ => '$petName está de paseo',
+    };
+    final caregiverTitle = switch (serviceType) {
+      'GUARDERIA' => 'Guardería con $petName',
+      'HOSPEDAJE' => 'Hospedaje con $petName',
+      _ => 'Paseo con $petName',
+    };
 
     if (Platform.isIOS) {
       try {
@@ -106,10 +107,8 @@ class GardenLiveActivity {
       _serviceStartMs = startTime.millisecondsSinceEpoch;
       _totalPaidSeconds = totalPaidDurationMinutes * 60;
       _subtitle = role == 'CLIENT' ? 'Con $caregiverName' : 'Dueño: $ownerName';
-      _lastTitle = role == 'CLIENT'
-          ? '$emoji $petName está de $serviceLabel'
-          : '$emoji Paseando a $petName';
-      _lastBody = '$_subtitle · Garden';
+      _lastTitle = role == 'CLIENT' ? ownerTitle : caregiverTitle;
+      _lastBody = '$_subtitle · ${_endLabel()}';
       await _initAndroid();
       await _showAndroidNotification();
       await _updateAndroidWidget(status: 'IN_PROGRESS');
@@ -119,6 +118,16 @@ class GardenLiveActivity {
   // Cache for Android notification refresh
   String _lastTitle = '';
   String _lastBody = '';
+
+  int get _endMs => _serviceStartMs + _totalPaidSeconds * 1000;
+
+  /// "vuelve a las 10:05" / "termina a las 18:00" / "hasta el 18/10".
+  String _endLabel() {
+    final end = DateTime.fromMillisecondsSinceEpoch(_endMs);
+    final hm = '${end.hour}:${end.minute.toString().padLeft(2, '0')}';
+    if (_serviceType == 'HOSPEDAJE') return 'hasta el ${end.day}/${end.month}';
+    return _serviceType == 'PASEO' && _role == 'CLIENT' ? 'vuelve a las $hm' : 'termina a las $hm';
+  }
 
   /// Call every N seconds from the service timer (suggested: every 10s for iOS,
   /// every 10s for Android too — el widget de Android no tiene reloj propio,
@@ -163,6 +172,9 @@ class GardenLiveActivity {
 
     if (Platform.isAndroid) {
       _totalPaidSeconds = totalPaidDurationMinutes * 60;
+      // La extensión mueve la hora de fin: notificación y widget al día.
+      _lastBody = '$_subtitle · ${_endLabel()}';
+      await _showAndroidNotification();
       await _updateAndroidWidget(status: 'IN_PROGRESS');
     }
   }
@@ -325,7 +337,7 @@ class GardenLiveActivity {
   Future<void> _initAndroid() async {
     if (_androidReady) return;
     const init = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('ic_stat_garden'),
     );
     await _notifications.initialize(init);
     await _notifications
@@ -352,12 +364,21 @@ class GardenLiveActivity {
       priority: Priority.low,
       ongoing: true,
       autoCancel: false,
+      // Cuenta regresiva hasta la hora de vuelta, como la pantalla del
+      // servicio ("cuánto falta"); antes contaba el tiempo transcurrido.
       showWhen: _serviceStartMs > 0,
-      when: _serviceStartMs > 0 ? _serviceStartMs : null,
+      when: _serviceStartMs > 0 ? _endMs : null,
       usesChronometer: _serviceStartMs > 0,
-      chronometerCountDown: false,
+      chronometerCountDown: _serviceStartMs > 0,
       color: const Color(0xFF778C43),
-      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      // Ícono monocromo de la barra de estado (con el de la app a color salía
+      // un cuadrado blanco). El ícono grande, el del servicio.
+      icon: 'ic_stat_garden',
+      largeIcon: DrawableResourceAndroidBitmap(switch (_serviceType) {
+        'GUARDERIA' => 'garden_svc_guarderia',
+        'HOSPEDAJE' => 'garden_svc_hospedaje',
+        _ => 'garden_svc_paseo',
+      }),
     );
     await _notifications.show(
       _androidNotifId,

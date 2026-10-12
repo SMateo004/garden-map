@@ -3,228 +3,238 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-// ── Brand colors ──────────────────────────────────────────────────────────────
+// ── Lenguaje visual ───────────────────────────────────────────────────────────
+// El mismo de la app (lib/theme/garden_theme.dart, lib/design/garden_service.dart):
+// bosque profundo de fondo en la pantalla de bloqueo (se lee sobre cualquier
+// fondo de pantalla), cada servicio con su ícono propio (exportado de
+// GardenServiceIcon a Assets.xcassets: GardenSvcPaseo/Guarderia/Hospedaje) y
+// su color. Antes: gris #1C1C1C y emojis (🐕 para paseo Y guardería, 😴,
+// 🚶‍♂️🐕 caminando sobre la barra, "Servicio completado 🎉").
 
-private extension Color {
-    static let gardenGreen = Color(red: 119/255, green: 140/255, blue: 67/255)
-    static let gardenGreenDim = Color(red: 119/255, green: 140/255, blue: 67/255).opacity(0.22)
-    static let gardenSurface = Color(white: 0.11)
-    static let gardenTrack = Color.white.opacity(0.14)
+extension Color {
+    static let gardenForest = Color(red: 22/255, green: 38/255, blue: 16/255)      // darkSurface
+    static let gardenForestDeep = Color(red: 13/255, green: 26/255, blue: 7/255)   // darkBackground
+    static let gardenTextOnDark = Color(red: 240/255, green: 247/255, blue: 232/255)
+    static let gardenSubOnDark = Color(red: 169/255, green: 196/255, blue: 138/255)
+    static let gardenOlive = Color(red: 119/255, green: 140/255, blue: 67/255)
+    static let gardenAmber = Color(red: 255/255, green: 194/255, blue: 77/255)
 }
 
-// ── Attribute / progress helpers ──────────────────────────────────────────────
+/// Identidad de cada servicio (ícono, color, nombres) — una sola fuente para
+/// la Actividad en vivo y el widget de acceso rápido.
+struct GardenServiceStyle {
+    let type: String
 
-@available(iOS 16.2, *)
-private extension GardenServiceAttributes {
-    /// Icon shown in the small, fixed-size Dynamic Island compact/minimal slots.
-    var compactEmoji: String {
-        switch serviceType {
-        case "PASEO": return "🐕"
-        case "GUARDERIA": return "🐕"
-        default: return "😴" // HOSPEDAJE
+    var assetName: String {
+        switch type {
+        case "GUARDERIA": return "GardenSvcGuarderia"
+        case "HOSPEDAJE": return "GardenSvcHospedaje"
+        default: return "GardenSvcPaseo"
         }
     }
 
-    /// Emoji marker that walks left→right along the progress track. Combos
-    /// (two glyphs) are fine here — there's room on lock screen/expanded.
-    var progressMarkerEmoji: String {
-        switch serviceType {
-        case "PASEO": return "🚶‍♂️🐕"       // dueño/cuidador caminando con la mascota
-        case "GUARDERIA": return "🐕"        // mascota paseando sola en la guardería
-        default: return "🐾💤"               // HOSPEDAJE: mascota durmiendo
+    var label: String {
+        switch type {
+        case "GUARDERIA": return "Guardería"
+        case "HOSPEDAJE": return "Hospedaje"
+        default: return "Paseo"
         }
     }
 
-    var serviceLabel: String {
-        switch serviceType {
-        case "PASEO": return "En paseo"
-        case "GUARDERIA": return "En guardería"
-        default: return "En hospedaje"
+    /// Color del servicio sobre fondo claro / oscuro (GardenService.ink).
+    func ink(dark: Bool) -> Color {
+        switch type {
+        case "GUARDERIA": return dark ? Color(red: 1, green: 194/255, blue: 77/255) : Color(red: 201/255, green: 133/255, blue: 0)
+        case "HOSPEDAJE": return dark ? Color(red: 79/255, green: 209/255, blue: 138/255) : Color(red: 15/255, green: 122/255, blue: 62/255)
+        default: return dark ? Color(red: 88/255, green: 226/255, blue: 98/255) : Color(red: 47/255, green: 168/255, blue: 58/255)
         }
     }
 
-    var serviceNoun: String {
-        switch serviceType {
-        case "PASEO": return "paseo"
-        case "GUARDERIA": return "guardería"
-        default: return "hospedaje"
+    /// Fondo suave del servicio (GardenService.soft).
+    func soft(dark: Bool) -> Color {
+        switch type {
+        case "GUARDERIA": return dark ? Color(red: 51/255, green: 41/255, blue: 15/255) : Color(red: 1, green: 241/255, blue: 214/255)
+        case "HOSPEDAJE": return dark ? Color(red: 18/255, green: 48/255, blue: 31/255) : Color(red: 220/255, green: 239/255, blue: 227/255)
+        default: return dark ? Color(red: 23/255, green: 58/255, blue: 22/255) : Color(red: 226/255, green: 247/255, blue: 223/255)
         }
     }
-
-    func displayTitle(state: ContentState) -> String {
-        if state.status == "COMPLETED" { return "Servicio completado 🎉" }
-        return role == "CLIENT"
-            ? "\(petName) está de \(serviceNoun)"
-            : "Paseando a \(petName)"
-    }
-
-    func displaySubtitle() -> String {
-        role == "CLIENT" ? "Con \(caregiverName)" : "Dueño: \(ownerName)"
-    }
 }
 
-@available(iOS 16.2, *)
-private extension GardenServiceAttributes {
-    /// garden://service/<bookingId> — mismo formato de ruta que el widget de
-    /// Android (ver deep_link_service.dart / MainActivity.kt), manejado por
-    /// AppDelegate.swift (_routeFromDeepLinkURL). Tocar el Live Activity abre
-    /// Garden directo en la pantalla de ese servicio en vez de solo traer la
-    /// app al frente en lo que sea que estuviera mostrando antes.
-    var deepLinkURL: URL? {
-        URL(string: "garden://service/\(bookingId)")
-    }
-}
-
-@available(iOS 16.2, *)
-private extension ActivityViewContext<GardenServiceAttributes> {
-    /// 0...1 progress of elapsed time vs. total paid duration, at a given date.
-    func progress(at date: Date) -> Double {
-        let total = Double(max(state.totalPaidSeconds, 1))
-        let elapsed = date.timeIntervalSince(state.startedAt)
-        return min(max(elapsed / total, 0), 1)
-    }
-
-    /// Slightly over the goal (extra/unpaid overtime not yet reflected in an
-    /// approved extension) — used to flag the bar in amber instead of hiding it.
-    func isOvertime(at date: Date) -> Bool {
-        date.timeIntervalSince(state.startedAt) > Double(state.totalPaidSeconds)
-    }
-}
-
-// ── Reusable walking-progress bar ─────────────────────────────────────────────
-
-/// Horizontal track with an emoji marker sliding left→right as the service
-/// advances towards its paid time goal, capped by a Garden paw print at the
-/// finish line. Recomputes every few seconds via TimelineView (fully local,
-/// no extra ActivityKit updates) and glides between ticks with `.animation`
-/// so the motion still reads as continuous on the lock screen.
-@available(iOS 16.2, *)
-private struct WalkingProgressBar: View {
-    let context: ActivityViewContext<GardenServiceAttributes>
-    var markerSize: CGFloat = 22
-    var trackHeight: CGFloat = 6
-    var pawSize: CGFloat = 16
+/// Ícono del servicio sobre su círculo suave, como en la app.
+struct GardenServiceBadge: View {
+    let style: GardenServiceStyle
+    var size: CGFloat = 48
+    var dark: Bool = true
 
     var body: some View {
-        TimelineView(.periodic(from: context.state.startedAt, by: 3)) { timeline in
-            let progress = context.progress(at: timeline.date)
-            let overtime = context.isOvertime(at: timeline.date)
+        ZStack {
+            Circle().fill(style.soft(dark: dark))
+            Image(style.assetName)
+                .resizable()
+                .scaledToFit()
+                .padding(size * 0.19)
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(style.label)
+    }
+}
 
-            GeometryReader { geo in
-                let usableWidth = max(geo.size.width - markerSize, 0)
-                let markerX = usableWidth * progress
+// ── Textos y tiempos de la Actividad ─────────────────────────────────────────
 
-                ZStack(alignment: .leading) {
-                    // Track
-                    Capsule()
-                        .fill(Color.gardenTrack)
-                        .frame(height: trackHeight)
+@available(iOS 16.2, *)
+private extension GardenServiceAttributes {
+    var style: GardenServiceStyle { GardenServiceStyle(type: serviceType) }
 
-                    // Filled progress
-                    Capsule()
-                        .fill(overtime ? Color.orange : Color.gardenGreen)
-                        .frame(width: max(markerX + markerSize / 2, trackHeight), height: trackHeight)
-                        .animation(.linear(duration: 3), value: markerX)
+    func title(_ state: ContentState) -> String {
+        if state.status == "COMPLETED" {
+            return role == "CLIENT" ? "\(petName) ya volvió" : "Servicio terminado"
+        }
+        if role == "CLIENT" {
+            switch serviceType {
+            case "GUARDERIA": return "\(petName) está en guardería"
+            case "HOSPEDAJE": return "\(petName) está en hospedaje"
+            default: return "\(petName) está de paseo"
+            }
+        }
+        return "\(style.label) con \(petName)"
+    }
 
-                    // Garden paw at the finish line — brand watermark + goal marker
-                    Image("GardenPaw")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: pawSize, height: pawSize)
-                        .opacity(0.9)
-                        .offset(x: usableWidth + markerSize - pawSize / 2, y: 0)
+    var subtitle: String { role == "CLIENT" ? "Con \(caregiverName)" : "Dueño: \(ownerName)" }
 
-                    // Emoji walking marker
-                    Text(context.state.status == "COMPLETED" ? "🏁" : context.attributes.progressMarkerEmoji)
-                        .font(.system(size: markerSize))
-                        .offset(x: markerX, y: -(markerSize / 2) + trackHeight / 2)
-                        .animation(.linear(duration: 3), value: markerX)
+    /// "vuelve a las" / "termina a las" / "hasta el".
+    var endCaption: String {
+        if serviceType == "HOSPEDAJE" { return "hasta el" }
+        return serviceType == "PASEO" && role == "CLIENT" ? "vuelve a las" : "termina a las"
+    }
+
+    /// garden://service/<bookingId> — mismo formato que el widget de Android,
+    /// manejado por AppDelegate.swift (_routeFromDeepLinkURL).
+    var deepLinkURL: URL? { URL(string: "garden://service/\(bookingId)") }
+}
+
+@available(iOS 16.2, *)
+private extension GardenServiceAttributes.ContentState {
+    var endsAt: Date { startedAt.addingTimeInterval(TimeInterval(max(totalPaidSeconds, 60))) }
+    var range: ClosedRange<Date> { startedAt...endsAt }
+}
+
+/// Hora o día de fin, grande y en el color del servicio.
+@available(iOS 16.2, *)
+private struct EndTimeView: View {
+    let attributes: GardenServiceAttributes
+    let state: GardenServiceAttributes.ContentState
+    var size: CGFloat = 24
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(attributes.endCaption)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.gardenSubOnDark)
+            Group {
+                if attributes.serviceType == "HOSPEDAJE" {
+                    Text(state.endsAt, format: .dateTime.weekday(.abbreviated).day())
+                } else {
+                    Text(state.endsAt, style: .time)
                 }
             }
-            .frame(height: max(markerSize, pawSize))
+            .font(.system(size: size, weight: .heavy, design: .rounded))
+            .foregroundColor(attributes.style.ink(dark: true))
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
         }
     }
 }
 
-// ── Lock Screen / Banner ──────────────────────────────────────────────────────
+/// Barra de avance nativa (se mueve sola, sin gastar actualizaciones) en el
+/// color del servicio, y debajo cuánto falta, en vivo.
+@available(iOS 16.2, *)
+private struct ProgressBlock: View {
+    let attributes: GardenServiceAttributes
+    let state: GardenServiceAttributes.ContentState
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ProgressView(timerInterval: state.range, countsDown: false) {
+                EmptyView()
+            } currentValueLabel: {
+                EmptyView()
+            }
+            .tint(attributes.style.ink(dark: true))
+            .labelsHidden()
+
+            HStack(spacing: 4) {
+                Text("Empezó a las")
+                Text(state.startedAt, style: .time)
+                Spacer(minLength: 4)
+                Text("Faltan")
+                Text(timerInterval: state.range, countsDown: true, showsHours: true)
+                    .monospacedDigit()
+                    .foregroundColor(.gardenTextOnDark)
+                    .frame(maxWidth: 64, alignment: .trailing)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.gardenSubOnDark)
+        }
+    }
+}
+
+// ── Pantalla de bloqueo / banner ──────────────────────────────────────────────
 
 @available(iOS 16.2, *)
 struct GardenLockScreenView: View {
     let context: ActivityViewContext<GardenServiceAttributes>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Color.gardenGreenDim)
-                        .frame(width: 54, height: 54)
-                    Text(context.attributes.compactEmoji)
-                        .font(.system(size: 26))
-                }
+        let a = context.attributes
+        let s = context.state
+        let done = s.status == "COMPLETED"
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(context.attributes.displayTitle(state: context.state))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                GardenServiceBadge(style: a.style, size: 50)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(a.title(s))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.gardenTextOnDark)
                         .lineLimit(1)
-                    Text(context.attributes.displaySubtitle())
+                    Text(done ? "Toca para ver el resumen" : a.subtitle)
                         .font(.system(size: 12))
-                        .foregroundColor(Color(white: 0.65))
+                        .foregroundColor(.gardenSubOnDark)
                         .lineLimit(1)
                 }
-
-                Spacer(minLength: 0)
-
-                if context.state.status != "COMPLETED" {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(
-                            timerInterval: context.state.startedAt...Date.distantFuture,
-                            countsDown: false,
-                            showsHours: true
-                        )
-                        .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                        .foregroundColor(.gardenGreen)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: 92)
-                        Text("transcurrido")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color(white: 0.5))
-                    }
-                } else {
+                Spacer(minLength: 4)
+                if done {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.gardenGreen)
+                        .foregroundColor(a.style.ink(dark: true))
+                } else {
+                    EndTimeView(attributes: a, state: s)
                 }
             }
 
-            if context.state.status != "COMPLETED" {
-                WalkingProgressBar(context: context, markerSize: 24, trackHeight: 6, pawSize: 18)
-                    .padding(.top, 2)
-            }
+            if !done {
+                ProgressBlock(attributes: a, state: s)
 
-            // Mini-mapa (idea #1) — solo PASEO (los otros servicios no se
-            // mueven). Se omite en silencio mientras no llegó ningún snapshot
-            // todavía (primeros ~30s del servicio) — el resto de la tarjeta ya
-            // es útil sin él.
-            if context.state.status != "COMPLETED",
-               context.attributes.serviceType == "PASEO",
-               let mapData = context.state.mapSnapshotData,
-               let mapImage = UIImage(data: mapData) {
-                Image(uiImage: mapImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 70)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.top, 2)
+                // Mini-mapa — solo PASEO; se omite hasta que llega el primero.
+                if a.serviceType == "PASEO",
+                   let data = s.mapSnapshotData,
+                   let map = UIImage(data: data) {
+                    Image(uiImage: map)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 72)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
             }
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .activityBackgroundTint(Color.gardenSurface)
-        .activitySystemActionForegroundColor(.white)
-        .widgetURL(context.attributes.deepLinkURL)
+        .padding(.vertical, 16)
+        .environment(\.colorScheme, .dark)
+        .environment(\.locale, Locale(identifier: "es_BO"))
+        .activityBackgroundTint(Color.gardenForest)
+        .activitySystemActionForegroundColor(.gardenTextOnDark)
+        .widgetURL(a.deepLinkURL)
     }
 }
 
@@ -234,115 +244,85 @@ struct GardenLockScreenView: View {
 struct GardenServiceLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GardenServiceAttributes.self) { context in
-
-            // Lock Screen / Banner
             GardenLockScreenView(context: context)
-
         } dynamicIsland: { context in
-            DynamicIsland {
+            let a = context.attributes
+            let s = context.state
+            let ink = a.style.ink(dark: true)
 
-                // Expanded (press & hold the pill)
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.gardenGreenDim)
-                                .frame(width: 40, height: 40)
-                            Text(context.attributes.compactEmoji)
-                                .font(.system(size: 20))
-                        }
+                        GardenServiceBadge(style: a.style, size: 40)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(context.attributes.petName)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
+                            Text(a.petName)
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(.gardenTextOnDark)
                                 .lineLimit(1)
-                            Text(context.attributes.serviceLabel)
+                            Text(a.style.label)
                                 .font(.system(size: 11))
-                                .foregroundColor(Color(white: 0.6))
+                                .foregroundColor(.gardenSubOnDark)
                         }
                     }
                     .padding(.leading, 6)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(
-                            timerInterval: context.state.startedAt...Date.distantFuture,
-                            countsDown: false,
-                            showsHours: true
-                        )
-                        .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                        .foregroundColor(.gardenGreen)
-                        .frame(maxWidth: 92)
-                        Text("⏱ tiempo")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color(white: 0.5))
+                    if s.status != "COMPLETED" {
+                        EndTimeView(attributes: a, state: s, size: 20)
+                            .padding(.trailing, 6)
                     }
-                    .padding(.trailing, 6)
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    if context.state.status != "COMPLETED" {
-                        WalkingProgressBar(context: context, markerSize: 20, trackHeight: 5, pawSize: 14)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 2)
-                    }
-
-                    Divider()
-                        .overlay(Color.gardenGreenDim)
-                        .padding(.horizontal, 8)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.circle")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.5))
-                        Text(context.attributes.displaySubtitle())
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.65))
-                        Spacer()
-                        // Link (no solo texto): en la región expandida del Dynamic
-                        // Island, a diferencia del lock screen, .widgetURL no cubre
-                        // sub-regiones individuales — este botón necesita su propio
-                        // destino tocable para abrir directo el seguimiento del
-                        // servicio en vez de solo abrir la app.
-                        if let url = context.attributes.deepLinkURL {
-                            Link(destination: url) {
-                                HStack(spacing: 3) {
-                                    Text("Abrir Garden")
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Image(systemName: "arrow.right.circle.fill")
-                                        .font(.system(size: 12))
+                    VStack(spacing: 8) {
+                        if s.status != "COMPLETED" {
+                            ProgressBlock(attributes: a, state: s)
+                        }
+                        HStack(spacing: 6) {
+                            Text(a.subtitle)
+                                .font(.system(size: 12))
+                                .foregroundColor(.gardenSubOnDark)
+                                .lineLimit(1)
+                            Spacer()
+                            // En la isla expandida .widgetURL no cubre las
+                            // sub-regiones: el botón necesita su propio Link.
+                            if let url = a.deepLinkURL {
+                                Link(destination: url) {
+                                    HStack(spacing: 3) {
+                                        Text(a.serviceType == "PASEO" ? "Ver el mapa" : "Ver en Garden")
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 10, weight: .bold))
+                                    }
+                                    .foregroundColor(ink)
                                 }
-                                .foregroundColor(.gardenGreen)
                             }
                         }
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
                 }
-
             } compactLeading: {
-                Text(context.attributes.compactEmoji)
-                    .font(.system(size: 14))
-
+                Image(a.style.assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
             } compactTrailing: {
-                Text(
-                    timerInterval: context.state.startedAt...Date.distantFuture,
-                    countsDown: false,
-                    showsHours: true
-                )
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundColor(.gardenGreen)
-                .minimumScaleFactor(0.7)
-                .frame(minWidth: 42)
-
+                // Cuánto falta, en vivo (antes: tiempo transcurrido).
+                Text(timerInterval: s.range, countsDown: true, showsHours: false)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(ink)
+                    .frame(maxWidth: 44)
             } minimal: {
-                Text(context.attributes.compactEmoji)
-                    .font(.system(size: 12))
+                Image(a.style.assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
             }
-            .keylineTint(.gardenGreen)
-            .contentMargins(.horizontal, 10, for: .compactLeading)
-            .contentMargins(.horizontal, 10, for: .compactTrailing)
+            .keylineTint(ink)
+            .widgetURL(a.deepLinkURL)
         }
     }
 }
