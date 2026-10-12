@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
+import '../../widgets/garden_empty_state.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1001,6 +1002,26 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           return Scaffold(
             backgroundColor: bg,
             body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
+          );
+        }
+
+        // La reserva no se pudo abrir (se abrió desde un widget o un aviso viejo, la reserva ya no
+        // existe o no es de esta cuenta): mensaje claro y salida, en vez de una pantalla vacía.
+        if (_booking == null) {
+          return Scaffold(
+            backgroundColor: bg,
+            appBar: AppBar(backgroundColor: bg, elevation: 0),
+            body: Center(
+              child: GardenEmptyState(
+                type: GardenEmptyType.bookings,
+                title: 'No encontramos este servicio',
+                subtitle: 'Puede que ya haya terminado o se haya cancelado. Revisa tus reservas para ver su estado.',
+                ctaLabel: 'Ir a mis reservas',
+                onCta: () => context.go(
+                  widget.role == 'CAREGIVER' ? '/caregiver/home?tab=reservas' : '/my-bookings-tab',
+                ),
+              ),
+            ),
           );
         }
 
