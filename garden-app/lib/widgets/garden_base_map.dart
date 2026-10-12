@@ -4,128 +4,113 @@ import 'package:flutter_map/flutter_map.dart';
 /// Mapa base de Garden — el ÚNICO lugar donde se define de dónde salen los mosaicos y cómo se ven.
 /// Todas las pantallas lo usan con `children: [...GardenBaseMap.layers(isDark), ...tusCapas]`.
 ///
-/// Estilo: minimalista, blanco puro y el verde de Garden. Se parte del mapa base gris claro de Esri
-/// ("Light Gray Canvas", diseñado justamente como lienzo neutro) y se recolorea con matrices de color: el
-/// campo queda blanco puro, la ciudad en un salvia muy suave, las calles en verde Garden y los nombres de
-/// calles/barrios (capa aparte, transparente) en el verde de la marca. En tema oscuro, la misma idea sobre
-/// el fondo bosque de la app.
+/// Estilo (octubre 2026): las calles tienen que leerse, en gris plomo y blanco (sin el verde de antes;
+/// el verde queda para lo de Garden que va encima: zonas, recorridos, marcadores).
+/// - Claro: el mapa de calles de Esri ("World Street Map", trae los nombres de casi todas las calles)
+///   recoloreado en dos pasos: el suelo crema pasa a gris muy claro #ECEDEB, las calles quedan blancas,
+///   las avenidas en gris medio y el texto en gris grafito (no negro); casi sin color.
+///   Antes (suelo #E2E4E2, texto casi negro) el mapa se veía pesado.
+/// - Oscuro: el lienzo gris oscuro de Esri en carbón neutro, calles en gris plomo y su capa de nombres
+///   en claro.
+///
+/// Antes (blanco y verde sobre el lienzo gris claro) la matriz de calles solo pintaba los píxeles 100 %
+/// blancos: las calles finas y los bordes (241–254) quedaban transparentes, y el lienzo casi no trae
+/// nombres de calles en zoom de barrio.
 ///
 /// Historia de proveedores (para no repetir errores):
 /// - CARTO: pasó a exigir clave y los mosaicos mostraban "API KEY REQUIRED".
 /// - OpenStreetMap (tile.openstreetmap.org): bloquea las apps hechas con flutter_map y en la web devolvía
 ///   mosaicos "403 Access blocked"; además su política no admite el tráfico de una app.
-/// - Esri Light Gray Canvas: responde sin clave y con CORS (necesario en la web). Para tráfico grande Esri
-///   pide una cuenta de ArcGIS Location Platform (tiene nivel gratuito): el token se pasa con
-///   `--dart-define=MAP_TILE_TOKEN=...` y se agrega solo a las URLs.
+/// - Esri (server.arcgisonline.com): responde sin clave y con CORS abierto (necesario en la web),
+///   verificado para World_Street_Map y los lienzos. Para tráfico grande Esri pide una cuenta de ArcGIS
+///   Location Platform (tiene nivel gratuito): el token se pasa con `--dart-define=MAP_TILE_TOKEN=...`.
 class GardenBaseMap {
   GardenBaseMap._();
 
   static const _token = String.fromEnvironment('MAP_TILE_TOKEN');
-  static const _base =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-  static const _labels =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
+  static const _root = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+  static const _street = '$_root/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+  static const _darkBase = '$_root/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+  static const _darkLabels = '$_root/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
 
-  static String get tileUrl => _token.isEmpty ? _base : '$_base?token=$_token';
-  static String get labelsUrl => _token.isEmpty ? _labels : '$_labels?token=$_token';
+  static String _withToken(String url) => _token.isEmpty ? url : '$url?token=$_token';
+
+  static String tileUrl(bool isDark) => _withToken(isDark ? _darkBase : _street);
+  static String get darkLabelsUrl => _withToken(_darkLabels);
 
   static const userAgentPackage = 'com.garden.bolivia';
 
-  /// Nivel máximo con mosaicos propios del lienzo gris; más cerca, flutter_map amplía el último nivel.
-  static const maxNativeZoom = 16;
+  /// Niveles con mosaicos propios; más cerca, flutter_map amplía el último nivel.
+  static const streetMaxNativeZoom = 19;
+  static const canvasMaxNativeZoom = 16;
 
-  static const attribution = 'Esri, HERE, Garmin, © OpenStreetMap';
+  static const attribution = 'Esri, HERE, Garmin, USGS, © OpenStreetMap';
 
   // ── Matrices de color ─────────────────────────────────────────────────────────────────────────
-  // Cada fila: R, G, B, A, desfase (0–255). L = 0.2126R + 0.7152G + 0.0722B. El lienzo gris trae:
-  // campo ≈239, mancha urbana ≈232 (zoom bajo), calles 255 (solo desde zoom ~11) y agua/límites más
-  // oscuros. Una sola matriz no puede pintar a la vez "más claro" y "más oscuro" que el campo, así que
-  // el mismo mosaico se dibuja dos veces: el SUELO y, encima, solo las CALLES (con transparencia).
+  // Cada fila: R, G, B, A, desfase (0–255). L = 0.2126R + 0.7152G + 0.0722B. Cada matriz lleva L de
+  // forma lineal entre dos colores y suma una parte del croma original (k).
 
-  /// Suelo claro: campo (239) blanco puro; ciudad (232) salvia muy suave #E7EADD; agua y ríos en salvia.
-  static const List<double> lightGroundMatrix = <double>[
-    0.7289, 2.4521, 0.2475, 0, -564.4, //
-    0.6378, 2.1456, 0.2166, 0, -462.0, //
-    1.0326, 3.4738, 0.3507, 0, -905.9, //
+  /// Claro, paso 1 sobre World Street Map: estira los tonos (suelo crema L≈242 → gris claro, blanco →
+  /// blanco, todo lo oscuro → negro); 5 % del croma original (parques apenas verdosos).
+  static const List<double> lightStreetMatrix = <double>[
+    0.5138274, 1.560345, 0.1575181, 0, -314.0810686, //
+    0.4498863, 1.5634462, 0.1527836, 0, -297.3596036, //
+    0.4948525, 1.6647155, 0.2180543, 0, -351.2937063, //
     0, 0, 0, 1, 0,
   ];
 
-  /// Calles claras: color fijo verde Garden suavizado #92A369; opacas donde L = 255 y transparentes
-  /// bajo 250 (el resto del mosaico no se dibuja en esta capa).
-  static const List<double> lightRoadsMatrix = <double>[
-    0, 0, 0, 0, 146, //
-    0, 0, 0, 0, 163, //
-    0, 0, 0, 0, 105, //
-    10.8426, 36.4752, 3.6822, 0, -12750,
-  ];
-
-  /// Suelo oscuro: campo → fondo bosque #0D1A07, ciudad → superficie bosque #162610.
-  static const List<double> darkGroundMatrix = <double>[
-    -0.2733, -0.9195, -0.0928, 0, 320.3, //
-    -0.3645, -1.2261, -0.1238, 0, 435.7, //
-    -0.2733, -0.9195, -0.0928, 0, 314.3, //
+  /// Claro, paso 2: aclara todo hacia arriba — el negro pasa a gris grafito #585C5A y el blanco sigue
+  /// blanco, así el suelo queda en #ECEDEB. Va aparte porque una sola matriz no puede aclarar los
+  /// tonos oscuros sin oscurecer el suelo (el paso 1 recorta en 0 y este levanta desde ahí).
+  static const List<double> lightInkMatrix = <double>[
+    0.654902, 0, 0, 0, 88, //
+    0, 0.6392157, 0, 0, 92, //
+    0, 0, 0.6470588, 0, 90, //
     0, 0, 0, 1, 0,
   ];
 
-  /// Calles oscuras: verde Garden #778C43, misma transparencia que en claro.
-  static const List<double> darkRoadsMatrix = <double>[
-    0, 0, 0, 0, 119, //
-    0, 0, 0, 0, 140, //
-    0, 0, 0, 0, 67, //
-    10.8426, 36.4752, 3.6822, 0, -12750,
-  ];
-
-  /// Nombres: texto gris (51) → verde Garden #778C43, halo blanco → blanco. Conserva la transparencia.
-  static const List<double> lightLabelsMatrix = <double>[
-    0.1417, 0.4768, 0.0481, 0, 85.0, //
-    0.1198, 0.4032, 0.0407, 0, 111.25, //
-    0.1959, 0.6591, 0.0665, 0, 20.0, //
-    0, 0, 0, 1, 0,
-  ];
-
-  /// Base oscura: suelo → fondo bosque #0D1A07, calles → verde Garden #778C43.
+  /// Oscuro sobre el lienzo gris oscuro: suelo (L≈71) → gris carbón #1C1E1D, calles (L≈102) → gris plomo
+  /// #5C615E (las avenidas, más claras, quedan más claras todavía).
   static const List<double> darkBaseMatrix = <double>[
-    1.6097, 5.4151, 0.5467, 0, -1811.7, //
-    1.7312, 5.8238, 0.5879, 0, -1936.4, //
-    0.9111, 3.0651, 0.3094, 0, -1025.9, //
+    0.4389161, 1.476542, 0.1490581, 0, -118.5806, //
+    0.4594903, 1.545755, 0.1560452, 0, -123.4516, //
+    0.4457742, 1.499613, 0.1513871, 0, -119.871, //
     0, 0, 0, 1, 0,
   ];
 
-  /// Nombres en oscuro: texto → salvia claro #BECCA0, halo → fondo bosque.
+  /// Nombres del lienzo oscuro: texto claro (L≈230) → #DEE1DD; halo (L≈40) → carbón. Conserva la
+  /// transparencia de la capa.
   static const List<double> darkLabelsMatrix = <double>[
-    -0.1845, -0.6205, -0.0626, 0, 234.25, //
-    -0.1855, -0.6240, -0.0630, 0, 248.5, //
-    -0.1595, -0.5364, -0.0542, 0, 198.25, //
+    0.2170758, 0.7302568, 0.07372, 0, -12.8421, //
+    0.2181947, 0.7340211, 0.0741, 0, -11.0526, //
+    0.2148379, 0.7227284, 0.07296, 0, -11.4211, //
     0, 0, 0, 1, 0,
   ];
 
-  static TileBuilder _tinted(List<double> matrix) =>
-      (context, tileWidget, tile) => ColorFiltered(colorFilter: ColorFilter.matrix(matrix), child: tileWidget);
+  static TileBuilder _tinted(List<double> matrix, [List<double>? then]) => (context, tileWidget, tile) {
+        final first = ColorFiltered(colorFilter: ColorFilter.matrix(matrix), child: tileWidget);
+        return then == null ? first : ColorFiltered(colorFilter: ColorFilter.matrix(then), child: first);
+      };
 
-  /// Fondo de la vista mientras cargan los mosaicos (evita el parpadeo gris de flutter_map).
-  static Color background(bool isDark) => isDark ? const Color(0xFF0D1A07) : Colors.white;
+  /// Fondo de la vista mientras cargan los mosaicos (el mismo suelo, sin parpadeo blanco ni gris).
+  static Color background(bool isDark) => isDark ? const Color(0xFF1C1E1D) : const Color(0xFFECEDEB);
 
-  /// Capas base de un [FlutterMap]: mosaicos + nombres + la atribución que exigen los datos.
+  /// Capas base de un [FlutterMap]: mosaicos (+ nombres en oscuro) y la atribución que exigen los datos.
   static List<Widget> layers(bool isDark) => [
         TileLayer(
-          urlTemplate: tileUrl,
+          urlTemplate: tileUrl(isDark),
           userAgentPackageName: userAgentPackage,
-          maxNativeZoom: maxNativeZoom,
-          tileBuilder: _tinted(isDark ? darkGroundMatrix : lightGroundMatrix),
+          maxNativeZoom: isDark ? canvasMaxNativeZoom : streetMaxNativeZoom,
+          tileBuilder: isDark ? _tinted(darkBaseMatrix) : _tinted(lightStreetMatrix, lightInkMatrix),
         ),
-        // Mismos mosaicos (el navegador/la caché los reutiliza): solo las calles, en verde.
-        TileLayer(
-          urlTemplate: tileUrl,
-          userAgentPackageName: userAgentPackage,
-          maxNativeZoom: maxNativeZoom,
-          tileBuilder: _tinted(isDark ? darkRoadsMatrix : lightRoadsMatrix),
-        ),
-        TileLayer(
-          urlTemplate: labelsUrl,
-          userAgentPackageName: userAgentPackage,
-          maxNativeZoom: maxNativeZoom,
-          tileBuilder: _tinted(isDark ? darkLabelsMatrix : lightLabelsMatrix),
-        ),
+        // El mapa de calles ya trae los nombres; el lienzo oscuro los tiene en una capa aparte.
+        if (isDark)
+          TileLayer(
+            urlTemplate: darkLabelsUrl,
+            userAgentPackageName: userAgentPackage,
+            maxNativeZoom: canvasMaxNativeZoom,
+            tileBuilder: _tinted(darkLabelsMatrix),
+          ),
         const SimpleAttributionWidget(
           source: Text(attribution, style: TextStyle(fontSize: 10)),
         ),
