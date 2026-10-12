@@ -54,11 +54,15 @@ class MainActivity : FlutterFragmentActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Antes de super: Flutter lee intent.data como ruta inicial al crear la vista.
+        stripWidgetCallbackUri(intent)
         super.onCreate(savedInstanceState)
         captureDeepLink(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
+        // Antes de super: con la app abierta, Flutter empuja intent.data como ruta nueva.
+        stripWidgetCallbackUri(intent)
         super.onNewIntent(intent)
         captureDeepLink(intent)
         // App ya corriendo (launchMode singleTop) — empujar directo a Dart en
@@ -69,6 +73,19 @@ class MainActivity : FlutterFragmentActivity() {
             val args = mapOf("route" to route, "role" to pendingDeepLinkRole)
             pendingDeepLinkRole = null
             deepLinkChannel?.invokeMethod("onDeepLink", args)
+        }
+    }
+
+    /**
+     * Glance (los widgets del home screen) le pone al Intent de cada toque un `data` propio
+     * (`glance-action:/CALLBACK?appWidgetId=…`) para que los PendingIntent de cada widget no se
+     * pisen entre sí. Flutter trata `intent.data` como un deep link y se lo pasaba a GoRouter como
+     * ruta → pantalla "Page Not Found". La ruta real del widget viaja en el extra `deepLinkRoute`
+     * (ver [captureDeepLink]), así que ese `data` se descarta antes de que Flutter lo vea.
+     */
+    private fun stripWidgetCallbackUri(intent: Intent?) {
+        if (intent != null && intent.data?.scheme == "glance-action") {
+            intent.data = null
         }
     }
 

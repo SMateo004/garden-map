@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'auth_state.dart';
@@ -30,7 +31,7 @@ class DeepLinkService {
         final args = call.arguments as Map?;
         final route = args?['route'] as String?;
         final role = args?['role'] as String?;
-        if (route != null) _navigate(router, route, role);
+        if (route != null) _navigateWhenReady(router, route, role);
       }
     });
 
@@ -38,10 +39,54 @@ class DeepLinkService {
       final initial = await _channel.invokeMethod<Map>('getInitialRoute');
       final route = initial?['route'] as String?;
       final role = initial?['role'] as String?;
-      if (route != null) _navigate(router, route, role);
+      if (route != null) _navigateWhenReady(router, route, role);
     } catch (e) {
       debugPrint('[DeepLink] getInitialRoute error: $e');
     }
+  }
+
+  // ── Esperar a que la app termine de arrancar ──────────────────────────────
+  // Con la app cerrada, el toque en el widget llega mientras todavía se muestra el arranque
+  // (/ → /splash → inicio según la sesión). Ese arranque navega con `go`, que reemplaza la pila:
+  // si el destino del widget se empujaba antes, se perdía y la persona caía en el inicio. Ahora
+  // se guarda y se abre recién cuando la app ya está en una pantalla real (o después del login).
+  static const _bootLocations = {'', '/', '/splash', '/onboarding', '/login', '/maintenance', '/update-required'};
+  static String? _pendingRoute;
+  static String? _pendingRole;
+  static GoRouter? _router;
+
+  static bool _isReady(GoRouter router) {
+    final path = router.routerDelegate.currentConfiguration.uri.path;
+    return !_bootLocations.contains(path);
+  }
+
+  @visibleForTesting
+  static void handleForTest(GoRouter router, String route, String? role) => _navigateWhenReady(router, route, role);
+
+  static void _navigateWhenReady(GoRouter router, String route, String? role) {
+    if (_isReady(router)) {
+      _navigate(router, route, role);
+      return;
+    }
+    _pendingRoute = route;
+    _pendingRole = role;
+    if (_router == null) {
+      _router = router;
+      router.routerDelegate.addListener(_flushPending);
+    }
+  }
+
+  static void _flushPending() {
+    final router = _router;
+    final route = _pendingRoute;
+    if (router == null || route == null || !_isReady(router)) return;
+    final role = _pendingRole;
+    _pendingRoute = null;
+    _pendingRole = null;
+    router.routerDelegate.removeListener(_flushPending);
+    _router = null;
+    // Fuera del frame de navegación que disparó el aviso.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _navigate(router, route, role));
   }
 
   static void _navigate(GoRouter router, String route, String? role) {

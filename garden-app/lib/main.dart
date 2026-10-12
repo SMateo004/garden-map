@@ -216,8 +216,22 @@ String _homeForRole(String effectiveRole) {
 final GoRouter _router = GoRouter(
   observers: [AnalyticsRouteObserver(() => _router.routeInformationProvider.value.uri.path)],
   initialLocation: '/',
+  // Una ubicación que no existe (deep link viejo, URI interna del sistema que se coló, enlace mal
+  // escrito) nunca muestra la pantalla cruda de error de go_router: vuelve al inicio, que decide
+  // a dónde ir según la sesión.
+  onException: (context, state, router) {
+    debugPrint('[Router] ubicación desconocida: ${state.uri} → inicio');
+    router.go('/');
+  },
   // Redirige al login si se intenta acceder a una ruta protegida sin sesión.
   redirect: (context, state) {
+    // Las rutas de la app son siempre paths (/marketplace, /service/…). Una URI con esquema propio
+    // del sistema —p. ej. `glance-action:/CALLBACK…` que Android adjunta al tocar un widget, o un
+    // `garden://` del Live Activity— no es una pantalla: la navegación real la hace
+    // DeepLinkService con la ruta que manda el código nativo.
+    final scheme = state.uri.scheme;
+    if (scheme.isNotEmpty && scheme != 'http' && scheme != 'https') return '/';
+
     final path = state.matchedLocation;
 
     // Guardia de rol: se evalúa ANTES del chequeo de rutas públicas porque
