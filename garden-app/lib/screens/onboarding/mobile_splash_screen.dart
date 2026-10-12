@@ -14,10 +14,10 @@ const _kSplashVersion = 'v5.0';
 
 /// Mismos colores que el splash nativo (flutter_native_splash en pubspec.yaml:
 /// `color` y `color_dark`): al pasar del nativo a este no hay salto.
-/// Claro: el crema de la app con el logo oliva. Oscuro: verde bosque con el
-/// logo lima.
+/// Claro: el crema de la app con el logo oliva. Oscuro: el gris carbón del
+/// tema con el logo lima (antes verde bosque #3B5E1A: toda la pantalla verde).
 const _kSplashLight = GardenColors.lightBackground;
-const _kSplashDark = Color(0xFF3B5E1A);
+const _kSplashDark = GardenColors.darkBackground;
 
 class _NavTarget {
   final String path;
