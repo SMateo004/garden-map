@@ -31,6 +31,7 @@ import 'narrative/chat_event.dart';
 import 'screens/client/pet_form_sheet.dart';
 import 'theme/garden_motion.dart';
 import 'theme/garden_theme.dart';
+import 'design/garden_paw_mark.dart';
 
 // ── CATÁLOGO DEL SISTEMA DE DISEÑO ─────────────────────────────────────────
 // Punto de entrada aparte, no forma parte de la app publicada. Sirve para
@@ -492,6 +493,12 @@ class _CatalogPageState extends State<_CatalogPage> {
                     caregiverName: tone == StoryTone.live ? 'Andrea' : null,
                   ),
                 ),
+            ]),
+          ]),
+          const _Section('Huella GARDEN (flota; tócala y gira)', [
+            Wrap(spacing: 24, children: [
+              _Labeled('46', GardenPawMark(size: 46)),
+              _Labeled('110', GardenPawMark(size: 110)),
             ]),
           ]),
           _Section('Brote', [
