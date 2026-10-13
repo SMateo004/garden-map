@@ -5977,24 +5977,53 @@ export async function resolveSlotConflict(
 }
 
 /** Devuelve la primera reserva COMPLETED sin calificar del cliente (para el modal al abrir app). */
+/**
+ * Reserva COMPLETED más reciente que el dueño todavía puede calificar. La ventana es la misma del
+ * auto-release (setting `autoReleasePaymentHoras`, 24 h por defecto, contadas desde que el cuidador
+ * terminó el servicio): pasado ese plazo el pago se libera solo y ya no hay nada que calificar.
+ * Devuelve además `rateDeadline` (ISO) para que la ficha del inicio muestre hasta cuándo, y el
+ * nombre/foto del cuidador. Usada por el splash y por la ficha temporal del marketplace.
+ */
 export async function getPendingRatingBooking(clientId: string) {
-  const booking = await prisma.booking.findFirst({
+  const windowHours = await getNumericSetting('autoReleasePaymentHoras', 24);
+  const windowMs = windowHours * 60 * 60 * 1000;
+  const candidates = await prisma.booking.findMany({
     where: {
       clientId,
       status: BookingStatus.COMPLETED,
       ownerRated: false,
-      payoutStatus: 'PENDING',
+      payoutStatus: 'PENDING', // excluye disputas (ON_HOLD) y pagos ya liberados
     },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ serviceEndedAt: 'desc' }, { updatedAt: 'desc' }],
+    take: 5,
     select: {
       id: true,
       serviceType: true,
       petName: true,
       updatedAt: true,
-      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+      serviceEndedAt: true,
+      caregiver: {
+        select: {
+          profilePhoto: true,
+          user: { select: { firstName: true, lastName: true, profilePicture: true } },
+        },
+      },
     },
   });
-  return booking;
+  const now = Date.now();
+  for (const b of candidates) {
+    const endedAt = b.serviceEndedAt ?? b.updatedAt;
+    const deadline = new Date(endedAt.getTime() + windowMs);
+    // El cron de auto-release corre cada hora: entre que vence y que corre, no se ofrece.
+    if (deadline.getTime() <= now) continue;
+    return {
+      ...b,
+      caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`.trim(),
+      caregiverPhoto: b.caregiver.profilePhoto ?? b.caregiver.user.profilePicture ?? null,
+      rateDeadline: deadline.toISOString(),
+    };
+  }
+  return null;
 }
 
 /**

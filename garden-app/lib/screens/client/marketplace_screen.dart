@@ -18,6 +18,7 @@ import '../../design/garden_booking_carousel.dart';
 import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_icons.dart';
+import '../../design/garden_ratings.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_tiles.dart';
 import '../../narrative/booking_story.dart';
@@ -139,6 +140,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── Reservas del inicio (en curso primero, luego las próximas) ──
   List<Map<String, dynamic>> _heroBookings = [];
+
+  // ── Ficha temporal "califica a tu cuidador" (hasta que califique o venza el plazo) ──
+  Map<String, dynamic>? _pendingRating;
+  String? _dismissedRatingId; // "ahora no": se oculta hasta volver a abrir la app
 
   // ── Mascotas del cliente (saludo y foto de la reserva) ──
   List<Map<String, dynamic>> _clientPets = [];
@@ -425,10 +430,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // de la ciudad equivocada para alguien en Cochabamba.
     await _loadZones();
     await _autoSelectPetTypeFromClientPets();
-    await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking()]);
+    await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking(), _loadPendingRating()]);
     _activeBookingTimer?.cancel();
     _activeBookingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (mounted) _loadActiveBooking();
+      if (!mounted) return;
+      _loadActiveBooking();
+      _loadPendingRating();
     });
   }
 
@@ -485,6 +492,58 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final found = pickHeroBookings(bookings, now: DateTime.now());
       if (mounted) setState(() => _heroBookings = found);
     } catch (_) {}
+  }
+
+  /// Servicio terminado que el dueño todavía puede calificar (el backend ya descarta los vencidos,
+  /// los que están en disputa y los que ya se pagaron).
+  Future<void> _loadPendingRating() async {
+    if (_authToken.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/pending-rating'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final b = data['data'];
+      if (mounted) setState(() => _pendingRating = b is Map<String, dynamic> ? b : null);
+    } catch (_) {}
+  }
+
+  /// La ficha se muestra si hay algo por calificar, no la ocultó y el plazo no venció.
+  Map<String, dynamic>? get _visiblePendingRating {
+    final b = _pendingRating;
+    if (b == null || b['id'] == _dismissedRatingId) return null;
+    final deadline = DateTime.tryParse(b['rateDeadline'] as String? ?? '');
+    if (deadline != null && !deadline.isAfter(DateTime.now())) return null;
+    return b;
+  }
+
+  Future<void> _rateBooking(String id) async {
+    await context.push('/service/$id', extra: {'role': 'CLIENT', 'token': _authToken});
+    if (!mounted) return;
+    _loadPendingRating();
+    _loadActiveBooking();
+  }
+
+  Widget _buildPendingRatingCard(Map<String, dynamic> b) {
+    final id = b['id'] as String;
+    final name = (b['caregiverName'] as String?)?.trim() ?? '';
+    return GardenPendingRatingCard(
+      key: ValueKey('pending-rating-$id'),
+      caregiverName: name.isEmpty ? 'tu cuidador' : name.split(' ').first,
+      caregiverPhoto: b['caregiverPhoto'] as String?,
+      petName: b['petName'] as String?,
+      service: GardenService.fromApi(b['serviceType'] as String?),
+      deadline: DateTime.tryParse(b['rateDeadline'] as String? ?? '')?.toLocal(),
+      onRate: () => _rateBooking(id),
+      onDismiss: () => setState(() => _dismissedRatingId = id),
+      compact: true,
+    )
+        .animate()
+        .fadeIn(duration: GardenMotion.resolve(context, GardenMotion.standard), curve: GardenMotion.enter)
+        .slideY(begin: -0.06, end: 0, curve: GardenMotion.enter);
   }
 
   Future<void> _checkOnboarding() async {
@@ -695,6 +754,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     children: [
                       _buildToolbar(theme, isDark, surface, border),
                       Container(height: 1, color: border),
+                      if (_visiblePendingRating case final pr?)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(GardenSpacing.lg, GardenSpacing.lg, GardenSpacing.lg, 0),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 520),
+                              child: _buildPendingRatingCard(pr),
+                            ),
+                          ),
+                        ),
                       Expanded(child: _buildCaregiverList(theme, isDark)),
                     ],
                   ),
@@ -728,9 +798,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
+    final pendingRating = _visiblePendingRating;
     final header = <Widget>[
       if (kIsWeb) _buildMobileAppBanner(bg, border, textColor, subtextColor, isDark),
-      if (_heroBookings.isNotEmpty) ...[
+      if (pendingRating != null) ...[
+        _buildPendingRatingCard(pendingRating),
+        const SizedBox(height: 10),
+      ],
+      if (_heroBookingsShown.isNotEmpty) ...[
         _buildBookingsArea(),
         const SizedBox(height: 14),
       ],
@@ -829,9 +904,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // El resto —confirmadas, por pagar, esperando al cuidador, por calificar—
   // va en una tarjeta de una línea; si son varias, en un carrusel que muestra
   // una a la vez y pasa sola.
+  /// Las reservas del inicio sin la que ya aparece en la ficha de calificar (no se repite).
+  List<Map<String, dynamic>> get _heroBookingsShown {
+    final ratingId = _visiblePendingRating?['id'];
+    if (ratingId == null) return _heroBookings;
+    return [for (final b in _heroBookings) if (b['id'] != ratingId) b];
+  }
+
   Widget _buildBookingsArea() {
-    final live = _heroBookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
-    final rest = [for (final b in _heroBookings) if (!identical(b, live)) b];
+    final shown = _heroBookingsShown;
+    final live = shown.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
+    final rest = [for (final b in shown) if (!identical(b, live)) b];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (live != null) _buildActiveBookingCard(live),
       if (live != null && rest.isNotEmpty) const SizedBox(height: 10),
@@ -887,6 +970,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       case StoryAction.bookAgain:
         context.push('/caregiver/${b['caregiverId']}');
       case StoryAction.rate:
+        // La encuesta del resumen del servicio es la única forma de calificar.
+        _rateBooking(id);
       case StoryAction.respond:
       case StoryAction.sendPhoto:
       case StoryAction.findAnother:

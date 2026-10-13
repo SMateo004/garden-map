@@ -77,6 +77,12 @@ class GardenPendingRatingCard extends StatelessWidget {
   final DateTime? deadline;
   final VoidCallback onRate;
 
+  /// Si se pasa, muestra una X para ocultar la ficha (la del inicio: "ahora no").
+  final VoidCallback? onDismiss;
+
+  /// Versión de una sola fila (la ficha temporal del inicio): no le quita lugar a la búsqueda.
+  final bool compact;
+
   const GardenPendingRatingCard({
     super.key,
     required this.caregiverName,
@@ -85,7 +91,79 @@ class GardenPendingRatingCard extends StatelessWidget {
     this.petName,
     this.service,
     this.deadline,
+    this.onDismiss,
+    this.compact = false,
   });
+
+  Widget _avatar(bool isDark, double size) => Stack(clipBehavior: Clip.none, children: [
+        GardenAvatar(imageUrl: caregiverPhoto, size: size, initials: caregiverName),
+        if (service != null)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: GardenClay(
+              size: size / 2,
+              color: service!.soft(isDark),
+              interactive: false,
+              child: GardenServiceIcon(service!, size: size * 0.29, color: service!.ink(isDark)),
+            ),
+          ),
+      ]);
+
+  Widget _compact(BuildContext context, bool isDark, Color surface, Color text, Color sub) {
+    return Material(
+      color: surface,
+      borderRadius: BorderRadius.circular(GardenRadius.md),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        onTap: onRate,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(10, 8, onDismiss != null ? 2 : 10, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(GardenRadius.md),
+            border: Border.all(color: GardenColors.star.withValues(alpha: 0.55), width: 1.2),
+          ),
+          child: Row(children: [
+            _avatar(isDark, 34),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text('¿Cómo te fue con $caregiverName?',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w800)),
+                if (deadline != null)
+                  Text('Hasta ${gardenDeadlineLabel(deadline!)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            // Píldora chica (la tarjeta entera también abre la encuesta).
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(999)),
+              child: const Text('Calificar',
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+            ),
+            if (onDismiss != null)
+              Tooltip(
+                message: 'Ahora no',
+                child: InkResponse(
+                  onTap: onDismiss,
+                  radius: 18,
+                  child: Padding(
+                    padding: const EdgeInsets.all(7),
+                    child: GardenIcon(GIcon.cerrar, size: GIconSize.xs, color: sub),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +171,7 @@ class GardenPendingRatingCard extends StatelessWidget {
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final text = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final sub = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    if (compact) return _compact(context, isDark, surface, text, sub);
     final what = [
       if (service != null) service!.label,
       if (petName != null && petName!.isNotEmpty) 'de $petName',
@@ -109,20 +188,7 @@ class GardenPendingRatingCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Stack(clipBehavior: Clip.none, children: [
-            GardenAvatar(imageUrl: caregiverPhoto, size: 48, initials: caregiverName),
-            if (service != null)
-              Positioned(
-                right: -4,
-                bottom: -4,
-                child: GardenClay(
-                  size: 24,
-                  color: service!.soft(isDark),
-                  interactive: false,
-                  child: GardenServiceIcon(service!, size: 14, color: service!.ink(isDark)),
-                ),
-              ),
-          ]),
+          _avatar(isDark, 48),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -134,6 +200,13 @@ class GardenPendingRatingCard extends StatelessWidget {
               ],
             ]),
           ),
+          if (onDismiss != null)
+            IconButton(
+              tooltip: 'Ahora no',
+              visualDensity: VisualDensity.compact,
+              onPressed: onDismiss,
+              icon: GardenIcon(GIcon.cerrar, size: GIconSize.sm, color: sub),
+            ),
         ]),
         if (deadline != null) ...[
           const SizedBox(height: 10),
