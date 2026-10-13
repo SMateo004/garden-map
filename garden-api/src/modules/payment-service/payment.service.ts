@@ -11,6 +11,7 @@ import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-regist
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { confirmExtensionQrBySip } from '../booking-service/booking.service.js';
 import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
+import { releasePendingTips } from '../booking-service/tip-release.service.js';
 
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
@@ -240,6 +241,8 @@ export async function applyConfirmedPaymentEffects(bookingId: string): Promise<v
           status: 'COMPLETED',
         },
       });
+      // Si la deuda incluía propinas, ahora que se pagó le llegan al cuidador.
+      await releasePendingTips(tx, booking.clientId);
     });
   } catch (err) {
     logger.error('No se pudo recuperar la deuda del pago confirmado', { bookingId, err });

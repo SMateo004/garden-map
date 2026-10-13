@@ -122,6 +122,8 @@ export interface BookingCreateResult {
   meetAndGreet?: any;
   walletPaymentAmount?: number;
   donationAmount?: number;
+  /** Propina del dueño al cuidador (una sola vez por reserva); null = todavía no dio. */
+  tipAmount?: number | null;
   serviceReport?: any;
   /** Desde cuándo el cuidador puede avisar "en camino" / "ya llegué" (ISO). null = sin restricción. */
   enRouteOpensAt?: string | null;
@@ -240,6 +242,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     meetAndGreet: b.meetAndGreet ?? null,
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     donationAmount: Number(b.donationAmount ?? 0),
+    tipAmount: b.tipAmount == null ? null : Number(b.tipAmount),
     serviceReport: b.serviceReport ?? null,
     bookingGroupId: b.bookingGroupId ?? null,
     enRouteOpensAt: opensAtIso(b, EN_ROUTE_OPENS_MINUTES_BEFORE),

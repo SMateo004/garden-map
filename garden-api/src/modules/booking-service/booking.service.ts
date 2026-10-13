@@ -38,6 +38,7 @@ import {
   preStartOpensAtMs,
 } from '../../utils/service-window.js';
 import * as sipService from '../../services/sip.service.js';
+import { TIP_PENDING_DESCRIPTION } from './tip-release.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
 import * as paymentQrAmountService from '../../services/payment-qr-amount.service.js';
 import { env } from '../../config/env.js';
@@ -5167,38 +5168,44 @@ export async function concludeService(
   return result.response;
 }
 
-/** Propina opcional post-servicio — 100% al cuidador, sin comisión de
- * Garden (a diferencia del pago del servicio, que sí la lleva). Débito
- * inmediato de la billetera del cliente, sin QR/tarjeta — mismo criterio
- * que las donaciones (ver _recordDonation en initPayment): es un monto
- * chico y discrecional, no vale la pena el flujo de pago completo. */
+/** Propina opcional al cuidador — 100% para él, sin comisión de Garden (a
+ * diferencia del pago del servicio). Se puede dar una sola vez por reserva,
+ * mientras el servicio está en curso o después de terminado.
+ *
+ * Se descuenta de la billetera del dueño aunque no le alcance el saldo: el
+ * saldo puede quedar negativo (deuda) y se cobra con su próximo pago, igual que
+ * el tiempo extra (debtRecoveryAmount en initPayment). Al cuidador le llega al
+ * instante lo que el saldo cubría; el resto queda "por cobrar" (TIP_RECEIVED
+ * PENDING) hasta que el dueño salde la deuda — ver tip-release.service.ts. */
 export async function addTip(
   bookingId: string,
   clientId: string,
   amount: number
-): Promise<{ tipAmount: number; balance: number }> {
+): Promise<{ tipAmount: number; balance: number; paidNow: number; pendingAmount: number }> {
   if (!(amount > 0) || amount > 500) {
     throw new BadRequestError('Monto de propina inválido', 'INVALID_TIP_AMOUNT');
   }
 
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
       include: { caregiver: { select: { userId: true } } },
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
-    if (booking.status !== BookingStatus.COMPLETED) {
-      throw new BadRequestError('Solo se puede dar propina en servicios completados', 'BOOKING_NOT_COMPLETED');
+    if (booking.status !== BookingStatus.IN_PROGRESS && booking.status !== BookingStatus.COMPLETED) {
+      throw new BadRequestError(
+        'La propina se puede dar mientras el servicio está en curso o después de terminado',
+        'BOOKING_NOT_TIPPABLE'
+      );
     }
     if (booking.tipAmount != null) {
       throw new BadRequestError('Ya diste propina en esta reserva', 'TIP_ALREADY_GIVEN');
     }
 
-    // Bloquea la fila del cliente para el resto de la transacción — mismo
-    // patrón que initPayment/wallet.routes.ts (retiros): sin esto, dos
-    // propinas casi simultáneas podrían leer el mismo saldo bajo Read
-    // Committed y ambas descontar, dejando el saldo negativo sin que
-    // ninguna se rechace.
+    // Bloquea la fila del dueño para el resto de la transacción — mismo patrón
+    // que initPayment/wallet.routes.ts (retiros): sin esto, dos operaciones casi
+    // simultáneas podrían leer el mismo saldo bajo Read Committed.
     await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
 
     const clientUser = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
@@ -5208,14 +5215,11 @@ export async function addTip(
       _sum: { amount: true },
     });
     const availableBalance = Math.max(0, clientBalance - Number(pendingAgg._sum.amount ?? 0));
-    if (availableBalance < amount) {
-      throw new BadRequestError(
-        `Saldo disponible insuficiente. Disponible: Bs ${availableBalance.toFixed(2)}, propina: Bs ${amount.toFixed(2)}.`,
-        'INSUFFICIENT_BALANCE'
-      );
-    }
+    // Lo que el saldo cubre llega al cuidador ya; el resto queda por cobrar.
+    const paidNow = Math.round(Math.min(amount, availableBalance) * 100) / 100;
+    const pendingAmount = Math.round((amount - paidNow) * 100) / 100;
 
-    // Atomic claim — evita doble-propina por una carrera con otro request
+    // Atomic claim — evita doble propina por una carrera con otro request
     // simultáneo (ej. doble tap), igual que el resto de las transiciones
     // de estado de Booking en este archivo.
     const claimed = await tx.booking.updateMany({
@@ -5237,41 +5241,70 @@ export async function addTip(
         type: 'TIP',
         amount,
         balance: Number(updatedClient.balance),
-        description: `Propina — reserva ${bookingId.slice(0, 8)}`,
+        description:
+          pendingAmount > 0
+            ? `Propina — reserva ${bookingId.slice(0, 8)} (Bs ${pendingAmount.toFixed(2)} se cobran en tu próxima reserva)`
+            : `Propina — reserva ${bookingId.slice(0, 8)}`,
         bookingId,
         status: 'COMPLETED',
       },
     });
 
-    const updatedCaregiver = await tx.user.update({
-      where: { id: booking.caregiver.userId },
-      data: { balance: { increment: amount } },
-      select: { balance: true },
-    });
-    await tx.walletTransaction.create({
-      data: {
-        userId: booking.caregiver.userId,
-        // Tipo propio: antes era 'TIP' igual que el débito del cliente, y la
-        // billetera del cuidador la mostraba como gasto ("− Bs 10") y el panel
-        // no la contaba como ganancia.
-        type: 'TIP_RECEIVED',
-        amount,
-        balance: Number(updatedCaregiver.balance),
-        description: `Propina recibida — reserva ${bookingId.slice(0, 8)}`,
-        bookingId,
-        status: 'COMPLETED',
-      },
-    });
+    if (paidNow > 0) {
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.caregiver.userId} FOR UPDATE`;
+      const updatedCaregiver = await tx.user.update({
+        where: { id: booking.caregiver.userId },
+        data: { balance: { increment: paidNow } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.caregiver.userId,
+          // Tipo propio: antes era 'TIP' igual que el débito del cliente, y la
+          // billetera del cuidador la mostraba como gasto ("− Bs 10") y el panel
+          // no la contaba como ganancia.
+          type: 'TIP_RECEIVED',
+          amount: paidNow,
+          balance: Number(updatedCaregiver.balance),
+          description: `Propina recibida — reserva ${bookingId.slice(0, 8)}`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+    }
+    if (pendingAmount > 0) {
+      const caregiverNow = await tx.user.findUnique({
+        where: { id: booking.caregiver.userId },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.caregiver.userId,
+          type: 'TIP_RECEIVED',
+          amount: pendingAmount,
+          balance: Number(caregiverNow?.balance ?? 0),
+          description: `${TIP_PENDING_DESCRIPTION} — reserva ${bookingId.slice(0, 8)} (llega cuando el dueño pague su próxima reserva)`,
+          bookingId,
+          status: 'PENDING',
+        },
+      });
+    }
 
     sendPushToUser(
       booking.caregiver.userId,
       '💚 Recibiste una propina',
-      `Un cliente te dejó Bs ${amount.toFixed(2)} de propina — 100% para ti, sin comisión.`,
+      pendingAmount > 0
+        ? paidNow > 0
+          ? `Te dejaron Bs ${amount.toFixed(2)} de propina: Bs ${paidNow.toFixed(2)} ya están en tu billetera y Bs ${pendingAmount.toFixed(2)} llegan cuando el dueño pague su próxima reserva. 100% para ti.`
+          : `Te dejaron Bs ${amount.toFixed(2)} de propina — llega a tu billetera cuando el dueño pague su próxima reserva. 100% para ti.`
+        : `Un cliente te dejó Bs ${amount.toFixed(2)} de propina — 100% para ti, sin comisión.`,
       { type: 'TIP_RECEIVED', bookingId }
     ).catch(() => {});
+    emitWalletUpdated(clientId);
+    emitWalletUpdated(booking.caregiver.userId);
 
-    logger.info('Propina registrada', { bookingId, clientId, amount });
-    return { tipAmount: amount, balance: Number(updatedClient.balance) };
+    logger.info('Propina registrada', { bookingId, clientId, amount, paidNow, pendingAmount });
+    return { tipAmount: amount, balance: Number(updatedClient.balance), paidNow, pendingAmount };
   });
 }
 

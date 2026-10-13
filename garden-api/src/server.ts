@@ -56,6 +56,7 @@ import { iniciarJobPaymentReview } from './jobs/payment-review.job.js';
 import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
+import { iniciarJobLiberarPropinas } from './jobs/tip-release.job.js';
 import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.job.js';
 import { iniciarJobAnalyticsRollup } from './jobs/analytics-rollup.job.js';
 import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
@@ -273,6 +274,7 @@ async function start() {
     iniciarJobMgExpiry();
     iniciarJobSlotConflictExpiry();
     iniciarJobChatRetention();
+    iniciarJobLiberarPropinas();
     iniciarJobCaregiverAcceptExpiry();
     iniciarJobAnalyticsRollup();
     iniciarJobNoShowExpiry();
