@@ -14,7 +14,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/zones.dart';
 import '../../services/zones_service.dart';
 import '../../services/cities_service.dart';
-import '../../design/brote.dart';
 import '../../design/garden_booking_carousel.dart';
 import '../../design/garden_booking_hero_card.dart';
 import '../../design/garden_caregiver_card.dart';
@@ -33,6 +32,8 @@ import '../../utils/web_redirect.dart';
 import 'nearby_vets_screen.dart';
 import '../../widgets/garden_base_map.dart';
 import '../../design/garden_marketplace_banner.dart';
+import '../../design/garden_paw_mark.dart';
+import '../../design/brote.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -733,11 +734,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _buildBookingsArea(),
         const SizedBox(height: 14),
       ],
-      _buildMobileSearchRow(theme, isDark, surface, border, textColor, subtextColor),
-      const SizedBox(height: 12),
+      // Sin búsqueda por nombre (oct 2026): servicios en pastillas finas y,
+      // abajo, los atajos con el botón de filtros al lado.
       _buildServiceTiles(),
-      const SizedBox(height: 14),
-      _buildShortcuts(),
+      const SizedBox(height: 10),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: _buildShortcuts()),
+        const SizedBox(width: 8),
+        _buildFilterButton(theme, isDark, surface, border),
+      ]),
       // Sin título ni repetición de filtros: los servicios y el botón de
       // filtros (con su contador) ya dicen qué se está viendo.
       const SizedBox(height: 16),
@@ -778,7 +783,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
       child: Row(
         children: [
-          const Brote(pose: BrotePose.hola, size: 46),
+          // La huella de GARDEN en relieve (flota apenas; al tocarla gira).
+          const GardenPawMark(size: 46),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -901,95 +907,61 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  // ── Búsqueda + filtros ───────────────────────────────────────────────────
-  Widget _buildMobileSearchRow(ThemeData theme, bool isDark, Color surface, Color border,
-      Color textColor, Color subtextColor) {
+  // ── Filtros ──────────────────────────────────────────────────────────────
+  // Botón redondo junto a la barra de atajos (antes iba al lado de la
+  // búsqueda por nombre, que se quitó del inicio).
+  Widget _buildFilterButton(ThemeData theme, bool isDark, Color surface, Color border) {
     final hasFilters = _activeFilterCount > 0;
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: border),
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: textColor, fontSize: 14),
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Busca un cuidador por nombre',
-                hintStyle: TextStyle(color: subtextColor, fontSize: 14),
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.only(left: 12, right: 6),
-                  child: GardenIcon(GIcon.buscar, color: subtextColor),
-                ),
-                prefixIconConstraints: const BoxConstraints(minWidth: 38),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onChanged: (v) {
-                _searchDebounce?.cancel();
-                _searchDebounce = Timer(const Duration(milliseconds: 400), () {
-                  setState(() => _searchQuery = v.trim());
-                  _loadCaregivers(reset: true);
-                });
-              },
-            ),
+    return Semantics(
+      button: true,
+      label: hasFilters ? 'Filtros, $_activeFilterCount activos' : 'Filtros',
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _showMobileFilterSheet(theme, isDark, surface, border);
+        },
+        child: AnimatedContainer(
+          duration: GardenMotion.resolve(context, GardenMotion.quick),
+          // Mismo alto que la barra de atajos (42).
+          height: 42,
+          width: 42,
+          decoration: BoxDecoration(
+            color: hasFilters ? GardenColors.primary.withValues(alpha: 0.15) : surface,
+            borderRadius: BorderRadius.circular(21),
+            border: Border.all(color: hasFilters ? GardenColors.primary : border),
           ),
-        ),
-        const SizedBox(width: 8),
-        Semantics(
-          button: true,
-          label: hasFilters ? 'Filtros, $_activeFilterCount activos' : 'Filtros',
-          child: GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              _showMobileFilterSheet(theme, isDark, surface, border);
-            },
-            child: AnimatedContainer(
-              duration: GardenMotion.resolve(context, GardenMotion.quick),
-              height: 44,
-              width: 44,
-              decoration: BoxDecoration(
-                color: hasFilters ? GardenColors.primary.withValues(alpha: 0.15) : surface,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: hasFilters ? GardenColors.primary : border),
+          child: Stack(
+            children: [
+              Center(
+                child: GardenIcon(
+                  GIcon.filtros,
+                  state: hasFilters ? GIconState.active : GIconState.idle,
+                ),
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: GardenIcon(
-                      GIcon.filtros,
-                      state: hasFilters ? GIconState.active : GIconState.idle,
+              if (hasFilters)
+                Positioned(
+                  top: 5,
+                  right: 5,
+                  child: Container(
+                    width: 15,
+                    height: 15,
+                    decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                    child: Center(
+                      child: Text('$_activeFilterCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
                     ),
                   ),
-                  if (hasFilters)
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: Container(
-                        width: 15,
-                        height: 15,
-                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                        child: Center(
-                          child: Text('$_activeFilterCount',
-                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  // ── Servicios como mosaicos (día → noche) ────────────────────────────────
+  // ── Servicios en pastillas finas (día → noche) ───────────────────────────
+  // Las cuatro en una fila, cada una con su parte del ancho (antes: cuatro
+  // mosaicos altos con una figura grande y el nombre abajo).
   Widget _buildServiceTiles() {
     const options = <(String, GardenService?)>[
       ('todos', null),
@@ -1000,8 +972,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return Row(
       children: [
         for (var k = 0; k < options.length; k++) ...[
-          if (k > 0) const SizedBox(width: 8),
+          if (k > 0) const SizedBox(width: 6),
+          // Guardería y Hospedaje son más largas: un poco más de ancho.
           Expanded(
+            flex: options[k].$1 == 'todos' || options[k].$1 == 'paseo' ? 9 : 11,
             child: GardenServiceTile(
               service: options[k].$2,
               selected: _selectedService == options[k].$1,

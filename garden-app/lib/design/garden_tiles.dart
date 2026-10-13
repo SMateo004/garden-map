@@ -12,7 +12,10 @@ import 'garden_service.dart';
 // una fila de accesos con iconos. Mismo radio, mismo tamaño de icono y misma
 // tipografía en todos — se aprenden una vez.
 
-/// Mosaico de servicio. [service] null = "Todos".
+/// Servicio como pastilla fina: ícono chico + nombre en una línea. [service]
+/// null = "Todos". La elegida toma el color del servicio; las demás quedan
+/// neutras. Antes era un mosaico alto (figura de 46 px con volumen y el nombre
+/// abajo, ~90 px de alto); ahora mide 36 px y deja la lista más arriba.
 class GardenServiceTile extends StatelessWidget {
   final GardenService? service;
   final bool selected;
@@ -40,6 +43,7 @@ class GardenServiceTile extends StatelessWidget {
       button: true,
       selected: selected,
       label: svc?.label ?? 'Todos los servicios',
+      excludeSemantics: true,
       child: GestureDetector(
         onTap: () {
           HapticFeedback.selectionClick();
@@ -48,40 +52,39 @@ class GardenServiceTile extends StatelessWidget {
         child: AnimatedContainer(
           duration: GardenMotion.resolve(context, GardenMotion.quick),
           curve: GardenMotion.enter,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: selected ? soft : surface,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(color: selected ? ink.withValues(alpha: 0.45) : border, width: selected ? 1.5 : 1),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Figura con volumen: la elegida toma el color del servicio y
-              // flota; las demás quedan neutras (antes: ícono de línea plano).
-              GardenClay(
-                size: 46,
-                interactive: false,
-                color: selected
-                    ? Color.lerp(ink, Colors.white, isDark ? 0.0 : 0.12)!
-                    : (isDark ? GardenColors.darkSurfaceElevated : const Color(0xFFF1EEE4)),
-                child: GardenClayIcon(
+          alignment: Alignment.center,
+          // En un teléfono angosto el contenido se achica un poco en vez de
+          // cortarse ("Hospeda…"); con lugar, queda a su tamaño.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GardenIcon(
                   svc == null ? GIcon.huella : GIcon.forService(svc),
-                  size: GIconSize.lg,
-                  color: selected ? Colors.white : idleText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                svc?.label ?? 'Todos',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GardenText.labelMedium.copyWith(
+                  size: GIconSize.sm,
+                  state: selected ? GIconState.active : GIconState.idle,
                   color: selected ? ink : idleText,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                 ),
-              ),
-            ],
+                const SizedBox(width: 5),
+                Text(
+                  svc?.label ?? 'Todos',
+                  maxLines: 1,
+                  style: GardenText.labelMedium.copyWith(
+                    color: selected ? ink : idleText,
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
