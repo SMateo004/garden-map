@@ -43,6 +43,7 @@ import '../../design/garden_story_progress.dart';
 import '../../widgets/garden_base_map.dart';
 import '../../utils/photo_picker.dart';
 import '../../design/garden_service_icon.dart';
+import '../../widgets/tip_card.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -3132,6 +3133,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 24),
 
+                  // Propina ("un extra") para el cuidador, mientras el servicio está en curso.
+                  _tipCard(),
+                  const SizedBox(height: 16),
+
                   if (_booking?['clientMarkedEndAt'] != null) ...[
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -4077,6 +4082,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   // --- VISTA: COMPLETED ---
+  /// Propina del dueño al cuidador (una sola vez por reserva).
+  Widget _tipCard() => GardenTipCard(
+        key: ValueKey('tip-${_booking?['tipAmount']}'),
+        bookingId: widget.bookingId,
+        baseUrl: _baseUrl,
+        token: _token,
+        caregiverFirstName: ((_booking?['caregiverName'] as String?) ?? 'tu cuidador').split(' ').first,
+        tipAmount: (_booking?['tipAmount'] as num?)?.toDouble(),
+        onTipped: _loadBooking,
+      );
+
   Widget _buildCompletedView() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
@@ -4233,6 +4249,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                     ]),
                   ),
+                  // Propina, también después de terminado (si no la dio en curso).
+                  if (!isCaregiver) ...[
+                    const SizedBox(height: 14),
+                    _tipCard(),
+                  ],
                   const SizedBox(height: 28),
 
                   // ── Qué sigue ───────────────────────────────────────────
@@ -6267,8 +6288,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           return;
         }
 
-        // Misma propina que desde "Mis reservas" (widgets/tip_sheet.dart).
-        await showTipSheet(context, bookingId: widget.bookingId, baseUrl: _baseUrl, token: _token);
+        // Misma propina que desde "Mis reservas" (widgets/tip_sheet.dart), salvo
+        // que ya la haya dado durante el servicio (una sola vez por reserva).
+        if (_booking?['tipAmount'] == null) {
+          await showTipSheet(context, bookingId: widget.bookingId, baseUrl: _baseUrl, token: _token);
+        }
         if (!mounted) return;
         _showSmartContractDialog(rating);
       } else {

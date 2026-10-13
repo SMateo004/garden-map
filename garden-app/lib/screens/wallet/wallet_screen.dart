@@ -1781,7 +1781,10 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           color: GardenColors.warning.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('En camino', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
+                        // Propina "por cobrar": el dueño la dejó sin saldo y llega
+                        // cuando pague su próxima reserva (no suma al saldo todavía).
+                        child: Text(isTipReceived ? 'Por cobrar' : 'En camino',
+                            style: const TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ],

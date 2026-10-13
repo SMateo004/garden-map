@@ -1,16 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../design/garden_icons.dart';
 import '../theme/garden_theme.dart';
 import '../utils/input_formatters.dart';
+import 'tip_card.dart';
 
 /// Ofrece la propina después de una calificación de 3 estrellas o más — mismo
 /// sheet desde "Mis reservas" y desde el resumen del servicio.
-Future<void> showTipSheet(BuildContext context,
-    {required String bookingId, required String baseUrl, required String token}) {
+Future<void> showTipSheet(
+  BuildContext context, {
+  required String bookingId,
+  required String baseUrl,
+  required String token,
+}) {
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -54,11 +58,20 @@ class _TipSheetState extends State<TipSheet> {
 
   Future<void> _loadBalance() async {
     try {
-      final res = await http.get(Uri.parse('${widget.baseUrl}/wallet'), headers: {'Authorization': 'Bearer ${widget.token}'});
+      final res = await http.get(
+        Uri.parse('${widget.baseUrl}/wallet'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
       final data = jsonDecode(res.body);
       if (mounted && data['success'] == true) {
-        setState(() => _availableBalance = double.tryParse(
-            data['data']?['availableBalance']?.toString() ?? data['data']?['balance']?.toString() ?? '0') ?? 0);
+        setState(
+          () =>
+              _availableBalance =
+                  double.tryParse(
+                    data['data']?['availableBalance']?.toString() ?? data['data']?['balance']?.toString() ?? '0',
+                  ) ??
+                  0,
+        );
       }
     } catch (_) {
       // Sin red — se deja _availableBalance en null (no se bloquea nada,
@@ -75,10 +88,9 @@ class _TipSheetState extends State<TipSheet> {
   }
 
   double get _amount => _selected ?? parseDecimal(_customController.text) ?? 0;
-  bool get _exceedsBalance => _availableBalance != null && _amount > _availableBalance!;
 
   Future<void> _submit() async {
-    if (_amount <= 0 || _exceedsBalance) return;
+    if (_amount <= 0) return;
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
@@ -126,84 +138,59 @@ class _TipSheetState extends State<TipSheet> {
             children: [
               Center(
                 child: Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
-              Text('¿Le dejas una propina?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                '¿Le dejas una propina?',
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 6),
-              Text('100% va directo al cuidador — Garden no cobra comisión sobre propinas.',
-                  style: TextStyle(color: subtextColor, fontSize: 12.5)),
+              Text(
+                '100% va directo al cuidador — Garden no cobra comisión sobre propinas.',
+                style: TextStyle(color: subtextColor, fontSize: 12.5),
+              ),
               if (!_loadingBalance && _availableBalance != null) ...[
                 const SizedBox(height: 6),
-                Text('Saldo disponible: Bs ${_availableBalance!.toStringAsFixed(2)}',
-                    style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                Text(
+                  'Saldo disponible: Bs ${_availableBalance!.toStringAsFixed(2)}',
+                  style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
               ],
               const SizedBox(height: 18),
-              if (!_loadingBalance && _availableBalance != null && _availableBalance! < presets.first) ...[
-                // Ni el monto más chico alcanza — no tiene sentido mostrar
-                // presets todos deshabilitados, se ofrece cargar saldo directo.
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: GardenColors.warning.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('No te alcanza el saldo de tu billetera para dejar propina todavía.',
-                          style: TextStyle(color: textColor, fontSize: 12.5)),
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          context.push('/wallet');
-                        },
-                        icon: const GardenIcon(GIcon.billetera, size: GIconSize.sm, inheritColor: true),
-                        label: const Text('Cargar saldo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: GardenColors.primary,
-                          side: const BorderSide(color: GardenColors.primary),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ] else ...[
+              ...[
                 Row(
                   children: [
                     ...presets.map((p) {
                       final sel = _selected == p;
-                      final disabled = _availableBalance != null && p > _availableBalance!;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: Opacity(
-                          opacity: disabled ? 0.4 : 1.0,
-                          child: GestureDetector(
-                            onTap: disabled ? null : () {
-                              HapticFeedback.selectionClick();
-                              setState(() {
-                                _selected = sel ? null : p;
-                                if (!sel) _customController.clear();
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: sel ? GardenColors.primary : surface,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: sel ? GardenColors.primary : borderColor),
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _selected = sel ? null : p;
+                              if (!sel) _customController.clear();
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: sel ? GardenColors.primary : surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: sel ? GardenColors.primary : borderColor),
+                            ),
+                            child: Text(
+                              'Bs ${p.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                color: sel ? Colors.white : textColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
                               ),
-                              child: Text('Bs ${p.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                      color: sel ? Colors.white : textColor,
-                                      fontWeight: FontWeight.w700, fontSize: 13)),
                             ),
                           ),
                         ),
@@ -215,25 +202,17 @@ class _TipSheetState extends State<TipSheet> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         inputFormatters: [decimalInputFormatter],
                         style: TextStyle(color: textColor, fontSize: 13),
-                        onChanged: (v) {
-                          // Tope al saldo disponible — evita que el cliente
-                          // escriba un monto que sabemos de antemano que va a fallar.
-                          final parsed = double.tryParse(v) ?? 0;
-                          if (_availableBalance != null && parsed > _availableBalance!) {
-                            final capped = _availableBalance!.toStringAsFixed(2);
-                            _customController.value = TextEditingValue(
-                              text: capped, selection: TextSelection.collapsed(offset: capped.length),
-                            );
-                          }
-                          setState(() => _selected = null);
-                        },
+                        onChanged: (v) => setState(() => _selected = null),
                         decoration: InputDecoration(
                           hintText: 'Otro monto',
                           hintStyle: TextStyle(color: subtextColor, fontSize: 12),
                           prefixText: 'Bs ',
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: borderColor)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide(color: borderColor),
+                          ),
                           filled: true,
                           fillColor: surface,
                         ),
@@ -242,12 +221,22 @@ class _TipSheetState extends State<TipSheet> {
                   ],
                 ),
               ],
+              if ((tipDebtPart(_amount, _availableBalance) ?? 0) > 0) ...[
+                const SizedBox(height: 10),
+                // Sin tope por saldo (desde oct 2026): lo que falta queda como deuda.
+                Text(
+                  'Tu saldo es ${tipBs(_availableBalance ?? 0)}: ${tipBs(tipDebtPart(_amount, _availableBalance)!)} '
+                  'quedan como deuda y se cobran en tu próxima reserva.',
+                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                ),
+              ],
               const SizedBox(height: 20),
               GardenButton(
                 label: _submitting ? 'Enviando...' : 'Enviar propina de Bs ${_amount.toStringAsFixed(0)}',
                 loading: _submitting,
                 gIcon: GIcon.favorito,
-                onPressed: (_amount > 0 && !_submitting && !_exceedsBalance) ? _submit : null),
+                onPressed: (_amount > 0 && !_submitting) ? _submit : null,
+              ),
               const SizedBox(height: 8),
               Center(
                 child: TextButton(

@@ -180,6 +180,8 @@ enum GIcon {
   salir(Ph.signOut),
   hecho(Ph.check),
   quitar(Ph.minusCircle),
+  /// Menos, sin círculo (pareja de [agregar] en los − / + de montos).
+  menos(Ph.minus),
   seleccionado(Ph.radioButton),
   casilla(Ph.square),
   casillaMarcada(Ph.checkSquare),

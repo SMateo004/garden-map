@@ -112,6 +112,7 @@ class Ph {
   static const mapTrifold = PhGlyph(IconData(0xe31a, fontFamily: _reg), IconData(0xe31b, fontFamily: _duo), IconData(0xe31a, fontFamily: _duo));
   static const medal = PhGlyph(IconData(0xe320, fontFamily: _reg), IconData(0xe321, fontFamily: _duo), IconData(0xe320, fontFamily: _duo));
   static const megaphone = PhGlyph(IconData(0xe324, fontFamily: _reg), IconData(0xe325, fontFamily: _duo), IconData(0xe324, fontFamily: _duo));
+  static const minus = PhGlyph(IconData(0xe32a, fontFamily: _reg), IconData(0xe32b, fontFamily: _duo), IconData(0xe32a, fontFamily: _duo));
   static const minusCircle = PhGlyph(IconData(0xe32c, fontFamily: _reg), IconData(0xe32d, fontFamily: _duo), IconData(0xe32c, fontFamily: _duo));
   static const moon = PhGlyph(IconData(0xe330, fontFamily: _reg), IconData(0xe331, fontFamily: _duo), IconData(0xe330, fontFamily: _duo));
   static const navigationArrow = PhGlyph(IconData(0xeade, fontFamily: _reg), IconData(0xeadf, fontFamily: _duo), IconData(0xeade, fontFamily: _duo));
