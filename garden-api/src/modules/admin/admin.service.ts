@@ -1801,6 +1801,9 @@ export async function approveExtensionPayment(
       include: { caregiver: { select: { userId: true } } },
     });
     if (!booking) throw new NotFoundError('Reserva no encontrada');
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.REJECTED_BY_CAREGIVER) {
+      throw new BadRequestError('La reserva fue cancelada: rechaza la extensión en vez de aprobarla.');
+    }
 
     const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
     const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
@@ -1808,6 +1811,7 @@ export async function approveExtensionPayment(
 
     const evt = events[idx];
     const { extraAmount } = evt;
+    let extraCommissionApplied = 0;
     const COMMISSION_RATE = await getCommissionRate(booking.serviceType, booking.caregiverId);
     const pricePerUnitClient = Number(booking.pricePerUnit);
     const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, COMMISSION_RATE);
@@ -1827,6 +1831,7 @@ export async function approveExtensionPayment(
       // problema que en confirmWalkExtensionQr/confirmHospedajeExtensionQr/
       // confirmExtensionQrBySip, mismo fix.
       const extraCommission = evt.extraCommission ?? (extraAmount - pricePerUnitCaregiver * additionalDays);
+      extraCommissionApplied = extraCommission;
       const newEndDate = new Date(booking.endDate!);
       newEndDate.setDate(newEndDate.getDate() + additionalDays);
       bookingUpdate = {
@@ -1848,6 +1853,7 @@ export async function approveExtensionPayment(
       const { additionalMinutes } = evt;
       // FIX (auditoría 2026-09-30, E2): ver comentario equivalente arriba.
       const extraCommission = evt.extraCommission ?? (extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes));
+      extraCommissionApplied = extraCommission;
       bookingUpdate = {
         duration: (booking.duration ?? 60) + additionalMinutes,
         totalAmount: new Prisma.Decimal(newTotal),
@@ -1866,6 +1872,32 @@ export async function approveExtensionPayment(
     bookingUpdate.serviceEvents = events;
 
     await tx.booking.update({ where: { id: bookingId }, data: bookingUpdate });
+
+    // Si al cuidador ya se le liberó el pago de la reserva, la extensión no
+    // entraría en ningún pago futuro: antes el total subía pero el cuidador
+    // nunca recibía ese extra (el dueño sí lo pagó). Se le acredita ya su neto.
+    const extensionNet = Math.round((Number(extraAmount) - extraCommissionApplied - Number(evt.extraTax ?? 0)) * 100) / 100;
+    if (booking.payoutStatus === 'PAID' && booking.caregiver?.userId && extensionNet > 0) {
+      const caregiverId = booking.caregiver.userId;
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${caregiverId} FOR UPDATE`;
+      const credited = await tx.user.update({
+        where: { id: caregiverId },
+        data: { balance: { increment: extensionNet } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: caregiverId,
+          type: 'EARNING',
+          amount: extensionNet,
+          balance: Number(credited.balance),
+          description: `Extensión aprobada después del pago — reserva ${bookingId.slice(0, 8)}`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      caregiverMsg += ` Bs ${extensionNet.toFixed(2)} ya están en tu billetera.`;
+    }
     await enqueueBookingExtension(bookingId, isHospedaje
       ? { unit: 'DAYS', quantity: evt.additionalDays, newTotalAmount: newTotal }
       : { unit: 'MINUTES', quantity: evt.additionalMinutes, newTotalAmount: newTotal }, tx);

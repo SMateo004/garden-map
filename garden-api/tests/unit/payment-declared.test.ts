@@ -18,7 +18,7 @@ jest.mock('../../src/config/database', () => {
   const db = {
     booking: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     user: { update: jest.fn() },
-    walletTransaction: { create: jest.fn() },
+    walletTransaction: { create: jest.fn(), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     notification: { create: jest.fn() },
     adminNotification: { create: jest.fn() },
     adminAction: { create: jest.fn() },
@@ -48,7 +48,7 @@ jest.mock('../../src/shared/analytics', () => ({ track: jest.fn() }));
 const db = prisma as unknown as {
   booking: { findFirst: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
   user: { update: jest.Mock };
-  walletTransaction: { create: jest.Mock };
+  walletTransaction: { create: jest.Mock; aggregate: jest.Mock };
   notification: { create: jest.Mock };
   adminNotification: { create: jest.Mock };
   adminAction: { create: jest.Mock };
@@ -205,6 +205,16 @@ describe('verificación posterior del admin', () => {
     expect(firebase.sendPushToUser).toHaveBeenCalledWith('client-1', 'Tienes un pago pendiente', expect.any(String));
     // La reserva no se cancela.
     expect(db.booking.update.mock.calls[0][0].data.status).toBeUndefined();
+  });
+
+  it('NO llegó y la aprobación había saldado una deuda: la deuda vuelve', async () => {
+    db.booking.findUnique.mockResolvedValue(autoApproved);
+    db.walletTransaction.aggregate.mockResolvedValueOnce({ _sum: { amount: 20 } }); // DEBT_RECOVERY de esta reserva
+    db.user.update.mockResolvedValue({ balance: -80 });
+    const r = await reviewAutoApprovedPayment('b1', 'admin-1', 'NOT_RECEIVED');
+    expect(db.walletTransaction.aggregate.mock.calls[0][0].where).toEqual({ bookingId: 'b1', userId: 'client-1', type: 'DEBT_RECOVERY' });
+    expect(r.chargedAmount).toBe(110); // 90 del QR + 20 de deuda saldada sin dinero
+    expect(db.user.update.mock.calls[0][0].data).toEqual({ balance: { decrement: 110 } });
   });
 
   it('LLEGÓ: solo se registra, sin tocar la billetera', async () => {

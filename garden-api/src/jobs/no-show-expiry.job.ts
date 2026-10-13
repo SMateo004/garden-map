@@ -43,7 +43,7 @@ export function iniciarJobNoShowExpiry() {
  * cancelaba en el primer tick del cron, ignorando por completo el período
  * de gracia configurado por el admin.
  */
-function computeStartTime(booking: {
+export function computeStartTime(booking: {
   serviceType: string;
   walkDate: Date | null;
   startTime: string | null;
@@ -51,7 +51,11 @@ function computeStartTime(booking: {
 }): Date | null {
   if (booking.serviceType === 'HOSPEDAJE') {
     if (!booking.startDate) return null;
-    return new Date(boliviaDateAndTimeToMs(booking.startDate));
+    // El hospedaje no tiene hora de entrada: tomar la medianoche lo cancelaba
+    // sin reembolso a los 30 min de empezado el día, antes de que el cuidador
+    // pudiera recibir a la mascota. Se considera no-show recién si al
+    // terminar el día de entrada (23:59) nadie inició el servicio.
+    return new Date(boliviaDateAndTimeToMs(booking.startDate, booking.startTime ?? '23:59'));
   }
   // PASEO / GUARDERIA: walkDate + startTime ("HH:MM")
   if (!booking.walkDate) return null;

@@ -86,7 +86,14 @@ export async function reviewAutoApprovedPayment(
       return { clientId: b.clientId, charged: 0, balance: null as number | null };
     }
 
-    const charge = amountExpectedByQr(b);
+    // Lo que debía llegar por QR + la deuda previa que la aprobación saldó
+    // (applyConfirmedPaymentEffects): si el dinero no llegó, esa deuda vuelve.
+    // Sin esto, aprobar solo un pago que nunca llegó borraba la deuda gratis.
+    const recoveredDebt = await tx.walletTransaction.aggregate({
+      where: { bookingId, userId: b.clientId, type: 'DEBT_RECOVERY' },
+      _sum: { amount: true },
+    });
+    const charge = Math.round((amountExpectedByQr(b) + Number(recoveredDebt._sum.amount ?? 0)) * 100) / 100;
     let balanceAfter: number | null = null;
     if (charge > 0) {
       await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${b.clientId} FOR UPDATE`;
