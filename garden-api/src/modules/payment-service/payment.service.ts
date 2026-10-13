@@ -174,6 +174,78 @@ export async function handleCheckoutCompleted(
   enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
 }
 
+
+/**
+ * Lo que tiene que pasar SIEMPRE que se confirma el pago de una reserva, sin
+ * importar quién lo confirme (banco, admin desde Pagos, aprobación segura,
+ * aprobación automática del pago declarado):
+ *  - registrar la donación que el dueño eligió al pagar, y
+ *  - recuperar la deuda previa (saldo negativo) que se sumó al QR.
+ *
+ * Antes cada camino lo hacía por su cuenta y dos no lo hacían: el botón
+ * "Aprobar" de Pagos no registraba la donación (la tarjeta de donador nunca
+ * la mostraba) y ni ese botón ni la aprobación automática recuperaban la
+ * deuda — el dueño la pagaba dentro del QR pero su saldo seguía negativo y se
+ * le iba a volver a cobrar. Idempotente: se puede llamar más de una vez.
+ */
+export async function applyConfirmedPaymentEffects(bookingId: string): Promise<void> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, clientId: true, donationAmount: true, debtRecoveryAmount: true },
+  });
+  if (!booking) return;
+
+  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
+    try {
+      await prisma.donation.upsert({
+        where: { bookingId: booking.id },
+        create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
+        update: {},
+      });
+    } catch (err) {
+      logger.error('No se pudo registrar la donación del pago confirmado', { bookingId, err });
+    }
+  }
+
+  const debtRecovery = Number(booking.debtRecoveryAmount ?? 0);
+  if (debtRecovery <= 0) return;
+  try {
+    // Fila del cliente bloqueada, saldo releído y monto capeado al saldo
+    // negativo vigente (auditoría 2026-09-24): si la deuda ya se recuperó por
+    // otro lado, o el saldo cambió entre el QR y la confirmación, no se recupera
+    // de más. Y nunca dos veces para la misma reserva.
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.clientId} FOR UPDATE`;
+      const already = await tx.walletTransaction.count({
+        where: { bookingId: booking.id, type: 'DEBT_RECOVERY' },
+      });
+      if (already > 0) return;
+      const clientUser = await tx.user.findUnique({ where: { id: booking.clientId }, select: { balance: true } });
+      const currentBalance = Number(clientUser?.balance ?? 0);
+      const actualDebtRecovery = Math.min(debtRecovery, Math.max(0, -currentBalance));
+      if (actualDebtRecovery <= 0) return;
+      const updated = await tx.user.update({
+        where: { id: booking.clientId },
+        data: { balance: { increment: actualDebtRecovery } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'DEBT_RECOVERY',
+          amount: actualDebtRecovery,
+          balance: Number(updated.balance),
+          description: `Deuda previa saldada con el pago de la reserva ${booking.id.slice(0, 8)}`,
+          bookingId: booking.id,
+          status: 'COMPLETED',
+        },
+      });
+    });
+  } catch (err) {
+    logger.error('No se pudo recuperar la deuda del pago confirmado', { bookingId, err });
+  }
+}
+
 /**
  * Verifica pago por QR (placeholder integración bancaria) y confirma la reserva.
  * Busca por qrId; si la reserva está PENDING_PAYMENT y el QR no expiró, marca CONFIRMED y paidAt.
@@ -287,78 +359,8 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     });
   }
 
-  // Si el dueño eligió donar, registrar la donación
-  // BUG (auditoría): antes esto era fire-and-forget (sin await) — si el
-  // proceso se caía justo después de responder al cliente, el pago quedaba
-  // confirmado pero la donación nunca se registraba, sin forma de saberlo
-  // salvo por un log. Ahora se espera antes de continuar; si falla, solo se
-  // registra el error (el pago en sí ya está confirmado y no debe fallar
-  // la respuesta al cliente por esto).
-  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
-    try {
-      await prisma.donation.upsert({
-        where: { bookingId: booking.id },
-        create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
-        update: {},
-      });
-    } catch (err) {
-      logger.error('Donation record creation failed (QR)', { bookingId: booking.id, err });
-    }
-  }
-
-  // Si había deuda previa incluida en el QR, recuperarla (zerificar balance negativo)
-  const debtRecovery = Number(booking.debtRecoveryAmount ?? 0);
-  if (debtRecovery > 0) {
-    try {
-      // Ambos escritos en una sola transacción — antes eran dos awaits
-      // encadenados fuera de una transacción: si el proceso caía entre el
-      // incremento de balance y la creación del registro de wallet, el saldo
-      // quedaba recuperado sin ningún WalletTransaction que lo explique.
-      //
-      // FIX (auditoría 2026-09-24): antes se grababa `balance: 0` hardcodeado en el
-      // WalletTransaction, asumiendo que el saldo seguía siendo exactamente
-      // -debtRecovery en este instante. Si el cliente tuvo cualquier otro movimiento
-      // de saldo entre que se generó el QR y que se confirmó (pago con billetera,
-      // bono de referido, deuda de otro servicio), el historial le mostraba un saldo
-      // incorrecto. Además, dos QR pendientes con la misma deuda congelada podían
-      // "recuperarla" dos veces. Ahora se bloquea la fila (mismo patrón que
-      // booking.service.ts:1548), se relee el saldo real y se capea el monto a
-      // recuperar al saldo negativo vigente en este instante.
-      await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.clientId} FOR UPDATE`;
-        const clientUser = await tx.user.findUnique({
-          where: { id: booking.clientId },
-          select: { balance: true },
-        });
-        const currentBalance = Number(clientUser?.balance ?? 0);
-        const actualDebtRecovery = Math.min(debtRecovery, Math.max(0, -currentBalance));
-        if (actualDebtRecovery <= 0) {
-          logger.info('Debt recovery (QR): deuda ya recuperada por confirmación concurrente, nada que hacer', {
-            bookingId: booking.id,
-          });
-          return;
-        }
-        const updated = await tx.user.update({
-          where: { id: booking.clientId },
-          data: { balance: { increment: actualDebtRecovery } },
-          select: { balance: true },
-        });
-        await tx.walletTransaction.create({
-          data: {
-            userId: booking.clientId,
-            type: 'DEBT_RECOVERY',
-            amount: actualDebtRecovery,
-            balance: Number(updated.balance),
-            description: `Deuda por tiempo extra recuperada vía QR — reserva ${booking.id.slice(0, 8)}`,
-            bookingId: booking.id,
-            status: 'COMPLETED',
-          },
-        });
-      });
-    } catch (err) {
-      logger.error('Debt recovery failed (QR)', { bookingId: booking.id, err });
-    }
-  }
+  // Donación y deuda previa (misma lógica para todos los caminos de confirmación).
+  await applyConfirmedPaymentEffects(booking.id);
 
   // Registro en blockchain: queda en la cola persistente (chain-registry.service.ts)
   enqueueSafely('CREATE', () => enqueueBookingCreate(booking.id));
@@ -436,14 +438,9 @@ export async function verifyPaymentManual(
   }
   afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
 
-  // Si el dueño eligió donar, registrar la donación (ignorar si ya existe por doble-tap)
-  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
-    await prisma.donation.upsert({
-      where: { bookingId },
-      create: { bookingId, clientId: booking.clientId, amount: booking.donationAmount },
-      update: {},
-    }).catch((err) => logger.error('Donation record creation failed', { bookingId, err }));
-  }
+  // Donación y deuda previa (antes acá no se recuperaba la deuda: el dueño la
+  // pagaba en el QR y su saldo seguía negativo).
+  await applyConfirmedPaymentEffects(bookingId);
 
   logger.info(
     opts.autoApproved
@@ -559,63 +556,8 @@ export async function verifyPaymentBySipCallback(
 
   // Ver comentario equivalente en verifyPaymentByQr — antes fire-and-forget,
   // ahora awaited (best-effort, no rompe la confirmación de pago si falla).
-  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
-    try {
-      await prisma.donation.upsert({
-        where: { bookingId: booking.id },
-        create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
-        update: {},
-      });
-    } catch (err) {
-      logger.error('[SIP callback] Donation record failed', { bookingId: booking.id, err });
-    }
-  }
-
-  // Recuperar deuda previa incluida en el QR (igual que en verifyPaymentByQr) —
-  // ambos escritos en una sola transacción para no dejar un incremento de
-  // balance sin su WalletTransaction correspondiente si el proceso falla a mitad.
-  //
-  // FIX (auditoría 2026-09-24): ver comentario equivalente en verifyPaymentByQr —
-  // ya no se hardcodea `balance: 0`; se bloquea la fila, se relee el saldo real y
-  // se capea el monto a recuperar al saldo negativo vigente en este instante.
-  const sipDebtRecovery = Number(booking.debtRecoveryAmount ?? 0);
-  if (sipDebtRecovery > 0) {
-    try {
-      await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.clientId} FOR UPDATE`;
-        const clientUser = await tx.user.findUnique({
-          where: { id: booking.clientId },
-          select: { balance: true },
-        });
-        const currentBalance = Number(clientUser?.balance ?? 0);
-        const actualDebtRecovery = Math.min(sipDebtRecovery, Math.max(0, -currentBalance));
-        if (actualDebtRecovery <= 0) {
-          logger.info('[SIP callback] Debt recovery: deuda ya recuperada por confirmación concurrente, nada que hacer', {
-            bookingId: booking.id,
-          });
-          return;
-        }
-        const updated = await tx.user.update({
-          where: { id: booking.clientId },
-          data: { balance: { increment: actualDebtRecovery } },
-          select: { balance: true },
-        });
-        await tx.walletTransaction.create({
-          data: {
-            userId: booking.clientId,
-            type: 'DEBT_RECOVERY',
-            amount: actualDebtRecovery,
-            balance: Number(updated.balance),
-            description: `Deuda por tiempo extra recuperada vía SIP — reserva ${booking.id.slice(0, 8)}`,
-            bookingId: booking.id,
-            status: 'COMPLETED',
-          },
-        });
-      });
-    } catch (err) {
-      logger.error('[SIP callback] Debt recovery failed', { bookingId: booking.id, err });
-    }
-  }
+  // Donación y deuda previa (misma lógica para todos los caminos de confirmación).
+  await applyConfirmedPaymentEffects(booking.id);
 
   enqueueSafely('CREATE', () => enqueueBookingCreate(booking.id));
 

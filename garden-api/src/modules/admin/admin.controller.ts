@@ -24,6 +24,7 @@ const paymentReviewBodySchema = z.object({ outcome: z.enum(['CONFIRMED', 'NOT_RE
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
+import { applyConfirmedPaymentEffects } from '../payment-service/payment.service.js';
 
 const paymentQrUpload = multer({
   storage: multer.memoryStorage(),
@@ -354,6 +355,10 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
       'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.'
     ).catch(() => {});
   }
+
+  // Donación y deuda previa: antes este botón no registraba la donación ni
+  // recuperaba la deuda (ver applyConfirmedPaymentEffects).
+  for (const bookingId of [id, ...groupIds]) await applyConfirmedPaymentEffects(bookingId);
 
   enqueueSafely('CREATE', () => enqueueBookingCreate(id));
   afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');

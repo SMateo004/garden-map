@@ -1021,6 +1021,10 @@ export async function approvePaymentSecure(
     ).catch(() => {});
   }
 
+  // Donación y deuda previa (ver applyConfirmedPaymentEffects).
+  const { applyConfirmedPaymentEffects } = await import('../payment-service/payment.service.js');
+  for (const id of [bookingId, ...groupIds]) await applyConfirmedPaymentEffects(id);
+
   enqueueSafely('CREATE', () => enqueueBookingCreate(bookingId));
   afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
   logger.info('Admin: pago aprobado (secure, con contraseña)', { bookingId, adminId });
