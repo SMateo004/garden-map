@@ -279,26 +279,13 @@ struct GardenServiceLiveActivityWidget: Widget {
                         if s.status != "COMPLETED" {
                             ProgressBlock(attributes: a, state: s)
                         }
-                        HStack(spacing: 6) {
-                            Text(a.subtitle)
-                                .font(.system(size: 12))
-                                .foregroundColor(.gardenSubOnDark)
-                                .lineLimit(1)
-                            Spacer()
-                            // En la isla expandida .widgetURL no cubre las
-                            // sub-regiones: el botón necesita su propio Link.
-                            if let url = a.deepLinkURL {
-                                Link(destination: url) {
-                                    HStack(spacing: 3) {
-                                        Text(a.serviceType == "PASEO" ? "Ver el mapa" : "Ver en Garden")
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 10, weight: .bold))
-                                    }
-                                    .foregroundColor(ink)
-                                }
-                            }
-                        }
+                        // Sin botones: tocar la actividad (cualquier parte) abre el
+                        // servicio con el .widgetURL de abajo.
+                        Text(a.subtitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(.gardenSubOnDark)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)

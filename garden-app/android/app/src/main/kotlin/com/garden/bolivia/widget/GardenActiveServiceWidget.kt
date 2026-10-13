@@ -126,17 +126,11 @@ class GardenActiveServiceWidget : GlanceAppWidget() {
                 modifier = GlanceModifier.fillMaxWidth().height(6.dp),
             )
             Spacer(GlanceModifier.height(6.dp))
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
-                Text(
-                    "Empezó a las ${GardenWidgetUi.clock(d.startedAtMs)}",
-                    modifier = GlanceModifier.defaultWeight(),
-                    style = TextStyle(color = GardenWidgetUi.subtext, fontSize = 11.sp),
-                )
-                Text(
-                    if (d.serviceType == "PASEO") "Ver el mapa ›" else "Ver fotos ›",
-                    style = TextStyle(color = GardenWidgetUi.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                )
-            }
+            // Sin botones: toda la tarjeta abre el servicio.
+            Text(
+                "Empezó a las ${GardenWidgetUi.clock(d.startedAtMs)}",
+                style = TextStyle(color = GardenWidgetUi.subtext, fontSize = 11.sp),
+            )
 
             // Mini-mapa — solo PASEO. MainActivity.kt deja el bitmap cada ~30 s
             // mientras el paseo está en curso; sin él, la tarjeta ya es útil.
@@ -181,7 +175,6 @@ class GardenActiveServiceWidget : GlanceAppWidget() {
                     style = TextStyle(color = GardenWidgetUi.subtext, fontSize = 12.sp),
                 )
             }
-            Text("Listo", style = TextStyle(color = GardenWidgetUi.ink(d.serviceType), fontWeight = FontWeight.Bold, fontSize = 13.sp))
         }
     }
 

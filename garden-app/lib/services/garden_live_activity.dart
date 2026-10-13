@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'local_notification_service.dart';
+
 /// Manages Live Activities (iOS 16.2+) and the home-screen widget + persistent
 /// foreground notification (Android) during an active pet service (PASEO /
 /// GUARDERIA / HOSPEDAJE). See ios/GardenActivityWidget/ for the iOS widget
@@ -336,10 +338,10 @@ class GardenLiveActivity {
 
   Future<void> _initAndroid() async {
     if (_androidReady) return;
-    const init = InitializationSettings(
-      android: AndroidInitializationSettings('ic_stat_garden'),
-    );
-    await _notifications.initialize(init);
+    // El plugin es uno solo para toda la app: inicializarlo de nuevo acá (como antes) reemplazaba el
+    // manejador de toques de LocalNotificationService y, desde que empezaba un servicio, tocar
+    // CUALQUIER aviso local solo abría la app. Se usa la inicialización compartida.
+    await LocalNotificationService.init();
     await _notifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
@@ -385,6 +387,8 @@ class GardenLiveActivity {
       _lastTitle,
       _lastBody,
       NotificationDetails(android: details),
+      // Sin botones: tocarla abre la pantalla de este servicio (FcmService._handleData).
+      payload: _bookingId.isEmpty ? null : jsonEncode({'type': 'SERVICE_STARTED', 'bookingId': _bookingId}),
     );
   }
 }

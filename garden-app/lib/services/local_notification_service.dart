@@ -9,7 +9,31 @@ class LocalNotificationService {
 
   /// Qué hacer al tocar un aviso local (lo registra FcmService con la misma
   /// navegación que una notificación push). Antes tocarlo solo abría la app.
-  static void Function(Map<String, dynamic> data)? onTap;
+  static void Function(Map<String, dynamic> data)? _onTap;
+  static Map<String, dynamic>? _pendingTap;
+
+  static void Function(Map<String, dynamic> data)? get onTap => _onTap;
+  static set onTap(void Function(Map<String, dynamic> data)? handler) {
+    _onTap = handler;
+    final pending = _pendingTap;
+    if (handler != null && pending != null) {
+      _pendingTap = null;
+      handler(pending);
+    }
+  }
+
+  static void _deliver(String? raw) {
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final handler = _onTap;
+      if (handler != null) {
+        handler(data);
+      } else {
+        _pendingTap = data;
+      }
+    } catch (_) {}
+  }
 
   /// Sonido de GARDEN: tres roces de hojas, de suave a fuerte (un perro que
   /// pasa entre los arbustos). Sintetizado para GARDEN, sin derechos de terceros.
@@ -43,14 +67,14 @@ class LocalNotificationService {
     );
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
-      onDidReceiveNotificationResponse: (response) {
-        final raw = response.payload;
-        if (raw == null || raw.isEmpty) return;
-        try {
-          onTap?.call(Map<String, dynamic>.from(jsonDecode(raw) as Map));
-        } catch (_) {}
-      },
+      onDidReceiveNotificationResponse: (response) => _deliver(response.payload),
     );
+    // Si la app estaba cerrada y la abrió un aviso local (p. ej. la notificación fija del servicio),
+    // el toque no pasa por el callback de arriba.
+    try {
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) _deliver(launch!.notificationResponse?.payload);
+    } catch (_) {}
     // Crear el canal ya al arrancar (antes se creaba recién con el primer
     // aviso con la app abierta): así las push que llegan con la app cerrada
     // también usan el sonido.
