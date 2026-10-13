@@ -43,7 +43,12 @@ import '../../design/garden_depth.dart';
 class CaregiverHomeScreen extends StatefulWidget {
   /// Pestaña con la que abre: 0 Inicio, 1 Disponibilidad, 2 Reservas.
   final int initialTab;
-  const CaregiverHomeScreen({super.key, this.initialTab = 0});
+
+  /// Reserva a mostrar (`?booking=`), la que abre una notificación: se elige
+  /// su filtro, se despliega y se resalta en la pestaña Reservas.
+  final String? highlightBookingId;
+
+  const CaregiverHomeScreen({super.key, this.initialTab = 0, this.highlightBookingId});
 
   @override
   State<CaregiverHomeScreen> createState() => _CaregiverHomeScreenState();
@@ -82,6 +87,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _highlightId = widget.highlightBookingId;
     _initData();
     _loadAcceptWindow();
     // Aceptación periódica de Términos (cada 2 meses, haya trabajado o no): si toca, abre la pantalla.
@@ -230,6 +236,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   @override
   void dispose() {
+    _highlightClearTimer?.cancel();
+    _bookingsScroll.dispose();
     _unreadChatsTimer?.cancel();
     super.dispose();
   }
@@ -551,7 +559,81 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     if (data['success'] == true) {
       setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
       _computeDayStatuses();
+      if (_highlightId != null && !_highlightRevealed) await _revealHighlighted();
     }
+  }
+
+  // ── Reserva abierta desde una notificación ──────────────────────────────────
+  String? _highlightId;
+  bool _highlightRevealed = false;
+  Timer? _highlightClearTimer;
+  final Map<String, GlobalKey> _cardKeys = {};
+  final ScrollController _bookingsScroll = ScrollController();
+
+  @override
+  void didUpdateWidget(covariant CaregiverHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Otra notificación con la pantalla ya abierta: /caregiver/home?booking=… de nuevo.
+    final id = widget.highlightBookingId;
+    if (id != null && id != oldWidget.highlightBookingId) {
+      _highlightId = id;
+      _highlightRevealed = false;
+      if (_bookings.isNotEmpty) _revealHighlighted();
+    }
+  }
+
+  /// Abre Reservas en el filtro donde está esa reserva (antes se veía la lista
+  /// sin ir a ninguna), la despliega, se desplaza hasta ella y la resalta. Si es
+  /// más vieja que la página que trae la lista, la pide aparte.
+  Future<void> _revealHighlighted() async {
+    final id = _highlightId;
+    if (id == null || !mounted) return;
+    _highlightRevealed = true;
+    var booking = _bookings.where((b) => b['id'] == id).firstOrNull;
+    if (booking == null) {
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/bookings/$id'),
+          headers: {'Authorization': 'Bearer $_caregiverToken'},
+        );
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) booking = (body['data'] as Map).cast<String, dynamic>();
+      } catch (_) {}
+      if (booking == null || !mounted) return;
+      final found = booking;
+      setState(() => _bookings = [..._bookings, found]);
+    }
+    final status = booking['status'] as String? ?? '';
+    setState(() {
+      _selectedTab = 2;
+      _bookingFilter = _toAnswer.contains(status)
+          ? 'responder'
+          : _ahead.contains(status)
+              ? 'proximas'
+              : 'pasadas';
+    });
+    _highlightClearTimer?.cancel();
+    _highlightClearTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _highlightId = null);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(id));
+  }
+
+  /// La lista solo construye las tarjetas cercanas a la pantalla: si la buscada
+  /// todavía no existe, baja por tramos hasta que aparezca y la centra.
+  void _scrollToCard(String id, [int attempt = 0]) {
+    if (!mounted) return;
+    final ctx = _cardKeys[id]?.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+          duration: GardenMotion.resolve(context, GardenMotion.standard), curve: GardenMotion.move, alignment: 0.1);
+      return;
+    }
+    if (attempt >= 30 || !_bookingsScroll.hasClients) return;
+    final pos = _bookingsScroll.position;
+    if (pos.pixels >= pos.maxScrollExtent) return;
+    _bookingsScroll.jumpTo((pos.pixels + pos.viewportDimension * 0.8).clamp(0, pos.maxScrollExtent));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(id, attempt + 1));
   }
 
   Future<void> _logout() async {
@@ -2715,7 +2797,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+    final id = booking['id'] as String? ?? '';
     return _ExpandableBookingCard(
+      key: _cardKeys.putIfAbsent(id, GlobalKey.new),
+      highlighted: id.isNotEmpty && id == _highlightId,
       booking: booking,
       surface: surface,
       textColor: textColor,
@@ -2807,6 +2892,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     ),
                   ])
                 : ListView(
+                    controller: _bookingsScroll,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(top: 6, bottom: 32),
                     children: [
@@ -3428,7 +3514,12 @@ class _ExpandableBookingCard extends StatefulWidget {
   final VoidCallback? onRefresh;
   final String token;
 
+  /// Abierta desde una notificación: se despliega y se resalta.
+  final bool highlighted;
+
   const _ExpandableBookingCard({
+    super.key,
+    this.highlighted = false,
     required this.booking,
     required this.surface,
     required this.textColor,
@@ -3446,7 +3537,13 @@ class _ExpandableBookingCard extends StatefulWidget {
 }
 
 class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
-  bool _expanded = false;
+  late bool _expanded = widget.highlighted;
+
+  @override
+  void didUpdateWidget(covariant _ExpandableBookingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.highlighted && !oldWidget.highlighted) setState(() => _expanded = true);
+  }
   // Evita doble-tap / doble submit en las acciones de cancelación de esta
   // tarjeta — sin esto, dos toques rápidos (o un reintento antes de ver la
   // respuesta) pueden disparar dos POST de cancelación para la misma reserva.
@@ -3630,8 +3727,10 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
           color: widget.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _expanded ? GardenColors.primary.withValues(alpha: 0.4) : widget.borderColor,
-            width: _expanded ? 1.5 : 1,
+            color: widget.highlighted
+                ? GardenColors.success
+                : _expanded ? GardenColors.primary.withValues(alpha: 0.4) : widget.borderColor,
+            width: widget.highlighted ? 2 : _expanded ? 1.5 : 1,
           ),
           boxShadow: [BoxShadow(
             color: Colors.black.withValues(alpha: widget.isDark ? 0.2 : 0.05),

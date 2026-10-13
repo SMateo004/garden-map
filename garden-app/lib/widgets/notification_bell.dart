@@ -114,9 +114,12 @@ class AppNotification {
       // El dueño ve esa reserva resaltada en la lista (mismo mecanismo que
       // usa el pago al terminar: highlight_booking_id).
       final ownerList = role != 'CAREGIVER';
+      // El cuidador (no empleado) abre ESA reserva vía ?booking= (antes la
+      // lista, sin ir a ninguna); el dueño, vía highlight_booking_id.
+      final caregiverTarget = !ownerList && !staff && bookingId != null;
       return (
-        label: bookingId != null && ownerList ? 'Ver la reserva' : 'Ver mis reservas',
-        route: bookings(),
+        label: bookingId != null && (ownerList || caregiverTarget) ? 'Ver la reserva' : 'Ver mis reservas',
+        route: caregiverTarget ? '/caregiver/home?tab=reservas&booking=$bookingId' : bookings(),
         extra: null,
         highlight: ownerList ? bookingId : null,
       );

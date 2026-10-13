@@ -461,6 +461,7 @@ final GoRouter _router = GoRouter(
       name: 'caregiverHome',
       builder: (context, state) => CaregiverHomeScreen(
         initialTab: switch (state.uri.queryParameters['tab']) { 'disponibilidad' => 1, 'reservas' => 2, _ => 0 },
+        highlightBookingId: state.uri.queryParameters['booking'],
       ),
     ),
     GoRoute(

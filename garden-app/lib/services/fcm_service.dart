@@ -166,9 +166,16 @@ class FcmService {
       case 'BOOKING_PAYMENT':
       case 'BOOKING_ACCEPTED':
       case 'BOOKING_REJECTED':
-        // Reservas del dueño — la lista ya muestra el estado y las acciones
-        // disponibles para cada una (no hay pantalla de detalle separada).
-        _router!.go('/my-bookings-tab');
+        // Avisos de una reserva: el cuidador la abre en su pestaña Reservas
+        // (antes iba a /my-bookings-tab, la pantalla del dueño); el dueño, a
+        // su lista, que ya muestra estado y acciones.
+        if (isCaregiver && !AuthState.isCaregiverStaff) {
+          _router!.go(bookingId != null
+              ? '/caregiver/home?tab=reservas&booking=$bookingId'
+              : '/caregiver/home?tab=reservas');
+        } else {
+          _router!.go('/my-bookings-tab');
+        }
         break;
       case 'BOOKING_WAITING_APPROVAL':
         // Nueva solicitud de reserva esperando que el cuidador acepte o
