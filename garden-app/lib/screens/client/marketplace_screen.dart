@@ -23,6 +23,7 @@ import '../../design/garden_service.dart';
 import '../../design/garden_tiles.dart';
 import '../../narrative/booking_story.dart';
 import '../../theme/garden_motion.dart';
+import '../../utils/time_greeting.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
@@ -158,6 +159,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
   Timer? _activeBookingTimer;
+
+  /// Saludo según la hora local. El inicio queda abierto como pestaña: sin
+  /// este reloj, el saludo de la mañana seguía diciendo "buen día" a la noche.
+  String _greeting = timeGreeting();
+  Timer? _greetingTimer;
   final ScrollController _scrollController = ScrollController();
   final MapController _mapController = MapController();
 
@@ -266,6 +272,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   @override
   void initState() {
     super.initState();
+    _greetingTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final g = timeGreeting();
+      if (g != _greeting && mounted) setState(() => _greeting = g);
+    });
     if (widget.initialService != null) _selectedService = widget.initialService!;
     if (widget.initialZone != null) _selectedZone = widget.initialZone;
     if (widget.initialSize != null) _selectedSizes = [widget.initialSize!];
@@ -305,6 +315,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _searchController.dispose();
     _searchDebounce?.cancel();
     _activeBookingTimer?.cancel();
+    _greetingTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -687,13 +698,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  String _getGreeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Buenos días';
-    if (h < 19) return 'Buenas tardes';
-    return 'Buenas noches';
-  }
-
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -866,16 +870,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  firstName == null ? _getGreeting() : '${_getGreeting()}, $firstName',
+                  firstName == null ? _greeting : '$_greeting, $firstName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GardenText.bodySmall.copyWith(color: subtextColor, fontWeight: FontWeight.w700),
+                  style: GardenText.bodyLarge.copyWith(color: subtextColor, fontWeight: FontWeight.w700),
                 ),
+                const SizedBox(height: 2),
+                // Dos líneas si los nombres de las mascotas no entran en una.
                 Text(
                   _petQuestion,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GardenText.headingLarge.copyWith(color: textColor, fontWeight: FontWeight.w900),
+                  style: GardenText.headingLarge.copyWith(
+                      color: textColor, fontSize: 24, fontWeight: FontWeight.w900, height: 1.15),
                 ),
               ],
             ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -10,6 +11,7 @@ import '../../design/garden_depth.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../design/garden_service_icon.dart';
+import '../../utils/time_greeting.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
@@ -37,9 +39,16 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
   String? _tapping; // servicio tocado, para hundir su tarjeta
   _Missing? _missing;
 
+  String _greeting = timeGreeting();
+  Timer? _greetingTimer;
+
   @override
   void initState() {
     super.initState();
+    _greetingTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final g = timeGreeting();
+      if (g != _greeting && mounted) setState(() => _greeting = g);
+    });
     _loadName();
     // Un login que ocurre con esta pantalla ya montada debajo (invitado en
     // /service-selector → push a /login → go de vuelta) reutiliza este
@@ -139,6 +148,7 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
 
   @override
   void dispose() {
+    _greetingTimer?.cancel();
     loginSuccessNotifier.removeListener(_onLoginSuccess);
     super.dispose();
   }
@@ -157,9 +167,10 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final hasSession = AuthState.hasSession;
 
+    // Mismo saludo según la hora que el inicio del marketplace.
     final greeting = hasSession
-        ? (_userName != null ? 'Hola, $_userName' : 'Hola')
-        : 'Hola, qué gusto verte';
+        ? (_userName != null ? '$_greeting, $_userName' : _greeting)
+        : '$_greeting, qué gusto verte';
 
     // Entrada escalonada corta; con movimiento reducido aparece todo junto.
     Widget enter(Widget child, int i) => child
