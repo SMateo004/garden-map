@@ -96,6 +96,18 @@ router.post(
   bookingController.declarePaymentMade
 );
 
+/**
+ * POST /api/bookings/:id/payment/help — el cliente pide ayuda desde el QR (no lee, sin tiempo,
+ * ya pagó, otro monto, cancelar, otro). Lo resuelve el bot cuando se puede, queda en su chat de
+ * soporte y se avisa a los admins (payment-help.service.ts). Solo cliente titular.
+ */
+router.post(
+  '/:id/payment/help',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.paymentHelp
+);
+
 /** POST /api/bookings/:id/resolve-slot-conflict — cliente elige nueva hora tras SLOT_CONFLICT. Solo cliente titular. */
 router.post(
   '/:id/resolve-slot-conflict',

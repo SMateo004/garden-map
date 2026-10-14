@@ -20,7 +20,11 @@ import * as businessFeatures from '../business-features/business-features.servic
 import { z } from 'zod';
 import { reviewAutoApprovedPayment as reviewAutoApprovedPaymentService } from '../payment-service/payment-review.service.js';
 
-const paymentReviewBodySchema = z.object({ outcome: z.enum(['CONFIRMED', 'NOT_RECEIVED']) });
+const paymentReviewBodySchema = z.object({
+  outcome: z.enum(['CONFIRMED', 'NOT_RECEIVED', 'INCOMPLETE']),
+  /** Solo INCOMPLETE: cuánto llegó por QR. */
+  receivedAmount: z.coerce.number().min(0).max(100000).optional(),
+});
 import { emitWalletUpdated } from '../../services/socket.service.js';
 import { enqueueBookingCreate, enqueueSafely } from '../../services/chain-registry.service.js';
 import { afterGroupSiblingsPaid, markGroupSiblingsPaid } from '../booking-service/booking-group.service.js';
@@ -272,21 +276,22 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
- * POST /api/admin/bookings/:id/payment-review { outcome: 'CONFIRMED' | 'NOT_RECEIVED' }
+ * POST /api/admin/bookings/:id/payment-review { outcome: 'CONFIRMED' | 'NOT_RECEIVED' | 'INCOMPLETE', receivedAmount? }
  * Verificación posterior de un pago aprobado automáticamente (payment-review.service.ts).
  * NOT_RECEIVED descuenta lo que debía llegar de la billetera del cliente y le avisa.
+ * INCOMPLETE (cualquier pago ya aprobado) descuenta solo la diferencia con lo que llegó.
  */
 export const reviewAutoApprovedPayment = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
   const adminId = req.user!.userId;
-  const { outcome } = paymentReviewBodySchema.parse(req.body);
-  const result = await reviewAutoApprovedPaymentService(bookingId, adminId, outcome);
+  const { outcome, receivedAmount } = paymentReviewBodySchema.parse(req.body);
+  const result = await reviewAutoApprovedPaymentService(bookingId, adminId, outcome, receivedAmount);
   auditLog({
     userId: adminId,
-    action: outcome === 'CONFIRMED' ? 'PAYMENT_REVIEW_CONFIRMED' : 'PAYMENT_REVIEW_NOT_RECEIVED',
+    action: `PAYMENT_REVIEW_${outcome}`,
     entity: 'Booking',
     entityId: bookingId,
-    details: { chargedAmount: result.chargedAmount, clientBalance: result.clientBalance },
+    details: { chargedAmount: result.chargedAmount, clientBalance: result.clientBalance, receivedAmount },
     ip: req.ip,
   });
   res.json({ success: true, data: result });

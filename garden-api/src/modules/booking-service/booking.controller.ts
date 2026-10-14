@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { AppError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
@@ -20,6 +20,7 @@ import {
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 import { getBookingHistory } from './booking-history.service.js';
+import { PAYMENT_HELP_ISSUES, requestPaymentHelp } from '../payment-service/payment-help.service.js';
 
 /**
  * POST /api/bookings
@@ -297,6 +298,19 @@ export const initPayment = asyncHandler(async (req: Request, res: Response) => {
 /** POST /api/bookings/:id/payment/declared — el cliente avisa que ya pagó (ver booking.service). */
 export const declarePaymentMade = asyncHandler(async (req: Request, res: Response) => {
   const result = await bookingService.declarePaymentMade(req.params.id!, req.user!.userId);
+  res.json({ success: true, data: result });
+});
+
+const paymentHelpSchema = z.object({
+  issue: z.enum(PAYMENT_HELP_ISSUES),
+  paidAmount: z.coerce.number().min(0).max(100000).optional(),
+  detail: z.string().max(500).optional(),
+});
+
+/** POST /api/bookings/:id/payment/help — botón de soporte del QR (payment-help.service.ts). */
+export const paymentHelp = asyncHandler(async (req: Request, res: Response) => {
+  const body = paymentHelpSchema.parse(req.body);
+  const result = await requestPaymentHelp({ bookingId: req.params.id!, clientId: req.user!.userId, ...body });
   res.json({ success: true, data: result });
 });
 

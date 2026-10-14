@@ -345,3 +345,61 @@ export async function markThreadReadByAdmin(threadId: string) {
     logger.error('[SUPPORT_CHAT] Error marcando hilo como leído', { threadId, err });
   });
 }
+
+/**
+ * Deja en el chat de soporte del cliente un intercambio que el sistema ya
+ * resolvió por su cuenta (p. ej. la ayuda con el pago del QR): su pedido y la
+ * respuesta del bot con lo que se hizo. Así el cliente lo ve en su chat y el
+ * admin lo ve en el inbox aunque nadie haya tenido que intervenir. Con
+ * [escalate] el hilo queda esperando a un asesor.
+ */
+export async function recordSupportExchange(
+  userId: string,
+  clientText: string,
+  botText: string,
+  opts: { escalate?: boolean } = {}
+) {
+  const existing = await prisma.supportThread.findUnique({ where: { userId } });
+  const reopening = existing?.status === 'RESOLVED';
+  const status = opts.escalate ? 'ESCALATED' : reopening || !existing ? 'BOT' : existing.status;
+  const thread = await prisma.supportThread.upsert({
+    where: { userId },
+    create: { userId, lastMessagePreview: preview(botText), unreadByAdmin: true, status },
+    update: {
+      lastMessageAt: new Date(),
+      lastMessagePreview: preview(botText),
+      unreadByAdmin: true,
+      status,
+      ...(reopening ? { adminJoinedAt: null } : {}),
+    },
+  });
+  const saved = await prisma.supportMessage.create({
+    data: { threadId: thread.id, senderRole: 'CLIENT', message: clientText.slice(0, MAX_MESSAGE_LENGTH) },
+  });
+  const bot = await prisma.supportMessage.create({
+    data: { threadId: thread.id, senderRole: 'BOT', message: botText.slice(0, MAX_MESSAGE_LENGTH) },
+  });
+
+  const io = getIO();
+  if (io) {
+    const client = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, profilePicture: true },
+    });
+    io.to(ADMIN_SUPPORT_ROOM).emit('support_new_message', {
+      threadId: thread.id,
+      userId,
+      clientName: client ? `${client.firstName} ${client.lastName}`.trim() : 'Cliente',
+      clientPhoto: client?.profilePicture ?? null,
+      message: saved.message,
+      createdAt: saved.createdAt.toISOString(),
+    });
+    io.to(`user:${userId}`).emit('support_admin_reply', {
+      threadId: thread.id,
+      message: bot.message,
+      senderRole: 'BOT',
+      createdAt: bot.createdAt.toISOString(),
+    });
+  }
+  return { threadId: thread.id, status };
+}
