@@ -20,7 +20,7 @@ import {
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 import { getBookingHistory } from './booking-history.service.js';
-import { PAYMENT_HELP_ISSUES, requestPaymentHelp } from '../payment-service/payment-help.service.js';
+import { PAYMENT_HELP_ISSUES, requestPaymentHelp, type PaymentHelpIssue } from '../payment-service/payment-help.service.js';
 
 /**
  * POST /api/bookings
@@ -309,8 +309,15 @@ const paymentHelpSchema = z.object({
 
 /** POST /api/bookings/:id/payment/help — botón de soporte del QR (payment-help.service.ts). */
 export const paymentHelp = asyncHandler(async (req: Request, res: Response) => {
-  const body = paymentHelpSchema.parse(req.body);
-  const result = await requestPaymentHelp({ bookingId: req.params.id!, clientId: req.user!.userId, ...body });
+  // Campos explícitos: con la config de producción (sin strict) zod infiere todo opcional.
+  const { issue, paidAmount, detail } = paymentHelpSchema.parse(req.body);
+  const result = await requestPaymentHelp({
+    bookingId: req.params.id!,
+    clientId: req.user!.userId,
+    issue: issue as PaymentHelpIssue,
+    paidAmount,
+    detail,
+  });
   res.json({ success: true, data: result });
 });
 
