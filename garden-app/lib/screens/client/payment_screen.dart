@@ -24,6 +24,7 @@ import '../../utils/browser_back_guard.dart';
 import '../../utils/qr_saver.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/card_payment_widgets.dart';
+import '../../widgets/payment_help_sheet.dart';
 
 enum _BrowserBackGuardMode { none, confirmCancel, redirectHome }
 
@@ -85,6 +86,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _requestingManual = false;
   bool _isCheckingNow = false; // feedback when user presses the button
   bool _isSavingQr = false;
+
+  /// QR sin monto (el genérico del servicio) que da la ayuda cuando el banco
+  /// no lee el QR de la reserva; null = el QR normal.
+  String? _fallbackQrUrl;
 
   Timer? _pollTimer;
   Timer? _expiryTimer;
@@ -855,6 +860,80 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  // ── Ayuda con el pago (botón de soporte del QR) ───────────────────────────
+  // El bot lo resuelve en el momento cuando puede (otro QR, más tiempo, avisar
+  // el pago, cancelar) y siempre queda en el chat de soporte con aviso al
+  // equipo (POST /bookings/:id/payment/help). El pago lo sigue aprobando el admin.
+  Future<void> _openPaymentHelp() async {
+    final choice = await showPaymentHelpSheet(context);
+    if (choice == null || !mounted || _bookingId == null) return;
+    if (choice.issue == 'CANCEL') {
+      // Se avisa igual, pero la cancelación pide su propia confirmación.
+      _sendPaymentHelp(choice);
+      await _handleBack();
+      return;
+    }
+    final res = await _sendPaymentHelp(choice);
+    if (!mounted || res == null) return;
+    final action = res['action'] as String?;
+    final message = res['message'] as String? ?? '';
+    switch (action) {
+      case 'SHOW_FALLBACK_QR':
+        setState(() => _fallbackQrUrl = res['fallbackQrUrl'] as String?);
+        await _showHelpReply(message);
+      case 'EXTEND_QR':
+        final expiry = res['qrExpiresAt'] as String?;
+        if (expiry != null && _qrResponse != null) {
+          _stopPolling();
+          setState(() => _qrResponse = {..._qrResponse!, 'qrExpiresAt': expiry});
+          _startPolling();
+        }
+        GardenSnackBar.success(context, message);
+      case 'DECLARE':
+        await _showHelpReply(message);
+        if (mounted) await _declarePayment();
+      case 'OPEN_SUPPORT':
+        await _showHelpReply(message);
+        if (mounted) context.push('/support-chat');
+      default:
+        await _showHelpReply(message);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _sendPaymentHelp(PaymentHelpChoice choice) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$_bookingId/payment/help'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'issue': choice.issue, if (choice.paidAmount != null) 'paidAmount': choice.paidAmount}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) return Map<String, dynamic>.from(data['data'] as Map);
+      if (mounted) {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No pudimos enviar tu pedido de ayuda.');
+      }
+    } catch (_) {
+      if (mounted) GardenErrorDialog.show(context, 'Sin conexión. Revisa tu internet e intenta de nuevo.');
+    }
+    return null;
+  }
+
+  /// Respuesta del asistente de soporte (también queda en el chat de soporte).
+  Future<void> _showHelpReply(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          GardenIcon(GIcon.soporte, size: GIconSize.md, state: GIconState.active, color: GardenColors.primary),
+          SizedBox(width: 8),
+          Text('Soporte GARDEN'),
+        ]),
+        content: Text(message),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido'))],
+      ),
+    );
+  }
+
   // ── Polling ─────────────────────────────────────────────────────────────────
 
   /// Starts polling for a freshly generated QR. Reads expiry from the API response.
@@ -1249,6 +1328,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 icon: GardenIcon(GIcon.atras, size: GIconSize.md, color: textColor),
                 onPressed: interceptBack ? _handleBack : () => context.pop(),
               ),
+              actions: [
+                if (_qrResponse != null)
+                  IconButton(
+                    tooltip: 'Ayuda con el pago',
+                    icon: const GardenIcon(GIcon.soporte, size: GIconSize.md, color: GardenColors.primary),
+                    onPressed: _openPaymentHelp,
+                  ),
+              ],
             ),
             body: _buildPaymentBody(),
             bottomNavigationBar: _qrResponse == null && _booking != null ? _buildPayBar() : null,
@@ -1829,6 +1916,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// banco, o URL del QR provisional). Sin ninguna de las dos (nadie subió un
   /// QR provisional aún) cae al QR generado localmente como antes.
   Widget _buildQrVisual() {
+    if (_fallbackQrUrl != null) {
+      return Image.network(
+        _fallbackQrUrl!,
+        width: 250,
+        height: 250,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _buildGeneratedQr(),
+      );
+    }
     final qrImageType = _qrResponse?['qrImageType'] as String?;
     final qrImageUrl = _qrResponse?['qrImageUrl'] as String?;
 
@@ -1936,6 +2032,28 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            if (_fallbackQrUrl != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
+                ),
+                child: Row(children: [
+                  const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Este QR no trae el monto: escribe Bs ${_qrAmountToPay.toStringAsFixed(2)} a mano en tu banco.',
+                      style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.35),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+            ],
 
             // ── QR image (wrapped for screenshot capture) ──────────────────
             RepaintBoundary(

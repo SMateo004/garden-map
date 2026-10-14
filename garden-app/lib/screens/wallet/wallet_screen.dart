@@ -1737,7 +1737,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       'GIFT' => (GIcon.regalo, GardenColors.successDark),
       'OVERTIME_FEE' => (GIcon.cronometro, GardenColors.warning),
       // Pago aprobado sin verificar que después resultó no recibido: se descuenta (puede dejar deuda).
-      'PAYMENT_NOT_RECEIVED' => (GIcon.advertencia, GardenColors.error),
+      // … o que llegó incompleto: se descuenta la diferencia.
+      'PAYMENT_NOT_RECEIVED' || 'PAYMENT_INCOMPLETE' => (GIcon.advertencia, GardenColors.error),
       'OVERTIME_EARNING' => (GIcon.cronometro, GardenColors.successDark),
       'DEBT_RECOVERY' => (GIcon.confirmado, GardenColors.info),
       'REFERRAL_BONUS' => (GIcon.regalo, GardenColors.successDark),

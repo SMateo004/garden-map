@@ -36,9 +36,12 @@ void main() {
       // `type: CONSTANTE` dentro de un notification.create(...)
       for (final m in RegExp(r'\.notification\.create(?:Many)?\(').allMatches(src)) {
         final seg = src.substring(m.start, (m.start + 1600).clamp(0, src.length));
-        for (final c in RegExp(r'type:\s*([A-Z_]{4,})\b').allMatches(seg)) {
-          final v = consts[c.group(1)!];
-          if (v != null) types.add(v);
+        // También `type: cond ? CONST_A : CONST_B`.
+        for (final c in RegExp(r'type:\s*([^,\n]+)').allMatches(seg)) {
+          for (final id in RegExp(r'\b[A-Z_]{4,}\b').allMatches(c.group(1)!)) {
+            final v = consts[id.group(0)!];
+            if (v != null) types.add(v);
+          }
         }
       }
     }

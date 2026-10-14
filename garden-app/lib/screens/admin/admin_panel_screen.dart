@@ -2848,8 +2848,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     color: GardenColors.error,
                     outline: true,
                     onPressed: () => _reviewAutoApprovedPayment(p, 'NOT_RECEIVED'))),
-                ])
-              else
+                ]),
+              // Llegó menos de lo que debía: se cobra la diferencia de su billetera.
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => _reviewIncompletePayment(p, approveFirst: p['paymentAutoApprovedAt'] == null),
+                  icon: const GardenIcon(GIcon.calculadora, size: GIconSize.sm, color: GardenColors.warning),
+                  label: Text(
+                    p['paymentAutoApprovedAt'] != null ? 'Llegó incompleto' : 'Aprobar: llegó incompleto',
+                    style: const TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              if (p['paymentAutoApprovedAt'] == null)
               Row(children: [
                 Expanded(child: GardenButton(
                   label: 'Aprobar pago',
@@ -3584,6 +3595,81 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         }
       } else {
         GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo registrar la verificación');
+      }
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString());
+    }
+  }
+
+  /// Pago que llegó incompleto: el admin indica cuánto llegó y se descuenta la
+  /// diferencia de la billetera del cliente (puede quedar en negativo y se cobra
+  /// en su próximo pago). Si todavía no estaba aprobado, primero lo aprueba.
+  Future<void> _reviewIncompletePayment(Map<String, dynamic> p, {required bool approveFirst}) async {
+    final bookingId = p['id'] as String;
+    final total = double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0;
+    final wallet = double.tryParse(p['walletPaymentAmount']?.toString() ?? '0') ?? 0;
+    final donation = double.tryParse(p['donationAmount']?.toString() ?? '0') ?? 0;
+    final expected = (double.tryParse(p['paymentExpectedAmount']?.toString() ?? '') ??
+            (total - wallet + donation))
+        .clamp(0, double.infinity)
+        .toDouble();
+    final ctrl = TextEditingController();
+    final received = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Cuánto llegó?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Debía llegar Bs ${expected.toStringAsFixed(2)} por QR. La diferencia se descuenta de la billetera '
+              'del cliente (puede quedar en negativo y se cobra en su próximo pago) y se le avisa.'
+              '${approveFirst ? ' El pago queda aprobado.' : ''}'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(prefixText: 'Bs ', labelText: 'Monto que llegó'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text.replaceAll(',', '.'))),
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.warning, foregroundColor: Colors.white),
+            child: const Text('Cobrar la diferencia'),
+          ),
+        ],
+      ),
+    );
+    if (received == null || !mounted) return;
+    try {
+      if (approveFirst) {
+        final approve = await http.post(
+          Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-payment'),
+          headers: {'Authorization': 'Bearer $_adminToken'},
+        );
+        final a = jsonDecode(approve.body);
+        if (a['success'] != true) {
+          if (mounted) GardenErrorDialog.show(context, a['error']?['message'] ?? 'No se pudo aprobar el pago');
+          return;
+        }
+      }
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/payment-review'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'outcome': 'INCOMPLETE', 'receivedAmount': received}),
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      await _loadPayments();
+      if (!mounted) return;
+      if (data['success'] == true) {
+        final charged = (data['data']?['chargedAmount'] as num?)?.toDouble() ?? 0;
+        GardenSnackBar.warning(context,
+            charged > 0
+                ? 'Se descontaron Bs ${charged.toStringAsFixed(2)} de la billetera del cliente y se le avisó.'
+                : 'Llegó el monto completo: no se descontó nada.');
+      } else {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo registrar el pago incompleto');
       }
     } catch (e) {
       if (mounted) GardenErrorDialog.show(context, e.toString());

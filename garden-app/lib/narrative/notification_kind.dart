@@ -52,6 +52,8 @@ class NotificationKind {
     'OVERTIME_EARNING': NotificationKind(NotificationTopic.money, GIcon.billetera, StoryTone.good),
     'OVERTIME_FEE': NotificationKind(NotificationTopic.money, GIcon.reloj, StoryTone.waiting),
     'PAYMENT_NOT_RECEIVED': NotificationKind(NotificationTopic.money, GIcon.advertencia, StoryTone.waiting),
+    // El pago llegó incompleto: se descontó la diferencia de la billetera.
+    'PAYMENT_INCOMPLETE': NotificationKind(NotificationTopic.money, GIcon.advertencia, StoryTone.waiting),
     'TIP': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),
     'TIP_RECEIVED': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),
     'GIFT': NotificationKind(NotificationTopic.money, GIcon.regalo, StoryTone.good),
@@ -94,6 +96,8 @@ class NotificationKind {
     'EMAIL_OTP_MANUAL_HELP': NotificationKind(NotificationTopic.account, GIcon.correo, StoryTone.waiting),
     // Alertas para el admin (sendPushToAdmins → adminInboxType en el backend)
     'ADMIN_PAYMENT': NotificationKind(NotificationTopic.money, GIcon.pagarQr, StoryTone.waiting),
+    // El cliente pidió ayuda desde el QR de pago (payment-help.service.ts).
+    'ADMIN_PAYMENT_HELP': NotificationKind(NotificationTopic.money, GIcon.soporte, StoryTone.waiting),
     'ADMIN_EXTENSION': NotificationKind(NotificationTopic.money, GIcon.pagarQr, StoryTone.waiting),
     'ADMIN_WITHDRAWAL': NotificationKind(NotificationTopic.money, GIcon.retiro, StoryTone.waiting),
     'ADMIN_URGENT': NotificationKind(NotificationTopic.problem, GIcon.emergencia, StoryTone.alert),
@@ -152,7 +156,7 @@ class NotificationKind {
 /// ADMIN_* de su bandeja, o el `adminType` del push). Las claves las entiende
 /// AdminPanelScreen (`/admin?tab=…`). null = abrir el panel sin cambiar de pestaña.
 String? adminTabFor(String type) => switch (type) {
-      'ADMIN_PAYMENT' || 'ADMIN_EXTENSION' => 'pagos',
+      'ADMIN_PAYMENT' || 'ADMIN_EXTENSION' || 'ADMIN_PAYMENT_HELP' => 'pagos',
       'ADMIN_WITHDRAWAL' => 'retiros',
       'ADMIN_DISPUTE' || 'ADMIN_RATING' => 'disputas',
       'ADMIN_URGENT' || 'ADMIN_INCIDENT' => 'en-vivo',
