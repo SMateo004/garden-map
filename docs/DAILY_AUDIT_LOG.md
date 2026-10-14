@@ -3119,3 +3119,165 @@ de cuenta) — no se tocó código. Solo se actualiza este log.
   disputa abierta (sin chequeo en `approveCaregiverAccountDeletion`) y corregir nombre/apellido/
   fecha de nacimiento desde el panel admin no re-dispara la verificación de identidad de un
   cuidador ya `VERIFIED` (2026-10-11) — sigue sin aplicar.
+- La baja propia de un dueño (`auth.controller.ts:deleteAccount`) y la aprobación de baja de un
+  cuidador por admin (`approveCaregiverAccountDeletion`) siguen sin chequear retiros pendientes
+  (ni, en el segundo caso, reservas/disputas activas) antes de transferir el saldo a GARDEN — el
+  único de los tres caminos que sí lo hace es `deleteUserAccountByAdmin` (2026-10-11/12) — sigue
+  sin aplicar.
+
+---
+
+## 2026-10-14 — Propinas con deuda + reversión de pago (NOT_RECEIVED/INCOMPLETE): fuga de dinero
+## real al cuidador cuando el pago que liberó la propina resulta que nunca llegó
+
+**Commit de referencia al iniciar la auditoría:** `f6f5167` (chore: registrar auditoría diaria —
+baja de cuenta admin deja dos caminos sin el fix de retiro pendiente). `git log` mostró 27 commits
+nuevos hasta `806a5ca` (HEAD actual), la gran mayoría UI/Flutter (huella 3D, saludo del inicio,
+sonidos, mapa, versión 1.4.5/1.4.6). De esos 27, siete tocan dinero/`User.balance` directamente y
+son todos del 12-13 de octubre, sin auditar todavía: `db898a4`, `58d855c`, `4a541be`, `188d1aa`,
+`36422ab`, `e4500c4`, `2ecfa57` (más el fix de tipos `806a5ca`). Se eligieron como foco de hoy por
+ser, de lejos, el bloque más grande y más reciente sin auditar que toca dinero — exactamente la
+categoría (b) que prioriza CLAUDE.md.
+
+**Qué agregan, en conjunto (verificado leyendo el código, no solo los mensajes de commit):**
+- `db898a4` crea `applyConfirmedPaymentEffects(bookingId)` (`payment.service.ts:192-250`), la
+  función única que desde ahora registra la donación y recupera la deuda previa para TODOS los
+  caminos de aprobación de pago (admin manual, admin "segura", automática). Idempotente de verdad:
+  bloquea la fila del cliente, chequea con `count` dentro de la misma transacción si ya existe un
+  `DEBT_RECOVERY` para esa reserva, y capea el monto al saldo negativo vigente releído — mismo
+  patrón que ya se exigió el 2026-09-24.
+- `4a541be` permite dar propina (`POST /bookings/:id/tip`) sin saldo suficiente, incluso con la
+  reserva `IN_PROGRESS`: descuenta `User.balance` aunque quede negativo (esa deuda se cobra con el
+  próximo pago, mismo mecanismo que el tiempo extra); al cuidador le llega al instante solo lo que
+  el saldo cubría, el resto queda como `WalletTransaction TIP_RECEIVED` en `PENDING` ("por cobrar").
+- `58d855c`/`e4500c4` agregan a la revisión de pagos auto-aprobados (`payment-review.service.ts`)
+  los desenlaces `NOT_RECEIVED` e `INCOMPLETE`: si el banco nunca confirmó el pago o llegó de menos,
+  el admin lo marca y se descuenta de la billetera del cliente lo que debía haber llegado **más la
+  deuda previa que esa aprobación ya había dado por saldada** (para no borrarla gratis).
+
+Delegado un primer barrido de solo lectura a un subagente; cada hallazgo se re-verificó leyendo el
+código fuente real (`payment.service.ts`, `tip-release.service.ts`, `payment-review.service.ts`,
+`admin.controller.ts`, `admin.service.ts`) antes de clasificar riesgo. No se aplicó ningún cambio.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): si un pago que liberó una propina
+pendiente resulta `NOT_RECEIVED` o `INCOMPLETE`, el cuidador se queda con el dinero igual — fuga
+real de plata de GARDEN, no solo un dato mal mostrado
+
+**Dónde:**
+- `garden-api/src/modules/payment-service/payment.service.ts:218-246`
+  (`applyConfirmedPaymentEffects`) — dentro de la misma transacción que recupera la deuda del
+  cliente, la línea 245 llama `await releasePendingTips(tx, booking.clientId)`.
+- `garden-api/src/modules/booking-service/tip-release.service.ts:32-90` (`releasePendingTips`) —
+  libera propinas `PENDING` hasta donde el saldo (ya positivo tras recuperar la deuda) lo permita,
+  y le **incrementa el `User.balance` al cuidador** (líneas ~70-76), de forma irreversible y real
+  (ese saldo es retirable).
+- `garden-api/src/modules/payment-service/payment-review.service.ts:103-120`
+  (`reviewAutoApprovedPayment`, `NOT_RECEIVED`/`INCOMPLETE`) — cuando se descubre que el pago nunca
+  llegó (o llegó de menos), recalcula `due = amountExpectedByQr(b) + recoveredDebt` y descuenta esa
+  diferencia **solo de `User.balance` del cliente**. No hay ninguna consulta a `TIP_RECEIVED` ni a
+  `User.balance` del cuidador en esta función — confirmado con `grep -rn "TIP_RECEIVED"
+  garden-api/src/modules`, solo aparece en los 3 lugares que la crean/liberan/muestran, nunca en la
+  reversión de pago.
+
+**Qué pasa (caso concreto):** un dueño con saldo en 0 da una propina de Bs 20 durante un servicio
+`IN_PROGRESS` → su saldo queda en −20, se crea un `TIP_RECEIVED` pendiente para el cuidador. Ese
+mismo dueño paga por QR otra reserva distinta; el QR incluye los Bs 20 de deuda. Declara "ya
+pagué" y ningún admin lo revisa dentro de la ventana → se auto-aprueba
+(`payment-review.job.ts`) → `applyConfirmedPaymentEffects` recupera los Bs 20 (saldo vuelve a 0) y
+`releasePendingTips` libera la propina: el cuidador recibe Bs 20 reales en su billetera, ya
+retirables. Si después el admin revisa y el banco nunca confirmó ese QR (fraude, demora, el dueño
+en realidad no pagó) y marca `NOT_RECEIVED`, el código vuelve a poner al dueño en deuda (correcto),
+**pero el cuidador se queda con los Bs 20 que GARDEN nunca llegó a cobrar** — no hay ningún código
+en el repo que revise o revierta un `TIP_RECEIVED` ya `COMPLETED` ni que descuente el balance del
+cuidador. Lo mismo aplica con `INCOMPLETE` (línea 76-77: solo exige `b.paidAt`, no exige que haya
+sido auto-aprobado) — alcanzable también desde un pago aprobado a mano por el botón "Aprobar", no
+solo desde la auto-aprobación. Ninguno de los tests nuevos (`confirmed-payment-effects.test.ts`,
+`tip.test.ts`, `payment-declared.test.ts`, `payment-help.test.ts`) prueba esta interacción cruzada
+entre funciones — cada uno prueba su propia función de forma aislada.
+
+**Por qué no se aplicó:** toca `User.balance` de dos usuarios distintos (cliente y cuidador) y
+`WalletTransaction` directamente — categoría de alto riesgo según la política de esta auditoría, y
+además no hay una decisión de producto obvia y segura: hay que decidir si al revertir el pago se le
+quita el saldo al cuidador (puede ya haberlo retirado — ¿se le genera una deuda a él también?) o si
+GARDEN absorbe la pérdida como costo del mecanismo.
+**Propuesta de fix (no aplicada):** en `reviewAutoApprovedPayment`, antes de descontar al cliente,
+buscar si el `DEBT_RECOVERY` que se está revirtiendo coincidió con una liberación de `TIP_RECEIVED`
+(mismo cliente, misma ventana de tiempo/transacción) y, si el cuidador todavía tiene saldo
+suficiente, descontárselo (creando su propia deuda si no alcanza, mismo mecanismo que ya existe
+para el dueño); si no se puede recuperar del cuidador, al menos registrar la pérdida explícitamente
+en vez de dejarla silenciosa.
+
+### Hallazgo 2 (ALTO RIESGO — no aplicado, solo reportado): `approvePayment`/`approvePaymentSecure`
+siguen sin el guard atómico que el resto del módulo de pagos ya usa, y ahora compiten con un camino
+nuevo sobre la misma reserva
+
+**Dónde:** `garden-api/src/modules/admin/admin.controller.ts:306-320` (`approvePayment`) y
+`garden-api/src/modules/admin/admin.service.ts:988-993` (`approvePaymentSecure`) — ambos hacen
+`findUnique` + chequeo de status en código + `tx.booking.update({where:{id}})` **sin condición de
+status**, a diferencia de `verifyPaymentManual`/`verifyPaymentByQr`/`verifyPaymentBySipCallback`
+(`payment.service.ts`), que desde la auditoría del 2026-10-02 usan `updateMany` con `where`
+guardado por status.
+
+**Qué pasa:** un admin que aprueba manualmente y la auto-aprobación de `payment-review.job.ts`
+corriendo casi al mismo tiempo sobre la misma reserva pueden ejecutar ambos `update` — no duplica
+el balance (confirmado: `applyConfirmedPaymentEffects` es idempotente a nivel de base de datos,
+con lock + chequeo de `count` dentro de la misma transacción), pero sí puede duplicar el
+`AdminAction` de auditoría, la notificación al cuidador y el push — ruido de datos, no pérdida de
+dinero. El riesgo subió un poco porque ahora hay un tercer camino (`approve-payment-secure`) que
+puede competir por la misma fila, además de la auto-aprobación ya existente.
+
+**Propuesta de fix (no aplicada):** cambiar el `update` incondicional por
+`updateMany({where:{id, status: {in: ['PAYMENT_PENDING_APPROVAL','PENDING_PAYMENT']}}})` + chequeo
+de `count`, igual que los tres caminos hermanos en `payment.service.ts`.
+
+**Por qué no se aplicó:** aunque el fix es el mismo patrón ya establecido en el proyecto, toca
+directamente el flujo de aprobación de pagos (dinero) — cae en la categoría de alto riesgo de esta
+auditoría por simplicidad de fix no exime revisión humana, mismo criterio ya usado el 2026-09-26
+con `check-blink`.
+
+### Observaciones (informativas, sin acción — no son bugs claros, quedan documentadas)
+
+- **Propinas y disputas/cancelaciones:** nada en `garden-api/src/modules/dispute/` ni en las
+  cancelaciones lee o revierte `booking.tipAmount`/`TIP_RECEIVED` — un dueño que da propina durante
+  un servicio `IN_PROGRESS` y después gana una disputa contra ese mismo cuidador (ej. maltrato a la
+  mascota) se queda igual sin esa propina, sin que ningún texto confirme si es la política
+  intencional ("las propinas son un regalo, no se revierten") o un vacío sin decidir.
+- **Base de conocimiento del bot de soporte y centro de ayuda, desactualizados otra vez (mismo
+  patrón ya señalado el 2026-09-27 con B2):** `help_center_content.dart` no tiene ninguna entrada
+  sobre dar propina a un cuidador (su única mención de "propina" es sobre donaciones a
+  refugios, algo distinto) ni sobre el botón nuevo "¿Qué pasó con tu pago?"; `soporte-chat.agent.ts`
+  tampoco menciona propinas, el ayuda-con-el-pago ni `INCOMPLETE` — el bot no tendría con qué
+  responder si un cliente pregunta por cualquiera de estas dos funciones nuevas. No se aplicó
+  porque editar esos textos junto a un mecanismo de deuda real requiere decidir primero qué tan
+  exactamente describir el condicional ("se cobra cuando vuelvas a pagar, pero si nunca volvés a
+  pagar, queda pendiente para siempre") — se prefiere que el dueño del proyecto revise la redacción
+  exacta antes de tocar textos legales/de soporte sobre dinero.
+- Nit de estilo sin riesgo: `admin.service.ts` (aprobación de extensión, alrededor de la línea
+  1879) calcula el neto del cuidador a mano (`extra − comisión − impuesto`) en vez de llamar a
+  `caregiverNetOf()` como pide CLAUDE.md — matemáticamente idéntico, no es un bug, pero no se tocó
+  por ser código de cálculo de pago al cuidador (mismo criterio de alto riesgo).
+
+**Verificación:** `npx tsc --noEmit` (con el TypeScript del proyecto, `./node_modules/.bin/tsc`,
+no un `npx` global que resuelve una versión distinta) compila limpio, sin errores — no se
+reprodujeron los "2-3 errores preexistentes conocidos" que menciona CLAUDE.md; puede ser que
+`806a5ca` de hoy mismo los haya corregido, o que solo aparezcan bajo otro `tsconfig`. No se corrió
+`npm run test:unit` porque no hubo cambios de código que verificar.
+
+### Sin cambios aplicados hoy
+Los dos hallazgos nuevos son de alto riesgo (dinero de dos usuarios distintos, y flujo de
+aprobación de pagos) — no se tocó código. Solo se actualiza este log.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet como si fuera
+  dinero efectivo cuando en realidad es un código de descuento (2026-10-05) — sin decisión todavía.
+- La ventana de aceptación de 3h no se extiende para empresas con equipo activo (2026-10-10).
+- El cupo combinado recepción+marketplace no es atómico entre los dos caminos que lo comparten
+  (2026-10-10).
+- Eliminar cuenta: baja a ciegas de un cuidador con reserva `IN_PROGRESS`/disputa abierta, y
+  corregir identidad no re-dispara la verificación de un cuidador ya `VERIFIED` (2026-10-11).
+- Baja propia de dueño y aprobación de baja de cuidador por admin sin chequeo de retiro pendiente
+  (2026-10-11/12).
