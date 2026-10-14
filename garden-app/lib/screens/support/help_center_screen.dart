@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_settings.dart';
 import '../../theme/garden_theme.dart';
@@ -135,7 +135,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 // ── Saludo y buscador ─────────────────────────────────
                 if (!searching) ...[
                   Row(children: [
-                    const Brote(pose: BrotePose.hola, size: 56),
+                    const GardenPawMark(size: 56, floatCycles: GardenPawMark.settleCycles),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text('¿En qué te ayudamos?',

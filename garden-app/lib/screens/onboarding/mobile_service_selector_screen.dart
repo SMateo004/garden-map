@@ -6,7 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
@@ -206,7 +206,7 @@ class _MobileServiceSelectorScreenState extends State<MobileServiceSelectorScree
                 // ── Saludo ──
                 enter(
                   Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                    const Brote(pose: BrotePose.hola, size: 64),
+                    const GardenPawMark(size: 64, floatCycles: GardenPawMark.settleCycles),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

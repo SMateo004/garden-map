@@ -21,7 +21,7 @@ import '../../services/business_features.dart';
 import '../../widgets/mode_switcher_card.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_settings.dart';
 
@@ -718,7 +718,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 40),
-            const Center(child: Brote(pose: BrotePose.hola, size: 120)),
+            const Center(child: GardenPawMark(size: 120, floatCycles: GardenPawMark.settleCycles)),
             const SizedBox(height: 16),
             Text('Inicia sesión para ver tu perfil',
                 textAlign: TextAlign.center, style: GardenText.h4.copyWith(color: textColor, fontWeight: FontWeight.w900)),

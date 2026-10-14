@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, Clipboard, ClipboardData;
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import '../../design/brote.dart';
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_depth.dart';
 import '../../design/garden_icons.dart';
@@ -168,7 +167,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                       const SizedBox(height: 40),
                       GardenEmptyState(
                         type: GardenEmptyType.generic,
-                        brote: BrotePose.oops,
+                        mark: true,
                         title: 'No pudimos cargar tu código',
                         subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
                         ctaLabel: 'Reintentar',

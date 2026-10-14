@@ -95,7 +95,7 @@ def main() -> int:
             failed = True
             hint = {
                 "material_icons": "  → usa GardenIcon(GIcon.…) de lib/design/garden_icons.dart",
-                "emojis": "  → usa GardenIcon o Brote en lugar de emojis",
+                "emojis": "  → usa GardenIcon o GardenPawMark en lugar de emojis",
                 "loose_curves": "  → usa GardenMotion.enter / exit / pop",
                 "voseo": "  → la app habla de tú: \"Revisa\", \"puedes\"",
             }[k]

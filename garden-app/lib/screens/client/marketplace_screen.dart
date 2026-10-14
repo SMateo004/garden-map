@@ -35,7 +35,6 @@ import 'nearby_vets_screen.dart';
 import '../../widgets/garden_base_map.dart';
 import '../../design/garden_marketplace_banner.dart';
 import '../../design/garden_paw_mark.dart';
-import '../../design/brote.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -1878,7 +1877,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_hasError && _caregivers.isEmpty) {
       return withHeader(GardenEmptyState(
         type: GardenEmptyType.generic,
-        brote: BrotePose.oops,
+        mark: true,
         title: 'No pudimos conectar',
         subtitle: 'Revisa tu conexión a internet e intenta de nuevo. Tus filtros quedaron guardados.',
         ctaLabel: 'Reintentar',

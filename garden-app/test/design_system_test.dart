@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:garden_app/design/brote.dart';
+import 'package:garden_app/design/garden_paw_mark.dart';
 import 'package:garden_app/design/garden_booking_hero_card.dart';
 import 'package:garden_app/design/garden_chain_proof.dart';
 import 'package:garden_app/design/garden_live_hero.dart';
@@ -361,13 +361,11 @@ void main() {
       expect(find.textContaining('blockchain'), findsNothing);
     });
 
-    testWidgets('Brote dibuja las seis poses y se queda quieto', (tester) async {
-      await tester.pumpWidget(host(Wrap(children: [
-        for (final p in BrotePose.values) Brote(pose: p, size: 80),
-      ])));
-      // Sin bucles: debe asentarse solo después de la animación de entrada.
+    testWidgets('la huella de GARDEN fuera del inicio flota unas vueltas y se queda quieta', (tester) async {
+      await tester.pumpWidget(host(const GardenPawMark(size: 80, floatCycles: GardenPawMark.settleCycles)));
+      // Sin bucles eternos: debe asentarse sola.
       await tester.pumpAndSettle();
-      expect(find.byType(Brote), findsNWidgets(BrotePose.values.length));
+      expect(find.byType(GardenPawMark), findsOneWidget);
     });
   });
 }

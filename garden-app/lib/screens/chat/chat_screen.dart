@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/chat_service.dart';
 import 'package:go_router/go_router.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_pet_avatar.dart';
 import '../../design/garden_status_pill.dart';
@@ -884,7 +884,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Brote(pose: BrotePose.hola, size: 110),
+                                const GardenPawMark(size: 110, floatCycles: GardenPawMark.settleCycles),
                                 const SizedBox(height: 12),
                                 Text('Saluda a ${_otherName.split(' ').first}',
                                     textAlign: TextAlign.center,

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_empty_state.dart';
-import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import 'my_data_screen.dart';
 
@@ -118,7 +117,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         const SizedBox(height: 40),
         GardenEmptyState(
           type: GardenEmptyType.generic,
-          brote: BrotePose.buscando,
+          mark: true,
           title: 'Necesitamos tu dirección',
           subtitle: 'Con tu dirección te mostramos las veterinarias más cerca de tu casa.',
           ctaLabel: 'Completar mi dirección',
@@ -133,7 +132,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         const SizedBox(height: 40),
         GardenEmptyState(
           type: GardenEmptyType.generic,
-          brote: BrotePose.oops,
+          mark: true,
           title: 'No pudimos cargar las veterinarias',
           subtitle: '$_errorMessage. Revisa tu conexión e inténtalo de nuevo.',
           ctaLabel: 'Reintentar',

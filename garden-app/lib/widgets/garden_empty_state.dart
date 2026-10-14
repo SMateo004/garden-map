@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../design/brote.dart';
+import '../design/garden_paw_mark.dart';
 import '../design/garden_depth.dart';
 import '../design/garden_icons.dart';
 import '../theme/garden_motion.dart';
@@ -21,26 +21,25 @@ enum GardenEmptyType {
 }
 
 // ── QUÉ SE DIBUJA EN CADA TIPO ────────────────────────────────────────────
-// Brote solo donde la escena es de la familia (mascotas, chat, buscar
-// cuidador, reservas, notificaciones). Dinero, identidad y los listados de
-// admin llevan un icono sereno del sistema: Brote nunca va en pantallas de
-// dinero, pago, disputas ni verificación (plan de rediseño).
+// La huella de GARDEN solo donde la escena es de la familia (mascotas, chat,
+// buscar cuidador, reservas, notificaciones). Dinero, identidad y los listados
+// de admin llevan un icono sereno del sistema.
 class _EmptyConfig {
-  final BrotePose? brote;
+  final bool mark;
   final GIcon icon;
-  const _EmptyConfig({this.brote, required this.icon});
+  const _EmptyConfig({this.mark = false, required this.icon});
 }
 
 const _configs = <GardenEmptyType, _EmptyConfig>{
-  GardenEmptyType.notifications: _EmptyConfig(brote: BrotePose.durmiendo, icon: GIcon.notificaciones),
-  GardenEmptyType.bookings: _EmptyConfig(brote: BrotePose.esperando, icon: GIcon.reservas),
+  GardenEmptyType.notifications: _EmptyConfig(mark: true, icon: GIcon.notificaciones),
+  GardenEmptyType.bookings: _EmptyConfig(mark: true, icon: GIcon.reservas),
   GardenEmptyType.reviews: _EmptyConfig(icon: GIcon.estrella),
-  GardenEmptyType.caregivers: _EmptyConfig(brote: BrotePose.buscando, icon: GIcon.buscar),
+  GardenEmptyType.caregivers: _EmptyConfig(mark: true, icon: GIcon.buscar),
   GardenEmptyType.identity: _EmptyConfig(icon: GIcon.identidadVerificada),
   GardenEmptyType.payments: _EmptyConfig(icon: GIcon.pagoProtegido),
   GardenEmptyType.withdrawals: _EmptyConfig(icon: GIcon.retiro),
-  GardenEmptyType.chat: _EmptyConfig(brote: BrotePose.hola, icon: GIcon.chat),
-  GardenEmptyType.pets: _EmptyConfig(brote: BrotePose.hola, icon: GIcon.mascotas),
+  GardenEmptyType.chat: _EmptyConfig(mark: true, icon: GIcon.chat),
+  GardenEmptyType.pets: _EmptyConfig(mark: true, icon: GIcon.mascotas),
   GardenEmptyType.generic: _EmptyConfig(icon: GIcon.huella),
 };
 
@@ -55,9 +54,9 @@ class GardenEmptyState extends StatelessWidget {
   final VoidCallback? onCta;
   final bool compact;
 
-  /// Fuerza una pose de Brote (ej. [BrotePose.oops] para un error de
-  /// conexión). Si es null se usa la del tipo.
-  final BrotePose? brote;
+  /// Fuerza la huella de GARDEN aunque el tipo lleve icono (ej. un error de
+  /// conexión en una lista de la familia).
+  final bool mark;
 
   const GardenEmptyState({
     super.key,
@@ -67,7 +66,7 @@ class GardenEmptyState extends StatelessWidget {
     this.ctaLabel,
     this.onCta,
     this.compact = false,
-    this.brote,
+    this.mark = false,
   });
 
   @override
@@ -77,10 +76,8 @@ class GardenEmptyState extends StatelessWidget {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final size = compact ? 84.0 : 116.0;
-    final pose = brote ?? cfg.brote;
-
-    final Widget illustration = pose != null
-        ? Brote(pose: pose, size: size)
+    final Widget illustration = mark || cfg.mark
+        ? GardenPawMark(size: size, floatCycles: GardenPawMark.settleCycles)
         : GardenClay(
             size: size,
             tint: GardenColors.primary.withValues(alpha: isDark ? 0.14 : 0.10),

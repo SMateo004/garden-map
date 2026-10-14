@@ -191,7 +191,7 @@ de Sender ID** (si no, filtra en silencio); Entel reemplaza el Sender ID por un 
 ## Sistema de diseño de `garden-app` (rediseño UX/UI, desde octubre 2026)
 
 Plan completo: https://claude.ai/artifact/Mn73LFKVLfawFNN63B6uKd (17 interfaces, por fases).
-Decisiones tomadas: **sí** al personaje Brote, **tuteo** en toda la app (la landing estática
+Decisiones tomadas: **no** al personaje Brote (eliminado en 2026-10-13: su lugar lo ocupa la huella 3D `GardenPawMark`), **tuteo** en toda la app (la landing estática
 `garden-app/web/index.html` todavía usa voseo; hay que unificarla), el **admin no se rediseña**
 (solo adopta iconos y estados nuevos cuando se toque).
 
@@ -207,7 +207,10 @@ Código nuevo de UI usa únicamente estas piezas — nada de inventar variantes:
   su propio texto/color para un `BookingStatus`.
 - Mensajes de sistema del chat: `ChatEvent.parse` (`lib/narrative/chat_event.dart`) es el único
   que lee los emojis del texto del backend.
-- Personaje: `Brote(pose: ...)`, nunca en pantallas de dinero, pago, disputas ni verificación.
+- Figura de la marca: `GardenPawMark` (`lib/design/garden_paw_mark.dart`, huella 3D con sombra) en saludos,
+  estados vacíos, onboarding y celebraciones — flota siempre solo en el saludo del inicio; en el resto
+  `floatCycles: GardenPawMark.settleCycles`. Nunca en pantallas de dinero, pago, disputas ni verificación.
+  No hay personaje: Brote (la "manzana verde") se eliminó, no lo vuelvas a agregar.
 - Catálogo visual: `flutter run -t lib/main_catalog.dart -d chrome`. Componente nuevo → primero al
   catálogo, después a la pantalla.
 - CI (`app-design-system` en `ci.yml`): `python tool/ui_ratchet.py` falla si suben los usos de

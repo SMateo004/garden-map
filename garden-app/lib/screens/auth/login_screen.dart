@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
@@ -301,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Text('Qué bueno verte de nuevo',
                   style: GardenText.h3.copyWith(color: textColor, letterSpacing: -0.5)),
             ),
-            const Brote(pose: BrotePose.hola, size: 64),
+            const GardenPawMark(size: 64, floatCycles: GardenPawMark.settleCycles),
           ]),
           const SizedBox(height: 8),
           Text('Inicia sesión para gestionar tus reservas', style: GardenText.body.copyWith(color: subtextColor, fontSize: 15)),

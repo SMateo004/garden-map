@@ -7,7 +7,6 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_settings.dart' show GardenSegmented;
 
@@ -370,7 +369,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
         const SizedBox(height: 40),
         GardenEmptyState(
           type: GardenEmptyType.bookings,
-          brote: BrotePose.oops,
+          mark: true,
           title: 'No pudimos cargar tus paseos fijos',
           subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
           ctaLabel: 'Reintentar',

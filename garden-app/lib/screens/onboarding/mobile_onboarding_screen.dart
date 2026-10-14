@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_motion.dart';
@@ -14,16 +14,16 @@ class _Step {
   final Color color;
   final Color accentColor;
   final GIcon icon;
-  /// Brote en el centro; si es null va el icono grande. La diapositiva de
-  /// pagos usa icono: Brote nunca acompaña temas de dinero.
-  final BrotePose? brote;
+  /// La huella de GARDEN en el centro; si es false va el icono grande. La
+  /// diapositiva de pagos usa icono: la marca no acompaña temas de dinero.
+  final bool mark;
   final GIcon decorIcon1;
   final GIcon decorIcon2;
   final String title;
   final String subtitle;
   const _Step({
     required this.color, required this.accentColor,
-    required this.icon, this.brote,
+    required this.icon, this.mark = false,
     required this.decorIcon1, required this.decorIcon2,
     required this.title, required this.subtitle,
   });
@@ -33,7 +33,7 @@ class _Step {
 final _kSteps = [
   _Step(
     color: GardenService.paseo.hero.last, accentColor: GardenService.paseo.hero.first,
-    icon: GIcon.buscar, brote: BrotePose.buscando,
+    icon: GIcon.buscar, mark: true,
     decorIcon1: GIcon.ubicacion, decorIcon2: GIcon.estrella,
     title: 'Encuentra tu cuidador',
     subtitle: 'Explora cuidadores verificados cerca de ti en Santa Cruz, con fotos reales y reseñas de dueños como tú.',
@@ -61,7 +61,7 @@ final _kSteps = [
   ),
   _Step(
     color: GardenColors.primaryDark, accentColor: GardenService.paseo.hero.first,
-    icon: GIcon.foto, brote: BrotePose.celebrando,
+    icon: GIcon.foto, mark: true,
     decorIcon1: GIcon.notificaciones, decorIcon2: GIcon.estrella,
     title: 'Tranquilidad total',
     subtitle: 'Recibe fotos y actualizaciones en tiempo real durante el servicio. Al final, califica la experiencia.',
@@ -383,8 +383,8 @@ class _StepIllustrationState extends State<_StepIllustration>
                       ],
                     ),
                     child: Center(
-                      child: s.brote != null
-                          ? Brote(pose: s.brote!, size: 128)
+                      child: s.mark
+                          ? GardenPawMark(size: 128, floatCycles: GardenPawMark.settleCycles)
                           : Transform.scale(
                               scale: 1.6,
                               child: GardenIcon(s.icon,

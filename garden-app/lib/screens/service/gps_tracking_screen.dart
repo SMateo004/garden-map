@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/gps_tracking_session.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_service.dart';
 import '../../theme/garden_motion.dart';
@@ -894,7 +894,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Brote(pose: BrotePose.buscando, size: 110),
+                const GardenPawMark(size: 110, floatCycles: GardenPawMark.settleCycles),
                 const SizedBox(height: 24),
                 Text(
                   'Permiso de ubicación requerido',

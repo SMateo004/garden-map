@@ -14,7 +14,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_caregiver_card.dart' show GardenStatTiles;
 import '../../design/garden_icons.dart';
 import '../../design/garden_live_hero.dart';
@@ -2997,7 +2997,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                       child: Row(
                         children: [
-                          const Brote(pose: BrotePose.esperando, size: 56),
+                          const GardenPawMark(size: 56, floatCycles: GardenPawMark.settleCycles),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -4185,8 +4185,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── El final (regla pico-final): Brote celebra ──────────
-                  const Center(child: Brote(pose: BrotePose.celebrando, size: 120)),
+                  // ── El final (regla pico-final): la huella de GARDEN celebra ──
+                  const Center(child: GardenPawMark(size: 120, floatCycles: GardenPawMark.settleCycles)),
                   const SizedBox(height: 14),
                   Text(
                     isCaregiver

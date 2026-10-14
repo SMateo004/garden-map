@@ -6,7 +6,6 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../design/brote.dart';
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_ratings.dart';
 import '../../design/garden_service.dart';
@@ -138,7 +137,7 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
         const SizedBox(height: 40),
         GardenEmptyState(
           type: GardenEmptyType.reviews,
-          brote: BrotePose.oops,
+          mark: true,
           title: 'No pudimos cargar tus calificaciones',
           subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
           ctaLabel: 'Reintentar',
@@ -154,7 +153,7 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
         SizedBox(height: 40),
         GardenEmptyState(
           type: GardenEmptyType.reviews,
-          brote: BrotePose.esperando,
+          mark: true,
           title: 'Aún no calificaste ningún servicio',
           subtitle: 'Cuando termine un servicio, podrás contar cómo te fue. Tu reseña ayuda a otros dueños a elegir.',
         ),

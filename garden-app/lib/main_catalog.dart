@@ -4,7 +4,6 @@ import 'design/garden_marketplace_banner.dart';
 import 'design/garden_booking_carousel.dart';
 import 'design/garden_photo_tile.dart';
 import 'design/garden_code_input.dart';
-import 'design/brote.dart';
 import 'design/garden_booking_hero_card.dart';
 import 'design/garden_caregiver_card.dart';
 import 'design/garden_chain_proof.dart';
@@ -499,11 +498,6 @@ class _CatalogPageState extends State<_CatalogPage> {
             Wrap(spacing: 24, children: [
               _Labeled('46', GardenPawMark(size: 46)),
               _Labeled('110', GardenPawMark(size: 110)),
-            ]),
-          ]),
-          _Section('Brote', [
-            Wrap(spacing: 16, runSpacing: 16, children: [
-              for (final p in BrotePose.values) _Labeled(p.name, Brote(pose: p, size: 110)),
             ]),
           ]),
           _Section('Chat (día, burbujas agrupadas, ubicación, respuestas rápidas)', [

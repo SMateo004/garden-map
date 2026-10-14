@@ -10,13 +10,22 @@ import '../theme/garden_motion.dart';
 /// y la sombra del piso se achica cuando sube). Al tocarla da una vuelta
 /// completa sobre sí misma.
 ///
-/// Es la marca, no un personaje: Brote sigue en los estados vacíos, la carga
-/// y las celebraciones. Con "reducir movimiento" queda quieta y no gira.
+/// Es la única figura de la marca: reemplazó al personaje Brote en saludos,
+/// estados vacíos, carga y celebraciones. Con "reducir movimiento" queda
+/// quieta y no gira.
 class GardenPawMark extends StatefulWidget {
   final double size;
   final String semanticLabel;
 
-  const GardenPawMark({super.key, this.size = 46, this.semanticLabel = 'GARDEN'});
+  /// Cuántas veces flota antes de quedarse quieta. null = siempre (solo el
+  /// saludo del inicio); en el resto de las pantallas se usa [settleCycles]
+  /// para que no haya bucles eternos (regla del sistema: solo lo que está en
+  /// vivo se mueve sin parar).
+  final int? floatCycles;
+
+  static const settleCycles = 2;
+
+  const GardenPawMark({super.key, this.size = 46, this.semanticLabel = 'GARDEN', this.floatCycles});
 
   /// Imagen de la huella (generada con el mismo dibujo que el ícono).
   static const asset = 'assets/images/garden_paw_3d.png';
@@ -36,7 +45,7 @@ class _GardenPawMarkState extends State<GardenPawMark> with TickerProviderStateM
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    if (!GardenMotion.reduced(context)) _float.repeat();
+    if (!GardenMotion.reduced(context)) _float.repeat(count: widget.floatCycles);
   }
 
   @override

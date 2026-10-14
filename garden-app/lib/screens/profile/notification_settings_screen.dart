@@ -5,7 +5,6 @@ import '../../theme/garden_theme.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
-import '../../design/brote.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_settings.dart';
 import '../../widgets/garden_empty_state.dart';
@@ -122,7 +121,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                   const SizedBox(height: 40),
                   GardenEmptyState(
                     type: GardenEmptyType.notifications,
-                    brote: BrotePose.oops,
+                    mark: true,
                     title: 'No pudimos cargar tus preferencias',
                     subtitle: _error!,
                     ctaLabel: 'Reintentar',

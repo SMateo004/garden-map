@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
 import '../../theme/garden_theme.dart';
@@ -517,7 +517,7 @@ class _PetFormSheetState extends State<PetFormSheet> {
                         ? Image.network(fixImageUrl(_photoUrl!), fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Center(
                                 child: GardenIcon(GIcon.sinImagen, size: GIconSize.xl, color: GardenColors.primary)))
-                        : const Center(child: Brote(pose: BrotePose.hola, size: 72)),
+                        : const Center(child: GardenPawMark(size: 72, floatCycles: GardenPawMark.settleCycles)),
                   ),
                 ),
                 Positioned(

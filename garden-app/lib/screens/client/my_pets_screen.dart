@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
-import '../../design/brote.dart';
+import '../../design/garden_paw_mark.dart';
 import '../../design/garden_icons.dart';
 import '../../design/garden_pets.dart';
 import '../../theme/garden_theme.dart';
@@ -220,7 +220,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Brote(pose: BrotePose.hola, size: 120),
+            const GardenPawMark(size: 120, floatCycles: GardenPawMark.settleCycles),
             const SizedBox(height: 16),
             Text('Todavía no conocemos a tu mascota',
                 textAlign: TextAlign.center, style: GardenText.h4.copyWith(color: textColor)),

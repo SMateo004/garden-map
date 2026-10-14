@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import '../../design/brote.dart';
 import '../../design/garden_caregiver_card.dart';
 import '../../design/garden_icons.dart';
 import '../../theme/garden_motion.dart';
@@ -142,7 +141,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   const SizedBox(height: 40),
                   GardenEmptyState(
                     type: GardenEmptyType.caregivers,
-                    brote: BrotePose.oops,
+                    mark: true,
                     title: 'No pudimos cargar tus favoritos',
                     subtitle: 'Revisa tu conexión e inténtalo de nuevo.',
                     ctaLabel: 'Reintentar',

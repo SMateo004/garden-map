@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:garden_app/design/brote.dart';
 import 'package:garden_app/design/garden_booking_hero_card.dart';
 import 'package:garden_app/design/garden_icons.dart';
 import 'package:garden_app/design/garden_pet_avatar.dart';
@@ -114,11 +113,5 @@ void main() {
     await _shoot(tester, 'tarjeta_reserva', SingleChildScrollView(
       child: GardenBookingHeroCard(booking: booking, onAction: (_) {}, onChat: () {}),
     ), size: const Size(420, 360));
-  });
-
-  testWidgets('Brote en sus seis poses', (tester) async {
-    await _shoot(tester, 'brote', Wrap(spacing: 8, runSpacing: 8, children: [
-      for (final p in BrotePose.values) Brote(pose: p, size: 96),
-    ]), size: const Size(420, 260));
   });
 }
