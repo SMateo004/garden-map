@@ -297,10 +297,16 @@ export const reviewAutoApprovedPayment = asyncHandler(async (req: Request, res: 
   res.json({ success: true, data: result });
 });
 
-/** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual */
+/** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual.
+ * Con { receivedAmount } (llegó incompleto): aprueba y en la misma operación descuenta la
+ * diferencia de la billetera del cliente (payment-review INCOMPLETE), sin liberar antes las
+ * propinas que esperaban ese pago. */
 export const approvePayment = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id!;
   const adminId = req.user!.userId;
+  const { receivedAmount } = z
+    .object({ receivedAmount: z.coerce.number().min(0).max(100000).optional() })
+    .parse(req.body ?? {});
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
@@ -363,12 +369,28 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
 
   // Donación y deuda previa: antes este botón no registraba la donación ni
   // recuperaba la deuda (ver applyConfirmedPaymentEffects).
-  for (const bookingId of [id, ...groupIds]) await applyConfirmedPaymentEffects(bookingId);
+  const incomplete = receivedAmount !== undefined;
+  for (const bookingId of [id, ...groupIds]) {
+    await applyConfirmedPaymentEffects(bookingId, { releaseTips: !incomplete });
+  }
+  const review = incomplete
+    ? await reviewAutoApprovedPaymentService(id, adminId, 'INCOMPLETE', receivedAmount)
+    : null;
 
   enqueueSafely('CREATE', () => enqueueBookingCreate(id));
   afterGroupSiblingsPaid(groupIds, booking.clientId, 'manual_admin');
-  auditLog({ userId: adminId, action: 'PAYMENT_APPROVED', entity: 'Booking', entityId: id, ip: req.ip });
-  res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
+  auditLog({
+    userId: adminId,
+    action: incomplete ? 'PAYMENT_APPROVED_INCOMPLETE' : 'PAYMENT_APPROVED',
+    entity: 'Booking',
+    entityId: id,
+    details: incomplete ? { receivedAmount, chargedAmount: review?.chargedAmount } : undefined,
+    ip: req.ip,
+  });
+  res.json({
+    success: true,
+    data: { status: 'WAITING_CAREGIVER_APPROVAL', ...(review ? { chargedAmount: review.chargedAmount } : {}) },
+  });
 });
 
 /** POST /api/admin/bookings/:id/approve-payment-secure — igual que approve-payment,

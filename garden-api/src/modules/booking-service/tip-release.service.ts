@@ -31,6 +31,14 @@ export const TIP_PENDING_DESCRIPTION = 'Propina por cobrar';
  */
 export async function releasePendingTips(tx: Prisma.TransactionClient, clientId: string): Promise<number> {
   await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
+  // Un pago que se aprobó solo (sin que nadie viera el depósito) todavía puede
+  // resultar "no llegó" o "llegó incompleto": la deuda vuelve, y si la propina
+  // ya se hubiera liberado el cuidador se quedaría con plata que GARDEN nunca
+  // cobró (auditoría 2026-10-14). Se espera a que el admin lo verifique.
+  const unverified = await tx.booking.count({
+    where: { clientId, paidAt: { not: null }, paymentAutoApprovedAt: { not: null }, paymentReviewedAt: null },
+  });
+  if (unverified > 0) return 0;
   const client = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
   const debt = Math.max(0, -Number(client?.balance ?? 0));
 

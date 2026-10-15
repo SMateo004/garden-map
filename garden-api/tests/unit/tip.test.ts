@@ -9,7 +9,7 @@ import prisma from '../../src/config/database';
 
 jest.mock('../../src/config/database', () => {
   const db = {
-    booking: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+    booking: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
     user: { findUnique: jest.fn(), update: jest.fn() },
     walletTransaction: {
       create: jest.fn(), aggregate: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn(),
@@ -32,7 +32,7 @@ jest.mock('../../src/services/chain-registry.service', () => ({ enqueueSafely: j
 jest.mock('../../src/shared/analytics', () => ({ track: jest.fn() }));
 
 const db = prisma as unknown as {
-  booking: { findFirst: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock };
+  booking: { findFirst: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock; count: jest.Mock };
   user: { findUnique: jest.Mock; update: jest.Mock };
   walletTransaction: { create: jest.Mock; aggregate: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock; update: jest.Mock };
   $queryRaw: jest.Mock;
@@ -108,6 +108,7 @@ describe('releasePendingTips', () => {
   });
 
   beforeEach(() => {
+    db.booking.count.mockResolvedValue(0);
     db.booking.findMany.mockResolvedValue([{ id: 'booking-123456' }]);
     db.walletTransaction.updateMany.mockResolvedValue({ count: 1 });
     db.user.update.mockResolvedValue({ balance: 115 });
@@ -129,6 +130,19 @@ describe('releasePendingTips', () => {
     db.user.findUnique.mockResolvedValue({ balance: -15 });
     db.walletTransaction.findMany.mockResolvedValue([pending('t1', 15)]);
     expect(await releasePendingTips(db as never, 'client-1')).toBe(0);
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it('con un pago aprobado solo y sin verificar, la retiene (puede resultar que no llegó)', async () => {
+    // Auditoría 2026-10-14: la deuda se dio por saldada con un pago aprobado sin verificar;
+    // si después resulta "no llegó", el cuidador no debe haberse llevado la propina.
+    db.user.findUnique.mockResolvedValue({ balance: 0 });
+    db.booking.count.mockResolvedValue(1);
+    db.walletTransaction.findMany.mockResolvedValue([pending('t1', 15)]);
+    expect(await releasePendingTips(db as never, 'client-1')).toBe(0);
+    expect(db.booking.count.mock.calls[0][0].where).toMatchObject({
+      clientId: 'client-1', paymentAutoApprovedAt: { not: null }, paymentReviewedAt: null,
+    });
     expect(db.user.update).not.toHaveBeenCalled();
   });
 

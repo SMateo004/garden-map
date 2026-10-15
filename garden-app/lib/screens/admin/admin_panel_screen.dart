@@ -3642,22 +3642,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
     if (received == null || !mounted) return;
     try {
-      if (approveFirst) {
-        final approve = await http.post(
-          Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-payment'),
-          headers: {'Authorization': 'Bearer $_adminToken'},
-        );
-        final a = jsonDecode(approve.body);
-        if (a['success'] != true) {
-          if (mounted) GardenErrorDialog.show(context, a['error']?['message'] ?? 'No se pudo aprobar el pago');
-          return;
-        }
-      }
-      final response = await http.post(
-        Uri.parse('$_baseUrl/admin/bookings/$bookingId/payment-review'),
-        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'outcome': 'INCOMPLETE', 'receivedAmount': received}),
-      );
+      // Pendiente: aprobar y cobrar la diferencia en una sola operación (así las
+      // propinas que esperaban este pago no se liberan antes de tiempo).
+      final response = approveFirst
+          ? await http.post(
+              Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-payment'),
+              headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+              body: jsonEncode({'receivedAmount': received}),
+            )
+          : await http.post(
+              Uri.parse('$_baseUrl/admin/bookings/$bookingId/payment-review'),
+              headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+              body: jsonEncode({'outcome': 'INCOMPLETE', 'receivedAmount': received}),
+            );
       final data = jsonDecode(response.body);
       if (!mounted) return;
       await _loadPayments();

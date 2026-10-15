@@ -24,6 +24,7 @@ import prisma from '../../config/database.js';
 import logger from '../../shared/logger.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
+import { releasePendingTips } from '../booking-service/tip-release.service.js';
 
 export type PaymentReviewOutcome = 'CONFIRMED' | 'NOT_RECEIVED' | 'INCOMPLETE';
 export const WALLET_TX_PAYMENT_NOT_RECEIVED = 'PAYMENT_NOT_RECEIVED';
@@ -186,8 +187,14 @@ export async function reviewAutoApprovedPayment(
         ? `Tu pago llegó incompleto. Descontamos la diferencia (Bs ${result.charged.toFixed(2)}) de tu billetera.`
         : `No recibimos el pago de tu reserva. Descontamos Bs ${result.charged.toFixed(2)} de tu billetera.`
     ).catch(() => {});
-  } else {
+  } else if (outcome === 'CONFIRMED') {
     logger.info('[PAGO] Pago aprobado automáticamente verificado (llegó)', { bookingId, adminId });
+    // Las propinas que esperaban esta verificación ya se pueden liberar.
+    try {
+      await prisma.$transaction((tx) => releasePendingTips(tx, result.clientId));
+    } catch (err) {
+      logger.error('[PAGO] No se pudieron liberar propinas tras verificar el pago', { bookingId, err });
+    }
   }
   return { bookingId, outcome, chargedAmount: result.charged, clientBalance: result.balance };
 }

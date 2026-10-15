@@ -189,7 +189,11 @@ export async function handleCheckoutCompleted(
  * deuda — el dueño la pagaba dentro del QR pero su saldo seguía negativo y se
  * le iba a volver a cobrar. Idempotente: se puede llamar más de una vez.
  */
-export async function applyConfirmedPaymentEffects(bookingId: string): Promise<void> {
+export async function applyConfirmedPaymentEffects(
+  bookingId: string,
+  /** false: no liberar propinas todavía (el admin está por registrar que el pago llegó incompleto). */
+  opts: { releaseTips?: boolean } = {}
+): Promise<void> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: { id: true, clientId: true, donationAmount: true, debtRecoveryAmount: true },
@@ -241,8 +245,9 @@ export async function applyConfirmedPaymentEffects(bookingId: string): Promise<v
           status: 'COMPLETED',
         },
       });
-      // Si la deuda incluía propinas, ahora que se pagó le llegan al cuidador.
-      await releasePendingTips(tx, booking.clientId);
+      // Si la deuda incluía propinas, ahora que se pagó le llegan al cuidador
+      // (salvo que el pago se haya aprobado solo: espera a la verificación).
+      if (opts.releaseTips !== false) await releasePendingTips(tx, booking.clientId);
     });
   } catch (err) {
     logger.error('No se pudo recuperar la deuda del pago confirmado', { bookingId, err });
