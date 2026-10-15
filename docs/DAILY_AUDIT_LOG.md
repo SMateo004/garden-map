@@ -3281,3 +3281,127 @@ aprobación de pagos) — no se tocó código. Solo se actualiza este log.
   corregir identidad no re-dispara la verificación de un cuidador ya `VERIFIED` (2026-10-11).
 - Baja propia de dueño y aprobación de baja de cuidador por admin sin chequeo de retiro pendiente
   (2026-10-11/12).
+
+---
+
+## 2026-10-15 — Seguimiento del hallazgo de propinas del 2026-10-14 (ya corregido por el dueño) +
+## revisión de "ayuda con el pago" (sin hallazgos) + fix de bajo riesgo: la suite de tests no
+## corría completa fuera de GitHub Actions
+
+**Commit de referencia al iniciar la auditoría:** `7822d51` (chore: versión 1.4.7+38 de la app).
+`git log` mostró solo 3 commits nuevos desde `806a5ca` (HEAD de la corrida anterior, 2026-10-14):
+`2ecfa57`/`e4500c4` (ya habían sido auditados ayer como parte del lote de dinero del 12-13 de
+octubre, antes de que `806a5ca` quedara como referencia), `8ae59b2` (el propio commit de registro
+de la auditoría de ayer) y, lo relevante, **`d7c1561`** — un fix hecho directamente por el dueño
+del proyecto (no por esta rutina) que dice resolver el Hallazgo 1 de ayer.
+
+### Verificación: `d7c1561` corrige correctamente el Hallazgo 1 del 2026-10-14 (fuga de propina)
+
+Se leyó el diff completo y se verificó contra el código actual, no solo el mensaje del commit:
+- `tip-release.service.ts:releasePendingTips` ahora cuenta, antes de liberar nada, si el cliente
+  tiene una reserva con `paymentAutoApprovedAt` seteado y `paymentReviewedAt` todavía null (pago
+  aprobado solo, sin que un admin lo haya verificado) — si existe, no libera (`return 0`).
+- Confirmado con `grep` que los 3 lugares que llaman a `releasePendingTips` pasan por esta misma
+  función (ninguno la bypassea): `applyConfirmedPaymentEffects` (pago recién confirmado),
+  `reviewAutoApprovedPayment` en la rama `CONFIRMED` (se liberan recién ahí las que esperaban), y
+  el barrido periódico de `tip-release.service.ts` — los tres comparten el mismo guard.
+- "Aprobar: llegó incompleto" pasó a ser una sola operación (`approve-payment` con
+  `receivedAmount`): `applyConfirmedPaymentEffects(id, { releaseTips: false })` + la revisión
+  `INCOMPLETE` en el mismo request, así ya no hay ventana entre "aprobar" y "marcar incompleto"
+  donde la propina se libere de más.
+- `tip.test.ts` tiene un test nuevo exactamente para el caso de ayer (pago aprobado sin verificar
+  → no libera) y pasa.
+
+Cierra el hallazgo — se saca de la lista de pendientes.
+
+### El Hallazgo 2 de ayer sigue abierto, confirmado sin cambios
+
+`admin.controller.ts:approvePayment` (líneas 326-333) y `admin.service.ts:approvePaymentSecure`
+siguen haciendo `tx.booking.update({ where: { id } })` sin condición de `status` (a diferencia de
+`updateMany` guardado que ya usan sus hermanos en `payment.service.ts`). El fix de ayer agregó
+lógica nueva (el flujo combinado de "llegó incompleto") sobre este mismo camino sin guardia — no
+es un hallazgo nuevo, pero ahora depende un poco más de él. Sigue pendiente de aprobación (mismo
+criterio: toca aprobación de pagos).
+
+### Área nueva revisada hoy: "ayuda con el pago" desde el QR (`payment-help.service.ts`,
+commits `e4500c4`/`2ecfa57` del 12-13 de octubre) — sin hallazgos
+
+Se leyó el archivo completo y se verificó cada rama (`QR_NOT_WORKING`, `MORE_TIME`,
+`PAID_NOT_CONFIRMED`, `WRONG_AMOUNT`, `CANCEL`, `OTHER`) contra el código real:
+- `MORE_TIME` extiende el QR con un `updateMany` guardado por `status` + `qrExpiresAt` (nunca
+  acorta, nunca revive un QR ya vencido — si el job de expiración ya lo canceló, cae a
+  `OPEN_SUPPORT` en vez de extender algo que ya no existe).
+- `WRONG_AMOUNT` ("pagué otro monto"): si pagó de más, el código explícitamente NO acredita nada
+  automático — el mensaje dice que un asesor revisa y devuelve el excedente a mano, y `escalate:
+  true` efectivamente notifica a los admins (`notifyAdmins`) y lo deja en el chat de soporte
+  (`recordSupportExchange`). Es diseño intencional, no un vacío.
+- `declarePaymentMade` (lo que dispara `PAID_NOT_CONFIRMED`/`WRONG_AMOUNT` desde el cliente) es
+  idempotente con lock de fila (`FOR UPDATE`) — pedir ayuda dos veces o tras ya haber declarado no
+  duplica nada ni rompe el estado.
+- `CANCEL` desde este botón no cancela nada por sí solo — solo registra el pedido; la cancelación
+  real la dispara el flujo normal de cancelación de la pantalla (`_handleBack()` en
+  `payment_screen.dart`), con su propia confirmación. Correcto, no es un cancel fantasma.
+
+### Revisión rápida, sin hallazgos: `GardenPawMark` tras el reemplazo de Brote (`203a0ad`) y el
+saludo por hora del día (`a41ce3b`)
+
+`grep` de los 14 usos de `GardenPawMark(` en `lib/` confirma que ninguno está en una pantalla de
+dinero/pago/disputa/verificación (regla de CLAUDE.md) — aparece en login, marketplace, mascotas,
+chat, onboarding, perfil, servicio en curso/GPS, soporte y los estados vacíos genéricos, nunca en
+wallet/payment/dispute/verification. `timeGreeting()` (`utils/time_greeting.dart`) tiene los
+límites correctos (Buen día 5-11:59, Buenas tardes 12-18:59, Buenas noches el resto) y se
+refresca cada minuto en las dos pantallas que lo usan — no se reprodujo el bug de ayer ("buenos
+días" a las 2am) que esta misma feature vino a corregir. No se pudo correr `flutter analyze` (el
+SDK de Flutter no está instalado en este contenedor de la auditoría) — revisión solo de lectura,
+sin tocar código Flutter hoy por no poder verificarlo.
+
+### Hallazgo de bajo riesgo (aplicado, commiteado y pusheado): `npm run test:unit` no podía
+correr completo fuera de GitHub Actions — 25 de 60 suites morían con "Jest worker encountered 4
+child process exceptions" en vez de ejecutarse
+
+**Dónde:** `garden-api/tests/setup.ts` — pone valores mínimos de entorno para que
+`src/config/env.ts` no haga `process.exit(1)` al cargar en los tests, pero le faltaba
+`JWT_REFRESH_SECRET` (`env.ts:12`, `z.string().min(32)`, obligatoria). Cualquier suite que
+importa algo que termina importando `env.ts` (directa o indirectamente) hacía que ese
+`process.exit(1)` matara el proceso worker de Jest entero, en vez de fallar como un test normal —
+por eso el reporte decía "excepciones del worker", no "test falló", y escondía lo que esas 25
+suites en realidad verifican. `.github/workflows/ci.yml` sí define `JWT_REFRESH_SECRET` como
+variable de entorno del job, así que el pipeline real de GitHub Actions nunca lo sufre — el hueco
+solo afecta a correr los tests en cualquier otro lado (clon nuevo, máquina de otro colaborador, o
+esta misma rutina de auditoría diaria).
+
+**Fix aplicado:** una línea en `tests/setup.ts`, mismo patrón ya usado para `JWT_SECRET`:
+```
+process.env.JWT_REFRESH_SECRET ??= 'y'.repeat(32);
+```
+**Verificación:** antes del fix, `npm run test:unit` (con los workers default) daba "25 failed, 35
+passed" a nivel de test suites pero "349 passed, 349 total" a nivel de tests individuales (las 25
+suites ni llegaban a correr un test). Con el fix, `npx jest --testPathPattern=tests/unit`: **60
+test suites, 575 tests, todos pasan.** `./node_modules/.bin/tsc --noEmit` también limpio, sin
+errores nuevos (y sin los "2-3 preexistentes" que menciona CLAUDE.md — puede que ya se hayan
+corregido en algún commit reciente). No se tocó ningún código de producción, solo bootstrap de
+tests — clasificado bajo riesgo según el criterio de esta auditoría (categoría "código muerto o
+inalcanzable / infraestructura de testing", no dinero/auth/verificación).
+
+### Sin cambios en el resto
+
+No se encontró ningún hallazgo nuevo de alto riesgo hoy. No se tocó código de producción de
+`garden-api` ni de `garden-app`.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet como si fuera
+  dinero efectivo cuando en realidad es un código de descuento (2026-10-05) — sin decisión todavía.
+- La ventana de aceptación de 3h no se extiende para empresas con equipo activo (2026-10-10).
+- El cupo combinado recepción+marketplace no es atómico entre los dos caminos que lo comparten
+  (2026-10-10).
+- Eliminar cuenta: baja a ciegas de un cuidador con reserva `IN_PROGRESS`/disputa abierta, y
+  corregir identidad no re-dispara la verificación de un cuidador ya `VERIFIED` (2026-10-11).
+- Baja propia de dueño y aprobación de baja de cuidador por admin sin chequeo de retiro pendiente
+  (2026-10-11/12).
+- `approvePayment`/`approvePaymentSecure` (admin) siguen sin el `updateMany` guardado por status
+  que ya usan sus caminos hermanos — hoy además sostiene el flujo nuevo de "llegó incompleto"
+  (2026-10-14/15).
