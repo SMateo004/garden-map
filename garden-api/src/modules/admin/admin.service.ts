@@ -4048,7 +4048,7 @@ export async function dismissAntecedentesFlag(profileId: string, adminId: string
         userId: profile.userId,
         title: 'Antecedentes verificados',
         message: 'El equipo de GARDEN revisó tu documento. Tu perfil ya muestra el sello "Antecedentes verificados".',
-        type: 'ANTECEDENTES_APPROVED',
+        type: 'ANTECEDENTES_LIMPIO',
       },
     });
   }
@@ -4085,7 +4085,7 @@ export async function rejectAntecedentesDocument(profileId: string, adminId: str
       userId: profile.userId,
       title: 'Tu documento de antecedentes fue rechazado',
       message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Puedes subir uno nuevo desde tu perfil cuando quieras.`,
-      type: 'ANTECEDENTES_REJECTED',
+      type: 'ANTECEDENTES_RECHAZO',
     },
   });
 
@@ -4134,16 +4134,27 @@ export async function listNitVerifications() {
 
 /** POST /api/admin/nit-verifications/:profileId/approve — admin confirma que el NIT es válido. */
 export async function approveNitVerification(profileId: string, adminId: string): Promise<void> {
-  await prisma.caregiverProfile.update({
+  const profile = await prisma.caregiverProfile.update({
     where: { id: profileId },
     data: {
       nitStatus: 'VERIFICADO',
       nitReviewedAt: new Date(),
       nitReviewedById: adminId,
     } as any,
+    select: { userId: true },
   });
   await prisma.adminAction.create({
     data: { adminId, actionType: 'APPROVE_NIT_VERIFICATION', targetId: profileId },
+  });
+  // A diferencia del rechazo (que sí avisaba), la aprobación nunca notificaba
+  // al cuidador — se entera recién si vuelve a mirar su perfil.
+  await prisma.notification.create({
+    data: {
+      userId: profile.userId,
+      title: 'NIT verificado',
+      message: 'El equipo de GARDEN revisó y aprobó el NIT de tu empresa.',
+      type: 'NIT_APPROVED',
+    },
   });
 }
 

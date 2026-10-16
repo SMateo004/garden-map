@@ -81,7 +81,7 @@ describe('aprobación del admin', () => {
       data: expect.objectContaining({ antecedentesStatus: 'LIMPIO', antecedentesReviewedById: 'admin-1' }),
     }));
     expect(mockPrisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ userId: 'u1', type: 'ANTECEDENTES_APPROVED' }),
+      data: expect.objectContaining({ userId: 'u1', type: 'ANTECEDENTES_LIMPIO' }),
     }));
   });
 
