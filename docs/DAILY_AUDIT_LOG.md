@@ -3405,3 +3405,154 @@ No se encontró ningún hallazgo nuevo de alto riesgo hoy. No se tocó código d
 - `approvePayment`/`approvePaymentSecure` (admin) siguen sin el `updateMany` guardado por status
   que ya usan sus caminos hermanos — hoy además sostiene el flujo nuevo de "llegó incompleto"
   (2026-10-14/15).
+
+---
+
+## 2026-10-16 — Profundidad sobre verificación de identidad del cuidador: la cola de revisión de
+## antecedentes/NIT puede dar un veredicto contradictorio entre dos admins, y dos notificaciones de
+## esa misma cola rompían al avisar al cuidador (bug confirmado, no solo un riesgo teórico)
+
+**Commit de referencia al iniciar la auditoría:** `01571ed` (fix: la suite de tests corre completa
+fuera de GitHub Actions — único commit nuevo desde el cierre del 2026-10-15, ya registrado ese día).
+Sin commits nuevos sin auditar desde la corrida anterior.
+
+**Área elegida:** `garden-api/src/agents/documento-antecedentes.agent.ts`,
+`garden-api/src/modules/caregiver-profile/caregiver-profile.service.ts` (subida del documento) y
+`garden-api/src/modules/admin/admin.service.ts` (cola de revisión del admin: antecedentes penales
+FELCC/REJAP y verificación de NIT de empresas). Elegida por eje (a) de CLAUDE.md
+("seguridad y verificación del cuidador") — el módulo de antecedentes no se auditaba en profundidad
+desde el 2026-10-02 (cuando se corrigió la auto-aprobación por IA sin humano), y la cola de
+*decisión del admin* sobre ese mismo documento nunca se había revisado específicamente. Se verificó
+primero que el pipeline de subida (`submitAntecedentesDocument`, `assertCanSubmitAntecedentes`) y el
+agente de IA siguen exactamente como se dejaron el 2026-10-02/07 (falla cerrado, nunca decide solo,
+siempre a la cola del admin) — sin novedad ahí, el foco pasó al lado del admin.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): `suspendForAntecedentes`,
+`rejectAntecedentesDocument`, `approveNitVerification` y `rejectNitVerification` pueden pisarse la
+decisión entre dos admins sobre el mismo documento — a diferencia de `dismissAntecedentesFlag`, en
+el mismo archivo, que sí está protegido
+
+**Dónde:**
+- `garden-api/src/modules/admin/admin.service.ts:4008-4018` (`suspendForAntecedentes`) y
+  `:4067-4095` (`rejectAntecedentesDocument`) — ambas hacen `prisma.caregiverProfile.update({
+  where: { id: profileId }, ... })`, **sin condición sobre `antecedentesStatus`**.
+- `garden-api/src/modules/admin/admin.service.ts:4136-4157` (`approveNitVerification`, ya con el fix
+  de notificación de hoy) y `:4160-4182` (`rejectNitVerification`) — mismo patrón, sin condición
+  sobre `nitStatus`.
+- Comparar con `dismissAntecedentesFlag` (`:4026-4056`, sin cambios hoy), que sí usa
+  `updateMany({ where: { id: profileId, antecedentesStatus: 'EN_REVISION' }, ... })` + chequeo de
+  `count === 0` → `BadRequestError` — el patrón correcto ya existe en el propio archivo, a tres
+  funciones de distancia.
+
+**Por qué es explotable en la práctica, no solo en teoría:** `listFlaggedAntecedentes` y
+`listNitVerifications` (ambas en el mismo archivo) son colas visibles para **cualquier admin con
+acceso al panel** — y el aviso que las llena (`AdminNotification` tipo `ANTECEDENTES_FLAGGED`/
+`ANTECEDENTES_REVIEW`/`NIT_VERIFICATION_SUBMITTED`) llega a la bandeja de todos los admins a la vez
+(confirmado el 2026-10-11 con `72275bc`, "las alertas al admin llegan por la app"), igual que ya pasó
+con el bug de retiros duplicados (`B1`, 2026-09-27, dos admins completando el mismo retiro). Dos
+admins revisando la misma cola —o un admin que no refrescó la lista tras que otro ya actuó— pueden
+ejecutar dos acciones contradictorias sobre el mismo `profileId` casi al mismo tiempo:
+
+1. **Caso más grave — aprobar y suspender al mismo tiempo:** Admin A revisa el documento y lo
+   aprueba (`dismiss` → `LIMPIO`, notifica "Antecedentes verificados" al cuidador). Admin B, con la
+   cola todavía sin refrescar (o decidiendo algo distinto sobre el mismo caso), hace clic en
+   "Suspender" sobre el mismo perfil. Como `suspendForAntecedentes` no valida el status vigente,
+   ejecuta igual: llama a `suspendCaregiver()` (cancela y reembolsa TODAS las reservas activas del
+   cuidador, incluidas las `IN_PROGRESS` — con el mensaje de alarma "🚨 Suspendimos a tu cuidador...
+   activamos el protocolo de la Sección 16 de Términos" a los clientes, ver
+   `admin.service.ts:2481-2551`) y sobrescribe `antecedentesStatus: LIMPIO → FLAGGED`. El cuidador
+   recibe dos notificaciones contradictorias en segundos ("Antecedentes verificados" → "Tu perfil ha
+   sido suspendido"), queda suspendido pese a haber sido aprobado, y sus clientes activos reciben una
+   alerta de seguridad alarmante y un reembolso que no correspondía.
+2. **Caso más leve pero igual de confuso — aprobar y rechazar:** mismo patrón entre
+   `dismissAntecedentesFlag`/`rejectAntecedentesDocument` (o `approveNitVerification`/
+   `rejectNitVerification`): el documento queda en el estado del que escribió último, el cuidador
+   recibe dos notificaciones contradictorias ("verificado" y "rechazado") sobre el mismo documento, y
+   el `AdminAction` de auditoría registra ambas acciones como si las dos hubieran sido legítimas, sin
+   ninguna señal de que se pisaron.
+
+**Mitigante (no anula el hallazgo):** la cancelación/reembolso de reservas activas dentro de
+`suspendCaregiver()` sí usa `updateMany` guardado (`cancelActiveBookingsForSuspendedCaregiver`,
+confirmado leyendo el código) — una suspensión duplicada por otra vía (ej. rating bajo + esto mismo)
+no duplica el reembolso de dinero. El daño concreto de este hallazgo es de *decisión incorrecta y
+irreversible* (suspensión indebida, notificaciones contradictorias, reembolsos no correspondidos),
+no de duplicación de plata.
+
+**Propuesta de fix (no aplicada):** copiar el mismo patrón que ya usa `dismissAntecedentesFlag` en
+las otras tres funciones de antecedentes/NIT — `updateMany({ where: { id: profileId, status:
+'EN_REVISION' }, data: {...} })` + `if (count === 0) throw new ConflictError('Este documento ya no
+está en revisión')`, antes de llamar a `suspendCaregiver()` en el caso de `suspendForAntecedentes`
+(para no ejecutar la suspensión completa sobre un documento que ya no está pendiente).
+
+**Por qué no se aplicó:** aunque el fix es mecánico y ya está probado en el mismo archivo (mismo
+criterio usado el 2026-09-26 con `check-blink` y el 2026-10-14 con `approvePayment`), la función
+`suspendForAntecedentes` dispara una suspensión de cuenta real — cae directo en la categoría de alto
+riesgo de esta auditoría (autorización + verificación de identidad de cuidadores) sin excepción por
+simplicidad del fix. Queda para que el dueño del proyecto lo apruebe.
+
+### Hallazgo de bajo riesgo (aplicado, commiteado y pusheado hoy — commit `396902f`): dos
+notificaciones de esta misma cola rompían de verdad al avisar al cuidador, y la aprobación de NIT
+nunca avisaba
+
+Mientras se verificaba el hallazgo de arriba, se encontró que `dismissAntecedentesFlag` y
+`rejectAntecedentesDocument` graban `notifications.type: 'ANTECEDENTES_APPROVED'` /
+`'ANTECEDENTES_REJECTED'` — **21 caracteres cada uno**, uno más de lo que permite la columna real
+(`notifications.type VARCHAR(20) NOT NULL`, confirmado en la migración original de la tabla,
+`20260319140012_add_chat_messages/migration.sql:121`, sin ningún `ALTER` posterior que la ensanche).
+No es solo un riesgo: cada vez que un admin aprobaba o rechazaba un documento de antecedentes, el
+estado SÍ quedaba grabado (`LIMPIO`/`RECHAZADO`, ya ocurrió en el `updateMany`/`update` previo), pero
+la llamada a `prisma.notification.create()` de la línea siguiente fallaba con el error real de
+Postgres `value too long for type character varying(20)` — el admin veía un error 500 pese a que la
+decisión ya se había aplicado, y el cuidador nunca recibía el aviso. Los 575 tests existentes no lo
+detectaban porque mockean Prisma por completo (`tests/unit/antecedentes.admin-approval.test.ts`
+confirma el valor esperado pero nunca pasa por la restricción real de la columna). Se acortaron a
+`'ANTECEDENTES_LIMPIO'` (19) y `'ANTECEDENTES_RECHAZO'` (20) — dentro del límite y, de paso, más
+coherentes con el vocabulario que ya usa `antecedentesStatus` (`LIMPIO`/`RECHAZADO`). De paso, se
+notó que `approveNitVerification` (hermana de `dismissAntecedentesFlag`/`rejectNitVerification` en
+el mismo módulo) nunca notificaba al cuidador tras aprobar su NIT — a diferencia del rechazo, que sí
+avisa — y se agregó la misma notificación de cortesía (`'NIT_APPROVED'`, 12 caracteres), sin tocar
+la decisión de verificación en sí.
+
+Clasificado bajo riesgo porque el fix no toca la decisión de verificación (el estado LIMPIO/RECHAZADO
+ya se grababa bien antes y sigue igual) ni dinero/autenticación — solo corrige un valor de cadena que
+rompía el aviso de cortesía posterior.
+
+**Nota pendiente, no aplicada hoy:** `garden-app/lib/narrative/notification_kind.dart:84-85` todavía
+mapea las claves viejas (`'ANTECEDENTES_APPROVED'`/`'ANTECEDENTES_REJECTED'`) al ícono/tono de
+antecedentes — no se tocó porque el SDK de Flutter no está disponible en este contenedor para correr
+`flutter analyze` (mismo motivo que el 2026-10-15). No es una regresión: antes esas notificaciones
+nunca llegaban a crearse, así que ahora, al empezar a crearse de verdad, caen en el ícono genérico de
+"Novedades" (`NotificationKind.of`, línea 140) hasta que alguien actualice ese mapa con las claves
+nuevas — mejora neta de todos modos (antes no llegaba ninguna notificación; ahora llega, con un ícono
+genérico). Queda como mejora cosmética pendiente, no como hallazgo de riesgo.
+
+**Verificación:** `npx tsc --noEmit` (con `npm install` fresco en este contenedor) — sin errores
+nuevos, solo el `TS5101` de `baseUrl` ya documentado como preexistente. `npm run test:unit`: **60
+test suites, 575 tests, todos pasan**, incluyendo `antecedentes.admin-approval.test.ts` actualizado
+para esperar el nuevo valor.
+
+### Sin cambios en el resto
+No se tocó ningún otro módulo hoy — foco en profundidad sobre la cola de revisión de
+antecedentes/NIT, tal como pide CLAUDE.md.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet como si fuera
+  dinero efectivo cuando en realidad es un código de descuento (2026-10-05) — sin decisión todavía.
+- La ventana de aceptación de 3h no se extiende para empresas con equipo activo (2026-10-10).
+- El cupo combinado recepción+marketplace no es atómico entre los dos caminos que lo comparten
+  (2026-10-10).
+- Eliminar cuenta: baja a ciegas de un cuidador con reserva `IN_PROGRESS`/disputa abierta, y
+  corregir identidad no re-dispara la verificación de un cuidador ya `VERIFIED` (2026-10-11).
+- Baja propia de dueño y aprobación de baja de cuidador por admin sin chequeo de retiro pendiente
+  (2026-10-11/12).
+- `approvePayment`/`approvePaymentSecure` (admin) siguen sin el `updateMany` guardado por status
+  que ya usan sus caminos hermanos — hoy además sostiene el flujo nuevo de "llegó incompleto"
+  (2026-10-14/15).
+- `suspendForAntecedentes`/`rejectAntecedentesDocument` y `approveNitVerification`/
+  `rejectNitVerification` (admin) escriben el veredicto sin el `updateMany` guardado por status
+  que sí usa `dismissAntecedentesFlag` en el mismo archivo — dos admins pueden pisarse la decisión
+  sobre el mismo documento (2026-10-16).
