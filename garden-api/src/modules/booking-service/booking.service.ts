@@ -4980,6 +4980,11 @@ export async function concludeService(
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
+    // Bloqueo de la reserva antes de leer su estado: dos "terminar" a la vez (doble
+    // toque, o dos empleados de una empresa) pasaban ambos el chequeo de IN_PROGRESS
+    // y, con tiempo extra, le cobraban dos veces al cliente y le pagaban dos veces al
+    // cuidador (pruebas en vivo 2026-10-17). Con el lock, el segundo espera y ve COMPLETED.
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
     const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
     if (!booking) throw new BookingNotFoundError(bookingId);
     if (booking.status !== BookingStatus.IN_PROGRESS) {
