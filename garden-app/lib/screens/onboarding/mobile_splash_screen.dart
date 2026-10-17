@@ -97,14 +97,21 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
       if (role == 'ADMIN') return const _NavTarget('/admin');
 
+      // El rol efectivo (el modo activo si la persona cambió de modo con
+      // /auth/switch-role, si no el rol permanente) — un cuidador que cambió
+      // a modo cliente debe recibir el mismo aviso de "reserva por calificar"
+      // que cualquier cliente, no solo quienes nacieron con rol CLIENT.
+      final activeRole = prefs.getString('active_role') ?? '';
+      final effectiveRole = activeRole.isNotEmpty ? activeRole : role;
+
       // Maintenance + force-update check + home resolution in parallel
       final token = AuthState.token;
       debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"}');
 
       final futures = await Future.wait([
         _fetchSettings(),
-        if (token.isNotEmpty && role != 'ADMIN') _fetchActiveBooking(token) else Future.value(null),
-        if (token.isNotEmpty && role == 'CLIENT') _fetchPendingRating(token) else Future.value(null),
+        if (token.isNotEmpty && effectiveRole != 'ADMIN') _fetchActiveBooking(token) else Future.value(null),
+        if (token.isNotEmpty && effectiveRole == 'CLIENT') _fetchPendingRating(token) else Future.value(null),
       ]);
 
       final settings = futures[0] as Map<String, dynamic>;
@@ -122,9 +129,6 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
       final activeBookingResult = futures.length > 1 ? futures[1] : null;
       final pendingRatingResult = futures.length > 2 ? futures[2] : null;
-
-      final activeRole = prefs.getString('active_role') ?? '';
-      final effectiveRole = activeRole.isNotEmpty ? activeRole : role;
 
       if (effectiveRole == 'CAREGIVER') {
         // Empleado de una empresa (mismo rol CAREGIVER que el dueño) — va a

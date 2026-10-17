@@ -3556,3 +3556,154 @@ antecedentes/NIT, tal como pide CLAUDE.md.
   `rejectNitVerification` (admin) escriben el veredicto sin el `updateMany` guardado por status
   que sí usa `dismissAntecedentesFlag` en el mismo archivo — dos admins pueden pisarse la decisión
   sobre el mismo documento (2026-10-16).
+- Dos jobs de auto-liberación de pago con ventanas distintas que no se enteran una de la otra:
+  el cron configurable (`autoReleasePaymentHoras`, 24h por defecto, editable en Admin) y el
+  auto-payout de respaldo con 48h fijas en el código — si un admin sube el setting por encima de
+  48h, el plazo que se le muestra al cliente (ficha de calificación, Términos, `/api/settings`)
+  queda desactualizado frente al que realmente libera el pago (2026-10-17).
+
+---
+
+## 2026-10-17 — Flujos de dinero: el plazo de auto-liberación de pago tiene dos relojes que no
+## se hablan entre sí — el que se le muestra al cliente no es siempre el que realmente paga
+
+**Commit de referencia al iniciar la auditoría:** `27f8991` (chore: registrar auditoría diaria —
+cola de revisión de antecedentes/NIT sin guard atómico, cierre del 2026-10-16). Sin commits nuevos
+sin auditar desde la corrida anterior — `git log` no mostró actividad entre ambas corridas.
+
+**Área elegida:** se buscó una feature reciente que nunca pasó por esta auditoría en lugar de
+reabrir un módulo ya cubierto. `e9fe802` (12 de octubre, "ficha temporal en el inicio para
+calificar al cuidador") nunca se había revisado específicamente — las corridas del 12 al 16 de
+octubre se enfocaron en baja de cuentas, propinas/reversión de pago y la cola de antecedentes/NIT.
+Al auditar esa ficha (que depende por completo del plazo de auto-liberación de pago,
+`autoReleasePaymentHoras`) se encontró que ese plazo no es único: hay un segundo mecanismo de
+auto-liberación en el código, con una ventana fija que nunca se actualiza si se cambia el setting.
+
+### Hallazgo (ALTO RIESGO — no aplicado, solo reportado): dos jobs de auto-liberación de pago con
+dos ventanas distintas e independientes — el plazo que ve el cliente puede no ser el que realmente
+libera el dinero
+
+**Dónde — los dos mecanismos, confirmados leyendo el código, no solo los nombres:**
+
+1. **`garden-api/src/server.ts:294-322`** — cron cada hora. Lee el setting `autoReleasePaymentHoras`
+   (editable por el admin, `getNumericSetting('autoReleasePaymentHoras', 24)`, default **24h**) y
+   llama a `autoReleasePayment(bookingId, autoReleaseHoras)`
+   (`booking.service.ts:5548`) sobre toda reserva `COMPLETED`/`ownerRated:false`/
+   `payoutStatus:'PENDING'` con `serviceEndedAt` más viejo que ese plazo.
+2. **`garden-api/src/jobs/service-reminders.job.ts:549` (`cron.schedule('0 */4 * * *', ...)`)** —
+   corre cada 4h y llama a `autoPayoutExpiredReviews()` (`booking.service.ts:6073`), que usa
+   `const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000)` — **48h fijas en el código**, sin
+   leer ningún setting, sobre el mismo criterio (`COMPLETED`/`ownerRated:false`/
+   `payoutStatus:'PENDING'`).
+
+Ambos escriben con el mismo patrón de claim atómico (`updateMany` condicionado a
+`payoutStatus:'PENDING'` antes de tocar el balance, confirmado en `booking.service.ts:5565-5570` y
+`:6094-6102`, con comentarios explícitos de que cada uno sabe que el otro existe) — **no hay riesgo
+de doble pago**, eso ya está bien resuelto. El problema es otro: cuál de los dos gana, y qué le
+dijimos al cliente mientras tanto.
+
+**Por qué importa — el plazo no es solo un detalle interno, se le muestra al cliente como una
+promesa concreta:**
+- `GET /api/settings` (`app.ts:358`, comentario en la línea 355-357) expone `autoReleasePaymentHoras`
+  como pública **a propósito**: "el dueño tiene que verla para no perder su derecho a reclamar sin
+  saberlo" — pasado ese plazo también se pierde el derecho a abrir una disputa.
+- La ficha nueva del 12 de octubre (`getPendingRatingBooking`, `booking.service.ts:6015-6060`)
+  calcula `rateDeadline = serviceEndedAt + autoReleasePaymentHoras` y se lo muestra tal cual al
+  cliente en el inicio ("Hasta …", `garden_ratings.dart`) como el momento en que deja de poder
+  calificar.
+- Los Términos y la pantalla legal citan este mismo plazo (confirmado en corridas anteriores,
+  `legal_screen.dart`).
+
+**El caso concreto donde se rompe:** mientras `autoReleasePaymentHoras` esté en su default (24h,
+menor que las 48h fijas), el cron de `server.ts` siempre libera primero y el de respaldo nunca
+llega a actuar — sin síntoma visible hoy. Pero apenas un admin suba ese setting por encima de 48h
+desde el panel (es un campo numérico editable sin tope superior, igual que el caso ya señalado el
+2026-10-01 para `discountValue` de promo codes) — por ejemplo, para dar más tiempo a calificar en
+una campaña — el job de respaldo de `service-reminders.job.ts` libera el pago igual a las 48h,
+**sin avisar a nadie y sin que `payoutStatus` deje ninguna pista de cuál de los dos lo hizo**. El
+cliente sigue viendo en la ficha del inicio y en `/api/settings` que tiene plazo hasta las X horas
+que configuró el admin (>48h), pero su oportunidad real de calificar y de abrir una disputa ya se
+cerró a las 48h — la ficha de calificación queda mostrando un conteo hacia un momento que ya pasó
+en la práctica (en el próximo refresh de 60s simplemente desaparece sin explicación, porque
+`payoutStatus` ya no es `PENDING`), y si quiso disputar el servicio después de las 48h ya no puede,
+contradiciendo lo que la propia pantalla de ajustes le prometió.
+
+**Efecto secundario, menor pero confirmado leyendo el código — las 3 oleadas de recordatorio de
+calificación (`service-reminders.job.ts:272-301`, `RATING_REMINDER_WAVES`, horas fijas 12/24/40)
+asumen el mismo plazo fijo de 48h ("si no calificás... antes de las 48h, el pago se libera solo",
+texto literal de la oleada 3) sin leer `autoReleasePaymentHoras` tampoco — con el default de hoy
+(24h), la oleada 3 (ventana 38h-42h) en la práctica nunca se llega a enviar, porque a esa altura la
+reserva ya tiene `payoutStatus:'PAID'` (liberada a las ~24h) y la consulta la excluye por completo
+(`payoutStatus:'PENDING'` es parte del `where`). No rompe nada hoy — es una oleada de aviso
+"inalcanzable" en la configuración actual — pero confirma que esta parte del código nunca se enteró
+de que existe un segundo plazo configurable.
+
+**Propuesta de fix (no aplicada):** unificar a una sola fuente de verdad. Lo más simple: que
+`autoPayoutExpiredReviews()` también lea `autoReleasePaymentHoras` (con un piso razonable, p.ej.
+`Math.max(autoReleaseHoras, valor actual 48h)` si se lo quiere mantener como red de seguridad del
+cron horario) en vez de tener su propio número fijo, y que `RATING_REMINDER_WAVES` calcule sus 3
+horarios como fracciones de ese mismo valor en lugar de horas fijas de 12/24/40.
+
+**Por qué no se aplicó:** toca directamente la lógica de cuándo se le paga al cuidador sin
+calificación del cliente y cuándo el cliente pierde su derecho a disputar — cae de lleno en la
+categoría de alto riesgo de esta auditoría (flujos de dinero/pagos). Queda para que el dueño del
+proyecto decida cuál de los dos números debe ganar (y si quiere conservar el job de respaldo como
+tope duro independiente del setting, a propósito).
+
+### Hallazgo de bajo riesgo (aplicado, commiteado y pusheado hoy): la ficha/redirección de
+"calificar al cuidador" del splash nunca se activaba para un cuidador que cambió a modo cliente
+
+**Dónde:** `garden-app/lib/screens/onboarding/mobile_splash_screen.dart` (`_computeDestination`).
+El splash decidía si pedir la reserva activa y la pendiente de calificar usando `role`
+(`prefs.getString('user_role')`, el rol **permanente** de la cuenta) en vez de `effectiveRole`
+(rol permanente, o el modo activo si la persona usó `/auth/switch-role` — el mismo campo que sí se
+usaba 12 líneas más abajo para decidir a qué pantalla de inicio mandarla). Una cuenta cuyo rol
+permanente es `CAREGIVER` pero que cambió a modo `CLIENT` (la propia función de cambio de modo que
+CLAUDE.md pide usar para probar como cliente sin registrar un cuidador nuevo) nunca disparaba
+`_fetchPendingRating` ni el chequeo de reserva activa de cliente en el splash — caía siempre a
+`/service-selector` sin el salto directo a calificar, aunque sí seguía viendo la ficha nueva del 12
+de octubre al llegar al marketplace (esa pantalla sí usa `AuthState.effectiveRole` correctamente).
+No afecta a las cuentas `reviewer.*` (su rol permanente ya es `CLIENT`), pero sí a cualquier cuenta
+real con doble rol que cambie de modo — exactamente el caso que esta misma auditoría señaló el
+2026-10-11 como relevante para el testing con cuentas reales.
+
+**Fix aplicado:** se adelantó el cálculo de `activeRole`/`effectiveRole` (ya existía más abajo en
+la misma función, se reusa la misma variable en vez de duplicarla) y se usa `effectiveRole` en las
+dos condiciones de `Future.wait` que deciden si pedir la reserva activa y la calificación
+pendiente. No toca backend, dinero ni autenticación — solo qué datos pide el splash según el modo
+activo real.
+
+**Verificación:** este entorno no tiene el SDK de Flutter instalado (mismo límite documentado en
+corridas anteriores, 2026-10-06 a 2026-10-16) — no se pudo correr `flutter analyze`. Se releyó el
+diff a mano (3 líneas movidas, 2 condiciones cambiadas, llaves/paréntesis balanceados, sin
+variables nuevas sin usar). No hubo cambios en `garden-api`, no aplica `tsc`/`npm run test:unit` hoy.
+
+### Sin cambios en el resto
+No se tocó ningún otro módulo hoy.
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde entonces — recordatorio)
+- Carrera (TOCTOU) en `startPhoneChange` sobre el mismo número nuevo pedido por dos usuarios a la
+  vez (2026-10-03).
+- El modelo de comisión variable + impuestos del 2026-10-03 (noche) señaló su propio texto legal
+  como "redacción mía, debe revisarla un abogado/contador" — sigue sin confirmarse que ya se revisó.
+- Veredicto `PARTIAL` de disputas registrado en el smart contract de Polygon mainnet como si fuera
+  dinero efectivo cuando en realidad es un código de descuento (2026-10-05) — sin decisión todavía.
+- La ventana de aceptación de 3h no se extiende para empresas con equipo activo (2026-10-10).
+- El cupo combinado recepción+marketplace no es atómico entre los dos caminos que lo comparten
+  (2026-10-10).
+- Eliminar cuenta: baja a ciegas de un cuidador con reserva `IN_PROGRESS`/disputa abierta, y
+  corregir identidad no re-dispara la verificación de un cuidador ya `VERIFIED` (2026-10-11).
+- Baja propia de dueño y aprobación de baja de cuidador por admin sin chequeo de retiro pendiente
+  (2026-10-11/12).
+- `approvePayment`/`approvePaymentSecure` (admin) siguen sin el `updateMany` guardado por status
+  que ya usan sus caminos hermanos — hoy además sostiene el flujo nuevo de "llegó incompleto"
+  (2026-10-14/15).
+- `suspendForAntecedentes`/`rejectAntecedentesDocument` y `approveNitVerification`/
+  `rejectNitVerification` (admin) escriben el veredicto sin el `updateMany` guardado por status
+  que sí usa `dismissAntecedentesFlag` en el mismo archivo — dos admins pueden pisarse la decisión
+  sobre el mismo documento (2026-10-16).
+- Dos jobs de auto-liberación de pago con ventanas distintas que no se enteran una de la otra:
+  el cron configurable (`autoReleasePaymentHoras`, 24h por defecto, editable en Admin) y el
+  auto-payout de respaldo con 48h fijas en el código — si un admin sube el setting por encima de
+  48h, el plazo que se le muestra al cliente (ficha de calificación, Términos, `/api/settings`)
+  queda desactualizado frente al que realmente libera el pago (2026-10-17).
