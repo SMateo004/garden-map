@@ -79,6 +79,10 @@ class NotificationKind {
     'PROFILE_UNDER_REVIEW': NotificationKind(NotificationTopic.account, GIcon.enRevision, StoryTone.waiting),
     'PROFILE_APPROVED': NotificationKind(NotificationTopic.account, GIcon.verificado, StoryTone.good),
     'PROFILE_REJECTED': NotificationKind(NotificationTopic.account, GIcon.conflicto, StoryTone.alert),
+    // Revisión de antecedentes y del NIT por el admin (admin.service.ts).
+    'ANTECEDENTES_LIMPIO': NotificationKind(NotificationTopic.account, GIcon.antecedentes, StoryTone.good),
+    'ANTECEDENTES_RECHAZO': NotificationKind(NotificationTopic.account, GIcon.antecedentes, StoryTone.alert),
+    'NIT_APPROVED': NotificationKind(NotificationTopic.account, GIcon.documento, StoryTone.good),
     'REJECTED': NotificationKind(NotificationTopic.account, GIcon.conflicto, StoryTone.alert),
     'APPROVED': NotificationKind(NotificationTopic.account, GIcon.verificado, StoryTone.good),
     'ANTECEDENTES_REJECTED': NotificationKind(NotificationTopic.account, GIcon.antecedentes, StoryTone.alert),
