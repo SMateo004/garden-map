@@ -3707,3 +3707,156 @@ No se tocó ningún otro módulo hoy.
   auto-payout de respaldo con 48h fijas en el código — si un admin sube el setting por encima de
   48h, el plazo que se le muestra al cliente (ficha de calificación, Términos, `/api/settings`)
   queda desactualizado frente al que realmente libera el pago (2026-10-17).
+- El precio de un servicio extra que se muestra al cliente puede no coincidir con lo que se le
+  cobra, cuando ese extra aplica a más de un tipo de servicio con comisiones distintas
+  (2026-10-18).
+- Creación de reservas (paseo/guardería/hospedaje): el chequeo de cupo del cuidador no tiene
+  ningún lock — dos reservas simultáneas para el mismo cuidador/horario pueden pasar ambas y
+  sobrepasar el máximo de mascotas que aceptó (2026-10-18).
+
+## 2026-10-18 — Creación de reservas: divergencia de precio en extras multi-servicio, y sin lock
+en el chequeo de cupo del cuidador
+
+**Commit de referencia al iniciar la auditoría:** `8520a02` (fix: íconos para los avisos de
+antecedentes y NIT revisados por el admin). Hubo actividad nueva desde la corrida del 2026-10-17
+(`27f8991`) que no fue de esta rutina — tres commits del dueño del proyecto:
+`42b3712` (el propio fix de bajo riesgo que dejé documentado ayer, splash/`effectiveRole`),
+`9c13f90` (lock `FOR UPDATE` agregado a `concludeService` — doble cobro de tiempo extra en
+"terminar servicio" simultáneo, visto en pruebas en vivo de empresa) y `e71afab`/`8520a02`
+(aviso de cookies en el sitio y un fix de íconos de notificación). Ninguno de los tres toca lo
+que se audita hoy.
+
+**Área elegida:** creación de una reserva nueva (`POST /api/bookings`, `createBooking` /
+`createBookingInTx` en `garden-api/src/modules/booking-service/booking.service.ts`) — nunca
+auditada específicamente antes (las corridas previas cubrieron extensiones, cancelaciones,
+jobs programados, pagos y disputas de reservas *ya creadas*, pero no el momento de creación en
+sí: cálculo de precio y chequeo de cupo/disponibilidad del cuidador). Se profundizó en dos
+puntos encontrados al leer ese flujo de punta a punta, en vez de repetir un módulo ya cubierto.
+
+Se revisó también quién aplica la comisión variable por servicio (`pricing.service.ts`,
+`getCommissionRate`) sobre el total de la reserva — ese cálculo en sí está bien (un solo lugar,
+`computeClientCharge`, aplicado una vez sobre `base + extras`). El problema no es cómo se cobra,
+sino qué precio se le mostró antes al cliente para decidir si reservar.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): el precio de un extra que ve el
+cliente puede no ser el que termina pagando
+
+**Dónde:**
+- `garden-api/src/modules/caregiver-service/caregiver.service.ts:661-664` — al armar el perfil
+  del cuidador (`GET /api/caregivers/:id`, lo que ve el cliente en la pantalla de reserva), cada
+  `ExtraService` se muestra con margen aplicado usando la comisión del **primer** servicio de su
+  propio `appliesTo` (comentario explícito en el código: "Un extra puede aplicar a varios
+  servicios; se muestra con la comisión del primero").
+- `garden-api/src/modules/extra-service/extra-service.validation.ts:13-14` — `appliesTo` es un
+  array de 1 o más `ServiceType`; no hay nada que impida ni que desaliente crear un extra que
+  aplique a PASEO, GUARDERIA y HOSPEDAJE a la vez (de hecho es el uso más obvio: un cuidador que
+  ofrece "bañado" no quiere crear el mismo extra tres veces).
+- `garden-api/src/modules/booking-service/booking.service.ts:688-715` — al crear la reserva, el
+  precio de los extras elegidos se suma **sin margen** (`e.pricePerDay` crudo) al subtotal del
+  servicio principal, y la comisión se calcula **una sola vez**, con la tasa del servicio que se
+  está reservando (`body.serviceType`, línea 711: `getCommissionRate(body.serviceType,
+  body.caregiverId)`) — sobre el total combinado (base + extras).
+- Las tasas por servicio son first-class y de verdad se configuran distinto entre sí: AppSettings
+  `commissionPctPaseo` / `commissionPctGuarderia` / `commissionPctHospedaje`
+  (`pricing.service.ts:42-46`) más overrides por cuidador/servicio en
+  `CaregiverCommissionOverride` (`pricing.service.ts:150-157`, puede fijar un % distinto para
+  PASEO que para GUARDERIA al mismo cuidador). Esto es justo la feature que CLAUDE.md documenta
+  como vigente desde el 2026-10-03 ("Comisión y tasa se resuelven con
+  `getCommissionRate(servicio, caregiverId)`"), no un caso de borde teórico.
+
+**El caso concreto donde se rompe:** un cuidador crea un extra "Bañado" con
+`appliesTo: ['HOSPEDAJE', 'PASEO']` (HOSPEDAJE primero). El admin tiene (o pone) una comisión de
+PASEO distinta de la de HOSPEDAJE para ese cuidador — por servicio global o por override
+individual, cualquiera de los dos activa el bug. Un cliente abre la pantalla de reservar un
+PASEO con ese cuidador: la app le muestra el precio del extra calculado con la comisión de
+HOSPEDAJE (porque es el primero en `appliesTo`), tanto en el perfil (`caregiver.service.ts:662`)
+como en la cotización que recalcula el Flutter en el cliente
+(`garden-app/lib/screens/client/booking_screen.dart`, usa el mismo valor ya marcado que vino del
+perfil). Al confirmar, el backend cobra ese mismo extra con la comisión de PASEO — un número
+distinto al que se le mostró. El cliente paga (o ve en el resumen) un total distinto al que
+aceptó en pantalla, en Bs, no un detalle cosmético.
+
+**Por qué no se aplicó (alto riesgo):** toca directamente cuánto se le muestra y cuánto se le
+cobra al cliente por un extra — cae de lleno en "dinero/pagos" de la política de esta auditoría.
+Además no hay una sola forma obviamente correcta de arreglarlo sin que el dueño decida el
+comportamiento esperado: ¿el extra debería tener un precio fijo (sin margen variable por
+servicio) para no depender de en qué reserva se use? ¿o la pantalla de reserva debería recalcular
+el margen del extra con la comisión del servicio que se está reservando en ese momento, en vez de
+la del primer `appliesTo`? Cualquiera de las dos requiere tocar qué ve el cliente antes de pagar.
+
+**Verificación intentada:** quise confirmar si hoy mismo hay comisiones distintas configuradas
+entre servicios para algún cuidador (para saber si esto ya está afectando pagos reales o es un
+riesgo latente), pero este entorno no tiene acceso de red a `api.gardenbo.com` (bloqueado por la
+política de red del contenedor) — no pude loguearme con `reviewer.admin` para leer
+`GET /api/admin/pricing`. El hallazgo no depende de eso: aunque hoy las tres tasas estén iguales,
+un admin puede cambiar cualquiera desde el panel sin ningún deploy, y el bug se activa de
+inmediato para toda reserva nueva con un extra multi-servicio.
+
+**Propuesta de fix (no aplicada):** en `caregiver.service.ts:662`, en vez de marcar el precio del
+extra con la comisión de `appliesTo[0]`, devolver el precio **base** (sin margen) al cliente y
+calcular/mostrar el margen en el momento de armar la cotización de una reserva concreta, con la
+comisión del `serviceType` que se está reservando — igual criterio que ya usa
+`booking.service.ts:711` al cobrar. Requiere también ajustar `booking_screen.dart` para no
+reusar el valor ya marcado que trae el perfil.
+
+### Hallazgo 2 (ALTO RIESGO — no aplicado, solo reportado): el chequeo de cupo del cuidador al
+crear una reserva no tiene lock — dos reservas a la vez pueden sobrepasar el máximo
+
+**Dónde:**
+- `garden-api/src/modules/booking-service/booking.service.ts:867-921` (`assertHospedajeAvailability`)
+  y `:924-1060+` (`assertPaseoAvailability`, cubre PASEO y GUARDERIA) — ambas corren dentro de la
+  misma `prisma.$transaction` que crea la reserva (`createBookingInTx`, confirmado en línea 276:
+  `prisma.$transaction((tx) => createBookingInTx(...), { timeout: 15000 })`), pero ninguna toma
+  ningún lock: cuentan mascotas/reservas activas con `tx.availability.findMany/findUnique`
+  (960-964) y `tx.booking.findMany` (1002-1018, y 1025-1042 para el pool combinado
+  hospedaje+guardería) y recién después, ya fuera de esas funciones, se hace `tx.booking.create`
+  (confirmado alrededor de la línea 753).
+- Contraste directo dentro del mismo archivo: pagos, extensiones, cancelaciones y fin de servicio
+  sí usan `tx.$queryRaw\`SELECT id FROM "bookings" WHERE id = ... FOR UPDATE\`` antes de leer el
+  estado que van a modificar (líneas 1547, 1642, 1979, 3095, 3370, 4987, 5195, 5214, 6163) — varios
+  con comentarios citando bugs reales de doble cobro ya vistos en producción (p. ej. línea
+  4984-4987, "pruebas en vivo 2026-10-17", y el propio `9c13f90` de ayer en `concludeService`).
+  La creación de una reserva nueva nunca adoptó ese patrón.
+- No hay tampoco una restricción a nivel de base de datos que lo impida como red de seguridad:
+  `prisma/schema.prisma` solo tiene `@@unique([caregiverId, date])` en `Availability` (fila de
+  excepción del horario, no de cupo ocupado) — nada que limite cuántas reservas activas puede
+  tener un cuidador para el mismo horario/día.
+
+**Por qué es una carrera real, no solo teórica:** Postgres en `READ COMMITTED` (el nivel por
+defecto de Prisma, no se pasa `isolationLevel` en ninguno de los `$transaction` de este archivo)
+permite que dos transacciones concurrentes hagan ambas el `SELECT`/`findMany` que cuenta cupo
+*antes* de que cualquiera haga el `INSERT` — ninguna ve la fila de la otra todavía, así que ambas
+pueden pasar el chequeo "hay cupo" y crear la reserva. Dos clientes reservando el mismo horario
+de paseo con el mismo cuidador al mismo tiempo (o un cliente reservando dos veces por doble toque
+en la app con mala conexión — el caso más probable en el uso real) pueden terminar con el
+cuidador comprometido por encima de `maxPetsPaseo`/`maxPets` combinado, sin ningún error.
+
+**Por qué no se aplicó (alto riesgo):** es la transacción más usada de todo el sistema (toda
+reserva nueva pasa por acá) y no hay una fila que ya exista para lockear con `FOR UPDATE` como en
+los otros casos (la reserva todavía no existe, y la fila de `Availability` del día puede no
+existir si el cuidador nunca puso una excepción). El fix correcto es un `pg_advisory_xact_lock`
+(hash de `caregiverId` + fecha, o `caregiverId` + fecha + `timeSlot` para paseo/guardería)
+adquirido al principio de `assertHospedajeAvailability`/`assertPaseoAvailability`, liberado solo
+al terminar la transacción — un patrón nuevo para este archivo que conviene que el dueño revise
+antes de que corra en producción sin entorno de staging (mal elegido el alcance del lock podría
+serializar reservas de cuidadores distintos entre sí, o no serializar lo suficiente si el hash
+colisiona).
+
+**Propuesta de fix (no aplicada):** al inicio de cada función de chequeo de cupo, dentro de la
+misma `tx`, ejecutar `SELECT pg_advisory_xact_lock(hashtext(caregiverId || ':' || fecha))` (y
+para paseo/guardería, incluir el `timeSlot` en la clave si se quiere permitir que distintos
+horarios del mismo día se creen en paralelo) antes de hacer los `findMany` que cuentan cupo. Se
+libera solo al final de la transacción (`pg_advisory_xact_lock`, no `pg_advisory_lock`), igual
+que el resto del archivo ya depende de que la transacción completa sea la unidad de aislamiento.
+
+**Verificación:** no se aplicó ningún cambio de código hoy (ambos hallazgos son de alto riesgo),
+así que no corresponde correr `tsc`/`test:unit` por un cambio propio. Se confirmó el baseline de
+la rama antes de empezar: `npx tsc --noEmit` sin errores propios (solo el warning preexistente de
+`tsconfig.json` sobre `baseUrl`, no relacionado) y `npm run test:unit` con **577/577 tests
+pasando en 61 suites** (la cifra de "158 tests" que viene en la instrucción de esta rutina quedó
+vieja — el número real ya creció bastante).
+
+### Sin fix de bajo riesgo hoy
+No se encontró ningún bug de bajo riesgo (copy/UI/código muerto) en el área auditada que valiera
+la pena aplicar — los dos hallazgos de hoy están directamente en el camino de dinero/disponibilidad
+y requieren decisión del dueño antes de tocar código.
