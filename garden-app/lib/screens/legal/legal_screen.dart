@@ -401,7 +401,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         ),
         _LegalSection(
           '7. Cookies y rastreo',
-          'La app móvil no utiliza cookies. La versión web puede utilizar cookies técnicas estrictamente necesarias para mantener tu sesión. No utilizamos cookies de rastreo de terceros.',
+          'La app no utiliza cookies de publicidad ni de rastreo de terceros. El sitio gardenbo.com muestra un aviso de cookies: las necesarias (sesión, preferencias y tu elección) siempre están activas, y puedes rechazar las de estadísticas (un identificador anónimo para entender cómo se usa GARDEN) eligiendo "Solo necesarias"; si lo haces, la app web tampoco envía estadísticas. Puedes cambiar tu elección cuando quieras desde la Política de privacidad del sitio. En el teléfono, las estadísticas se apagan desde Ajustes.',
         ),
         _LegalSection(
           '8. Menores de edad',

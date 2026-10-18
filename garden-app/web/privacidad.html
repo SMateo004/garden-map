@@ -96,7 +96,20 @@ footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);font-
   <p>Garden no está dirigido a menores de 18 años. No recolectamos intencionalmente datos de
   menores.</p>
 
-  <h2>6. Cambios a esta política</h2>
+  <h2 id="cookies">6. Cookies</h2>
+  <p>La versión web de GARDEN (gardenbo.com) usa cookies y el almacenamiento del navegador. La primera
+  vez que se entra aparece un aviso para aceptarlas todas o quedarse solo con las necesarias.</p>
+  <table>
+    <tr><th>Tipo</th><th>Qué guarda</th><th>Para qué</th></tr>
+    <tr><td>Necesarias</td><td>Sesión iniciada, modo activo, preferencias (tema, avisos vistos) y la elección sobre cookies (<code>garden_cookies</code>, 1 año)</td><td>Que la web funcione y recuerde la sesión. Siempre activas.</td></tr>
+    <tr><td>Estadísticas</td><td>Un identificador anónimo del navegador y qué pantallas se usan</td><td>Entender cómo se usa GARDEN para mejorarlo. Se pueden rechazar con "Solo necesarias" (la app web también las deja de enviar); los datos quedan en GARDEN, no se comparten con terceros.</td></tr>
+  </table>
+  <p>No usamos cookies de publicidad ni de rastreo de terceros. El aviso aparece solo en este sitio, no dentro de la app.</p>
+  <p><button type="button" onclick="window.gardenCookies &amp;&amp; window.gardenCookies.reset()"
+    style="font:inherit;font-weight:700;color:#fff;background:var(--primary);border:0;border-radius:999px;padding:8px 16px;cursor:pointer">
+    Cambiar mi elección de cookies</button></p>
+
+  <h2>7. Cambios a esta política</h2>
   <p>Si actualizamos esta política de forma relevante, lo vamos a notificar dentro de la app.</p>
 
   <div class="card">
@@ -106,5 +119,7 @@ footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);font-
 
   <footer>GARDEN · Santa Cruz de la Sierra, Bolivia · gardenbo.com</footer>
 </div>
+<!-- Aviso de cookies (mismo en todas las páginas) -->
+<script src="/cookie-consent.js" defer></script>
 </body>
 </html>

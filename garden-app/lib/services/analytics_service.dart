@@ -24,6 +24,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/cookie_consent.dart';
 import 'auth_state.dart';
 
 const String _kApiBase = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -70,6 +71,10 @@ class Analytics {
 
   bool get enabled => _enabled;
 
+  /// En la web además hace falta que se hayan aceptado las cookies de
+  /// estadísticas en el aviso (web/cookie-consent.js); en el teléfono no hay aviso.
+  bool get _active => _enabled && cookieAnalyticsAllowed();
+
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -115,7 +120,7 @@ class Analytics {
 
   /// Llamar desde `didChangeAppLifecycleState`.
   void onLifecycle(AppLifecycleState state) {
-    if (!_initialized || !_enabled) return;
+    if (!_initialized || !_active) return;
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       if (_pausedAt != null) return;
       _closeScreen();
@@ -148,7 +153,7 @@ class Analytics {
 
   /// Llamado por [AnalyticsRouteObserver] cuando cambia la pantalla visible.
   void screenChanged(String rawRoute, {String? currentPath}) {
-    if (!_initialized || !_enabled) return;
+    if (!_initialized || !_active) return;
     final screen = sanitizeRoute(rawRoute);
     if (screen == _screen) return;
     _closeScreen();
@@ -191,7 +196,7 @@ class Analytics {
 
   /// Evento suelto. [props]: solo valores cortos y NO personales.
   void track(String name, {Map<String, Object>? props, String? sinceMark}) {
-    if (!_initialized || !_enabled) return;
+    if (!_initialized || !_active) return;
     int? ms;
     final mark = sinceMark == null ? null : _marks[sinceMark];
     if (mark != null) ms = DateTime.now().difference(mark).inMilliseconds;
@@ -217,7 +222,7 @@ class Analytics {
   }
 
   Future<void> flush() async {
-    if (!_initialized || !_enabled || _flushing || _sessionId.isEmpty) return;
+    if (!_initialized || !_active || _flushing || _sessionId.isEmpty) return;
     _flushing = true;
     final batch = _queue.take(60).toList();
     final now = DateTime.now().millisecondsSinceEpoch;
