@@ -3860,3 +3860,147 @@ vieja — el número real ya creció bastante).
 No se encontró ningún bug de bajo riesgo (copy/UI/código muerto) en el área auditada que valiera
 la pena aplicar — los dos hallazgos de hoy están directamente en el camino de dinero/disponibilidad
 y requieren decisión del dueño antes de tocar código.
+
+---
+
+## 2026-10-19 — UI/Flutter (pantallas nuevas desde el 2026-10-01) + seguimiento de 2 hallazgos
+## viejos sin aplicar (cupo recepción+marketplace y baja de cuenta)
+
+**Commit de referencia al iniciar la auditoría:** `92a77ba` (chore: registrar auditoría diaria —
+divergencia de precio en extras multi-servicio y chequeo de cupo sin lock al crear reservas). Sin
+commits nuevos del dueño desde la corrida anterior — `git log` no mostró actividad.
+
+**Área elegida:** la capa UI/Flutter (`garden-app/lib`) solo había tenido una corrida dedicada
+(2026-10-01, 18 días atrás) pese a la cantidad de pantallas nuevas/reescritas desde entonces (ficha
+de propina, ayuda con el pago desde el QR, rediseño del inicio, huella 3D, funciones de negocio). Se
+delegó la exploración a un subagente de solo lectura con instrucciones explícitas de no repetir lo
+ya verificado por mí antes de delegar (confirmé a mano que `GardenPawMark` nunca se fuerza con
+`mark: true` sobre `GardenEmptyType.identity/payments/withdrawals`, que `staff_assign_bookings_screen.dart`/
+`staff_home_screen.dart` usan `BookingStory`/`GardenStatusPill` correctamente, y que
+`garden-app/web/index.html` **ya está en tuteo completo** — no se encontró ninguna forma de voseo en
+todo el archivo; la línea de CLAUDE.md que dice que la landing "todavía usa voseo" quedó desactualizada,
+no hace falta tocar código por esto, solo queda la nota para que se actualice el doc cuando el dueño
+quiera).
+
+En paralelo, mientras corría el subagente, se verificó el estado actual (no una auditoría nueva) de
+dos hallazgos de alto riesgo ya reportados y nunca aplicados, para no dejarlos acumular sin
+seguimiento:
+- **2026-10-10, Hallazgo 2 (cupo combinado recepción+marketplace sin lock simétrico):** sigue abierto
+  — `grep` confirma que `booking.service.ts` sigue sin ningún `FOR UPDATE` sobre `caregiver_profiles`
+  (el único lock de ese archivo sigue siendo sobre `bookings`/`users`). Esto es la misma clase de bug
+  que el Hallazgo 2 del **2026-10-18** (chequeo de cupo sin lock al crear una reserva) — de hecho es
+  anterior y más específico: ya señalaba en concreto que recepción (`caregiver-crm.service.ts`, con
+  `lockProfile`/`FOR UPDATE`) y el marketplace (`booking.service.ts`, sin lock) compiten por el mismo
+  cupo de forma asimétrica. Los dos hallazgos deberían resolverse juntos — cualquier fix de lock de
+  disponibilidad en `assertHospedajeAvailability`/`assertPaseoAvailability` cierra ambos a la vez.
+- **2026-10-10, Hallazgo 1 (ventana de aceptación de 3h no se extiende con equipo activo):** sigue
+  abierto — `caregiver-accept-expiry.job.ts` sigue sin ninguna referencia a `StaffMember`/
+  `canManageBookings`/`STAFF_BOOKING_DECISIONS`.
+- **2026-10-11/12 (baja de cuenta sin chequeo de retiro pendiente en 2 de los 3 caminos):** sigue
+  abierto — se releyó `auth.controller.ts:670-713` (`deleteAccount`, baja propia de un dueño) línea
+  por línea: sigue sin ninguna consulta a `WalletTransaction` antes de llamar a
+  `finalizeAccountDeletion`, exactamente como se reportó hace 7 días. No se repitió la lectura de
+  `approveCaregiverAccountDeletion` (sin cambios recientes en `admin.service.ts` relacionados, según
+  `git log --since=2026-10-12`).
+
+Ninguno de los tres se tocó hoy (son alto riesgo, ya reportados en detalle en sus corridas
+originales) — se deja esta nota de seguimiento para que quede claro que siguen sin decisión del
+dueño, ahora 7-9 días después del hallazgo original, y para conectar explícitamente el hallazgo de
+cupo del 2026-10-10 con el del 2026-10-18 (son la misma raíz).
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+**El botón "Resolver emergencia" del cuidador podía fallar en silencio, igual que el bug ya
+arreglado el 2026-10-01 en el mismo archivo.**
+`garden-app/lib/screens/service/service_execution_screen.dart`, función `_resolveIncidentCaregiver()`
+(usada por el botón "Resolver emergencia" que reanuda un servicio pausado por un incidente). El
+propio comentario que ya estaba en el código documenta que esta request fallaba el 100% de las veces
+hasta hace poco por un campo obligatorio faltante (`description`) — ese campo ya se agregó, pero el
+manejo de error nunca se agregó: un fallo de red caía en un `catch (_) {}` vacío, y una respuesta sin
+excepción pero con `success != true` (ej. un error de validación o de autorización del servidor)
+tampoco mostraba nada. **Falla concreta:** un cuidador con conexión inestable toca "Resolver
+emergencia" para reanudar el servicio pausado; la request falla, no ve ningún error, asume que se
+resolvió y sigue de largo — el timer del servicio queda pausado sin que se entere. Mismo patrón
+exacto que el bug F4 ya arreglado el 2026-10-01 en este archivo (`_reportIncident`), y el patrón
+correcto ya existía dos funciones arriba (`_reportSos`). **Fix aplicado:** mismo patrón —
+rama `else if (mounted)` que muestra `GardenErrorDialog.show(...)` con el mensaje del servidor
+cuando `success != true`, y el `catch` ahora muestra `GardenErrorDialog.show(context, 'Error de
+conexión.')` en vez de tragarse la excepción. Diff mínimo (6 líneas), `GardenErrorDialog` ya estaba
+importado y usado 23 veces en el mismo archivo. No toca dinero, auth ni verificación de identidad.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado): cancelar la reserva desde la pantalla de
+pago QR puede fallar en silencio y el cliente queda creyendo que se canceló (y que se le devolvió
+la parte pagada con billetera) cuando en realidad no pasó nada
+
+**Dónde:**
+- `garden-app/lib/screens/client/payment_screen.dart:1074-1083` (`_cancelBooking()`) — hace
+  `POST /bookings/:id/cancel` envuelto en un `try { ... } catch (_) {}` que no propaga ni reporta
+  ningún fallo.
+- `garden-app/lib/screens/client/payment_screen.dart:1130-1145` (`_handleBack()`) — cuando el
+  cliente confirma "Sí, cancelar reserva" en el diálogo, llama a `await _cancelBooking()` y, **sin
+  comprobar si tuvo éxito**, sigue de largo y hace `context.pop(true)` (o navega a `/marketplace`) —
+  el `true` le indica a la pantalla anterior ("Mis reservas") que debe refrescar como si la
+  cancelación hubiera funcionado.
+- `garden-api/src/modules/booking-service/booking.service.ts:2562-2592` — confirmado leyendo el
+  backend: si la reserva tenía un pago combinado billetera+QR sin completar
+  (`booking.walletPaymentAmount`), cancelarla **sí mueve dinero real**: devuelve esa parte a
+  `User.balance` con `FOR UPDATE` + `WalletTransaction` tipo `REFUND` dentro de la misma
+  transacción atómica (comentario explícito en el código citando este mismo caso: "el cliente sale
+  de la pantalla de pago... antes esa parte se perdía").
+
+**El caso concreto donde se rompe:** un cliente paga una reserva combinando saldo de su billetera
+Garden + QR bancario por el resto. Si antes de completar el QR decide cancelar (o la conexión falla
+justo en ese POST), `_cancelBooking()` traga el error, y `_handleBack()` lo saca de la pantalla
+mostrándole (implícitamente, por la navegación) que la reserva quedó cancelada y que recuperó la
+parte que había puesto de su billetera. En realidad la reserva sigue viva en `PENDING_PAYMENT`
+(bloqueando ese horario del cuidador) y la plata de su billetera sigue descontada, sin ningún aviso
+de que algo salió mal. El propio comentario del backend (línea 2563-2565) describe exactamente este
+escenario como el motivo por el que se agregó la devolución automática — pero asume que el POST de
+cancelación efectivamente llega.
+
+**Por qué se clasifica alto riesgo aunque el fix en sí sería solo de Flutter:** la misma lógica que
+ya estableció esta auditoría el 2026-10-01 (hallazgo F3, validación de monto mínimo de retiro) — un
+cambio que es solo de UI pero que está directamente en el camino de dinero/billetera (acá, de un
+reembolso real de saldo) se trata como alto riesgo por la política de esta rutina, no por la
+complejidad técnica del fix.
+
+**Propuesta de fix (no aplicada):** que `_cancelBooking()` devuelva si la cancelación tuvo éxito
+(revisar `res.statusCode`/`data['success']`, no solo que la request no haya tirado una excepción), y
+que `_handleBack()` solo navegue hacia atrás si fue exitosa — si falla, mostrar
+`GardenErrorDialog.show(...)` y dejar al usuario en la pantalla para reintentar (igual patrón que
+el resto del archivo, que sí usa `GardenErrorDialog` en otros 5 puntos). Queda para que el dueño
+decida si prefiere ese comportamiento (bloquear la salida hasta confirmar) o uno más permisivo
+(salir igual pero avisando que puede haber quedado pendiente) — la función también se usa para
+limpieza best-effort de reservas huérfanas en otros caminos, así que conviene confirmar que el
+fix no afecte esos casos antes de aplicarlo.
+
+### Verificación
+
+`npx tsc --noEmit` en `garden-api` — sin cambios en la API hoy, sin errores nuevos (solo el aviso
+preexistente de `baseUrl`). **`flutter analyze` no se pudo correr** — Flutter/Dart no está instalado
+en este contenedor de esta corrida (igual que el 2026-10-01). Se verificó el único cambio aplicado
+(`service_execution_screen.dart`) a mano: balance de llaves/paréntesis del archivo completo (0/0),
+y comparación estructural directa contra el bloque ya existente y probado `_reportSos` (mismos
+guards `mounted`, mismo uso de `GardenErrorDialog`, sin tocar imports ni firmas) — mismo nivel de
+verificación que se dejó documentado como aceptable en la corrida del 2026-10-01 para el mismo tipo
+de cambio. Se deja la misma recomendación: correr `flutter analyze` sobre este archivo en cuanto
+Flutter esté disponible en el contenedor de una corrida futura.
+
+### Pendiente de decisión del dueño del proyecto
+
+- Hallazgo de hoy: cancelación silenciosa en `payment_screen.dart` (puede dejar plata de billetera
+  descontada sin reembolsar y una reserva huérfana bloqueando el horario).
+- Seguimiento sin cambios (seguir reclamando hasta que se decida): cupo combinado
+  recepción+marketplace sin lock simétrico (2026-10-10, conectado con 2026-10-18), ventana de
+  aceptación de 3h que no se extiende con equipo activo (2026-10-10), baja de cuenta propia sin
+  chequear retiros pendientes (2026-10-11/12), divergencia de precio en extras multi-servicio y
+  chequeo de cupo sin lock al crear reservas (2026-10-18), los dos relojes de auto-liberación de pago
+  que no coinciden (2026-10-17), y el resto de la lista acumulada en las corridas del 10-11 al 10-18
+  (TOCTOU de `startPhoneChange`, revisión legal pendiente del texto de comisión+impuestos, veredicto
+  `PARTIAL` de disputas en el contrato de Polygon).
+- Nota de documentación (sin acción de código): la línea de CLAUDE.md sobre que
+  `garden-app/web/index.html` "todavía usa voseo" está desactualizada — el archivo ya está en tuteo
+  completo. Se deja para que se actualice el doc cuando el dueño lo vea; no se modificó CLAUDE.md
+  desde esta rutina.
+
+---

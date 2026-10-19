@@ -5591,8 +5591,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           _elapsed = _computeElapsedNow();
         });
         _showResolvedChoiceDialog();
+      } else if (mounted) {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo resolver la emergencia.');
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'Error de conexión.');
+      }
+    }
   }
 
   void _showResolvedChoiceDialog() {
