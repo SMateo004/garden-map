@@ -583,7 +583,6 @@ export async function addVisitEvent(ownerUserId: string, actingUserId: string, v
     throw new BadRequestError(`Tipo de evento inválido: ${body.type}`);
   }
 
-  const events = ((visit.events as unknown as WalkInVisitEvent[] | null) ?? []).slice();
   const entry: WalkInVisitEvent = {
     type: body.type,
     note: body.note ?? null,
@@ -591,11 +590,33 @@ export async function addVisitEvent(ownerUserId: string, actingUserId: string, v
     at: new Date().toISOString(),
     byUserId: actingUserId,
   };
-  events.push(entry);
 
-  const updated = await prisma.walkInVisit.update({
+  // FIX (auditoría 2026-10-20): esto era un read-modify-write completo sobre
+  // `events` (leer el array, pushear en JS, reescribir el array entero) —
+  // dos eventos casi simultáneos (ej. una foto y una nota del mismo turno)
+  // pisaban la escritura del otro bajo Read Committed: ambos leían el mismo
+  // array, cada uno sumaba SU evento, y el que escribía último ganaba,
+  // perdiendo el evento del otro sin ningún error ni rastro — un incidente
+  // podía disparar el email/aviso a admins (armado a partir de `body`, no
+  // del array ya guardado) y aun así no quedar en la bitácora. Mismo bug ya
+  // encontrado y arreglado para Booking.serviceEvents (auditoría 2026-09-29,
+  // ver addServiceEvent en booking.service.ts) — mismo fix: concatenar el
+  // evento dentro del propio UPDATE (`jsonb ||`), atómico, sin leer el array
+  // completo antes de escribir. De paso, el guard de `checkedOutAt IS NULL`
+  // queda atómico también (antes era un chequeo aparte que un checkout
+  // concurrente podía esquivar).
+  const eventJson = JSON.stringify(entry);
+  const claimed = await prisma.$executeRaw`
+    UPDATE "walk_in_visits"
+    SET "events" = COALESCE("events", '[]'::jsonb) || ${eventJson}::jsonb
+    WHERE id = ${visitId} AND "checkedOutAt" IS NULL
+  `;
+  if (claimed === 0) {
+    throw new BadRequestError('Esta visita ya finalizó — no se pueden agregar más registros', 'VISIT_ALREADY_CHECKED_OUT');
+  }
+
+  const updated = await prisma.walkInVisit.findUniqueOrThrow({
     where: { id: visitId },
-    data: { events: events as any },
     include: { walkInPet: { include: { walkInClient: true } } },
   });
 
