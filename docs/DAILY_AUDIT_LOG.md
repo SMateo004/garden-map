@@ -4004,3 +4004,88 @@ Flutter esté disponible en el contenedor de una corrida futura.
   desde esta rutina.
 
 ---
+
+## 2026-10-20 — Re-verificación de flujos de dinero ya auditados (sin hallazgo nuevo) + condición
+## de carrera nueva en la bitácora del CRM walk-in (bajo riesgo, corregida)
+
+**Commit de referencia al iniciar la auditoría:** `5214f34` (fix: "Resolver emergencia" del
+cuidador fallaba en silencio sin avisar). Sin commits nuevos del dueño desde la corrida anterior.
+
+**Primera pasada — retiros, calificaciones/reviews, auto-liberación de pagos retenidos y
+apelación de disputas (releídos a fondo, no solo diffeados):** se revisó `wallet.routes.ts`
+(`/withdraw`, `/withdraw/:id/cancel`, `/redeem`), `admin.controller.ts`
+(`processWithdrawal`/`completeWithdrawal`/`rejectWithdrawal`), `confirmReceiptByClient`/`rateOwner`/
+`maybeAutoSuspendForLowRating` en `booking.service.ts`, los dos jobs de auto-liberación en
+`server.ts` (`autoReleasePayment` a las 24h y el SLA de `onHoldSlaHoras` a las 72h) y
+`applyResolution`/`resolveDisputeAppeal` en `dispute.routes.ts`/`admin.service.ts`. Todo esto ya
+había pasado por varias rondas de esta misma auditoría (2026-09-27, 2026-10-05, 2026-10-14 a
+10-17) — se confirma que los fixes siguen en pie: locks `FOR UPDATE` antes de cada lectura de
+balance, claims atómicos (`updateMany` condicionado) antes de cualquier movimiento de plata, y
+reversión completa por rollback de transacción si un claim falla a mitad de camino (ej.
+`applyResolution` nunca deja una reserva encallada en `RESOLVING_DISPUTE`: ese estado solo se
+persiste si la misma transacción ya terminó de escribir `PAID`/`REFUNDED` al final). **Sin
+hallazgo nuevo** en ninguno de estos módulos — se documenta la re-verificación para que una
+corrida futura no vuelva a gastar tiempo re-leyendo lo mismo sin una razón concreta (ej. un commit
+nuevo que los toque).
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy (`6b6fcf6`)
+
+**Dos eventos casi simultáneos en la bitácora de una visita walk-in (CRM de recepción) podían
+pisarse entre sí, perdiendo uno en silencio.**
+
+`garden-api/src/modules/caregiver-crm/caregiver-crm.service.ts`, función `addVisitEvent()` (la que
+usa el botón de agregar nota/foto/incidente a una visita walk-in desde `/bookings/:id` del
+mostrador). El código leía `visit.events` (array JSON), le hacía `.push()` en JS al evento nuevo, y
+reescribía el array completo con `prisma.walkInVisit.update()` — un read-modify-write clásico sin
+ningún lock. **Falla concreta:** dos empleados del mismo local (o el mismo empleado desde dos
+pestañas/dispositivos) agregan un evento a la misma visita casi al mismo tiempo — ej. uno sube una
+foto y otro anota "comió bien" — ambos leen el mismo array bajo Read Committed de Postgres, cada
+uno le suma SU evento en memoria, y el que termina de escribir último gana: el evento del otro
+desaparece de la bitácora sin ningún error. Para el caso `INCIDENT` esto es más grave que un dato
+cosmético: el email al cliente y el aviso a admins se arman a partir del `body` de la request, NO
+del array ya guardado, así que el aviso de "hubo una novedad" sí llega — pero el registro
+permanente de qué pasó puede no haber quedado guardado, dejando un hueco en el historial que
+importaría ante un reclamo.
+
+**Por qué se identificó con confianza (no es solo una sospecha teórica):** es exactamente el mismo
+patrón de bug que esta misma auditoría ya encontró y arregló para `Booking.serviceEvents` el
+2026-09-29 (ver el comentario "FIX (auditoría 2026-09-29)" todavía en
+`booking.service.ts:4350-4363`) — el CRM walk-in (`caregiver-crm.service.ts`) se escribió
+alrededor de la misma fecha pero nunca recibió ese mismo fix para su propio array de eventos.
+
+**Fix aplicado:** mismo patrón ya establecido y probado en este repo (`addServiceEvent` en
+`booking.service.ts`): reemplazar el read-modify-write por un `UPDATE` atómico con concatenación
+JSONB (`SET "events" = COALESCE("events", '[]'::jsonb) || ${eventJson}::jsonb`), que nunca lee el
+array completo antes de escribir — dos escrituras concurrentes se serializan a nivel de fila y
+ambos eventos quedan, en vez de que uno pise al otro. De paso, el guard de "la visita ya hizo
+check-out" (antes un `if` aparte, no atómico) quedó condicionado dentro del mismo `UPDATE`
+(`WHERE ... AND "checkedOutAt" IS NULL`), cerrando también la ventana donde un check-out
+concurrente podía dejar pasar un evento tardío. No toca dinero (el módulo entero es "puro
+registro interno, sin reserva real de Garden" según su propio comentario de cabecera) ni
+autenticación — cambio acotado a una función, sin tocar el contrato de la API ni el modelo.
+
+### Verificación
+
+`npm install` (no había `node_modules` en este contenedor) + `npx tsc --noEmit` sin errores nuevos
+(cero errores, de hecho — ni el aviso preexistente de `baseUrl` apareció una vez instaladas las
+dependencias) + `npm run test:unit`: **577/577 tests pasan** (no hay test dedicado a
+`addVisitEvent`, así que no hay regresión que detectar ahí, pero tampoco ningún otro módulo se vio
+afectado). **No se pudo probar en vivo contra la API real** (`api.gardenbo.com`) — la política de
+red de este contenedor de esta corrida no permite ese host de salida (`curl` devolvió
+`CONNECT tunnel failed, 403`); se deja como limitación de esta sesión, no del fix. Verificación de
+reemplazo: comparación estructural directa contra el patrón ya en producción y probado
+(`addServiceEvent`/`$executeRaw` con `jsonb ||` en `booking.service.ts`), mismo nivel aceptado en
+corridas anteriores sin acceso a un entorno de prueba (2026-10-19, Flutter).
+
+### Pendiente de decisión del dueño del proyecto
+
+Nada nuevo de alto riesgo hoy. Sigue acumulada la lista de corridas anteriores sin cambios desde
+que se reportaron (cupo recepción+marketplace sin lock simétrico y ventana de aceptación de 3h,
+ambos del 2026-10-10; baja de cuenta sin chequear retiros pendientes, 2026-10-11/12; divergencia de
+precio en extras multi-servicio, 2026-10-18; cancelación silenciosa en `payment_screen.dart`,
+2026-10-19; los dos relojes de auto-liberación de pago, 2026-10-17; TOCTOU de `startPhoneChange`,
+revisión legal pendiente del texto de comisión+impuestos, veredicto `PARTIAL` de disputas en el
+contrato de Polygon, Meet & Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA
+— estos últimos cuatro ya llevan entre 15 y 26 días sin una decisión).
+
+---
