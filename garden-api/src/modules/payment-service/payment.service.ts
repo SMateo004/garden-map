@@ -484,6 +484,12 @@ export async function verifyPaymentBySipCallback(
   });
 
   if (!booking) {
+    // El alias puede ser una compra de Premium (también se paga por QR del banco).
+    const { confirmByBank } = await import('../premium/premium.service.js');
+    if (await confirmByBank(alias)) {
+      logger.info('[SIP callback] Pago de Premium confirmado por el banco', { alias });
+      return { bookingId: alias, status: 'PREMIUM_CONFIRMED' };
+    }
     logger.warn('[SIP callback] Booking no encontrada para alias', { alias });
     throw new NotFoundError('Reserva no encontrada para el alias recibido');
   }

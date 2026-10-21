@@ -379,6 +379,21 @@ model CaregiverProfile {
   trainingProgress                CaregiverTrainingProgress[]
   extraServices                   ExtraService[]
   commissionOverrides             CaregiverCommissionOverride[]
+  /// Quién paga la comisión de GARDEN en sus reservas NUEVAS: 'CLIENT' (se suma al
+  /// precio que ve el dueño) o 'CAREGIVER' (el dueño ve el precio del cuidador y la
+  /// comisión se descuenta de lo que cobra). Lo elige el propio cuidador; cada reserva
+  /// guarda una copia (Booking.commissionPaidBy). Ver pricing.service.ts.
+  commissionPaidBy                String                      @default("CLIENT") @db.VarChar(10)
+  commissionPaidByChangedAt       DateTime?
+  /// Fin del período Premium ("Destacado") vigente; null o pasado = no es Premium.
+  /// Lo calcula premium.service.ts a partir de las compras pagadas.
+  premiumUntil                    DateTime?
+  /// Aviso "tu Premium vence en 3 días" ya enviado para el premiumUntil vigente.
+  premiumReminderSentAt           DateTime?
+  /// Orden en el marketplace: 2 = Premium vigente, 1 = paga su comisión, 0 = resto.
+  /// Se recalcula al activar/vencer Premium y al cambiar quién paga la comisión.
+  listingBoost                    Int                         @default(0)
+  premiumPurchases                PremiumPurchase[]
   staffMembers                    CaregiverStaffMember[]
   staffInvites                    CaregiverStaffInvite[]
   walkInClients                   WalkInClient[]
@@ -396,6 +411,8 @@ model CaregiverProfile {
   @@index([createdAt(sort: Desc)])
   @@index([experienceYears])
   @@index([animalTypes])
+  @@index([listingBoost(sort: Desc), rating(sort: Desc)])
+  @@index([premiumUntil])
   @@map("caregiver_profiles")
 }
 
@@ -724,6 +741,10 @@ model Booking {
   /// pruebas, sin pasar por el flujo real de pago/Meet&Greet). Habilita el
   /// botón de borrado directo — nunca se puede borrar una reserva real.
   createdByAdmin             Boolean          @default(false)
+  /// Copia, al reservar, de quién paga la comisión ('CLIENT' | 'CAREGIVER'). Si es
+  /// 'CAREGIVER', totalAmount NO incluye la comisión y commissionAmount se descuenta
+  /// del cuidador. caregiverNetOf() = total − comisión − impuestos vale para ambos.
+  commissionPaidBy           String           @default("CLIENT") @db.VarChar(10)
   serviceStartedAt           DateTime?
   serviceEndedAt             DateTime?
   serviceStartPhoto          String?
@@ -1492,6 +1513,7 @@ enum LedgerEntrySource {
   AUTO_WITHDRAWAL
   AUTO_REFERRAL
   AUTO_REFUND
+  AUTO_PREMIUM
   MANUAL
 }
 
@@ -2273,3 +2295,45 @@ model AnalyticsDaily {
   @@index([metric, day])
   @@map("analytics_daily")
 }
+
+/// Compra de Premium ("Destacado") de un cuidador/empresa. Se paga por QR (como una
+/// reserva, sin billetera) o la registra un admin presencialmente. Al quedar PAID se
+/// extiende CaregiverProfile.premiumUntil (encadenada después del período vigente).
+/// Estados: PENDING_PAYMENT → (declarado) PAYMENT_PENDING_APPROVAL → PAID | REJECTED;
+/// PENDING_PAYMENT sin pagar → EXPIRED; el cuidador puede cancelar → CANCELLED;
+/// PAID aprobado solo y luego "no recibido" (o quitado por un admin) → REVOKED.
+model PremiumPurchase {
+  id                String           @id @default(uuid())
+  caregiverId       String
+  weeks             Int
+  /// Bs, entero — precio de la tabla vigente al comprar (copia).
+  amount            Decimal          @db.Decimal(10, 2)
+  status            String           @default("PENDING_PAYMENT") @db.VarChar(30)
+  /// 'QR' (pagado por el cuidador) | 'ADMIN' (registrado presencialmente por un admin).
+  method            String           @db.VarChar(10)
+  /// Solo method=ADMIN: 'CASH' | 'TRANSFER' | 'OTHER'.
+  manualPaymentKind String?          @db.VarChar(20)
+  note              String?          @db.VarChar(500)
+  qrId              String?          @unique
+  qrImageUrl        String?          @db.Text
+  qrExpiresAt       DateTime?
+  sipQrId           String?
+  paymentDeclaredAt DateTime?
+  paidAt            DateTime?
+  /// Aprobado solo al vencer el QR declarado sin revisión (igual que las reservas).
+  autoApprovedAt    DateTime?
+  reviewedAt        DateTime?
+  reviewOutcome     String?          @db.VarChar(20)
+  decidedBy         String?
+  /// Período que cubrió esta compra al activarse.
+  activatedFrom     DateTime?
+  activatedUntil    DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  caregiver         CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId, status])
+  @@index([status, qrExpiresAt])
+  @@map("premium_purchases")
+}
+

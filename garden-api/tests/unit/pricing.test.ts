@@ -22,6 +22,7 @@ jest.mock('../../src/config/database', () => ({
   __esModule: true,
   default: {
     caregiverCommissionOverride: { findMany: jest.fn().mockResolvedValue([]) },
+    caregiverProfile: { findMany: jest.fn().mockResolvedValue([]) },
     appSettings: { findUnique: jest.fn().mockResolvedValue(null) },
   },
 }));
@@ -36,6 +37,7 @@ function cfg(over: Partial<PricingConfig> = {}): PricingConfig {
     defaultCommissionPct: 10,
     serviceCommissionPct: {},
     overrides: new Map(),
+    caregiverPaysCommission: new Set(),
     taxRatePct: 16,
     configuredTaxRatePct: 16,
     taxesEnabled: true,

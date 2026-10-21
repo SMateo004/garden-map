@@ -579,6 +579,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () => context.push('/caregiver/trainings'),
           ),
         ]),
+        // Decisiones del titular (los empleados de empresa no llegan acá: ver arriba).
+        GardenSettingsGroup(title: 'Crece en Garden', children: [
+          GardenSettingsRow(
+              icon: GIcon.estrella,
+              title: 'Garden Premium',
+              subtitle: 'Aparece primero como Destacado',
+              onTap: () => context.push('/caregiver/premium')),
+          GardenSettingsRow(
+              icon: GIcon.billetera,
+              title: 'Comisión de Garden',
+              subtitle: 'Elige quién la paga',
+              onTap: () => context.push('/caregiver/commission')),
+        ]),
       ];
     }
     if (_effectiveRole == 'ADMIN') {

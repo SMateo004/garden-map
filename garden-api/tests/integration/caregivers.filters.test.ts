@@ -132,7 +132,10 @@ describe('GET /api/caregivers con filtros', () => {
     const res = await request(app).get('/api/caregivers?service=HOSPEDAJE&zone=norte&priceRange=estandar');
     expect(res.status).toBe(200);
 
-    const call = (mockPrisma.caregiverProfile.findMany as jest.Mock).mock.calls[0]?.[0];
+    // La primera llamada puede ser la de la config de precios (quién absorbe la comisión).
+    const call = (mockPrisma.caregiverProfile.findMany as jest.Mock).mock.calls
+      .map((c) => c[0])
+      .find((args) => args?.where?.status === CaregiverStatus.APPROVED);
     // Service + price filters are always applied; zone may be blocked by admin
     if (call) {
       expect(call.where).toMatchObject({

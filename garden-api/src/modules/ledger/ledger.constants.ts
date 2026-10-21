@@ -13,6 +13,7 @@ export const CHART_OF_ACCOUNTS: Array<{ code: string; name: string; type: Ledger
   { code: '3200', name: 'Utilidades retenidas', type: LedgerAccountType.PATRIMONIO },
 
   { code: '4100', name: 'Ingresos por comisión', type: LedgerAccountType.INGRESO },
+  { code: '4200', name: 'Ingresos por Premium (destacados)', type: LedgerAccountType.INGRESO },
   { code: '4900', name: 'Otros ingresos', type: LedgerAccountType.INGRESO },
 
   { code: '5100', name: 'Marketing — bonos de referidos', type: LedgerAccountType.GASTO },
@@ -30,6 +31,7 @@ export const ACCOUNT = {
   CAPITAL: '3100',
   UTILIDADES_RETENIDAS: '3200',
   INGRESO_COMISION: '4100',
+  INGRESO_PREMIUM: '4200',
   OTROS_INGRESOS: '4900',
   GASTO_MARKETING_REFERIDOS: '5100',
   GASTO_MARKETING_PROMOS: '5200',

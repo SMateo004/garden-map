@@ -68,6 +68,7 @@ import { iniciarJobRecurringBookingGeneration } from './jobs/recurring-booking-g
 import { iniciarJobInstantBookingAutoAccept } from './jobs/instant-booking-auto-accept.job.js';
 import { iniciarJobCaregiverWaitlist } from './jobs/caregiver-waitlist.job.js';
 import { iniciarJobBlockchainSync } from './jobs/blockchain-sync.job.js';
+import { iniciarJobPremium } from './jobs/premium.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -286,6 +287,7 @@ async function start() {
     iniciarJobInstantBookingAutoAccept();
     iniciarJobCaregiverWaitlist();
     iniciarJobBlockchainSync();
+    iniciarJobPremium();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

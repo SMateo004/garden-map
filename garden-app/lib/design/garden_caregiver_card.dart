@@ -83,6 +83,8 @@ class GardenCaregiverCard extends StatelessWidget {
             ? company![0]
             : '${first.isNotEmpty ? first[0] : 'C'}${last.isNotEmpty ? last[0] : ''}';
     final verified = c['verified'] == true;
+    // Premium vigente (lo calcula el servidor): aparece primero y con esta insignia.
+    final featured = c['isFeatured'] == true;
     final antecedentes = c['antecedentesVerified'] == true;
     final reviews = c['reviewCount'] as int? ?? 0;
     final rating = (c['rating'] as num? ?? 0).toDouble();
@@ -142,7 +144,12 @@ class GardenCaregiverCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(GardenRadius.lg),
-            border: Border.all(color: verified ? GardenColors.primary.withValues(alpha: 0.3) : border),
+            border: Border.all(
+              color: featured
+                  ? GardenColors.star.withValues(alpha: 0.7)
+                  : verified ? GardenColors.primary.withValues(alpha: 0.3) : border,
+              width: featured ? 1.5 : 1,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,6 +203,10 @@ class GardenCaregiverCard extends StatelessWidget {
                             style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800),
                           ),
                         ),
+                        if (featured) ...[
+                          const SizedBox(width: 6),
+                          const _FeaturedBadge(),
+                        ],
                         const SizedBox(width: 8),
                         const _ReserveButton(),
                       ],
@@ -421,6 +432,31 @@ class GardenStatTiles extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Insignia "Destacado" de los perfiles Premium.
+class _FeaturedBadge extends StatelessWidget {
+  const _FeaturedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Destacado',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
+        decoration: BoxDecoration(
+          color: GardenColors.star.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(GardenRadius.full),
+        ),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          GardenIcon(GIcon.estrella, size: GIconSize.xs, state: GIconState.active, color: GardenColors.star),
+          SizedBox(width: 3),
+          Text('Destacado', style: TextStyle(color: Color(0xFFB7791F), fontSize: 10.5, fontWeight: FontWeight.w800)),
+        ]),
+      ),
     );
   }
 }

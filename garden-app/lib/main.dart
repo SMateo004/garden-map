@@ -35,6 +35,8 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/caregiver/become_caregiver_screen.dart';
 import 'screens/caregiver/caregiver_guide_screen.dart';
+import 'screens/caregiver/premium_screen.dart';
+import 'screens/caregiver/commission_payer_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
@@ -193,6 +195,8 @@ const _roleRestrictedPrefixes = <String, String>{
   // chequeo explícito de AuthState.isCaregiverStaff más abajo en redirect.
   '/caregiver-staff/home': 'CAREGIVER',
   '/caregiver/reception': 'CAREGIVER',
+  '/caregiver/premium': 'CAREGIVER',
+  '/caregiver/commission': 'CAREGIVER',
   '/caregiver-staff/reception': 'CAREGIVER',
 };
 
@@ -498,6 +502,16 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/verification',
       name: 'caregiverVerification',
       builder: (context, state) => const VerificationScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/premium',
+      name: 'caregiverPremium',
+      builder: (context, state) => const PremiumScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/commission',
+      name: 'caregiverCommission',
+      builder: (context, state) => const CommissionPayerScreen(),
     ),
     GoRoute(
       path: '/caregiver/trainings',

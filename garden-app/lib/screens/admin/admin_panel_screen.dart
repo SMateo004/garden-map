@@ -45,6 +45,7 @@ import '../../widgets/notification_bell.dart';
 import 'package:firebase_messaging/firebase_messaging.dart' show RemoteMessage;
 import '../../theme/garden_motion.dart';
 import '../../design/garden_marketplace_banner.dart';
+import 'admin_premium.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   /// Clave de la pestaña a abrir (`/admin?tab=pagos`), la que manda tocar una
@@ -275,8 +276,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  /// Compras de Premium en la pestaña Pagos; se refresca junto con los pagos.
+  final _premiumPurchasesKey = GlobalKey<AdminPremiumPurchasesSectionState>();
+
   Future<void> _loadPayments() async {
     setState(() => _isLoadingPayments = true);
+    _premiumPurchasesKey.currentState?.reload();
     try {
       // Cargar pagos principales
       final results = await Future.wait([
@@ -3069,6 +3074,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ]),
           const SizedBox(height: 12),
 
+          // ── PREMIUM (destacados): pagos declarados / aprobados solos ──
+          AdminPremiumPurchasesSection(
+            key: _premiumPurchasesKey,
+            adminToken: _adminToken,
+            onChanged: _loadPendingCounts,
+          ),
+          const SizedBox(height: 16),
+
           // ── KPI STATS ──────────────────────────────────────────
           if (_paymentsHistory.isNotEmpty) ...[
             Container(
@@ -4669,6 +4682,10 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     adminToken: widget.token,
                     baseUrl: widget.baseUrl,
                   ),
+
+                  // PREMIUM Y COMISIÓN (pago presencial, quitar compras)
+                  AdminCaregiverPremiumCard(adminToken: widget.token, caregiverProfileId: widget.caregiverId),
+                  const SizedBox(height: 12),
 
                   // CONTACTO
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

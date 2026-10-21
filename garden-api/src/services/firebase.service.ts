@@ -155,7 +155,7 @@ export function adminInboxType(pushType?: string): string {
   if (t.startsWith('BLOCKCHAIN')) return 'ADMIN_BLOCKCHAIN';
   if (t.startsWith('EXTENSION')) return 'ADMIN_EXTENSION';
   if (t.startsWith('WITHDRAWAL')) return 'ADMIN_WITHDRAWAL';
-  if (t.startsWith('PAYMENT') || t.startsWith('SIP')) return 'ADMIN_PAYMENT';
+  if (t.startsWith('PAYMENT') || t.startsWith('SIP') || t.startsWith('PREMIUM')) return 'ADMIN_PAYMENT';
   if (t === 'CAREGIVER_SUBMIT') return 'ADMIN_CAREGIVER';
   if (t.startsWith('NIT')) return 'ADMIN_NIT';
   if (t === 'LOW_RATING') return 'ADMIN_RATING';

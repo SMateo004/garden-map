@@ -3,7 +3,7 @@ import prisma from '../../config/database.js';
 import { BadRequestError } from '../../shared/errors.js';
 import type { PatchClientProfileBody } from './client-profile.validation.js';
 import logger from '../../shared/logger.js';
-import { getPricingConfig, resolveCommissionPct, walk30BasePrice } from '../pricing/pricing.service.js';
+import { getPricingConfig, clientMarkupPct, walk30BasePrice } from '../pricing/pricing.service.js';
 
 /**
  * GET /api/client/my-profile - Perfil del cliente con sus mascotas (Pet[]).
@@ -126,7 +126,7 @@ export async function getFavorites(userId: string) {
   // Mismo precio que el listado: comisión de Admin > Comisiones por servicio y cuidador.
   const pricing = await getPricingConfig();
   const priced = (price: number | null, service: 'PASEO' | 'HOSPEDAJE' | 'GUARDERIA', caregiverId: string) =>
-    price ? Math.round(price * (1 + resolveCommissionPct(pricing, service, caregiverId) / 100)) : null;
+    price ? Math.round(price * (1 + clientMarkupPct(pricing, service, caregiverId) / 100)) : null;
 
   // Map to CaregiverListItem-like format
   return caregivers.map(c => ({

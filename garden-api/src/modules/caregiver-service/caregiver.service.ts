@@ -20,7 +20,7 @@ import { PHOTO_COUNT, MAX_BIO_CHARS } from './caregiver.validation.js';
 import logger from '../../shared/logger.js';
 import { socialForResponse } from '../../shared/social-links.js';
 import { blockchainService } from '../../services/blockchain.service.js';
-import { getPricingConfig, resolveCommissionPct, walk30BasePrice, type PricedService } from '../pricing/pricing.service.js';
+import { getPricingConfig, clientMarkupPct, walk30BasePrice, type PricedService } from '../pricing/pricing.service.js';
 
 const cache = getCache();
 
@@ -35,7 +35,13 @@ type RateFor = (caregiverId: string, service: PricedService) => number;
  */
 async function getRateResolver(): Promise<RateFor> {
   const cfg = await getPricingConfig();
-  return (caregiverId, service) => resolveCommissionPct(cfg, service, caregiverId || null) / 100;
+  // Recargo que ve el dueño: la comisión, o 0 si ese cuidador paga él la comisión.
+  return (caregiverId, service) => clientMarkupPct(cfg, service, caregiverId || null) / 100;
+}
+
+/** Premium ("Destacado") vigente: insignia en listados y perfil. */
+function isPremiumActive(p: { premiumUntil?: Date | null }): boolean {
+  return !!p.premiumUntil && p.premiumUntil.getTime() > Date.now();
 }
 
 /**
@@ -282,7 +288,9 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   const useCursor = Boolean(cursor);
 
   const include = { user: { select: { firstName: true, lastName: true, profilePicture: true } } } as const;
-  const orderBy = [{ rating: 'desc' as const }, { createdAt: 'desc' as const }];
+  // Primero Premium ("Destacado"), después quienes pagan su comisión, después el resto;
+  // dentro de cada grupo, por calificación (listingBoost, ver premium.service.ts).
+  const orderBy = [{ listingBoost: 'desc' as const }, { rating: 'desc' as const }, { createdAt: 'desc' as const }];
 
   const [caregivers, total] = await Promise.all([
     useCursor
@@ -328,6 +336,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
       isProfessional: (c as any).isProfessional ?? false,
+      isFeatured: isPremiumActive(c),
       isCompany: (c as any).isCompany ?? false,
       companyName: (c as any).companyName ?? null,
       maxPets: c.maxPets ?? 1,
@@ -653,6 +662,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     oftenOut: profile.oftenOut,
     spaceDescription: profile.spaceDescription,
     isProfessional: (profile as any).isProfessional ?? false,
+    isFeatured: isPremiumActive(profile),
     isCompany: (profile as any).isCompany ?? false,
     companyName: (profile as any).companyName ?? null,
     extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({

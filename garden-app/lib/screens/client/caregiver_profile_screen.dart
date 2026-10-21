@@ -1371,12 +1371,32 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     return labels[zone] ?? zone.replaceAll('_', ' ');
   }
 
-  Widget _trustSeals({required bool verified, required bool offersWalks}) => GardenTrustSeals(
-        identityVerified: verified,
-        backgroundChecked: _caregiver?['antecedentesVerified'] == true,
-        offersWalks: offersWalks,
-        caregiverFirstName: _caregiver?['isCompany'] == true ? null : _caregiver?['firstName'] as String?,
-      );
+  Widget _trustSeals({required bool verified, required bool offersWalks}) {
+    final seals = GardenTrustSeals(
+      identityVerified: verified,
+      backgroundChecked: _caregiver?['antecedentesVerified'] == true,
+      offersWalks: offersWalks,
+      caregiverFirstName: _caregiver?['isCompany'] == true ? null : _caregiver?['firstName'] as String?,
+    );
+    if (_caregiver?['isFeatured'] != true) return seals;
+    // Perfil Premium vigente: insignia "Destacado" sobre los sellos de confianza.
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+        decoration: BoxDecoration(
+          color: GardenColors.star.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(GardenRadius.full),
+        ),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          GardenIcon(GIcon.estrella, size: GIconSize.sm, state: GIconState.active, color: GardenColors.star),
+          SizedBox(width: 5),
+          Text('Destacado', style: TextStyle(color: Color(0xFFB7791F), fontSize: 12.5, fontWeight: FontWeight.w800)),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      seals,
+    ]);
+  }
 
   Widget _buildTrustBadges(Color subtextColor, {bool offersHospedaje = false, bool offersGuarderia = false}) {
     if (_caregiver == null) return const SizedBox.shrink();

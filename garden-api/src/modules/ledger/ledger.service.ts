@@ -61,8 +61,19 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
   const earnings = await prisma.walletTransaction.findMany({
     where: { type: 'EARNING', status: 'COMPLETED', createdAt: { gte: start, lt: end }, bookingId: { not: null } },
     select: { id: true, amount: true, bookingId: true, userId: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
   });
   for (const earning of earnings) {
+    // Una reserva puede tener más de un EARNING (ej. una extensión aprobada después de
+    // liberar el pago). El asiento usa los totales de la reserva, así que va UNO por
+    // reserva, en su primer EARNING, con todo lo acreditado al cuidador — si no, la
+    // segunda fila repetía el cobro completo y ninguno de los dos asientos cuadraba.
+    const bookingEarnings = await prisma.walletTransaction.findMany({
+      where: { type: 'EARNING', status: 'COMPLETED', bookingId: earning.bookingId! },
+      select: { id: true, amount: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (bookingEarnings[0]?.id !== earning.id) continue;
     const booking = await prisma.booking.findUnique({
       where: { id: earning.bookingId! },
       select: {
@@ -76,7 +87,7 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
     const commissionAmount = Number(booking.commissionAmount);
     const grossCommission = booking.commissionAmountBeforePromo != null ? Number(booking.commissionAmountBeforePromo) : commissionAmount;
     const marketingExpense = Math.max(0, Math.round((grossCommission - commissionAmount) * 100) / 100);
-    const caregiverCut = Number(earning.amount);
+    const caregiverCut = Math.round(bookingEarnings.reduce((s, e) => s + Number(e.amount), 0) * 100) / 100;
     const walletPortion = Math.min(Number(booking.walletPaymentAmount ?? 0), totalAmount);
     const bankPortion = Math.max(0, Math.round((totalAmount - walletPortion) * 100) / 100);
 
@@ -97,6 +108,28 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
       earning.createdAt,
       `Pago liberado — ${svcLabel} de ${booking.petName ?? 'mascota'} (reserva ${booking.id.slice(0, 8)})`,
       lines
+    );
+    created++;
+  }
+
+  // ── AUTO_PREMIUM — compra de Premium pagada (QR o presencial): entra plata real y es
+  // ingreso de GARDEN (no pasa por billeteras). Las quitadas (REVOKED) no cuentan.
+  const premiumPaid = await prisma.premiumPurchase.findMany({
+    where: { status: 'PAID', paidAt: { gte: start, lt: end } },
+    select: { id: true, amount: true, weeks: true, paidAt: true, method: true },
+  });
+  for (const pp of premiumPaid) {
+    const amount = Number(pp.amount);
+    if (amount <= 0) continue;
+    await createEntryIfBalanced(
+      LedgerEntrySource.AUTO_PREMIUM,
+      pp.id,
+      pp.paidAt!,
+      `Premium ${pp.weeks} semana(s) — ${pp.method === 'ADMIN' ? 'registrado por un admin' : 'pago por QR'}`,
+      [
+        { accountId: accountMap.get(ACCOUNT.BANCO)!, debit: amount, credit: 0 },
+        { accountId: accountMap.get(ACCOUNT.INGRESO_PREMIUM)!, debit: 0, credit: amount },
+      ]
     );
     created++;
   }

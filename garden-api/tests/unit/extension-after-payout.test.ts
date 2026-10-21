@@ -25,6 +25,7 @@ jest.mock('../../src/modules/pricing/pricing.service', () => ({
   caregiverUnitFromPriced: jest.fn((p: number) => p / 1.1),
   getTaxRate: jest.fn().mockResolvedValue(0),
   caregiverNetOf: jest.fn(),
+  normalizePayer: (v: unknown) => (v === 'CAREGIVER' ? 'CAREGIVER' : 'CLIENT'),
 }));
 jest.mock('../../src/services/chain-registry.service', () => ({
   enqueueBookingExtension: jest.fn().mockResolvedValue(undefined),

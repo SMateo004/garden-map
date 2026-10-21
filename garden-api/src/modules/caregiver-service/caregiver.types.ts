@@ -2,6 +2,8 @@ import type { ServiceType, TimeSlot } from '@prisma/client';
 import type { SocialHandles, SocialNetwork } from '../../shared/social-links.js';
 
 export interface CaregiverListItem {
+  /** Premium vigente: aparece primero con la insignia "Destacado". */
+  isFeatured?: boolean;
   id: string;
   firstName: string;
   lastName: string;

@@ -6,6 +6,7 @@ import '../../design/garden_icons.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'admin_commission_allocation_screen.dart';
+import 'admin_premium.dart';
 import 'admin_taxes_switch_card.dart';
 
 /// Admin > Comisiones — ÚNICO lugar donde se configura la comisión de GARDEN.
@@ -238,18 +239,19 @@ class _AdminPricingScreenState extends State<AdminPricingScreen> {
   Widget build(BuildContext context) {
     final subtextColor = themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(children: [
         TabBar(
           labelColor: GardenColors.primary,
           unselectedLabelColor: subtextColor,
           indicatorColor: GardenColors.primary,
-          tabs: const [Tab(text: 'Tarifas'), Tab(text: 'Distribución')],
+          tabs: const [Tab(text: 'Tarifas'), Tab(text: 'Distribución'), Tab(text: 'Premium')],
         ),
         Expanded(
           child: TabBarView(children: [
             _buildRates(context),
             AdminCommissionAllocationScreen(adminToken: widget.adminToken),
+            AdminPremiumSettingsPanel(adminToken: widget.adminToken),
           ]),
         ),
       ]),

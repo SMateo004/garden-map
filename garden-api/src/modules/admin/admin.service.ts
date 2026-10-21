@@ -33,6 +33,7 @@ import {
   getCommissionRate,
   getTaxRate,
   caregiverUnitFromPriced,
+  normalizePayer,
   caregiverNetOf,
   getPricingConfig,
   resolveCommissionPct,
@@ -1759,8 +1760,11 @@ export async function getAdminPendingCounts(): Promise<Record<string, number>> {
     prisma.chatReport.count({ where: { status: 'PENDING' } }),
   ]);
   const extensions = extBookings.reduce((n, b) => n + pendingExtensionEvents(b.serviceEvents).length, 0);
+  // Compras de Premium declaradas o aprobadas solas sin verificar (premium.service.ts).
+  const { countPurchasesNeedingAdmin } = await import('../premium/premium.service.js');
+  const premiumPending = await countPurchasesNeedingAdmin().catch(() => 0);
   return {
-    payments: payments + extensions,
+    payments: payments + extensions + premiumPending,
     withdrawals,
     disputes,
     caregivers,
@@ -1814,7 +1818,7 @@ export async function approveExtensionPayment(
     let extraCommissionApplied = 0;
     const COMMISSION_RATE = await getCommissionRate(booking.serviceType, booking.caregiverId);
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, COMMISSION_RATE);
+    const pricePerUnitCaregiver = caregiverUnitFromPriced(pricePerUnitClient, COMMISSION_RATE, normalizePayer(booking.commissionPaidBy));
     const newTotal = Number(booking.totalAmount) + extraAmount;
     const newCommission = Number(booking.commissionAmount);
     // Impuesto persistido al cotizar la extensión (0 en eventos anteriores al impuesto).
