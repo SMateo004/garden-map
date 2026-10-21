@@ -4089,3 +4089,148 @@ contrato de Polygon, Meet & Greet sin reembolso, y auto-aprobación de anteceden
 — estos últimos cuatro ya llevan entre 15 y 26 días sin una decisión).
 
 ---
+
+## 2026-10-21 — Sistema de notificaciones (email/push): textos de reembolso y de comisión
+## desactualizados frente al comportamiento real del backend (nunca auditado como área propia)
+
+**Commit de referencia al iniciar la auditoría:** `6630651` (chore: registrar auditoría diaria —
+race en bitácora del CRM walk-in corregida). Sin commits nuevos del dueño desde la corrida
+anterior. `git status` limpio al empezar.
+
+**Área auditada:** `garden-api/src/services/notification.service.ts` (827 líneas — emails +
+push de cada evento de reserva/pago), `garden-api/src/services/firebase.service.ts` (envío FCM),
+`garden-api/src/modules/notification-service/*` (bandeja in-app) y el lado Flutter
+(`fcm_service.dart`, `notification_bell.dart`, `local_notification_service.dart`,
+`narrative/notification_kind.dart`). Esta auditoría ya había tocado notificaciones de pasada
+muchas veces (siempre como parte de otro flujo: disputas, propinas, CRM), pero nunca como foco
+propio — se eligió por eje (c)/(a) del CLAUDE.md (coherencia de negocio + plazos/montos que no
+coinciden entre pantallas/canales) y porque `notification.service.ts` es el único archivo grande
+de toda la base que nunca apareció como "área auditada" en ninguna entrada anterior de este log.
+
+El código de `fcm_service.dart`, `notification_bell.dart` y `local_notification_service.dart` está
+sólido y bien comentado (incluye varios fixes de auditorías previas, ej. el deep-link de cada tipo
+de push) — se revisó a fondo pero no se encontró ningún bug nuevo ahí. El hallazgo real salió de
+comparar, evento por evento, lo que dice cada **email** (`notification.service.ts`) contra lo que
+el **push/notificación in-app del mismo evento** (creado en `booking.service.ts`, en la misma
+transacción que mueve la plata) dice sobre lo mismo, y contra el código real que ejecuta el
+reembolso.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado): los emails de cancelación/rechazo de
+reserva prometen un reembolso manual demorado que el backend ya no hace — el reembolso es
+automático e instantáneo desde hace tiempo, y el propio push/notificación in-app del mismo evento
+ya lo dice bien
+
+**Dónde:**
+- `garden-api/src/services/notification.service.ts:255` (`onCaregiverCancelled`, email al
+  cliente cuando el cuidador cancela una reserva confirmada): *"El reembolso completo llega en un
+  plazo máximo de 1 día hábil. Nuestro equipo de soporte se pondrá en contacto contigo a la
+  brevedad."*
+- `garden-api/src/services/notification.service.ts:263` y `:269` (mismo evento, WhatsApp
+  placeholder y push): *"Te devolvemos tus Bs {monto} en 1 día hábil"* / *"...en máx. 1 día
+  hábil"*.
+- `garden-api/src/services/notification.service.ts:410` (`onBookingRejected`, email al cliente
+  cuando el cuidador rechaza una solicitud paga): *"Se realizará la devolución total de tu dinero
+  en un plazo máximo de 24 horas hábiles. Nuestro equipo de soporte se contactará contigo a la
+  brevedad."*
+- Comparar con `garden-api/src/modules/booking-service/booking.service.ts:2135-2163`
+  (`requestCancellationByCaregiver`) y `:4040-4063` (`rejectBooking`): en ambos casos, **dentro de
+  la misma transacción** que cambia el estado de la reserva, se hace
+  `tx.user.update({ data: { balance: { increment: refundAmount } } })` + `WalletTransaction` tipo
+  `REFUND` — el monto completo ya está en la billetera del cliente antes de que la función
+  termine, sin intervención de ningún admin ni "equipo de soporte". El comentario del propio código
+  lo deja explícito: `// Auto-refund completo a la billetera, sin importar el método de pago
+  original`.
+- La notificación in-app que se crea en la MISMA transacción (`booking.service.ts:4073-4077` y
+  `:2210-2226`) ya dice lo correcto: *"Ya te devolvimos Bs X a tu billetera Garden"* /
+  *"...ya recibió el reembolso completo en su billetera Garden"* — en pasado, como corresponde.
+
+**La contradicción concreta:** para el mismo evento (el cuidador cancela o rechaza una reserva
+pagada), el cliente recibe dos mensajes que se contradicen directamente: la notificación in-app
+(que aparece al instante en la campana) le dice que el dinero *ya* está en su billetera Garden; el
+email (y el placeholder de WhatsApp/push de `notification.service.ts`) le dice que *todavía* tiene
+que esperar hasta 24 horas/1 día hábil y que alguien de soporte lo va a contactar. Un cliente que
+lee el email antes de abrir la app razonablemente espera un día entero y quizás escribe a soporte
+preguntando por un reembolso que ya recibió — y si de verdad espera sin revisar la billetera, no
+hay ningún problema real, pero el mensaje genera desconfianza y tickets de soporte evitables sobre
+dinero que no está en juego. Este texto es claramente una copia que quedó de una versión anterior
+del producto, previa a que el reembolso se volviera automático e instantáneo — el mismo patrón
+exacto que ya se corrigió en otros lugares de la app (`register_screen.dart`/`wallet_screen.dart`,
+corrida del 2026-10-01) pero que acá, en el email, nunca se tocó.
+
+**Por qué se clasifica alto riesgo aunque el fix sería solo de copy:** toca directamente la
+comunicación sobre un reembolso real de dinero — misma razón por la que el hallazgo F3 del
+2026-10-01 (validación de monto mínimo de retiro, "solo UI" pero en el camino de la billetera) se
+clasificó alto riesgo. Un texto mal calibrado sobre dinero es una decisión de producto/soporte, no
+un simple error de tipeo.
+
+**Fix propuesto (no aplicado):** en los tres puntos citados, cambiar el tiempo verbal de futuro
+("se realizará"/"llega en máx. 24h"/"nuestro equipo se contactará") a pasado/presente
+("ya se reembolsó automáticamente a tu billetera Garden — puedes verlo ya mismo en la pestaña
+Billetera"), igual que ya dice la notificación in-app del mismo evento. Si el dueño prefiere dejar
+un margen por si el auto-refund fallara en algún caso borde, alcanza con un texto tipo "ya debería
+estar en tu billetera; si no lo ves en los próximos minutos, escríbenos" en vez de prometer un
+plazo de horas que ya no aplica.
+
+### Hallazgo ALTO RIESGO (no aplicado, solo reportado): el email de bienvenida al cuidador aprobado
+hardcodea la comisión ("10%") y el retiro mínimo ("Bs 50") como si fueran fijos — ambos son
+settings dinámicos editables por un admin, y ya existe el patrón correcto en otros 2 lugares de la
+app que este email nunca adoptó
+
+**Dónde:**
+- `garden-api/src/services/notification.service.ts:677` (`onCaregiverWelcome`, enviado justo
+  cuando el perfil del cuidador queda aprobado — el primer email real que recibe): *"Tú fijas tus
+  precios. GARDEN retiene el **10%** por reserva completada. El **90%** restante entra
+  automáticamente a tu billetera..."*
+- `garden-api/src/services/notification.service.ts:679` (mismo email): *"Puedes retirar... cuando
+  quieras (mínimo Bs 50)"*.
+- Ambos valores son `AppSettings` editables por un admin en cualquier momento, no constantes:
+  `garden-api/src/modules/pricing/pricing.service.ts:33,39,43-47` (`platformCommissionPct`,
+  default 10 pero con override por servicio y por cuidador/empresa vía `getCommissionRate()`) y
+  `garden-api/src/modules/wallet/wallet.routes.ts:229` (`montoMinimoRetiro`, default 50,
+  `getNumericSetting('montoMinimoRetiro', 50)`).
+- El patrón correcto para este mismo texto **ya existe en dos lugares** desde la corrida del
+  2026-10-01 (hallazgo F1/F3 de esa fecha): `garden-app/lib/screens/auth/register_screen.dart`
+  trae `platformCommissionPct` dinámico desde `/api/settings` (`PUBLIC_SETTING_KEYS`,
+  `garden-api/src/app.ts:354`) y `wallet_screen.dart` trae `montoMinimoRetiro` de la misma forma.
+  El bot de soporte (`garden-api/src/agents/soporte-chat.agent.ts:36,46,76`) también lee
+  `montoMinimoRetiro` dinámicamente. El único lugar que quedó con los números fijos de origen es
+  este email de bienvenida.
+
+**Falla concreta:** si un admin cambia `platformCommissionPct` (ej. a 12%) o fija una comisión
+distinta por servicio/cuidador, o cambia `montoMinimoRetiro`, todo cuidador aprobado a partir de
+ese momento recibe un email de bienvenida con cifras incorrectas sobre cuánto le va a quedar de
+cada reserva y cuál es el mínimo para retirar — justo en el momento en que se está formando su
+primera impresión de cómo funciona el pago en GARDEN. A diferencia del registro (F1, ya corregido)
+esto no es visible para el cliente, pero sí es la primera promesa económica concreta que recibe
+cada cuidador nuevo.
+
+**Fix propuesto (no aplicado):** agregar los dos valores como parámetros a `onCaregiverWelcome(…)`
+(el caller en `caregiver-profile.service.ts` ya tiene o puede resolver fácilmente
+`getCommissionRate('PASEO', caregiverId)`/`getNumericSetting('montoMinimoRetiro', 50)` antes de
+llamar a esta función) en vez de dejarlos fijos en la plantilla — mismo principio que el fix ya
+aplicado en `register_screen.dart`/`wallet_screen.dart`, solo que del lado del backend.
+
+### Verificación
+
+Sin cambios de código hoy (los dos hallazgos son alto riesgo, solo reportados). No se tocó
+`garden-api` ni `garden-app` — no aplica `tsc --noEmit` ni `flutter analyze`. `git status` sigue
+limpio salvo esta actualización del log.
+
+### Pendiente de decisión del dueño del proyecto
+
+- Hallazgos de hoy: (1) emails/push de cancelación y rechazo de reserva (`onCaregiverCancelled`,
+  `onBookingRejected`) prometen un reembolso manual demorado con "equipo de soporte" que contacta,
+  cuando el reembolso ya es automático e instantáneo (el in-app notification del mismo evento ya
+  lo dice bien); (2) email de bienvenida al cuidador (`onCaregiverWelcome`) hardcodea comisión 10%
+  y retiro mínimo Bs 50 en vez de leerlos de `AppSettings` como ya hacen `register_screen.dart`,
+  `wallet_screen.dart` y el bot de soporte.
+- Sigue acumulada, sin cambios desde que se reportó, la lista de corridas anteriores: cupo
+  recepción+marketplace sin lock simétrico y ventana de aceptación de 3h (2026-10-10), baja de
+  cuenta sin chequear retiros pendientes (2026-10-11/12), divergencia de precio en extras
+  multi-servicio (2026-10-18), cancelación silenciosa en `payment_screen.dart` (2026-10-19), los
+  dos relojes de auto-liberación de pago (2026-10-17), TOCTOU de `startPhoneChange`, revisión legal
+  pendiente del texto de comisión+impuestos, veredicto `PARTIAL` de disputas en el contrato de
+  Polygon, Meet & Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA — estos
+  últimos cuatro ya llevan entre 16 y 27 días sin una decisión.
+
+---
