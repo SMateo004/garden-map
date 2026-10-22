@@ -45,6 +45,30 @@ async function completedServicesOf(userId: string): Promise<number> {
   return asClient + asCaregiver;
 }
 
+/**
+ * ¿El servicio que dispara el bono es legítimo para pagarlo? Se cobró de verdad, no lo armó un admin,
+ * y no es entre el que invitó y su invitado (ni entre dos invitados del mismo): si no, alguien podía
+ * invitarse a sí mismo con una segunda cuenta, reservarse y cobrar los dos bonos.
+ */
+async function qualifyingBooking(bookingId: string | undefined, referrerId: string): Promise<boolean> {
+  if (!bookingId) return false;
+  const b = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      paidAt: true, createdByAdmin: true, clientId: true,
+      client: { select: { referredByUserId: true } },
+      caregiver: { select: { userId: true, user: { select: { referredByUserId: true } } } },
+    },
+  });
+  if (!b || !b.paidAt || b.createdByAdmin) return false;
+  const parties = [b.clientId, b.caregiver.userId];
+  const partiesReferredBy = [b.client?.referredByUserId, b.caregiver.user?.referredByUserId];
+  if (parties.includes(referrerId)) return false;
+  // Dueño y cuidador invitados por la misma persona: el bono saldría de un servicio entre conocidos.
+  if (partiesReferredBy[0] && partiesReferredBy[0] === partiesReferredBy[1]) return false;
+  return true;
+}
+
 export async function getMyReferral(userId: string) {
   const code = await getOrCreateReferralCode(userId);
   const [referredCount, rewardedCount, rewardBS, caregiverRewardBS, me] = await Promise.all([
@@ -100,7 +124,7 @@ export async function applyReferralCode(userId: string, code: string) {
  * bono a ambas partes SOLO en el primer servicio COMPLETED del referido
  * (evita pagar el bono más de una vez, ver referralRewardGiven). No lanza
  * — cualquier error acá no debe tumbar la conclusión real del servicio. */
-export async function grantReferralRewardIfEligible(clientId: string): Promise<void> {
+export async function grantReferralRewardIfEligible(clientId: string, bookingId?: string): Promise<void> {
   try {
     const client = await prisma.user.findUnique({
       where: { id: clientId },
@@ -110,6 +134,7 @@ export async function grantReferralRewardIfEligible(clientId: string): Promise<v
 
     const completedCount = await prisma.booking.count({ where: { clientId, status: 'COMPLETED' } });
     if (completedCount !== 1) return; // no es el primero — no corresponde el bono
+    if (!(await qualifyingBooking(bookingId, client.referredByUserId))) return;
 
     const rewardBS = await getNumericSetting('referralRewardBS', 20);
     if (rewardBS <= 0) return;
@@ -173,7 +198,7 @@ export async function grantReferralRewardIfEligible(clientId: string): Promise<v
  * (Bs 30 por defecto). Un mismo usuario cobra un solo bono de referido en total, como dueño o
  * como cuidador (mismo flag referralRewardGiven). Se llama desde concludeService. No lanza.
  */
-export async function grantCaregiverReferralRewardIfEligible(caregiverProfileId: string): Promise<void> {
+export async function grantCaregiverReferralRewardIfEligible(caregiverProfileId: string, bookingId?: string): Promise<void> {
   try {
     const profile = await prisma.caregiverProfile.findUnique({ where: { id: caregiverProfileId }, select: { userId: true } });
     if (!profile) return;
@@ -186,6 +211,7 @@ export async function grantCaregiverReferralRewardIfEligible(caregiverProfileId:
 
     const completedCount = await prisma.booking.count({ where: { caregiverId: caregiverProfileId, status: 'COMPLETED' } });
     if (completedCount !== 1) return;
+    if (!(await qualifyingBooking(bookingId, user.referredByUserId))) return;
 
     const rewardBS = await getNumericSetting('referralCaregiverRewardBS', 30);
     if (rewardBS <= 0) return;

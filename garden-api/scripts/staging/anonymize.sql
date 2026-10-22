@@ -25,7 +25,8 @@ UPDATE "users" SET
   "fcmToken"     = NULL,
   "bankAccount"  = NULL,
   "phoneOtp"     = NULL,
-  "pendingPhone" = NULL
+  "pendingPhone" = NULL,
+  "securityPinHash" = NULL
 WHERE "email" NOT LIKE 'reviewer.%@gardenbo.com';
 
 -- Sesiones y códigos: nada de lo emitido en producción vale en staging.
@@ -40,7 +41,8 @@ UPDATE "caregiver_profiles" SET
   "ciAnversoUrl" = NULL, "ciReversoUrl" = NULL, "ciNumber" = NULL,
   "nitNumber" = NULL, "nitDocumentUrl" = NULL,
   "bankAccount" = NULL, "emergencyContacts" = NULL,
-  "addressStreet" = NULL, "addressNumber" = NULL, "addressApartment" = NULL,
+  "identityVerificationToken" = NULL, "antecedentesUrl" = NULL, "socialLinks" = NULL,
+  "addressStreet" = NULL, "addressNumber" = NULL, "addressApartment" = NULL, "addressCondominio" = NULL,
   "addressReference" = NULL, "addressDetail" = NULL,
   "addressLat" = round("addressLat"::numeric, 2)::float8,
   "addressLng" = round("addressLng"::numeric, 2)::float8
@@ -48,7 +50,7 @@ WHERE "userId" NOT IN (SELECT "id" FROM "users" WHERE "email" LIKE 'reviewer.%@g
 
 UPDATE "client_profiles" SET
   "phone" = NULL, "nit" = NULL, "nitRazonSocial" = NULL,
-  "addressStreet" = NULL, "addressNumber" = NULL, "addressApartment" = NULL,
+  "addressStreet" = NULL, "addressNumber" = NULL, "addressApartment" = NULL, "addressCondominio" = NULL,
   "addressReference" = NULL,
   "addressLat" = round("addressLat"::numeric, 2)::float8,
   "addressLng" = round("addressLng"::numeric, 2)::float8
@@ -62,7 +64,16 @@ UPDATE "booking_transport_legs" SET "address" = NULL, "addressReference" = NULL,
 UPDATE "walk_in_clients" SET "phone" = NULL, "email" = NULL;
 
 -- Verificación de identidad: selfies, fotos del carnet e IPs.
-UPDATE "identity_verification_sessions" SET "selfieUrl" = NULL, "ciFrontUrl" = NULL, "ciBackUrl" = NULL, "ipAddress" = NULL;
+UPDATE "identity_verification_sessions" SET "selfieUrl" = NULL, "ciFrontUrl" = NULL, "ciBackUrl" = NULL,
+  "faceCroppedDocumentUrl" = NULL, "faceCroppedSelfieUrl" = NULL, "livenessFrameUrls" = NULL, "ipAddress" = NULL;
 UPDATE "verification_audits" SET "ipAddress" = NULL;
+UPDATE "audit_logs" SET "ip" = NULL;
+
+-- QR de retiro: imagen del QR bancario personal de cada cuidador.
+DELETE FROM "withdrawal_qrs";
+
+-- Mascotas: microchip y documentos/vacunas (fotos que pueden traer datos del dueño).
+UPDATE "pets" SET "microchipNumber" = NULL, "vaccinePhotos" = '{}', "documents" = '{}';
+UPDATE "walk_in_pets" SET "microchipNumber" = NULL, "vaccinePhotos" = '{}', "documents" = '{}';
 
 COMMIT;

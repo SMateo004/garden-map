@@ -5506,8 +5506,8 @@ export async function concludeService(
   // overtime arriba) podría auto-bloquearse esperando un lock que la
   // transacción externa todavía no liberó. Nunca debe tumbar la
   // conclusión real del servicio, que ya quedó confirmada arriba.
-  grantReferralRewardIfEligible(result.clientId).catch(() => {});
-  grantCaregiverReferralRewardIfEligible(result.caregiverId).catch(() => {});
+  grantReferralRewardIfEligible(result.clientId, bookingId).catch(() => {});
+  grantCaregiverReferralRewardIfEligible(result.caregiverId, bookingId).catch(() => {});
 
   return result.response;
 }
