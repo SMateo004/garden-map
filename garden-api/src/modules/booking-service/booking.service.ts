@@ -5676,7 +5676,8 @@ const FINE_PERCENT              = 0.20; // 20 % del totalAmount como multa
  * Flujo:
  *  1. Valida que la reserva sea CONFIRMED, le pertenezca al cliente y haya pasado el tiempo de gracia.
  *  2. Crea ServiceReport.
- *  3. Reembolsa (totalAmount - commissionAmount) a la billetera del dueño.
+ *  3. Reembolsa al dueño lo que de verdad pagó (totalAmount - comisión, 0 si la absorbe
+ *     el cuidador vía commissionPaidBy — ver clientPaidCommission) a su billetera.
  *  4. Cancela la reserva.
  *  5. Si es la primera infracción del cuidador → WARNING; si tiene más → FINE (20% del totalAmount).
  *  6. Notifica a ambas partes.

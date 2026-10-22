@@ -431,7 +431,8 @@ export const reject = asyncHandler(async (req: Request, res: Response) => {
  * Dueño reporta que el cuidador no se presentó / no inició el servicio.
  * Disponible únicamente cuando la reserva está CONFIRMED y ya pasó el tiempo de gracia
  * (paseo: +10 min, otros: +30 min después de la hora programada).
- * Acción automática: reembolso al dueño (totalAmount - commissionAmount) + warning/multa al cuidador.
+ * Acción automática: reembolso al dueño de lo que de verdad pagó (ve clientPaidCommission —
+ * 0 si la comisión la absorbe el cuidador) + warning/multa al cuidador.
  */
 export const reportBooking = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
