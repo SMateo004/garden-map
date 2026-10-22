@@ -1409,6 +1409,20 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final acceptSeniors = _caregiver!['acceptSeniors'] == true;
 
     final badges = <Map<String, dynamic>>[];
+    // Recojo / entrega a domicilio: va primero, es una decisión práctica para el dueño.
+    final transport = _caregiver!['transport'];
+    if (transport is Map) {
+      final pick = (transport['pickupFee'] as num?) ?? 0;
+      final drop = (transport['dropoffFee'] as num?) ?? 0;
+      final km = (transport['maxKm'] as num?) ?? 0;
+      badges.add({
+        'icon': GIcon.auto,
+        'label': pick == 0 && drop == 0
+            ? 'Recojo y entrega gratis · hasta ${km.toStringAsFixed(km % 1 == 0 ? 0 : 1)} km'
+            : 'Recoge y entrega en tu casa · hasta ${km.toStringAsFixed(km % 1 == 0 ? 0 : 1)} km',
+        'color': GardenColors.primary,
+      });
+    }
     // "Favorito de la zona" en vez de "Top rated" cuando además tiene
     // suficientes reseñas de respaldo — más cálido que un tecnicismo en
     // inglés, mismo espíritu que el "Guest favorite" de Airbnb, pero solo

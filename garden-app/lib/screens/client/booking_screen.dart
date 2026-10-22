@@ -13,6 +13,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../services/taxes_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'my_data_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
@@ -145,6 +146,87 @@ class _BookingScreenState extends State<BookingScreen> {
 
   // Servicios extra opcionales (ej. "Comida incluida")
   Set<String> _selectedExtraIds = {};
+
+  // Recojo / entrega a domicilio (guardería y hospedaje) — ver transport.service.ts.
+  Map<String, dynamic>? _transportQuote;
+  String? _transportQuoteFor;
+  bool _transportLoading = false;
+  bool _wantPickup = false;
+  bool _wantDropoff = false;
+  String _pickupTime = '09:00';
+  String _dropoffTime = '18:00';
+
+  /// Lo que el cuidador ofrece (null si no ofrece transporte para este servicio).
+  Map<String, dynamic>? get _caregiverTransport {
+    final t = _caregiver?['transport'];
+    if (t is! Map || (_selectedService != 'GUARDERIA' && _selectedService != 'HOSPEDAJE')) return null;
+    final services = (t['services'] as List?)?.cast<String>() ?? const [];
+    return services.contains(_selectedService) ? t.cast<String, dynamic>() : null;
+  }
+
+  bool get _transportAvailable =>
+      _caregiverTransport != null && _transportQuote?['available'] == true && _transportQuoteFor == _selectedService;
+
+  /// Precios y su impuesto (por reserva / por día de guardería), como los calcula la API.
+  ({int fees, int tax}) get _transportCharge {
+    if (!_transportAvailable) return (fees: 0, tax: 0);
+    final pickupFee = ((_transportQuote?['pickupFee'] as num?) ?? 0).round();
+    final dropoffFee = ((_transportQuote?['dropoffFee'] as num?) ?? 0).round();
+    final rate = _taxRate ?? 0;
+    int fees = 0, tax = 0;
+    if (_wantPickup) {
+      fees += pickupFee;
+      tax += (pickupFee * rate).round();
+    }
+    if (_wantDropoff) {
+      fees += dropoffFee;
+      tax += (dropoffFee * rate).round();
+    }
+    return (fees: fees, tax: tax);
+  }
+
+  Future<void> _loadTransportQuote() async {
+    final svc = _selectedService;
+    if (svc == null || _transportLoading || _caregiverTransport == null) return;
+    setState(() {
+      _transportLoading = true;
+      // Cambió de servicio: lo elegido para el otro no se arrastra.
+      if (_transportQuoteFor != null && _transportQuoteFor != svc) {
+        _wantPickup = false;
+        _wantDropoff = false;
+      }
+    });
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/transport-quote?serviceType=$svc'),
+        headers: {'Authorization': 'Bearer $_clientToken'},
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      setState(() {
+        _transportQuote = data['success'] == true ? (data['data'] as Map).cast<String, dynamic>() : null;
+        _transportQuoteFor = svc;
+        if (!_transportAvailable) {
+          _wantPickup = false;
+          _wantDropoff = false;
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _transportQuoteFor = svc);
+    } finally {
+      if (mounted) setState(() => _transportLoading = false);
+    }
+  }
+
+  /// Hora en que empieza / termina la guardería elegida (para mostrar recojo y entrega).
+  String? get _guarderiaStart => _isMultiDay ? (_multiDaySameTime ? _multiDaySharedTime : null) : _selectedStartTime;
+  String? get _guarderiaEnd {
+    final st = _guarderiaStart;
+    if (st == null || !st.contains(':')) return null;
+    final parts = st.split(':');
+    final mins = int.parse(parts[0]) * 60 + int.parse(parts[1]) + _guarderiaSelectedDuration;
+    return '${(mins ~/ 60 % 24).toString().padLeft(2, '0')}:${(mins % 60).toString().padLeft(2, '0')}';
+  }
 
   /// Servicios extra que ofrece el cuidador y aplican al servicio seleccionado.
   List<Map<String, dynamic>> get _availableExtras {
@@ -699,6 +781,15 @@ class _BookingScreenState extends State<BookingScreen> {
       body['extraServiceIds'] = _selectedExtraIds.toList();
     }
 
+    // Recojo / entrega a domicilio (la API valida radio, dirección, horas y precio).
+    if (_transportAvailable && (_wantPickup || _wantDropoff)) {
+      final isHosp = _selectedService == 'HOSPEDAJE';
+      body['transport'] = {
+        'pickup': _wantPickup ? {if (isHosp) 'time': _pickupTime} : null,
+        'dropoff': _wantDropoff ? {if (isHosp) 'time': _dropoffTime} : null,
+      };
+    }
+
     // If M&G enabled, include mgData so backend creates PENDING_MG (still goes via API immediately)
     if (_includeMG && _mgDate != null) {
       final timeStr = _mgTime != null
@@ -830,15 +921,19 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Sin impuesto (en pausa) el total es el subtotal y `tax` es null.
   ({int subtotal, int? tax, int total}) _priceBreakdown(double price) {
     final days = _isMultiDayMode ? _selectedDates.length : 1;
+    // Recojo/entrega: precio fijo por viaje (por día en guardería de varios días), con su
+    // propio impuesto redondeado por viaje — igual que planTransport() en la API.
+    final t = _transportCharge;
     if (days > 1) {
       final perDay = _dayPriceBreakdown(price / days);
       return (
         subtotal: perDay.subtotal * days,
-        tax: perDay.tax == null ? null : perDay.tax! * days,
-        total: perDay.total * days,
+        tax: perDay.tax == null ? null : (perDay.tax! + t.tax) * days,
+        total: (perDay.total + t.fees + t.tax) * days,
       );
     }
-    return _dayPriceBreakdown(price);
+    final d = _dayPriceBreakdown(price);
+    return (subtotal: d.subtotal, tax: d.tax == null ? null : d.tax! + t.tax, total: d.total + t.fees + t.tax);
   }
 
   ({int subtotal, int? tax, int total}) _dayPriceBreakdown(double price) {
@@ -2126,6 +2221,14 @@ class _BookingScreenState extends State<BookingScreen> {
                 // ── Servicios extra opcionales ──────────────────────────
                 if (_hasServiceDateSelected && _availableExtras.isNotEmpty) ...[
                   _buildExtraServicesSection(textColor, subtextColor, borderColor, surface),
+                  const SizedBox(height: 24),
+                  Divider(color: borderColor),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── Recojo / entrega a domicilio ─────────────────────────
+                if (_hasServiceDateSelected && _caregiverTransport != null) ...[
+                  _buildTransportSection(textColor, subtextColor, borderColor, surface),
                   const SizedBox(height: 24),
                   Divider(color: borderColor),
                   const SizedBox(height: 20),
@@ -3730,11 +3833,25 @@ class _BookingScreenState extends State<BookingScreen> {
               final total = pricePerDay * _extraServiceDays;
               return _summaryRow(GIcon.agregar, extra['name'] as String? ?? 'Extra', 'Bs ${total.round()}');
             }),
+          if (_transportAvailable && _wantPickup)
+            _summaryRow(GIcon.auto, 'Recojo',
+                '${_selectedService == 'HOSPEDAJE' ? _pickupTime : (_guarderiaStart ?? 'al empezar')} · ${_feeText(_transportQuote?['pickupFee'] as num?)}'),
+          if (_transportAvailable && _wantDropoff)
+            _summaryRow(GIcon.inicio, 'Entrega',
+                '${_selectedService == 'HOSPEDAJE' ? _dropoffTime : (_guarderiaEnd ?? 'al terminar')} · ${_feeText(_transportQuote?['dropoffFee'] as num?)}'),
           const Divider(height: 24),
           // Mismo desglose que verá en la pantalla de pago: el total ya trae
           // los impuestos, así no hay sorpresas entre "Reservar" y "Pagar".
+          if (breakdown.tax == null && _transportCharge.fees > 0) ...[
+            _priceLine('Servicio', breakdown.subtotal, subtextColor),
+            _priceLine(_isMultiDayMode && _selectedDates.length > 1 ? 'Recojo y entrega (${_selectedDates.length} días)' : 'Recojo y entrega',
+                _transportCharge.fees * (_isMultiDayMode ? _selectedDates.length : 1), subtextColor),
+            const SizedBox(height: 6),
+          ],
           if (breakdown.tax != null) ...[
             _priceLine('Servicio', breakdown.subtotal, subtextColor),
+            if (_transportCharge.fees > 0)
+              _priceLine('Recojo y entrega', _transportCharge.fees * (_isMultiDayMode ? _selectedDates.length : 1), subtextColor),
             _priceLine('Impuestos (IVA e IT · ${(_taxRate! * 100).round()}%)', breakdown.tax!, subtextColor),
             const SizedBox(height: 6),
           ],
@@ -3768,6 +3885,138 @@ class _BookingScreenState extends State<BookingScreen> {
           ],
         ),
       );
+
+  String _feeText(num? fee) => (fee ?? 0) <= 0 ? 'Gratis' : 'Bs ${(fee ?? 0).round()}';
+
+  /// Horas de 30 en 30 entre las 06:00 y las 21:00 (las que acepta la API en hospedaje).
+  static final List<String> _transportTimes = [
+    for (var m = 6 * 60; m <= 21 * 60; m += 30) '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}',
+  ];
+
+  Widget _buildTransportSection(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    final offer = _caregiverTransport!;
+    final isHosp = _selectedService == 'HOSPEDAJE';
+    final place = isHosp ? 'el hospedaje' : 'la guardería';
+    if (_transportQuoteFor != _selectedService && !_transportLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadTransportQuote());
+    }
+    final quote = _transportQuoteFor == _selectedService ? _transportQuote : null;
+    final pickupFee = (quote?['pickupFee'] ?? offer['pickupFee']) as num?;
+    final dropoffFee = (quote?['dropoffFee'] ?? offer['dropoffFee']) as num?;
+    final distance = (quote?['distanceKm'] as num?)?.toDouble();
+
+    Widget option({
+      required bool selected,
+      required GIcon icon,
+      required String title,
+      required String detail,
+      required num? fee,
+      required ValueChanged<bool> onChanged,
+      Widget? extra,
+    }) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: selected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? GardenColors.primary : borderColor),
+        ),
+        child: Column(children: [
+          CheckboxListTile(
+            value: selected,
+            onChanged: _transportAvailable ? (v) => setState(() => onChanged(v == true)) : null,
+            controlAffinity: ListTileControlAffinity.leading,
+            activeColor: GardenColors.primary,
+            secondary: GardenIcon(icon, size: GIconSize.sm, color: selected ? GardenColors.primary : subtextColor),
+            title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+            subtitle: Text('$detail · ${_feeText(fee)}', style: TextStyle(color: subtextColor, fontSize: 12)),
+          ),
+          if (selected && extra != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: extra),
+        ]),
+      );
+    }
+
+    Widget timePicker(String label, String value, ValueChanged<String> onPick) => Row(children: [
+          Expanded(child: Text(label, style: TextStyle(color: subtextColor, fontSize: 12.5))),
+          DropdownButton<String>(
+            value: _transportTimes.contains(value) ? value : _transportTimes.first,
+            items: [for (final t in _transportTimes) DropdownMenuItem(value: t, child: Text(t))],
+            onChanged: (v) {
+              if (v != null) setState(() => onPick(v));
+            },
+          ),
+        ]);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Recojo y entrega a domicilio', style: GardenText.h4.copyWith(color: textColor)),
+      const SizedBox(height: 4),
+      Text(
+        'Opcional · el cuidador busca y/o devuelve a tu mascota en tu casa'
+        '${distance != null ? ' (estás a ${distance.toStringAsFixed(1)} km)' : ''}.',
+        style: TextStyle(color: subtextColor, fontSize: 12),
+      ),
+      const SizedBox(height: 12),
+      if (_transportLoading && quote == null)
+        const Padding(padding: EdgeInsets.all(8), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+      else if (quote != null && quote['available'] != true) ...[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: GardenColors.warning.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const GardenIcon(GIcon.info, size: GIconSize.sm, color: GardenColors.warning),
+            const SizedBox(width: 8),
+            Expanded(child: Text(quote['message'] as String? ?? 'No disponible para tu dirección.', style: TextStyle(color: textColor, fontSize: 12.5, height: 1.35))),
+          ]),
+        ),
+        if (quote['code'] == 'TRANSPORT_ADDRESS_REQUIRED')
+          TextButton(
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
+              if (mounted) setState(() => _transportQuoteFor = null); // vuelve a cotizar
+            },
+            child: const Text('Agregar mi dirección'),
+          ),
+      ] else ...[
+        option(
+          selected: _wantPickup,
+          icon: GIcon.auto,
+          title: 'Que lo recojan en mi casa',
+          detail: isHosp
+              ? 'El día de entrada'
+              : (_guarderiaStart != null ? 'A las $_guarderiaStart, al empezar' : 'Al empezar la guardería'),
+          fee: pickupFee,
+          onChanged: (v) => _wantPickup = v,
+          extra: isHosp ? timePicker('Hora de recojo', _pickupTime, (v) => _pickupTime = v) : null,
+        ),
+        option(
+          selected: _wantDropoff,
+          icon: GIcon.inicio,
+          title: 'Que lo devuelvan a mi casa',
+          detail: isHosp
+              ? 'El día de salida'
+              : (_guarderiaEnd != null ? 'A las $_guarderiaEnd, al terminar' : 'Al terminar la guardería'),
+          fee: dropoffFee,
+          onChanged: (v) => _wantDropoff = v,
+          extra: isHosp ? timePicker('Hora de entrega', _dropoffTime, (v) => _dropoffTime = v) : null,
+        ),
+        if (_wantPickup != _wantDropoff)
+          Text(
+            _wantPickup ? 'Al terminar, recoges tú a tu mascota en $place.' : 'Al empezar, llevas tú a tu mascota a $place.',
+            style: TextStyle(color: subtextColor, fontSize: 12),
+          ),
+        if (_isMultiDayMode && (_wantPickup || _wantDropoff))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('Se hace cada día que elegiste.', style: TextStyle(color: subtextColor, fontSize: 12)),
+          ),
+      ],
+    ]);
+  }
 
   Widget _summaryRow(GIcon icon, String label, String value) {
     final isDark = themeNotifier.isDark;

@@ -1,6 +1,7 @@
 import type { Booking, ServiceType } from '@prisma/client';
 import type { BookingGroupSummary } from './booking-group.service.js';
 import { ARRIVAL_OPENS_MINUTES_BEFORE, EN_ROUTE_OPENS_MINUTES_BEFORE, preStartOpensAtMs } from '../../utils/service-window.js';
+import { legView, transportGrossOf } from '../transport/transport.view.js';
 
 export interface BookingCreateResult {
   id: string;
@@ -143,6 +144,13 @@ export interface BookingCreateResult {
   }>;
   /** Servicios extra contratados (snapshot al reservar). Solo presente si hay. */
   extras?: Array<{ name: string; pricePerDay: number; totalPrice: number }>;
+  /** Recojo / entrega a domicilio (Guardería / Hospedaje). amount = lo que paga el dueño por
+   * los viajes vigentes (con impuesto); refunded = lo devuelto por viajes cancelados. */
+  transport?: {
+    amount: number;
+    refunded: number;
+    legs: Array<ReturnType<typeof legView>>;
+  };
   /** Paseo o guardería de varios días: id compartido por todos los días (null en reservas sueltas). */
   bookingGroupId?: string | null;
   /** Resumen del grupo — solo en el detalle de una reserva y al crearla. */
@@ -248,6 +256,16 @@ export function bookingToResponse(b: any): BookingCreateResult {
     enRouteOpensAt: opensAtIso(b, EN_ROUTE_OPENS_MINUTES_BEFORE),
     arrivalOpensAt: opensAtIso(b, ARRIVAL_OPENS_MINUTES_BEFORE),
   };
+
+  if (Array.isArray(b.transportLegs) && b.transportLegs.length > 0) {
+    res.transport = {
+      amount: transportGrossOf(b),
+      refunded: Number(b.transportRefundAmount ?? 0),
+      legs: [...b.transportLegs]
+        .sort((x: any, y: any) => (x.kind === 'PICKUP' ? 0 : 1) - (y.kind === 'PICKUP' ? 0 : 1))
+        .map((l: any) => legView(l, b)),
+    };
+  }
 
   // Servicios extra contratados (snapshot al reservar) — el cuidador/empresa
   // necesita saber qué debe entregar; el cliente, qué pagó.

@@ -50,10 +50,14 @@ class GpsTrackingSession extends ChangeNotifier {
 
   String? _bookingId;
   String? _token;
+  /// '/bookings' (titular) o '/caregiver-staff/bookings' (empleado de una empresa:
+  /// el servidor manda sus puntos a la reserva de la empresa).
+  String _bookingsPath = '/bookings';
   bool _running = false;
   bool _permissionDenied = false;
   bool _isSendingTrack = false; // evita requests paralelos (race condition fix)
   bool _androidForegroundInitDone = false;
+  String _notificationTitle = 'Paseo en curso';
 
   StreamSubscription<Map<String, double>>? _gpsSub;
   Timer? _sendTimer;
@@ -75,12 +79,22 @@ class GpsTrackingSession extends ChangeNotifier {
 
   /// Arranca (o continúa) el tracking para [bookingId]. Idempotente: si ya
   /// está corriendo para el mismo booking, no hace nada.
-  Future<void> start({required String bookingId, required String token}) async {
+  /// [bookingsPath]: '/caregiver-staff/bookings' para un empleado de empresa.
+  /// [notificationTitle]: texto de la notificación fija de Android ("Paseo en curso",
+  /// "Recogiendo a Toby"…).
+  Future<void> start({
+    required String bookingId,
+    required String token,
+    String bookingsPath = '/bookings',
+    String notificationTitle = 'Paseo en curso',
+  }) async {
     if (_running && _bookingId == bookingId) return;
     if (_running) await stop(); // sesión de otro booking activa: cortarla primero
 
     _bookingId = bookingId;
     _token = token;
+    _bookingsPath = bookingsPath;
+    _notificationTitle = notificationTitle;
     _permissionDenied = false;
     notifyListeners();
 
@@ -179,14 +193,14 @@ class GpsTrackingSession extends ChangeNotifier {
     } else {
       await FlutterForegroundTask.startService(
         serviceId: 3000,
-        notificationTitle: 'Paseo en curso',
+        notificationTitle: _notificationTitle,
         notificationText: 'Compartiendo tu ubicación en vivo con el dueño de la mascota',
         callback: gpsForegroundStartCallback,
       );
     }
     // Le pasamos bookingId/token al TaskHandler — corre en su propio isolate,
     // no comparte memoria con esta clase.
-    FlutterForegroundTask.sendDataToTask({'bookingId': bookingId, 'token': token});
+    FlutterForegroundTask.sendDataToTask({'bookingId': bookingId, 'token': token, 'bookingsPath': _bookingsPath});
   }
 
   /// Datos que manda `GpsTaskHandler` (isolate del foreground service) cada
@@ -225,7 +239,7 @@ class GpsTrackingSession extends ChangeNotifier {
       track.add(pos);
       notifyListeners();
       await http.post(
-        Uri.parse('$_baseUrl/bookings/$booking/track'),
+        Uri.parse('$_baseUrl$_bookingsPath/$booking/track'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -255,6 +269,7 @@ class GpsTrackingSession extends ChangeNotifier {
     _running = false;
     _bookingId = null;
     _token = null;
+    _bookingsPath = '/bookings';
     _isSendingTrack = false;
     notifyListeners();
   }

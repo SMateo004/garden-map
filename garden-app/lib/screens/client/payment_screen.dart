@@ -626,6 +626,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   double get _serviceBeforeTax => (_serviceAmount - _taxAmount).clamp(0, double.infinity);
 
+  /// Precios de los viajes vigentes (recojo / entrega), sin impuesto.
+  double get _transportFees {
+    final legs = (_booking?['transport'] as Map?)?['legs'] as List?;
+    if (legs == null) return 0;
+    return legs
+        .whereType<Map>()
+        .where((l) => l['status'] != 'CANCELLED')
+        .fold<double>(0, (s, l) => s + ((l['fee'] as num?)?.toDouble() ?? 0));
+  }
+
   String get _taxRateLabel {
     final r = _taxRatePct;
     return r == r.roundToDouble() ? r.toInt().toString() : r.toStringAsFixed(1);
@@ -2467,12 +2477,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     final lines = <GardenPaymentLine>[];
     if (_booking != null) {
+      // Recojo / entrega a domicilio (precio sin impuesto): va aparte del servicio.
+      final transportFees = _isGroup ? 0.0 : _transportFees;
       if (_taxAmount > 0) {
-        lines
-          ..add(GardenPaymentLine('Servicio', _serviceBeforeTax))
-          ..add(GardenPaymentLine('Impuestos (IVA e IT · $_taxRateLabel%)', _taxAmount));
+        lines.add(GardenPaymentLine('Servicio', _serviceBeforeTax - transportFees));
+        if (transportFees > 0) lines.add(GardenPaymentLine('Recojo y entrega', transportFees));
+        lines.add(GardenPaymentLine('Impuestos (IVA e IT · $_taxRateLabel%)', _taxAmount));
       } else {
-        lines.add(GardenPaymentLine('Servicio', _serviceAmount));
+        lines.add(GardenPaymentLine('Servicio', _serviceAmount - transportFees));
+        if (transportFees > 0) lines.add(GardenPaymentLine('Recojo y entrega', transportFees));
       }
       if (_donationAmount > 0) lines.add(GardenPaymentLine('Donación', _donationAmount));
       if (_useWallet && _walletCoverage > 0) {

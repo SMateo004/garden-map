@@ -97,6 +97,8 @@ class GardenCaregiverCard extends StatelessWidget {
       if (verified) (GIcon.identidadVerificada, 'ID verificada'),
       if (antecedentes) (GIcon.antecedentes, 'Antecedentes revisados'),
       if (isCompany) (GIcon.empresa, 'Empresa'),
+      // Recojo / entrega a domicilio (guardería u hospedaje).
+      if (c['transport'] is Map) (GIcon.auto, 'Recoge en tu casa'),
     ];
 
     // Compacta (~110 px en vez de ~180): todo a la derecha de la foto en

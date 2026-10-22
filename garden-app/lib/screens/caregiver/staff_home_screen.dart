@@ -15,6 +15,9 @@ import '../../design/garden_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/mode_switcher_card.dart';
 import 'reception_screen.dart';
+import '../service/transport_leg_card.dart';
+import '../../services/gps_tracking_session.dart';
+import '../../utils/navigation_launcher.dart';
 
 /// Dashboard reducido del empleado de una empresa cuidadora: ve y atiende reservas
 /// (check-in/check-out). Sin billetera, precios ni configuración. Aceptar/rechazar
@@ -332,7 +335,10 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
     setState(() => _isLoading = true);
     try {
       final booking = await _service.getBookingById(widget.bookingId);
-      if (mounted) setState(() => _booking = booking);
+      if (mounted) {
+        setState(() => _booking = booking);
+        _syncGps();
+      }
     } catch (e) {
       if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -388,8 +394,43 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
     await _run(() => _service.rejectBooking(widget.bookingId, reason: reason));
   }
 
-  Future<void> _markEnRoute() => _run(() => _service.markEnRoute(widget.bookingId));
-  Future<void> _markArrived() => _run(() => _service.markArrived(widget.bookingId));
+  Future<void> _markEnRoute() async {
+    final wasPickup = _pickupPending != null;
+    await _run(() => _service.markEnRoute(widget.bookingId));
+    if (wasPickup) _startGps('Recogiendo a $_petFirst');
+  }
+
+  static const _staffPath = '/caregiver-staff/bookings';
+  String get _petFirst => ((_booking?['petName'] as String?) ?? 'la mascota').split(',').first.trim();
+
+  /// Comparte la ubicación en vivo (paseo o viaje de recojo/entrega) por las rutas del
+  /// empleado: el servidor la guarda en la reserva de la empresa.
+  void _startGps(String title) {
+    GpsTrackingSession.instance
+        .start(bookingId: widget.bookingId, token: AuthState.token, bookingsPath: _staffPath, notificationTitle: title)
+        .catchError((_) {});
+  }
+
+  /// Retoma o corta el GPS según el estado real (al abrir la pantalla y tras cada acción).
+  void _syncGps() {
+    final b = _booking;
+    if (b == null) return;
+    final session = GpsTrackingSession.instance;
+    final mine = session.isRunning && session.bookingId == widget.bookingId;
+    final shouldRun = (b['serviceType'] == 'PASEO' && b['status'] == 'IN_PROGRESS') ||
+        (b['serviceType'] != 'PASEO' && TransportLegs.live(b) != null);
+    if (shouldRun && !mine) {
+      _startGps(b['serviceType'] == 'PASEO' ? 'Paseo en curso' : 'Viaje con $_petFirst');
+    } else if (!shouldRun && mine) {
+      session.stop();
+    }
+  }
+  /// Recojo a domicilio pendiente: "llegué" y "recogí" son los del viaje.
+  Map<String, dynamic>? get _pickupPending => TransportLegs.pending(_booking, 'PICKUP');
+
+  Future<void> _markArrived() => _run(() => _pickupPending != null
+      ? _service.transportAction(widget.bookingId, 'pickup', 'arrive')
+      : _service.markArrived(widget.bookingId));
   Future<void> _confirmEnd(bool accepted) => _run(() => _service.confirmEnd(widget.bookingId, accepted));
 
   Future<void> _startService() async {
@@ -399,7 +440,11 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
     await _run(() async {
       final bytes = await picked.readAsBytes();
       final url = await _service.uploadServicePhoto(bytes, picked.name.isEmpty ? 'start.jpg' : picked.name);
-      await _service.startService(widget.bookingId, url);
+      if (_pickupPending != null) {
+        await _service.transportAction(widget.bookingId, 'pickup', 'done', body: {'photo': url});
+      } else {
+        await _service.startService(widget.bookingId, url);
+      }
     });
   }
 
@@ -435,7 +480,12 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
         final status = b['status'] as String;
         final serviceType = b['serviceType'] as String? ?? '';
         final isPaseo = serviceType == 'PASEO';
-        final canConclude = _photoCount >= _minPhotos;
+        final pickup = _pickupPending;
+        final drop = TransportLegs.of(b, 'DROPOFF');
+        final dropPending = drop != null && drop['status'] == 'SCHEDULED';
+        final canConclude = _photoCount >= _minPhotos && !dropPending;
+        final petFirst = ((b['petName'] as String?) ?? 'la mascota').split(',').first.trim();
+        final windowSource = pickup ?? b;
 
         return Scaffold(
           backgroundColor: bg,
@@ -463,7 +513,34 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+
+                // Paseo: ir a buscarlo a la casa del dueño.
+                if (isPaseo && const ['CONFIRMED'].contains(status) &&
+                    (b['clientAddress'] as Map?)?['lat'] != null && (b['clientAddress'] as Map?)?['lng'] != null) ...[
+                  GardenNavigateButton(
+                    lat: ((b['clientAddress'] as Map)['lat'] as num).toDouble(),
+                    lng: ((b['clientAddress'] as Map)['lng'] as num).toDouble(),
+                    label: (b['clientAddress'] as Map)['full'] as String?,
+                    outline: true,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                // Recojo / entrega a domicilio de esta reserva.
+                for (final leg in TransportLegs.all(b))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TransportLegCard(
+                      booking: {...b, 'id': widget.bookingId},
+                      leg: leg,
+                      role: 'CAREGIVER',
+                      token: AuthState.token,
+                      baseUrl: _service.baseUrl,
+                      bookingsPath: '/caregiver-staff/bookings',
+                      onChanged: _load,
+                    ),
+                  ),
+                const SizedBox(height: 8),
 
                 if (widget.canChat) ...[
                   GardenButton(
@@ -504,33 +581,37 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                     label: 'Avisar que voy en camino',
                     outline: true,
                     loading: _isActing,
-                    onPressed: (_isActing || ServiceWindow.blockReason(b, 'enRouteOpensAt', 'avisar que vas en camino') != null)
+                    onPressed: (_isActing || ServiceWindow.blockReason(windowSource, 'enRouteOpensAt', 'avisar que vas en camino') != null)
                         ? null
                         : _markEnRoute,
                   ),
-                  if (ServiceWindow.blockReason(b, 'enRouteOpensAt', 'avisar que vas en camino') case final reason?)
+                  if (ServiceWindow.blockReason(windowSource, 'enRouteOpensAt', 'avisar que vas en camino') case final reason?)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(reason, style: TextStyle(color: subtextColor, fontSize: 12)),
                     ),
                   const SizedBox(height: 10),
-                  if (isPaseo) ...[
+                  if (isPaseo || (pickup != null && pickup['arrivedAt'] == null)) ...[
                     GardenButton(
-                      label: 'Ya llegué',
+                      label: isPaseo ? 'Ya llegué' : 'Llegué a su casa',
                       outline: true,
                       loading: _isActing,
-                      onPressed: (_isActing || ServiceWindow.blockReason(b, 'arrivalOpensAt', 'marcar tu llegada') != null)
+                      onPressed: (_isActing || ServiceWindow.blockReason(windowSource, 'arrivalOpensAt', 'marcar tu llegada') != null)
                           ? null
                           : _markArrived,
                     ),
-                    if (ServiceWindow.blockReason(b, 'arrivalOpensAt', 'marcar tu llegada') case final reason?)
+                    if (ServiceWindow.blockReason(windowSource, 'arrivalOpensAt', 'marcar tu llegada') case final reason?)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(reason, style: TextStyle(color: subtextColor, fontSize: 12)),
                       ),
                     const SizedBox(height: 10),
                   ],
-                  GardenButton(label: 'Iniciar servicio (foto)', loading: _isActing, onPressed: _isActing ? null : _startService),
+                  GardenButton(
+                    label: pickup != null ? 'Recogí a $petFirst (foto)' : 'Iniciar servicio (foto)',
+                    loading: _isActing,
+                    onPressed: _isActing ? null : _startService,
+                  ),
                 ],
 
                 if (status == 'IN_PROGRESS') ...[
@@ -549,7 +630,11 @@ class _StaffBookingDetailScreenState extends State<StaffBookingDetailScreen> {
                   GardenButton(label: 'Agregar foto', outline: true, gIcon: GIcon.foto, loading: _isActing, onPressed: _isActing ? null : _addPhotoEvent),
                   const SizedBox(height: 10),
                   GardenButton(
-                    label: canConclude ? 'Concluir servicio' : 'Faltan fotos para concluir',
+                    label: dropPending
+                        ? 'Primero toca "Salí a devolver a $petFirst"'
+                        : canConclude
+                            ? (drop != null ? 'Entregué a $petFirst — concluir' : 'Concluir servicio')
+                            : 'Faltan fotos para concluir',
                     loading: _isActing,
                     onPressed: (_isActing || !canConclude) ? null : _conclude,
                   ),

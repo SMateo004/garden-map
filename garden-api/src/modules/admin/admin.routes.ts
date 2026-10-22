@@ -10,6 +10,7 @@ import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
 import { getAdminSummary, getRedesignImpact } from '../analytics/analytics.service.js';
 import pricingAdminRouter from '../pricing/pricing.admin.js';
+import * as transportController from '../transport/transport.routes.js';
 
 const router = Router();
 
@@ -43,6 +44,8 @@ router.post('/support/threads/:threadId/resolve', supportChatController.resolve)
 
 /** Comisiones variables por servicio / cuidador-empresa e impuestos (ver pricing.admin.ts). */
 router.use('/pricing', pricingAdminRouter);
+/** Cancelar un recojo/entrega (ej. el cuidador no aparece): devuelve el viaje a la billetera del dueño. */
+router.post('/bookings/:id/transport/:kind/cancel', transportController.legCancel);
 
 /** Libro contable / finanzas — reporte gerencial mensual para socios. */
 router.get('/ledger/accounts', ledgerController.getAccounts);

@@ -228,6 +228,18 @@ class CaregiverStaffService {
     return data['data'] as Map<String, dynamic>;
   }
 
+  /// Recojo / entrega a domicilio: [kind] 'pickup' | 'dropoff'; [action] 'en-route' |
+  /// 'arrive' | 'done' (recojo, con foto) | 'at-base' | 'cancel'.
+  Future<Map<String, dynamic>> transportAction(String bookingId, String kind, String action, {Map<String, dynamic>? body}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/caregiver-staff/bookings/$bookingId/transport/$kind/$action'),
+      headers: _authHeaders,
+      body: jsonEncode(body ?? {}),
+    );
+    final data = await _decode(res);
+    return data['data'] as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> markArrived(String bookingId) async {
     final res = await http.post(Uri.parse('$baseUrl/caregiver-staff/bookings/$bookingId/arrive'), headers: _authHeaders);
     final data = await _decode(res);

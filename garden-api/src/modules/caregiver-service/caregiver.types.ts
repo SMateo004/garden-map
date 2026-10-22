@@ -4,6 +4,8 @@ import type { SocialHandles, SocialNetwork } from '../../shared/social-links.js'
 export interface CaregiverListItem {
   /** Premium vigente: aparece primero con la insignia "Destacado". */
   isFeatured?: boolean;
+  /** Recojo / entrega a domicilio (Guardería / Hospedaje); null = no lo ofrece. */
+  transport?: { pickupFee: number; dropoffFee: number; maxKm: number; services: ServiceType[] } | null;
   id: string;
   firstName: string;
   lastName: string;

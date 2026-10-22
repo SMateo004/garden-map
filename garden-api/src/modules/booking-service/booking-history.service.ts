@@ -52,6 +52,10 @@ export interface BookingHistory {
     caregiverNetAmount?: number;
     commissionAmount?: number;
     taxAmount?: number;
+    /** Recojo / entrega a domicilio incluidos en el total (con impuesto). */
+    transportAmount: number;
+    /** Devuelto por viajes de recojo / entrega cancelados. */
+    transportRefunded: number;
   };
   timeline: HistoryEvent[];
   movements: Array<{
@@ -130,6 +134,7 @@ export async function getBookingHistory(
       caregiver: { select: { userId: true } },
       dispute: true,
       review: { select: { createdAt: true, rating: true, isSystemGenerated: true } },
+      transportLegs: true,
     },
   });
   if (!booking) throw new BookingNotFoundError(bookingId);
@@ -203,6 +208,10 @@ export async function getBookingHistory(
     reference: rawRef ? String(rawRef).slice(-8) : null,
     refundAmount,
     refundStatus: booking.refundStatus ?? null,
+    // Recojo / entrega a domicilio incluidos en el total (con su impuesto) y lo devuelto
+    // por viajes cancelados.
+    transportAmount: Math.round((Number(booking.transportAmount ?? 0) + Number(booking.transportTaxAmount ?? 0)) * 100) / 100,
+    transportRefunded: Number(booking.transportRefundAmount ?? 0),
   };
   if (seesCaregiverSide) {
     payment.caregiverNetAmount = total - commission - tax;
@@ -238,7 +247,40 @@ export async function getBookingHistory(
     });
   }
 
-  push(booking.enRouteAt, { kind: 'EN_ROUTE', actor: 'CUIDADOR', title: 'El cuidador va en camino' });
+  // Recojo / entrega a domicilio: cada paso del viaje queda en la historia.
+  for (const leg of booking.transportLegs ?? []) {
+    const pickup = leg.kind === 'PICKUP';
+    const what = pickup ? 'recojo' : 'entrega';
+    const fee = Number(leg.fee);
+    push(leg.enRouteAt, {
+      kind: pickup ? 'PICKUP_EN_ROUTE' : 'DROPOFF_EN_ROUTE',
+      actor: 'CUIDADOR',
+      title: pickup ? 'El cuidador salió a recogerlo' : 'Salió de regreso a casa',
+    });
+    push(leg.arrivedAt, { kind: pickup ? 'PICKUP_ARRIVED' : 'DROPOFF_ARRIVED', actor: 'CUIDADOR', title: 'El cuidador llegó a tu casa' });
+    push(leg.doneAt, {
+      kind: pickup ? 'PICKUP_DONE' : 'DROPOFF_DONE',
+      actor: 'CUIDADOR',
+      title: pickup ? 'Lo recogieron en casa' : 'Lo entregaron en casa',
+      amount: fee > 0 ? fee : null,
+    });
+    push(leg.atBaseAt, { kind: 'PICKUP_AT_BASE', actor: 'CUIDADOR', title: `Llegaron a ${booking.serviceType === 'HOSPEDAJE' ? 'el hospedaje' : 'la guardería'}` });
+    if (leg.cancelledAt) {
+      const refunded = Number(leg.refundedAmount ?? 0);
+      push(leg.cancelledAt, {
+        kind: pickup ? 'PICKUP_CANCELLED' : 'DROPOFF_CANCELLED',
+        actor: leg.cancelledBy === 'CLIENT' ? 'CLIENTE' : leg.cancelledBy === 'ADMIN' ? 'SOPORTE' : 'CUIDADOR',
+        title: `Se canceló la ${what === 'recojo' ? 'recogida' : 'entrega'} a domicilio`,
+        detail: [leg.cancelReason, refunded > 0 ? `Devuelto a la billetera: Bs ${refunded.toFixed(2)}` : null].filter(Boolean).join(' · ') || null,
+        amount: refunded > 0 ? refunded : null,
+      });
+    }
+  }
+
+  // Con recojo, el "en camino" general es el mismo aviso del viaje (no se repite).
+  if (!(booking.transportLegs ?? []).some((l) => l.kind === 'PICKUP' && l.enRouteAt)) {
+    push(booking.enRouteAt, { kind: 'EN_ROUTE', actor: 'CUIDADOR', title: 'El cuidador va en camino' });
+  }
   push(booking.arrivedAt, { kind: 'ARRIVED', actor: 'CUIDADOR', title: 'El cuidador llegó' });
   push(booking.serviceStartedAt, { kind: 'STARTED', actor: 'CUIDADOR', title: 'Servicio iniciado' });
 

@@ -29,6 +29,8 @@ import '../../utils/caregiver_earnings.dart';
 import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
+import 'transport_leg_card.dart';
+import '../../utils/navigation_launcher.dart';
 import 'meet_and_greet_screen.dart';
 import '../../services/gps_tracking_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -260,6 +262,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               .toList();
           _isLoading = false;
         });
+        // Viaje de recojo / entrega en curso: el GPS se comparte (y se retoma si la app se
+        // reabrió); terminado el viaje, se corta.
+        if (widget.role == 'CAREGIVER' && _booking?['serviceType'] != 'PASEO' && !kIsWeb) {
+          final liveLeg = TransportLegs.live(_booking);
+          final session = GpsTrackingSession.instance;
+          if (liveLeg != null && !(session.isRunning && session.bookingId == widget.bookingId)) {
+            _startTripGps(interactive: false);
+          } else if (liveLeg == null && session.isRunning && session.bookingId == widget.bookingId) {
+            session.stop();
+          }
+        }
         
         _scheduleWindowRefresh();
 
@@ -1391,6 +1404,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 14),
                   ],
 
+                  // ── Recojo / entrega a domicilio (guardería y hospedaje) ──────
+                  // (la tarjeta trae la dirección y el botón "Navegar a su casa")
+                  if (!isPaseo && widget.role == 'CAREGIVER') ..._transportCards('CAREGIVER'),
+
                   // ── Meet & Greet (HOSPEDAJE) ─────────────────────────────────
                   if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
                     _buildMeetAndGreetCard(),
@@ -1411,7 +1428,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         Text('Paso a paso',
                           style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                         const SizedBox(height: 14),
-                        GardenStoryProgress(steps: _prepSteps(isPaseo, ownerFirst)),
+                        GardenStoryProgress(steps: _prepSteps(isPaseo, ownerFirst, pickup: _pickupPending != null)),
                       ],
                     ),
                   ),
@@ -1496,20 +1513,23 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             // llegó al punto de encuentro — paso propio, no afecta el cobro
             // (ver _markArrived). El resto de la lógica de bloqueo (ventana
             // horaria, etc.) sigue aplicando recién después, para "Iniciar".
-            if (isPaseo && !_hasArrived) {
+            if ((isPaseo || _pickupPending != null) && !_hasArrived) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   enRouteChip,
                   GardenButton(
-                    label: _isMarkingArrived ? 'Marcando llegada...' : 'Ya llegué',
+                    label: _isMarkingArrived ? 'Marcando llegada...' : (isPaseo ? 'Ya llegué' : 'Llegué a su casa'),
                     loading: _isMarkingArrived,
                     color: GardenColors.secondary,
                     onPressed: (_isMarkingArrived || arrivalBlocked != null) ? null : _markArrived,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    arrivalBlocked ?? 'Marca tu llegada al punto de encuentro para poder iniciar el paseo.',
+                    arrivalBlocked ??
+                        (isPaseo
+                            ? 'Marca tu llegada al punto de encuentro para poder iniciar el paseo.'
+                            : 'Marca tu llegada a la casa del dueño para recoger a $_petFirst.'),
                     style: TextStyle(color: subtextColor, fontSize: 11),
                     textAlign: TextAlign.center,
                     maxLines: 2,
@@ -1557,7 +1577,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                 ],
                 GardenButton(
-                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? 'Iniciar paseo' : (isGuarderia ? 'Iniciar guardería' : 'Iniciar hospedaje')),
+                  label: _isProcessing
+                      ? 'Iniciando...'
+                      : (_pickupPending != null
+                          ? 'Recogí a $_petFirst'
+                          : (isPaseo ? 'Iniciar paseo' : (isGuarderia ? 'Iniciar guardería' : 'Iniciar hospedaje'))),
                   loading: _isProcessing,
                   color: isBlocked
                       ? (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)
@@ -1605,10 +1629,40 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   /// Pasos de la preparación del cuidador. Paseo: en camino → llegué →
   /// iniciar; guardería y hospedaje: en camino → iniciar. "En camino" es
   /// opcional: si marcó la llegada sin avisar, cuenta como hecho igual.
-  List<StoryStepItem> _prepSteps(bool isPaseo, String ownerFirst) {
+  List<StoryStepItem> _prepSteps(bool isPaseo, String ownerFirst, {bool pickup = false}) {
     String? at(String key) {
       final d = DateTime.tryParse(_booking?[key] as String? ?? '');
       return d == null ? null : 'A las ${_formatClockTime(d)}';
+    }
+
+    if (pickup) {
+      final leg = _pickupPending!;
+      String? legAt(String key) {
+        final d = DateTime.tryParse(leg[key] as String? ?? '');
+        return d == null ? null : 'A las ${_formatClockTime(d)}';
+      }
+      final enRoute = leg['enRouteAt'] != null;
+      final arrived = leg['arrivedAt'] != null;
+      return [
+        StoryStepItem(
+          GIcon.auto,
+          enRoute ? 'Saliste hacia su casa' : 'Avisa que vas en camino',
+          enRoute ? StoryStepState.done : StoryStepState.current,
+          detail: enRoute ? legAt('enRouteAt') : 'Recojo ${TransportLegs.whenLabel(leg)}. $ownerFirst te sigue en el mapa.',
+        ),
+        StoryStepItem(
+          GIcon.ubicacion,
+          arrived ? 'Llegaste a su casa' : 'Marca que llegaste',
+          arrived ? StoryStepState.done : (enRoute ? StoryStepState.current : StoryStepState.next),
+          detail: arrived ? legAt('arrivedAt') : null,
+        ),
+        StoryStepItem(
+          GIcon.huella,
+          'Recoge a $_petFirst',
+          arrived ? StoryStepState.current : StoryStepState.next,
+          detail: 'Con una foto. Ahí empieza el servicio; al llegar toca "Ya llegamos".',
+        ),
+      ];
     }
 
     final arrived = isPaseo && _hasArrived;
@@ -1745,27 +1799,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
-  Future<void> _launchMaps(double lat, double lng, String label) async {
-    final encoded = Uri.encodeComponent(label);
-    // Intenta Google Maps primero, luego Apple Maps como fallback
-    final urls = [
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
-      'maps://?q=$lat,$lng',
-      'geo:$lat,$lng?q=$lat,$lng($encoded)',
-    ];
-    for (final rawUrl in urls) {
-      final uri = Uri.parse(rawUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
-      }
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir la aplicación de mapas')),
-      );
-    }
-  }
+  Future<void> _launchMaps(double lat, double lng, String label) =>
+      NavigationLauncher.open(context, lat: lat, lng: lng, label: label);
 
   Widget _buildMeetAndGreetCard() {
     final mg = _booking?['meetAndGreet'] as Map<String, dynamic>?;
@@ -2409,6 +2444,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   const SizedBox(height: 20),
 
+                  // ── Recojo / entrega a domicilio ──
+                  ..._transportCards('CLIENT'),
+
                   // ── Paso a paso (lo mismo que ve el cuidador, del lado del dueño) ──
                   Container(
                     padding: const EdgeInsets.all(18),
@@ -2489,6 +2527,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
     if (isPaseo && _hasArrived) {
       return (GIcon.ubicacion, '$caregiverFirst llegó', 'Está por empezar el paseo.');
+    }
+    if (_pickupPending != null && _hasArrived) {
+      return (GIcon.ubicacion, '$caregiverFirst está en tu puerta', 'Llegó a recoger a $_petFirst.');
     }
     if (_hasEnRoute) {
       final t = at('enRouteAt');
@@ -2648,6 +2689,32 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     String? at(String key) {
       final d = DateTime.tryParse(_booking?[key] as String? ?? '');
       return d == null ? null : 'A las ${_formatClockTime(d)}';
+    }
+
+    final pickup = _pickupPending;
+    if (pickup != null) {
+      final enRoute = pickup['enRouteAt'] != null;
+      final arrived = pickup['arrivedAt'] != null;
+      return [
+        const StoryStepItem(GIcon.confirmado, 'Reserva confirmada', StoryStepState.done),
+        StoryStepItem(
+          GIcon.auto,
+          enRoute ? '$caregiverFirst va en camino a tu casa' : '$caregiverFirst te avisa cuando salga',
+          enRoute ? StoryStepState.done : StoryStepState.current,
+          detail: enRoute ? 'Síguelo en el mapa.' : 'Recojo ${TransportLegs.whenLabel(pickup)}.',
+        ),
+        StoryStepItem(
+          GIcon.ubicacion,
+          arrived ? '$caregiverFirst está en tu puerta' : 'Llega a buscar a $petName',
+          arrived ? StoryStepState.done : (enRoute ? StoryStepState.current : StoryStepState.next),
+        ),
+        StoryStepItem(
+          GIcon.huella,
+          'Se lleva a $petName',
+          arrived ? StoryStepState.current : StoryStepState.next,
+          detail: 'Ahí empieza el servicio y te llegan fotos y novedades.',
+        ),
+      ];
     }
 
     final arrived = isPaseo && _hasArrived;
@@ -2814,6 +2881,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ],
                     const SizedBox(height: 14),
                   ],
+
+                  // ── Recojo / entrega a domicilio ──
+                  ..._transportCards('CLIENT', onlyRelevant: true),
 
                   // ── Cuánto falta y cuándo vuelve (antes: barra que repetía el cronómetro) ──
                   _buildClientClock(),
@@ -3766,26 +3836,40 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     );
                   }),
                   const SizedBox(height: 20),
+                  // ── Recojo / entrega a domicilio ──
+                  ..._transportCards('CAREGIVER', onlyRelevant: true),
                   // ── Botón deslizante: Finalizar servicio ─────────────────
                   // No se puede finalizar mientras haya una emergencia activa sin
                   // resolver (_isServicePaused) — hay que resolverla primero.
                   // Movido a después del bloque de Acciones (pedido explícito) para
                   // que el cuidador no lo toque por error antes de revisar las acciones.
-                  SlideToConfirmButton(
-                    label: _isServicePaused
-                        ? 'Resuelve la emergencia activa primero'
-                        : isPhotoMet
-                            ? (isPaseo
-                                ? 'Desliza cuando ${_booking?['petName'] ?? 'la mascota'} esté en casa'
-                                : 'Desliza para terminar el servicio')
-                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
-                    color: _isServicePaused
-                        ? GardenColors.error
-                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
-                    icon: Icons.check_circle_rounded,
-                    height: 58,
-                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
-                  ),
+                  Builder(builder: (context) {
+                    // Entrega a domicilio: se finaliza al entregarlo en su casa, después
+                    // de avisar "Salí a devolverlo" (el servidor también lo exige).
+                    final drop = _dropoffLeg;
+                    final dropPending = drop != null && drop['status'] == 'SCHEDULED';
+                    final dropOnWay = drop != null && (drop['status'] == 'EN_ROUTE' || drop['status'] == 'ARRIVED');
+                    final canFinish = isPhotoMet && !_isServicePaused && !dropPending;
+                    return SlideToConfirmButton(
+                      label: _isServicePaused
+                          ? 'Resuelve la emergencia activa primero'
+                          : !isPhotoMet
+                              ? 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más'
+                              : dropPending
+                                  ? 'Primero toca "Salí a devolver a $_petFirst"'
+                                  : dropOnWay
+                                      ? 'Desliza al entregar a $_petFirst en su casa'
+                                      : (isPaseo
+                                          ? 'Desliza cuando ${_booking?['petName'] ?? 'la mascota'} esté en casa'
+                                          : 'Desliza para terminar el servicio'),
+                      color: _isServicePaused
+                          ? GardenColors.error
+                          : (canFinish ? GardenColors.success : GardenColors.warning),
+                      icon: Icons.check_circle_rounded,
+                      height: 58,
+                      onConfirmed: canFinish ? _showFinishConfirmation : null,
+                    );
+                  }),
 
                 ],
               ),
@@ -4542,9 +4626,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   /// El servidor manda desde qué hora se habilitan (ver ServiceWindow); antes de eso el
   /// botón queda deshabilitado con el motivo, no se deja tocar para fallar después.
   String? _enRouteBlockReason() =>
-      ServiceWindow.blockReason(_booking, 'enRouteOpensAt', 'avisar que vas en camino');
+      ServiceWindow.blockReason(_pickupPending ?? _booking, 'enRouteOpensAt', 'avisar que vas en camino');
   String? _arrivalBlockReason() =>
-      ServiceWindow.blockReason(_booking, 'arrivalOpensAt', 'marcar tu llegada');
+      ServiceWindow.blockReason(_pickupPending ?? _booking, 'arrivalOpensAt', 'marcar tu llegada');
 
   /// Refresca la pantalla justo cuando se habilita el siguiente aviso.
   void _scheduleWindowRefresh() {
@@ -4575,7 +4659,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        final wasPickup = _pickupPending != null && _booking?['serviceType'] != 'PASEO';
         await _loadBooking();
+        if (wasPickup) _startTripGps();
       } else {
         throw Exception(data['error']?['message'] ?? 'No se pudo avisar que vas en camino');
       }
@@ -4590,14 +4676,81 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   /// Solo PASEO: el cuidador marca que llegó al punto de encuentro, un paso
   /// separado y previo a "Iniciar paseo" — no toca serviceStartedAt ni el
   /// cobro, solo avisa al dueño y habilita el botón de iniciar.
-  bool get _hasArrived => _booking?['arrivedAt'] != null;
+  bool get _hasArrived => _pickupPending != null
+      ? _pickupPending!['arrivedAt'] != null
+      : _booking?['arrivedAt'] != null;
+
+  // ── Recojo / entrega a domicilio (guardería y hospedaje) ───────────────────
+  /// Recojo todavía no hecho: el servicio empieza al recoger a la mascota en su casa.
+  Map<String, dynamic>? get _pickupPending => TransportLegs.pending(_booking, 'PICKUP');
+  Map<String, dynamic>? get _dropoffLeg => TransportLegs.of(_booking, 'DROPOFF');
+  String get _petFirst => ((_booking?['petName'] as String?) ?? 'la mascota').split(',').first.trim();
+
+  /// Tarjetas de los viajes de la reserva (las canceladas también, para que se entienda).
+  List<Widget> _transportCards(String role, {bool onlyRelevant = false}) {
+    final legs = TransportLegs.all(_booking);
+    if (legs.isEmpty) return const [];
+    return [
+      for (final l in legs)
+        if (!onlyRelevant || l['status'] != 'DONE' || TransportLegs.isLive(l))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TransportLegCard(
+              booking: {...?_booking, 'id': widget.bookingId},
+              leg: l,
+              role: role,
+              token: _token,
+              baseUrl: _baseUrl,
+              onChanged: _loadBooking,
+              onTripEvent: _onTripEvent,
+            ),
+          ),
+    ];
+  }
+
+  /// GPS del viaje: se comparte desde que sale hasta que llegan (como en el paseo).
+  /// [interactive]: false al retomarlo solo (refresco de pantalla) — sin pedir permiso ni
+  /// mostrar diálogos; solo lo pide cuando el cuidador toca un botón.
+  Future<void> _startTripGps({bool interactive = true}) async {
+    if (kIsWeb) return;
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied && interactive) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted && interactive) {
+          GardenErrorDialog.show(
+            context,
+            'Permite la ubicación para que el dueño pueda seguir el viaje en el mapa.',
+            actionLabel: 'Configuración',
+            onAction: Geolocator.openAppSettings,
+          );
+        }
+        return;
+      }
+      await GpsTrackingSession.instance.start(bookingId: widget.bookingId, token: _token);
+    } catch (_) {
+      // Sin GPS el viaje sigue igual: solo no se ve en el mapa.
+    }
+  }
+
+  void _onTripEvent(String event) {
+    if (event == 'dropoff_en_route') {
+      _startTripGps();
+    } else if (event == 'at_base' || event == 'cancelled') {
+      if (_booking?['serviceType'] != 'PASEO' && TransportLegs.live(_booking) == null) {
+        GpsTrackingSession.instance.stop();
+      }
+    }
+  }
 
   Future<void> _markArrived() async {
     if (_isMarkingArrived) return;
     setState(() => _isMarkingArrived = true);
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/arrive'),
+        Uri.parse(_pickupPending != null
+            ? '$_baseUrl/bookings/${widget.bookingId}/transport/pickup/arrive'
+            : '$_baseUrl/bookings/${widget.bookingId}/arrive'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
       );
       final data = jsonDecode(response.body);
@@ -4641,7 +4794,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (understood != true) return;
     }
     // Para paseos en móvil, verificar permiso de ubicación antes de iniciar
-    if (!kIsWeb && _booking?['serviceType'] == 'PASEO') {
+    final viaPickup = _pickupPending != null;
+    if (!kIsWeb && (_booking?['serviceType'] == 'PASEO' || viaPickup)) {
       LocationPermission permission = await Geolocator.checkPermission();
       // Divulgación destacada, DENTRO de la app, mostrada antes del diálogo
       // del sistema operativo — requisito de Google Play para apps que piden
@@ -4748,7 +4902,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final photoUrl = uploadData['data']['url'] as String;
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/start'),
+        Uri.parse(viaPickup
+            ? '$_baseUrl/bookings/${widget.bookingId}/transport/pickup/done'
+            : '$_baseUrl/bookings/${widget.bookingId}/start'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
         body: jsonEncode({'photo': photoUrl}),
       );
@@ -4759,11 +4915,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         // Arranca el tracking GPS en background (independiente de la pantalla)
         // apenas el servicio pasa a IN_PROGRESS. Solo aplica a PASEO — el
         // backend (trackServiceLocation) rechaza el resto de todos modos.
-        if (_booking?['serviceType'] == 'PASEO') {
+        if (_booking?['serviceType'] == 'PASEO' || viaPickup) {
           GpsTrackingSession.instance.start(bookingId: widget.bookingId, token: _token);
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Servicio iniciado! El pago sigue protegido hasta que termine.'), backgroundColor: GardenColors.success),
+          SnackBar(
+            content: Text(viaPickup
+                ? '¡$_petFirst va contigo! Toca "Ya llegamos" al llegar.'
+                : '¡Servicio iniciado! El pago sigue protegido hasta que termine.'),
+            backgroundColor: GardenColors.success,
+          ),
         );
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
@@ -5260,7 +5421,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         // El servicio pasó a COMPLETED — cortar el tracking GPS en background
         // acá, no en _markServiceEnded (esa acción del dueño solo congela el
         // reloj de overtime, no termina el booking realmente).
-        if (_booking?['serviceType'] == 'PASEO') {
+        if (_booking?['serviceType'] == 'PASEO' || _dropoffLeg != null) {
           GpsTrackingSession.instance.stop();
         }
         await _loadBooking();

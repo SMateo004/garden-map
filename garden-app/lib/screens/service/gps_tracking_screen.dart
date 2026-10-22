@@ -27,6 +27,8 @@ class GpsTrackingScreen extends StatefulWidget {
   final String petName;
   final String token;
   final String? petPhoto;
+  /// '/bookings' o '/caregiver-staff/bookings' (empleado de una empresa).
+  final String bookingsPath;
 
   const GpsTrackingScreen({
     super.key,
@@ -35,6 +37,7 @@ class GpsTrackingScreen extends StatefulWidget {
     required this.petName,
     required this.token,
     this.petPhoto,
+    this.bookingsPath = '/bookings',
   });
 
   @override
@@ -106,7 +109,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
       if (!mounted) return;
       try {
         final res = await http.get(
-          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
+          Uri.parse('$_baseUrl${widget.bookingsPath}/${widget.bookingId}/track'),
           headers: {'Authorization': 'Bearer ${widget.token}'},
         );
         final data = jsonDecode(res.body);
@@ -156,7 +159,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   Future<void> _loadTrackHistory() async {
     try {
       final res = await http.get(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
+        Uri.parse('$_baseUrl${widget.bookingsPath}/${widget.bookingId}/track'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
       final data = jsonDecode(res.body);

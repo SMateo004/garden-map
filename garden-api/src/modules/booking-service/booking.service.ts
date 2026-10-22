@@ -49,6 +49,17 @@ import type {
 } from './booking.validation.js';
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
+import {
+  planTransport,
+  transportGrossOf,
+  LEG_STATUS,
+  ACTIVE_LEG_STATUSES,
+  trackLegLocation,
+  legTrack,
+  markLegEnRoute,
+  legScheduledMs,
+  ARRIVE_OPENS_MIN,
+} from '../transport/transport.service.js';
 import { combinedOccupancyByDay, firstFullDay, walkInPetsByDay } from '../caregiver-crm/walk-in-capacity.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
@@ -441,6 +452,12 @@ async function createBookingInTx(
         acceptSeniors: true,
         requireMeetAndGreet: true,
         commissionPaidBy: true,
+        addressLat: true,
+        addressLng: true,
+        transportEnabled: true,
+        transportPickupFee: true,
+        transportDropoffFee: true,
+        transportMaxKm: true,
       },
     });
 
@@ -715,10 +732,31 @@ async function createBookingInTx(
     // Quién paga la comisión (lo elige el cuidador): se copia en la reserva, así cambiar
     // la opción después no toca esta reserva (extensiones y cambios de fecha la usan).
     const commissionPaidBy = normalizePayer(caregiver.commissionPaidBy);
-    const charge = computeClientCharge(subtotal, commissionRate, await getTaxRate(), commissionPaidBy);
+    const taxRate = await getTaxRate();
+    const charge = computeClientCharge(subtotal, commissionRate, taxRate, commissionPaidBy);
     totalAmount = charge.total;
     const commissionAmount = charge.commission;
-    const taxAmount = charge.tax;
+    let taxAmount = charge.tax;
+
+    // Recojo / entrega a domicilio: precio fijo por viaje, 100% del cuidador (sin
+    // comisión), con su propio impuesto. Valida radio, dirección y horas (transport.service).
+    const transportPlan = planTransport((body as any).transport, {
+      caregiver,
+      client: clientProfile,
+      taxRate,
+      booking: body.serviceType === ServiceType.HOSPEDAJE
+        ? {
+          serviceType: body.serviceType, startDate: new Date(body.startDate), endDate: new Date(body.endDate),
+          walkDate: null, startTime: null, timeSlot: null, duration: null,
+        }
+        : {
+          serviceType: body.serviceType, startDate: null, endDate: null,
+          walkDate: new Date((body as any).walkDate), startTime: (body as any).startTime ?? null,
+          timeSlot: (body as any).timeSlot ?? null, duration: (body as any).duration ?? null,
+        },
+    });
+    totalAmount += transportPlan.amount + transportPlan.tax;
+    taxAmount += transportPlan.tax;
     // El dueño ve el precio unitario con el recargo de comisión (ninguno si la paga el
     // cuidador), sin impuestos — se agregan en el detalle de pago.
     pricePerUnit = commissionPaidBy === 'CAREGIVER' ? Math.round(pricePerUnit) : Math.round(pricePerUnit * (1 + commissionRate));
@@ -736,6 +774,25 @@ async function createBookingInTx(
       commissionAmount: new Prisma.Decimal(commissionAmount),
       taxAmount: new Prisma.Decimal(taxAmount),
       commissionPaidBy,
+      ...(transportPlan.legs.length > 0
+        ? {
+          transportAmount: new Prisma.Decimal(transportPlan.amount),
+          transportTaxAmount: new Prisma.Decimal(transportPlan.tax),
+          transportLegs: {
+            create: transportPlan.legs.map((l) => ({
+              kind: l.kind,
+              fee: new Prisma.Decimal(l.fee),
+              tax: new Prisma.Decimal(l.tax),
+              time: l.time,
+              address: l.address,
+              addressLat: l.addressLat,
+              addressLng: l.addressLng,
+              addressReference: l.addressReference,
+              distanceKm: new Prisma.Decimal(l.distanceKm),
+            })),
+          },
+        }
+        : {}),
       petCount,
       petName: allPetNames, // comma-separated for display in notifications/lists
       petBreed: pet.breed ?? null,
@@ -2318,6 +2375,28 @@ export async function calculateRefund(
   booking: Pick<
     Booking,
     'serviceType' | 'startDate' | 'endDate' | 'walkDate' | 'timeSlot' | 'totalAmount'
+  > & { transportAmount?: unknown; transportTaxAmount?: unknown },
+  cancellationDate: Date
+): Promise<CalculateRefundResult> {
+  // El recojo / entrega a domicilio no se hizo (se cancela antes de empezar): se devuelve
+  // completo, aparte de la política por horas que aplica al servicio.
+  const transport = transportGrossOf(booking);
+  if (transport <= 0) return calculateServiceRefund(booking, cancellationDate);
+  const service = await calculateServiceRefund(
+    { ...booking, totalAmount: new Prisma.Decimal(Math.max(0, Number(booking.totalAmount) - transport)) },
+    cancellationDate
+  );
+  return {
+    refundAmount: Math.round((service.refundAmount + transport) * 100) / 100,
+    refundStatus: RefundStatus.APPROVED,
+    refundPercent: service.refundPercent,
+  };
+}
+
+async function calculateServiceRefund(
+  booking: Pick<
+    Booking,
+    'serviceType' | 'startDate' | 'endDate' | 'walkDate' | 'timeSlot' | 'totalAmount'
   >,
   cancellationDate: Date
 ): Promise<CalculateRefundResult> {
@@ -3562,6 +3641,7 @@ export async function getMyBookings(
         meetAndGreet: true,
         bookingPets: true,
         bookingExtras: true,
+        transportLegs: true,
         assignedStaffMember: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -3721,6 +3801,7 @@ export async function getBookingById(
       meetAndGreet: true,
       bookingPets: true,
       bookingExtras: true,
+      transportLegs: true,
     },
   });
 
@@ -3789,6 +3870,7 @@ export async function getBookingsByCaregiverUserId(
         meetAndGreet: true,
         bookingPets: true,
         bookingExtras: true,
+        transportLegs: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -4130,18 +4212,57 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
   });
 }
 export async function startService(bookingId: string, caregiverUserId: string, photoUrl: string): Promise<BookingCreateResult> {
+  return startServiceCore(bookingId, caregiverUserId, photoUrl, false);
+}
+
+/**
+ * Recojo a domicilio: "Recogí a X" (con foto) — el servicio empieza cuando la mascota
+ * queda con el cuidador en la casa del dueño. Es el mismo inicio que startService (mismas
+ * validaciones y bloqueo), y además cierra el viaje de recojo.
+ */
+export async function pickUpPet(bookingId: string, caregiverUserId: string, photoUrl: string): Promise<BookingCreateResult> {
+  return startServiceCore(bookingId, caregiverUserId, photoUrl, true);
+}
+
+async function startServiceCore(
+  bookingId: string,
+  caregiverUserId: string,
+  photoUrl: string,
+  viaPickup: boolean
+): Promise<BookingCreateResult> {
   if (!photoUrl || photoUrl.trim().length === 0) {
-    throw new BadRequestError('Se requiere una foto de inicio del servicio');
+    throw new BadRequestError(viaPickup ? 'Toma una foto de la mascota al recogerla.' : 'Se requiere una foto de inicio del servicio');
   }
 
   return prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
     const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
     if (!booking) throw new BookingNotFoundError(bookingId);
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
+    }
+
+    // Recojo a domicilio pendiente: el servicio arranca al recoger a la mascota.
+    const pickupLeg = await tx.bookingTransportLeg.findFirst({
+      where: { bookingId, kind: 'PICKUP', status: { in: ACTIVE_LEG_STATUSES } },
+    });
+    if (viaPickup && !pickupLeg) {
+      throw new BadRequestError('Esta reserva no tiene recojo a domicilio pendiente.', 'TRANSPORT_LEG_NOT_FOUND');
+    }
+    if (pickupLeg && pickupLeg.status === LEG_STATUS.SCHEDULED && !viaPickup) {
+      throw new BadRequestError(
+        `Esta reserva incluye recojo a domicilio. Toca "Voy en camino" al salir y "Recogí a ${booking.petName}" al tenerlo contigo. Si el dueño lo trae, cancela el recojo primero (se le devuelve).`,
+        'TRANSPORT_PICKUP_PENDING'
+      );
+    }
+    if (pickupLeg && viaPickup && pickupLeg.status === LEG_STATUS.SCHEDULED) {
+      const sched = legScheduledMs(booking, pickupLeg);
+      if (sched != null && Date.now() < sched - ARRIVE_OPENS_MIN * 60_000) {
+        throw new BadRequestError('Todavía es pronto para recogerlo. Revisa la hora acordada del recojo.', 'TRANSPORT_TOO_EARLY');
+      }
     }
 
     // No se puede iniciar antes del día del servicio (hora de Bolivia). La app
@@ -4180,22 +4301,35 @@ export async function startService(bookingId: string, caregiverUserId: string, p
     if (updateResult.count === 0) {
       throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
     }
-    const updated = await tx.booking.findFirstOrThrow({ where: { id: bookingId } });
+    // El recojo (en camino / llegó) queda hecho: la mascota ya está con el cuidador.
+    if (pickupLeg) {
+      const now = new Date();
+      await tx.bookingTransportLeg.update({
+        where: { id: pickupLeg.id },
+        data: {
+          status: LEG_STATUS.DONE,
+          doneAt: now,
+          donePhoto: photoUrl,
+          ...(pickupLeg.enRouteAt ? {} : { enRouteAt: now }),
+          ...(pickupLeg.arrivedAt ? {} : { arrivedAt: now }),
+        },
+      });
+    }
+    const updated = await tx.booking.findFirstOrThrow({ where: { id: bookingId }, include: { transportLegs: true } });
 
     // Notificación in-app al cliente
+    const place = booking.serviceType === ServiceType.HOSPEDAJE ? 'el hospedaje' : 'la guardería';
+    const title = pickupLeg ? `🐾 ${booking.petName} ya va con su cuidador` : '¡El servicio ha comenzado! 🐕';
+    const message = pickupLeg
+      ? `Lo recogieron en tu casa. Síguelo en el mapa hasta ${place} desde "Mis reservas".`
+      : `El cuidador inició el servicio para ${booking.petName}. Puedes seguir el progreso en "Mis reservas".`;
     await tx.notification.create({
-      data: {
-        bookingId: bookingId,
-        userId: booking.clientId,
-        title: '¡El servicio ha comenzado! 🐕',
-        message: `El cuidador inició el servicio para ${booking.petName}. Puedes seguir el progreso en "Mis reservas".`,
-        type: 'SERVICE_STARTED',
-      },
+      data: { bookingId: bookingId, userId: booking.clientId, title, message, type: 'SERVICE_STARTED' },
     });
     sendPushToUser(
       booking.clientId,
-      '¡Empezó el servicio! 🐕',
-      `${booking.petName} ya está con su cuidador. Sigue el paso a paso en vivo desde "Mis reservas".`,
+      pickupLeg ? title : '¡Empezó el servicio! 🐕',
+      pickupLeg ? message : `${booking.petName} ya está con su cuidador. Sigue el paso a paso en vivo desde "Mis reservas".`,
       { type: 'SERVICE_STARTED', bookingId }
     ).catch(() => {});
     notificationService.onServiceStarted(bookingId).catch(() => {});
@@ -4223,6 +4357,13 @@ function assertPreStartWindowOpen(
  * calcOvertimeMinutes. Idempotente — si ya estaba marcado, no reenvía la
  * notificación al dueño. */
 export async function markEnRoute(bookingId: string, caregiverUserId: string): Promise<BookingCreateResult> {
+  // Con recojo a domicilio, "en camino" es ir a la casa del dueño: lo maneja el viaje
+  // (mismo aviso, con la dirección y el mapa en vivo).
+  const pickup = await prisma.bookingTransportLeg.findFirst({
+    where: { bookingId, kind: 'PICKUP', status: { in: ACTIVE_LEG_STATUSES } },
+    select: { id: true },
+  });
+  if (pickup) return markLegEnRoute(bookingId, caregiverUserId, 'PICKUP');
   return prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
@@ -4623,9 +4764,12 @@ export async function trackServiceLocation(
   const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
   if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id }, include: { transportLegs: true } });
   if (!booking) throw new BookingNotFoundError(bookingId);
-  if (booking.serviceType !== ServiceType.PASEO) throw new BadRequestError('GPS solo disponible para paseos (no guardería ni hospedaje)');
+  // Guardería / hospedaje: solo durante un viaje de recojo o entrega a domicilio.
+  if (booking.serviceType !== ServiceType.PASEO) {
+    return trackLegLocation(booking, lat, lng, accuracy);
+  }
 
   // Guard: only track while the walk is actually in progress
   if (booking.status !== BookingStatus.IN_PROGRESS) {
@@ -4730,6 +4874,8 @@ export async function getGpsTrack(bookingId: string, userId: string): Promise<an
     },
   });
   if (!booking) throw new BookingNotFoundError(bookingId);
+  // Guardería / hospedaje: la ruta es la del viaje de recojo o entrega a domicilio.
+  if (booking.serviceType !== ServiceType.PASEO) return legTrack(bookingId);
   return (booking.serviceTrackingData as any[]) || [];
 }
 
@@ -5024,6 +5170,17 @@ export async function concludeService(
       throw new BadRequestError('No puedes finalizar el servicio mientras haya una emergencia activa sin resolver.');
     }
 
+    // Entrega a domicilio: el servicio termina al entregar la mascota en la casa del dueño.
+    const dropoffLeg = await tx.bookingTransportLeg.findFirst({
+      where: { bookingId, kind: 'DROPOFF', status: { in: ACTIVE_LEG_STATUSES } },
+    });
+    if (dropoffLeg && dropoffLeg.status === LEG_STATUS.SCHEDULED) {
+      throw new BadRequestError(
+        `Esta reserva incluye la entrega a domicilio. Toca "Salí a devolverlo" al salir con ${booking.petName} y finaliza al entregarlo. Si el dueño lo recoge, cancela la entrega primero (se le devuelve).`,
+        'TRANSPORT_DROPOFF_PENDING'
+      );
+    }
+
     // Validar fotos mínimas server-side (PASEO=2, otros=3)
     const events = (booking.serviceEvents as any[]) || [];
     const photoEvents = events.filter((e: any) => e.type === 'PHOTO');
@@ -5049,7 +5206,9 @@ export async function concludeService(
     // este punto con una emergencia sin resolver (la guardia de arriba ya
     // lanzó si booking.pausedAt seguía seteado), así que todo el tiempo
     // pausado ya está capturado en booking.totalPausedMinutes.
-    const overtimeMins = calcOvertimeMinutes(
+    // Con entrega a domicilio la hora de devolución la maneja el cuidador: nunca hay
+    // cargo por tiempo extra al dueño.
+    const overtimeMins = dropoffLeg ? 0 : calcOvertimeMinutes(
       booking.serviceType,
       booking.serviceStartedAt,
       booking.duration,
@@ -5063,14 +5222,16 @@ export async function concludeService(
     const cfg = await getBookingSettings();
 
     if (overtimeMins > 0) {
-      // Tarifa por minuto basada en lo que pagó el cliente (prorrateado del total)
+      // Tarifa por minuto basada en lo que pagó el cliente (prorrateado del total, sin
+      // el recojo/entrega: un viaje no es tiempo de cuidado).
+      const serviceTotal = Number(booking.totalAmount) - transportGrossOf(booking);
       let ratePerMin: number;
       if (booking.serviceType === ServiceType.HOSPEDAJE) {
         const totalDays = Number(booking.totalDays ?? 1);
-        ratePerMin = Number(booking.totalAmount) / (totalDays * 24 * 60);
+        ratePerMin = serviceTotal / (totalDays * 24 * 60);
       } else {
         // PASEO / GUARDERÍA: precio por minuto del servicio contratado
-        ratePerMin = Number(booking.totalAmount) / Number(booking.duration ?? 60);
+        ratePerMin = serviceTotal / Number(booking.duration ?? 60);
       }
       overtimeFeeGross    = Math.round(overtimeMins * ratePerMin * 100) / 100;
       // El cargo (prorrateo del total) ya incluye el impuesto de la reserva; el cuidador
@@ -5154,6 +5315,17 @@ export async function concludeService(
         ...(petMood ? { petMood } : {}),
       },
     });
+    if (dropoffLeg) {
+      await tx.bookingTransportLeg.update({
+        where: { id: dropoffLeg.id },
+        data: {
+          status: LEG_STATUS.DONE,
+          doneAt: concludedAt,
+          donePhoto: photoUrl,
+          ...(dropoffLeg.arrivedAt ? {} : { arrivedAt: concludedAt }),
+        },
+      });
+    }
 
     // Notificación de servicio completado + pedido de calificación — con el
     // dato real del "report card" (distancia recorrida) cuando aplica, en

@@ -37,6 +37,7 @@ import 'screens/caregiver/become_caregiver_screen.dart';
 import 'screens/caregiver/caregiver_guide_screen.dart';
 import 'screens/caregiver/premium_screen.dart';
 import 'screens/caregiver/commission_payer_screen.dart';
+import 'screens/caregiver/transport_settings_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
@@ -197,6 +198,7 @@ const _roleRestrictedPrefixes = <String, String>{
   '/caregiver/reception': 'CAREGIVER',
   '/caregiver/premium': 'CAREGIVER',
   '/caregiver/commission': 'CAREGIVER',
+  '/caregiver/transport': 'CAREGIVER',
   '/caregiver-staff/reception': 'CAREGIVER',
 };
 
@@ -512,6 +514,11 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/commission',
       name: 'caregiverCommission',
       builder: (context, state) => const CommissionPayerScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/transport',
+      name: 'caregiverTransport',
+      builder: (context, state) => const TransportSettingsScreen(),
     ),
     GoRoute(
       path: '/caregiver/trainings',

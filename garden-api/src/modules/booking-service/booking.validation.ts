@@ -10,6 +10,16 @@ const serviceTypeSchema = z.object({
   }),
 });
 
+const transportLegRequestSchema = z
+  .object({ time: z.string().max(5, 'Hora inválida').nullable().optional() })
+  .nullable()
+  .optional();
+/** Pedido de recojo / entrega al reservar: { pickup?: { time? }, dropoff?: { time? } }. */
+const transportRequestSchema = z
+  .object({ pickup: transportLegRequestSchema, dropoff: transportLegRequestSchema })
+  .nullable()
+  .optional();
+
 /** Schema completo para hospedaje. */
 export const hospedajeSchema = z
   .object({
@@ -24,6 +34,8 @@ export const hospedajeSchema = z
     // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
     // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
     extraServiceIds: z.array(z.string()).optional(),
+    // Recojo / entrega a domicilio — precio, radio y horas se validan en transport.service.ts.
+    transport: transportRequestSchema,
   })
   .refine(
     (data) => {
@@ -141,6 +153,8 @@ export const guarderiaSchema = z
     // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
     // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
     extraServiceIds: z.array(z.string()).optional(),
+    // Recojo / entrega a domicilio — precio, radio y horas se validan en transport.service.ts.
+    transport: transportRequestSchema,
   })
   .refine(
     (data) => (!!data.walkDate && !!data.timeSlot) || (!!data.walkDays && data.walkDays.length > 0),

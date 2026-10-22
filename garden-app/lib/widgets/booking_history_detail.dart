@@ -76,6 +76,11 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
         'PAYMENT_REQUESTED' => GIcon.esperando,
         'PAID' => GIcon.pagoProtegido,
         'EN_ROUTE' => GIcon.enVivo,
+        'PICKUP_EN_ROUTE' || 'DROPOFF_EN_ROUTE' => GIcon.auto,
+        'PICKUP_ARRIVED' || 'DROPOFF_ARRIVED' => GIcon.ubicacion,
+        'PICKUP_DONE' => GIcon.huella,
+        'DROPOFF_DONE' || 'PICKUP_AT_BASE' => GIcon.inicio,
+        'PICKUP_CANCELLED' || 'DROPOFF_CANCELLED' => GIcon.cancelado,
         'ARRIVED' => GIcon.ubicacion,
         'STARTED' => GIcon.cronometro,
         'EXTENSION' || 'EXTENSION_REQUESTED' => GIcon.repetir,
@@ -227,6 +232,10 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
           line(isClient ? 'Total pagado' : 'Total de la reserva', _bs(pay['totalAmount'] as num), bold: true),
           if (method != 'PENDING' && wallet > 0) line('Con billetera', _bs(wallet)),
           if (method != 'PENDING' && external > 0.005) line(_externalLabel(method), _bs(external)),
+          // Recojo / entrega a domicilio incluidos en el total (sin comisión: todo del cuidador).
+          if (((pay['transportAmount'] as num?) ?? 0) > 0) line('Recojo y entrega', _bs(pay['transportAmount'] as num)),
+          if (((pay['transportRefunded'] as num?) ?? 0) > 0)
+            line(isClient ? 'Viajes cancelados (devuelto)' : 'Viajes cancelados', _bs(pay['transportRefunded'] as num)),
           if (donation > 0) line('Donación', _bs(donation)),
           if (tip > 0) line(isClient ? 'Propina' : 'Propina recibida', _bs(tip)),
           if (!isClient && pay['caregiverNetAmount'] != null) ...[

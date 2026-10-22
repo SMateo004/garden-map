@@ -21,6 +21,7 @@ import logger from '../../shared/logger.js';
 import { socialForResponse } from '../../shared/social-links.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { getPricingConfig, clientMarkupPct, walk30BasePrice, type PricedService } from '../pricing/pricing.service.js';
+import { publicTransportOf } from '../transport/transport.service.js';
 
 const cache = getCache();
 
@@ -337,6 +338,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       sizesAccepted: c.sizesAccepted,
       isProfessional: (c as any).isProfessional ?? false,
       isFeatured: isPremiumActive(c),
+      transport: publicTransportOf(c as any),
       isCompany: (c as any).isCompany ?? false,
       companyName: (c as any).companyName ?? null,
       maxPets: c.maxPets ?? 1,
@@ -663,6 +665,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     spaceDescription: profile.spaceDescription,
     isProfessional: (profile as any).isProfessional ?? false,
     isFeatured: isPremiumActive(profile),
+    transport: publicTransportOf(profile as any),
     isCompany: (profile as any).isCompany ?? false,
     companyName: (profile as any).companyName ?? null,
     extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({

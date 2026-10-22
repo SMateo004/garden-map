@@ -38,7 +38,7 @@ type Tx = Prisma.TransactionClient;
 export async function stripTaxFromUnpaidBooking(tx: Tx, bookingId: string): Promise<{ removed: number; hadSipQr: boolean }> {
   const b = await tx.booking.findUnique({
     where: { id: bookingId },
-    select: { status: true, totalAmount: true, taxAmount: true, walletPaymentAmount: true, sipQrId: true },
+    select: { status: true, totalAmount: true, taxAmount: true, walletPaymentAmount: true, sipQrId: true, transportTaxAmount: true },
   });
   if (!b) return { removed: 0, hadSipQr: false };
   const tax = Number(b.taxAmount ?? 0);
@@ -58,6 +58,8 @@ export async function stripTaxFromUnpaidBooking(tx: Tx, bookingId: string): Prom
     data: {
       totalAmount: new Prisma.Decimal(newTotal),
       taxAmount: new Prisma.Decimal(0),
+      // El impuesto del recojo/entrega era parte de taxAmount: también queda en 0.
+      transportTaxAmount: new Prisma.Decimal(0),
       qrId: null,
       qrImageUrl: null,
       qrExpiresAt: null,
@@ -66,6 +68,9 @@ export async function stripTaxFromUnpaidBooking(tx: Tx, bookingId: string): Prom
     },
   });
   if (res.count === 0) return { removed: 0, hadSipQr: false };
+  if (Number(b.transportTaxAmount ?? 0) > 0) {
+    await tx.bookingTransportLeg.updateMany({ where: { bookingId }, data: { tax: new Prisma.Decimal(0) } });
+  }
   return { removed: tax, hadSipQr: !!b.sipQrId };
 }
 

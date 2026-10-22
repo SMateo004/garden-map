@@ -591,6 +591,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: 'Comisión de Garden',
               subtitle: 'Elige quién la paga',
               onTap: () => context.push('/caregiver/commission')),
+          GardenSettingsRow(
+              icon: GIcon.auto,
+              title: 'Recojo y entrega',
+              subtitle: 'Busca y devuelve mascotas en su casa',
+              onTap: () => context.push('/caregiver/transport')),
         ]),
       ];
     }

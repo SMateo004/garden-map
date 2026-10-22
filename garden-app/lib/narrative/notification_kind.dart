@@ -33,6 +33,15 @@ class NotificationKind {
     // Servicio en curso
     'SERVICE_EN_ROUTE': NotificationKind(NotificationTopic.service, GIcon.auto, StoryTone.live),
     'SERVICE_ARRIVED': NotificationKind(NotificationTopic.service, GIcon.ubicacion, StoryTone.live),
+    // Recojo / entrega a domicilio (guardería y hospedaje)
+    'TRANSPORT_PICKUP_EN_ROUTE': NotificationKind(NotificationTopic.service, GIcon.auto, StoryTone.live),
+    'TRANSPORT_PICKUP_ARRIVED': NotificationKind(NotificationTopic.service, GIcon.ubicacion, StoryTone.live),
+    'TRANSPORT_PICKUP_AT_BASE': NotificationKind(NotificationTopic.service, GIcon.inicio, StoryTone.good),
+    'TRANSPORT_DROPOFF_EN_ROUTE': NotificationKind(NotificationTopic.service, GIcon.auto, StoryTone.live),
+    'TRANSPORT_DROPOFF_ARRIVED': NotificationKind(NotificationTopic.service, GIcon.inicio, StoryTone.live),
+    'TRANSPORT_REMINDER': NotificationKind(NotificationTopic.service, GIcon.alarma, StoryTone.info),
+    'TRANSPORT_LATE': NotificationKind(NotificationTopic.service, GIcon.reloj, StoryTone.alert),
+    'TRANSPORT_LEG_CANCELLED': NotificationKind(NotificationTopic.booking, GIcon.cancelado, StoryTone.waiting),
     'SERVICE_STARTED': NotificationKind(NotificationTopic.service, GIcon.enVivo, StoryTone.live),
     'SERVICE_CHECKIN_PHOTO': NotificationKind(NotificationTopic.service, GIcon.foto, StoryTone.live),
     'LOCATION_PING_REQUEST': NotificationKind(NotificationTopic.service, GIcon.miUbicacion, StoryTone.info),

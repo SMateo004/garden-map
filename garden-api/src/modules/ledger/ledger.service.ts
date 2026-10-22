@@ -79,11 +79,15 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
       select: {
         id: true, totalAmount: true, commissionAmount: true, commissionAmountBeforePromo: true,
         taxAmount: true, walletPaymentAmount: true, petName: true, serviceType: true,
+        transportRefundAmount: true,
       },
     });
     if (!booking) continue;
 
-    const totalAmount = Number(booking.totalAmount);
+    // Un recojo/entrega cancelado después de pagar se devolvió a la billetera (asiento
+    // AUTO_REFUND) y se descontó de totalAmount: lo cobrado de verdad fue total + eso.
+    const transportRefunded = Number(booking.transportRefundAmount ?? 0);
+    const totalAmount = Number(booking.totalAmount) + transportRefunded;
     const commissionAmount = Number(booking.commissionAmount);
     const grossCommission = booking.commissionAmountBeforePromo != null ? Number(booking.commissionAmountBeforePromo) : commissionAmount;
     const marketingExpense = Math.max(0, Math.round((grossCommission - commissionAmount) * 100) / 100);
@@ -96,6 +100,8 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
     if (walletPortion > 0) lines.push({ accountId: accountMap.get(ACCOUNT.BILLETERA_CLIENTES)!, debit: walletPortion, credit: 0 });
     if (marketingExpense > 0) lines.push({ accountId: accountMap.get(ACCOUNT.GASTO_MARKETING_PROMOS)!, debit: marketingExpense, credit: 0 });
     lines.push({ accountId: accountMap.get(ACCOUNT.BILLETERA_CUIDADORES)!, debit: 0, credit: caregiverCut });
+    // …y esa devolución no es un gasto de GARDEN: compensa el AUTO_REFUND de ese viaje.
+    if (transportRefunded > 0) lines.push({ accountId: accountMap.get(ACCOUNT.GASTO_REEMBOLSOS)!, debit: 0, credit: transportRefunded });
     lines.push({ accountId: accountMap.get(ACCOUNT.INGRESO_COMISION)!, debit: 0, credit: grossCommission });
     // Impuestos (IVA+IT) cobrados al cliente: pasivo con el fisco, no ingreso de GARDEN.
     const taxAmount = Number(booking.taxAmount ?? 0);

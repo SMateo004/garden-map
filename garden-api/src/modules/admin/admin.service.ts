@@ -1,4 +1,5 @@
 import { BookingStatus, CaregiverStatus, Prisma, ServiceType, VerificationStatus } from '@prisma/client';
+import { legView, transportGrossOf } from '../transport/transport.view.js';
 import prisma from '../../config/database.js';
 import * as bookingService from '../booking-service/booking.service.js';
 import { applyResolution as applyDisputeResolution } from '../dispute/dispute.routes.js';
@@ -2079,6 +2080,7 @@ export async function getReservationDetail(bookingId: string) {
       review: true,
       dispute: true,
       pet: true,
+      transportLegs: true,
       messages: {
         include: {
           sender: { select: { id: true, firstName: true, lastName: true, role: true } },
@@ -2109,8 +2111,9 @@ export async function getReservationDetail(bookingId: string) {
   const commissionAmount = Number(booking.commissionAmount);
   const taxAmount = Number((booking as any).taxAmount ?? 0);
   const caregiverPayout = totalAmount - commissionAmount - taxAmount;
-  // % de comisión efectivo de esta reserva (varía por servicio / cuidador): comisión / precio del cuidador.
-  const commissionBase = totalAmount - commissionAmount - taxAmount;
+  // % de comisión efectivo de esta reserva (varía por servicio / cuidador): comisión / precio del
+  // cuidador (sin el recojo/entrega, que no lleva comisión).
+  const commissionBase = totalAmount - commissionAmount - taxAmount - Number(booking.transportAmount ?? 0);
   const commissionPercent = commissionBase > 0 ? Math.round((commissionAmount / commissionBase) * 1000) / 10 : 0;
 
   const u = booking.caregiver.user;
@@ -2220,6 +2223,14 @@ export async function getReservationDetail(bookingId: string) {
       read: m.read,
       createdAt: m.createdAt.toISOString(),
     })) : [],
+    // Recojo / entrega a domicilio (sin comisión, 100% del cuidador)
+    transport: booking.transportLegs.length > 0
+      ? {
+        amount: transportGrossOf(booking),
+        refunded: Number(booking.transportRefundAmount ?? 0),
+        legs: booking.transportLegs.map((l) => legView(l, booking)),
+      }
+      : null,
     // Wallet transactions
     walletTransactions: walletTxs.map((tx) => ({
       id: tx.id,

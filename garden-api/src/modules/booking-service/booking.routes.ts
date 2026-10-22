@@ -4,6 +4,7 @@ import * as bookingController from './booking.controller.js';
 import * as serviceExecutionController from './service-execution.controller.js';
 import * as promoCodeController from '../promo-code/promo-code.controller.js';
 import multer from 'multer';
+import * as transportController from '../transport/transport.routes.js';
 
 // Este middleware se usa en /:id/event y /:id/conclude, que reciben tanto fotos
 // como videos cortos (el picker en la app permite hasta 2 min de video). Un
@@ -243,6 +244,13 @@ router.post(
   requireRole('CAREGIVER'),
   serviceExecutionController.start
 );
+
+/** Recojo / entrega a domicilio (Guardería / Hospedaje) — ver transport.service.ts. */
+router.post('/:id/transport/pickup/done', authMiddleware, requireRole('CAREGIVER'), transportController.pickupDone);
+router.post('/:id/transport/pickup/at-base', authMiddleware, requireRole('CAREGIVER'), transportController.pickupAtBase);
+router.post('/:id/transport/:kind/en-route', authMiddleware, requireRole('CAREGIVER'), transportController.legEnRoute);
+router.post('/:id/transport/:kind/arrive', authMiddleware, requireRole('CAREGIVER'), transportController.legArrive);
+router.post('/:id/transport/:kind/cancel', authMiddleware, requireRole('CLIENT', 'CAREGIVER'), transportController.legCancel);
 
 /** POST /api/bookings/:id/en-route — cuidador marca que salió hacia el servicio (los 3 tipos, antes de iniciar). */
 router.post(

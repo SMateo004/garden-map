@@ -45,6 +45,7 @@ import { hideCommissionFromClients, hideDonationFromCaregivers } from './middlew
 import redaccionRoutes from './modules/redaccion/redaccion.routes.js';
 import blockchainRoutes from './modules/blockchain/blockchain.routes.js';
 import { caregiverPremiumRoutes, adminPremiumRoutes } from './modules/premium/premium.routes.js';
+import { caregiverTransportRoutes, transportQuoteRoutes } from './modules/transport/transport.routes.js';
 import { getPricingConfig } from './modules/pricing/pricing.service.js';
 
 const app = express();
@@ -288,9 +289,11 @@ app.use('/api/caregiver-staff', caregiverCrmStaffRoutes);
 app.use('/api/caregiver/extra-services', extraServiceRoutes);
 app.use('/api/caregiver/trainings', trainingRoutes);
 app.use('/api/caregiver', caregiverPremiumRoutes);
+app.use('/api/caregiver', caregiverTransportRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/client', clientProfileRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/caregivers', transportQuoteRoutes);
 app.use('/api/caregivers', caregiverRoutes);
 app.use('/api/users', userRoutes);
 // Antes que adminRoutes: tiene su propio auth + requireRole('ADMIN').

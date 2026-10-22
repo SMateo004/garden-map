@@ -715,6 +715,94 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
   }
 
   // ── TAB 3: SERVICIO ─────────────────────────────────────────
+  /// Viajes de recojo / entrega: estado y cancelar uno (devuelve su precio al dueño).
+  List<Widget> _buildTransportAdmin(Color textColor, Color subtextColor, Color borderColor) {
+    final t = _data?['transport'];
+    if (t is! Map) return const [];
+    final legs = ((t['legs'] as List?) ?? const []).whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+    if (legs.isEmpty) return const [];
+    const labels = {
+      'SCHEDULED': 'Programado', 'EN_ROUTE': 'En camino', 'ARRIVED': 'Llegó a la casa',
+      'DONE': 'Hecho', 'CANCELLED': 'Cancelado',
+    };
+    return [
+      Text('Recojo y entrega a domicilio · Bs ${((t['amount'] as num?) ?? 0).toStringAsFixed(2)}'
+          '${((t['refunded'] as num?) ?? 0) > 0 ? ' (devuelto Bs ${(t['refunded'] as num).toStringAsFixed(2)})' : ''}',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+      const SizedBox(height: 8),
+      for (final l in legs)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+          child: Row(children: [
+            GardenIcon(l['kind'] == 'PICKUP' ? GIcon.auto : GIcon.inicio, size: GIconSize.sm, color: GardenColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${l['kind'] == 'PICKUP' ? 'Recojo' : 'Entrega'} · ${labels[l['status']] ?? l['status']} · Bs ${((l['fee'] as num?) ?? 0).toStringAsFixed(0)}',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                Text([
+                  if (l['scheduledAt'] != null) 'Hora: ${_fmtLegTime(l['scheduledAt'] as String)}',
+                  if (l['address'] != null) l['address'] as String,
+                  if (l['distanceKm'] != null) '${(l['distanceKm'] as num).toStringAsFixed(1)} km',
+                  if (l['cancelReason'] != null) 'Motivo: ${l['cancelReason']}',
+                ].join(' · '), style: TextStyle(color: subtextColor, fontSize: 12)),
+              ]),
+            ),
+            if (const ['SCHEDULED', 'EN_ROUTE'].contains(l['status']))
+              TextButton(onPressed: () => _adminCancelLeg(l), child: const Text('Cancelar')),
+          ]),
+        ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  String _fmtLegTime(String iso) {
+    final d = DateTime.tryParse(iso)?.toLocal();
+    if (d == null) return iso;
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _adminCancelLeg(Map<String, dynamic> leg) async {
+    final ctl = TextEditingController();
+    final isPickup = leg['kind'] == 'PICKUP';
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isPickup ? '¿Cancelar el recojo?' : '¿Cancelar la entrega?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Se devuelve Bs ${((leg['fee'] as num?) ?? 0).toStringAsFixed(0)} (más su impuesto) a la billetera del dueño y '
+              '${isPickup ? 'tendrá que llevar a su mascota' : 'tendrá que recogerla'}. Se les avisa a los dos.',
+              style: const TextStyle(fontSize: 13, height: 1.4)),
+          TextField(controller: ctl, decoration: const InputDecoration(labelText: 'Motivo (lo ve el dueño)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Volver')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Cancelar viaje')),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/${widget.bookingId}/transport/${isPickup ? 'pickup' : 'dropoff'}/cancel'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': reason}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        GardenSnackBar.success(context, 'Viaje cancelado y devuelto');
+        await _load();
+      } else {
+        GardenErrorDialog.show(context, data['error']?['message'] as String? ?? 'No se pudo cancelar');
+      }
+    } catch (_) {
+      if (mounted) GardenErrorDialog.show(context, 'Sin conexión. Intenta de nuevo.');
+    }
+  }
+
   Widget _buildServiceTab(Color surface, Color textColor, Color subtextColor, Color borderColor, Color bg) {
     final d = _data!;
     final startedAt = d['serviceStartedAt'] as String?;
@@ -736,6 +824,9 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     }
 
     return ListView(padding: const EdgeInsets.all(16), children: [
+
+      // Recojo / entrega a domicilio
+      ..._buildTransportAdmin(textColor, subtextColor, borderColor),
 
       // Emergencia activa
       if (isPaused) ...[

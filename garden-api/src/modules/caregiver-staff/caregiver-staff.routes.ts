@@ -7,6 +7,7 @@ import * as caregiverStaffController from './caregiver-staff.controller.js';
 import * as caregiverProfileController from '../caregiver-profile/caregiver-profile.controller.js';
 import * as bookingController from '../booking-service/booking.controller.js';
 import * as serviceExecutionController from '../booking-service/service-execution.controller.js';
+import * as transportController from '../transport/transport.routes.js';
 
 const router = Router();
 
@@ -72,6 +73,12 @@ router.post(
   authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_START_SERVICE'), actAsOwner,
   serviceExecutionController.start
 );
+// Recojo / entrega a domicilio — el empleado hace los viajes de la empresa.
+router.post('/bookings/:id/transport/pickup/done', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_PICKUP_DONE'), actAsOwner, transportController.pickupDone);
+router.post('/bookings/:id/transport/pickup/at-base', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_PICKUP_AT_BASE'), actAsOwner, transportController.pickupAtBase);
+router.post('/bookings/:id/transport/:kind/en-route', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_TRANSPORT_EN_ROUTE'), actAsOwner, transportController.legEnRoute);
+router.post('/bookings/:id/transport/:kind/arrive', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_TRANSPORT_ARRIVE'), actAsOwner, transportController.legArrive);
+router.post('/bookings/:id/transport/:kind/cancel', authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_TRANSPORT_CANCEL'), actAsOwner, transportController.legCancel);
 router.post(
   '/bookings/:id/en-route',
   authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_EN_ROUTE'), actAsOwner,
@@ -87,6 +94,12 @@ router.post(
   authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, auditStaffAction('STAFF_ADD_EVENT'), actAsOwner,
   upload.single('photo'),
   serviceExecutionController.addEvent
+);
+// Ruta GPS de la reserva (paseo o viaje de recojo/entrega) para el mapa del empleado.
+router.get(
+  '/bookings/:id/track',
+  authMiddleware, requireRole('CAREGIVER'), requireStaffMembership, actAsOwner,
+  serviceExecutionController.getTrack
 );
 router.post(
   '/bookings/:id/track',

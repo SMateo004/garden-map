@@ -47,8 +47,10 @@ export async function applyPromoCode(bookingId: string, clientId: string, code: 
 
     const totalAmount = Number(booking.totalAmount);
     const commissionAmount = Number(booking.commissionAmount);
+    // El % se aplica al servicio, no al recojo/entrega (que es 100% del cuidador).
+    const serviceAmount = totalAmount - Number(booking.transportAmount ?? 0) - Number(booking.transportTaxAmount ?? 0);
     const rawDiscount = promo.discountType === 'PERCENT'
-      ? totalAmount * (Number(promo.discountValue) / 100)
+      ? Math.max(0, serviceAmount) * (Number(promo.discountValue) / 100)
       : Number(promo.discountValue);
     const discount = Math.min(Math.round(rawDiscount * 100) / 100, totalAmount);
     const newTotal = Math.max(0, Math.round((totalAmount - discount) * 100) / 100);

@@ -33,6 +33,8 @@ void gpsForegroundStartCallback() {
 class GpsTaskHandler extends TaskHandler {
   String? _bookingId;
   String? _token;
+  /// '/bookings' (titular) o '/caregiver-staff/bookings' (empleado de una empresa).
+  String _bookingsPath = '/bookings';
 
   String get _baseUrl =>
       const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -49,6 +51,8 @@ class GpsTaskHandler extends TaskHandler {
       final token = data['token'];
       if (bookingId is String) _bookingId = bookingId;
       if (token is String) _token = token;
+      final path = data['bookingsPath'];
+      if (path is String && path.startsWith('/')) _bookingsPath = path;
       debugPrint('GpsTaskHandler: datos recibidos, bookingId=$_bookingId');
     }
   }
@@ -73,7 +77,7 @@ class GpsTaskHandler extends TaskHandler {
       if (pos.accuracy > 50) return; // precisión baja, descartar el punto
 
       await http.post(
-        Uri.parse('$_baseUrl/bookings/$bookingId/track'),
+        Uri.parse('$_baseUrl$_bookingsPath/$bookingId/track'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',

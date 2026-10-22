@@ -394,6 +394,13 @@ model CaregiverProfile {
   /// Se recalcula al activar/vencer Premium y al cambiar quién paga la comisión.
   listingBoost                    Int                         @default(0)
   premiumPurchases                PremiumPurchase[]
+  /// Recojo y entrega a domicilio (solo Guardería / Hospedaje). Precio fijo por viaje
+  /// (0 = gratis), 100% para el cuidador (sin comisión), hasta transportMaxKm en línea
+  /// recta desde su dirección. Ver modules/transport/transport.service.ts.
+  transportEnabled                Boolean                     @default(false)
+  transportPickupFee              Decimal                     @default(0) @db.Decimal(10, 2)
+  transportDropoffFee             Decimal                     @default(0) @db.Decimal(10, 2)
+  transportMaxKm                  Decimal                     @default(5) @db.Decimal(5, 1)
   staffMembers                    CaregiverStaffMember[]
   staffInvites                    CaregiverStaffInvite[]
   walkInClients                   WalkInClient[]
@@ -838,6 +845,15 @@ model Booking {
   donation                   Donation?
   chatReports                ChatReport[]
   bookingExtras              BookingExtra[]
+  /// Recojo/entrega a domicilio vigentes (sin comisión, ya incluidos en totalAmount).
+  /// Si se cancela un viaje después de pagar, se descuenta de aquí y de totalAmount.
+  transportAmount            Decimal          @default(0) @db.Decimal(10, 2)
+  /// Impuesto de esos viajes (parte de taxAmount). Total del transporte = transportAmount + esto.
+  transportTaxAmount         Decimal          @default(0) @db.Decimal(10, 2)
+  /// Lo devuelto al cliente por viajes cancelados (con su impuesto). totalAmount ya NO lo
+  /// incluye; el libro contable lo suma al cobro original (ledger.service.ts).
+  transportRefundAmount      Decimal          @default(0) @db.Decimal(10, 2)
+  transportLegs              BookingTransportLeg[]
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -991,6 +1007,57 @@ model CommissionBucketMovement {
 /// Snapshot de un servicio extra seleccionado en una reserva — conserva
 /// nombre/precio del momento de la reserva aunque el ExtraService original
 /// cambie o se desactive después.
+/// Un viaje de recojo (PICKUP: casa del dueño → cuidador) o de entrega (DROPOFF:
+/// cuidador → casa del dueño) de una reserva de Guardería u Hospedaje. A lo sumo uno de
+/// cada tipo por reserva (la guardería de varios días es una reserva por día).
+model BookingTransportLeg {
+  id             String    @id @default(uuid())
+  bookingId      String
+  /// 'PICKUP' | 'DROPOFF'
+  kind           String    @db.VarChar(10)
+  /// Precio del viaje al reservar (sin comisión ni impuesto). 0 = gratis.
+  fee            Decimal   @db.Decimal(10, 2)
+  /// Impuesto de este viaje (0 mientras los impuestos estén en pausa). Al cancelarlo se
+  /// devuelve fee + tax, exacto al centavo.
+  tax            Decimal   @default(0) @db.Decimal(10, 2)
+  /// Hora acordada (HH:mm, Bolivia). Hospedaje: la elige el dueño (recojo el día de
+  /// entrada, entrega el de salida). Guardería: null = se deriva de la reserva
+  /// (inicio / inicio + duración), así una extensión mueve la entrega sola.
+  time           String?   @db.VarChar(5)
+  /// Domicilio del dueño al reservar (copia: no cambia si después edita su perfil).
+  address        String?   @db.VarChar(500)
+  addressLat     Float
+  addressLng     Float
+  addressReference String? @db.VarChar(300)
+  distanceKm     Decimal   @db.Decimal(6, 2)
+  /// SCHEDULED → EN_ROUTE → ARRIVED → DONE, o CANCELLED (solo antes de salir).
+  status         String    @default("SCHEDULED") @db.VarChar(12)
+  enRouteAt      DateTime?
+  arrivedAt      DateTime?
+  doneAt         DateTime?
+  donePhoto      String?
+  /// Recojo: el cuidador avisó que ya llegaron a la guardería / hospedaje (cierra el mapa).
+  atBaseAt       DateTime?
+  cancelledAt    DateTime?
+  /// 'CLIENT' | 'CAREGIVER' | 'ADMIN'
+  cancelledBy    String?   @db.VarChar(10)
+  cancelReason   String?   @db.VarChar(300)
+  /// Devuelto al cliente al cancelar este viaje (precio + su impuesto).
+  refundedAmount Decimal   @default(0) @db.Decimal(10, 2)
+  /// Puntos GPS del viaje [{lat,lng,timestamp,accuracy}].
+  trackingData   Json?
+  reminderSentAt DateTime?
+  lateNoticeAt   DateTime?
+  adminAlertAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, kind])
+  @@index([status])
+  @@map("booking_transport_legs")
+}
+
 model BookingExtra {
   id             String        @id @default(uuid())
   bookingId      String

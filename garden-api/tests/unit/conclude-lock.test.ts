@@ -11,6 +11,7 @@ jest.mock('../../src/config/database', () => {
   const db = {
     caregiverProfile: { findFirst: jest.fn() },
     booking: { findFirst: jest.fn(), update: jest.fn() },
+    bookingTransportLeg: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
     user: { update: jest.fn() },
     walletTransaction: { create: jest.fn() },
     notification: { create: jest.fn() },
