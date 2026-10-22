@@ -2,7 +2,7 @@ import { BookingStatus, CaregiverStatus, Prisma, ServiceType, VerificationStatus
 import prisma from '../../config/database.js';
 import * as bookingService from '../booking-service/booking.service.js';
 import { applyResolution as applyDisputeResolution } from '../dispute/dispute.routes.js';
-import { BadRequestError, CaregiverNotFoundError, ForbiddenError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
+import { BadRequestError, CaregiverNotFoundError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
 import * as caregiverProfileService from '../caregiver-profile/caregiver-profile.service.js';
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
@@ -40,6 +40,7 @@ import {
   PRICED_SERVICES,
 } from '../pricing/pricing.service.js';
 import { getAllocationReport } from '../pricing/commission-allocation.service.js';
+import { assertNoDeletionBlockers, getDeletionBlockers } from '../auth/account-deletion.guard.js';
 import {
   afterGroupSiblingsPaid,
   markGroupSiblingsPaid,
@@ -986,11 +987,15 @@ export async function approvePaymentSecure(
     select: { userId: true },
   });
 
+  // Reclamo atómico (auditoría 2026-10-14, H2): mismo patrón que verifyPaymentManual.
   const groupIds = await prisma.$transaction(async (tx) => {
-    await tx.booking.update({
-      where: { id: bookingId },
+    const claimed = await tx.booking.updateMany({
+      where: { id: bookingId, status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.PENDING_PAYMENT] } },
       data: { status: BookingStatus.WAITING_CAREGIVER_APPROVAL, paidAt: new Date() },
     });
+    if (claimed.count === 0) {
+      throw new ConflictError('Este pago ya fue aprobado o cambió de estado. Actualiza la reserva.');
+    }
     const groupIds = await markGroupSiblingsPaid(tx, bookingId);
     await tx.adminAction.create({
       data: {
@@ -4010,15 +4015,29 @@ export async function listFlaggedAntecedentes() {
  * FLAGGED para dejar constancia de qué lo motivó.
  */
 export async function suspendForAntecedentes(profileId: string, adminId: string): Promise<void> {
-  await suspendCaregiver(profileId, adminId, 'Antecedentes penales confirmados por un administrador tras revisar el documento subido');
-  await prisma.caregiverProfile.update({
-    where: { id: profileId },
+  // Reclamo atómico del documento ANTES de suspender (auditoría 2026-10-16, H1): si otro admin ya
+  // lo aprobó o rechazó, no se suspende a un cuidador recién verificado ni se reembolsa a sus clientes.
+  const claimed = await prisma.caregiverProfile.updateMany({
+    where: { id: profileId, antecedentesStatus: 'EN_REVISION' } as any,
     data: {
       antecedentesStatus: 'FLAGGED',
       antecedentesReviewedAt: new Date(),
       antecedentesReviewedById: adminId,
     } as any,
   });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Este documento ya no está en revisión — otro administrador ya lo decidió.');
+  }
+  try {
+    await suspendCaregiver(profileId, adminId, 'Antecedentes penales confirmados por un administrador tras revisar el documento subido');
+  } catch (err) {
+    // Sin suspensión, el documento vuelve a la cola para no quedar marcado sin efecto.
+    await prisma.caregiverProfile.updateMany({
+      where: { id: profileId, antecedentesStatus: 'FLAGGED' } as any,
+      data: { antecedentesStatus: 'EN_REVISION', antecedentesReviewedAt: null, antecedentesReviewedById: null } as any,
+    });
+    throw err;
+  }
 }
 
 /**
@@ -4075,14 +4094,18 @@ export async function rejectAntecedentesDocument(profileId: string, adminId: str
   });
   if (!profile) throw new CaregiverNotFoundError(profileId);
 
-  await prisma.caregiverProfile.update({
-    where: { id: profileId },
+  // Solo si sigue en revisión (auditoría 2026-10-16, H1) — mismo patrón que dismissAntecedentesFlag.
+  const rejected = await prisma.caregiverProfile.updateMany({
+    where: { id: profileId, antecedentesStatus: 'EN_REVISION' } as any,
     data: {
       antecedentesStatus: 'RECHAZADO',
       antecedentesReviewedAt: new Date(),
       antecedentesReviewedById: adminId,
     } as any,
   });
+  if (rejected.count === 0) {
+    throw new BadRequestError('Este documento ya no está en revisión — otro administrador ya lo decidió.');
+  }
 
   await prisma.notification.create({
     data: {
@@ -4138,15 +4161,20 @@ export async function listNitVerifications() {
 
 /** POST /api/admin/nit-verifications/:profileId/approve — admin confirma que el NIT es válido. */
 export async function approveNitVerification(profileId: string, adminId: string): Promise<void> {
-  const profile = await prisma.caregiverProfile.update({
-    where: { id: profileId },
+  const profile = await prisma.caregiverProfile.findUnique({ where: { id: profileId }, select: { userId: true } });
+  if (!profile) throw new CaregiverNotFoundError(profileId);
+  // Solo si sigue en revisión (auditoría 2026-10-16, H1): dos admins no deciden cosas opuestas.
+  const approved = await prisma.caregiverProfile.updateMany({
+    where: { id: profileId, nitStatus: 'EN_REVISION' } as any,
     data: {
       nitStatus: 'VERIFICADO',
       nitReviewedAt: new Date(),
       nitReviewedById: adminId,
     } as any,
-    select: { userId: true },
   });
+  if (approved.count === 0) {
+    throw new BadRequestError('Este NIT ya no está en revisión — otro administrador ya lo decidió.');
+  }
   await prisma.adminAction.create({
     data: { adminId, actionType: 'APPROVE_NIT_VERIFICATION', targetId: profileId },
   });
@@ -4174,14 +4202,17 @@ export async function rejectNitVerification(profileId: string, adminId: string, 
   });
   if (!profile) throw new CaregiverNotFoundError(profileId);
 
-  await prisma.caregiverProfile.update({
-    where: { id: profileId },
+  const rejected = await prisma.caregiverProfile.updateMany({
+    where: { id: profileId, nitStatus: 'EN_REVISION' } as any,
     data: {
       nitStatus: 'RECHAZADO',
       nitReviewedAt: new Date(),
       nitReviewedById: adminId,
     } as any,
   });
+  if (rejected.count === 0) {
+    throw new BadRequestError('Este NIT ya no está en revisión — otro administrador ya lo decidió.');
+  }
 
   await prisma.notification.create({
     data: {
@@ -4221,15 +4252,19 @@ export async function listPendingCaregiverDeletionRequests() {
     orderBy: { accountDeletionRequestedAt: 'asc' },
   });
 
-  return users.map((u) => ({
-    userId: u.id,
-    name: `${u.firstName} ${u.lastName}`.trim(),
-    email: u.email,
-    phone: u.phone,
-    requestedAt: u.accountDeletionRequestedAt?.toISOString() ?? null,
-    lastKnownLat: u.deletionRequestLat,
-    lastKnownLng: u.deletionRequestLng,
-  }));
+  return Promise.all(
+    users.map(async (u) => ({
+      userId: u.id,
+      name: `${u.firstName} ${u.lastName}`.trim(),
+      email: u.email,
+      phone: u.phone,
+      requestedAt: u.accountDeletionRequestedAt?.toISOString() ?? null,
+      lastKnownLat: u.deletionRequestLat,
+      lastKnownLng: u.deletionRequestLng,
+      // Lo que hoy impediría aprobarla (servicio en curso, reservas, disputas, retiros).
+      blockers: await getDeletionBlockers(u.id, (await authService.latestDeletionScope(u.id)) === 'CAREGIVER' ? 'CAREGIVER' : 'ALL'),
+    }))
+  );
 }
 
 /**
@@ -4247,8 +4282,13 @@ export async function approveCaregiverAccountDeletion(userId: string, adminId: s
     throw new BadRequestError('Este cuidador no solicitó eliminar su cuenta');
   }
 
+  // Re-validar al aprobar (auditoría 2026-10-11, H2): la revisión manual existe justamente para no
+  // dar de baja a alguien con una mascota a su cargo, reservas o una disputa abierta — antes no se miraba.
+  const scope = (await authService.latestDeletionScope(userId)) === 'CAREGIVER' ? 'CAREGIVER' : 'ALL';
+  await assertNoDeletionBlockers(userId, scope, 'admin');
+
   // Si pidió dejar solo la cara de cuidador (y seguir como dueño), la cuenta se conserva.
-  if ((await authService.latestDeletionScope(userId)) === 'CAREGIVER') {
+  if (scope === 'CAREGIVER') {
     await authService.finalizeCaregiverSideDeletion(userId);
   } else {
     await authService.finalizeAccountDeletion(userId);
@@ -4269,7 +4309,7 @@ export async function approveCaregiverAccountDeletion(userId: string, adminId: s
 export async function updateUserIdentity(
   userId: string,
   adminId: string,
-  input: { firstName?: string; lastName?: string; dateOfBirth?: string; reason?: string }
+  input: { firstName?: string; lastName?: string; dateOfBirth?: string; reason?: string; checkedAgainstId?: boolean }
 ): Promise<{ firstName: string; lastName: string; dateOfBirth: Date | null }> {
   const reason = (input.reason ?? '').trim();
   if (reason.length < 5) throw new BadRequestError('Indica el motivo del cambio (mínimo 5 caracteres)');
@@ -4289,6 +4329,26 @@ export async function updateUserIdentity(
   }
   if (Object.keys(data).length === 0) throw new BadRequestError('Nada que actualizar');
 
+  // Cuidador ya verificado (auditoría 2026-10-11, H3): su sello "verificado" se cotejó con el carnet
+  // usando el nombre y la fecha de antes. Un cambio real exige que el admin confirme que lo cotejó
+  // con el carnet (checkedAgainstId), queda marcado en la auditoría y se le avisa al cuidador.
+  const changed =
+    (data.firstName !== undefined && data.firstName !== user.firstName) ||
+    (data.lastName !== undefined && data.lastName !== user.lastName) ||
+    (data.dateOfBirth !== undefined && data.dateOfBirth.getTime() !== user.dateOfBirth?.getTime());
+  const verifiedCaregiver = changed
+    ? await prisma.caregiverProfile.findFirst({
+        where: { userId, identityVerificationStatus: 'VERIFIED' },
+        select: { id: true },
+      })
+    : null;
+  if (verifiedCaregiver && input.checkedAgainstId !== true) {
+    throw new BadRequestError(
+      'Este cuidador ya verificó su identidad con estos datos. Coteja el cambio con su carnet y confirma (checkedAgainstId) antes de guardarlo.',
+      'IDENTITY_RECHECK_REQUIRED'
+    );
+  }
+
   const updated = await prisma.user.update({
     where: { id: userId },
     data,
@@ -4299,9 +4359,24 @@ export async function updateUserIdentity(
       adminId,
       actionType: 'UPDATE_USER_IDENTITY',
       targetId: userId,
-      notes: JSON.stringify({ reason, before: user, after: updated }),
+      notes: JSON.stringify({
+        reason,
+        before: user,
+        after: updated,
+        ...(verifiedCaregiver ? { verifiedCaregiver: true, checkedAgainstId: true } : {}),
+      }),
     },
   });
+  if (verifiedCaregiver) {
+    await prisma.notification.create({
+      data: {
+        userId,
+        title: 'Actualizamos tus datos de identidad',
+        message: 'El equipo de GARDEN corrigió tu nombre o fecha de nacimiento según tu carnet. Si no lo pediste, escríbenos a soporte.',
+        type: 'SYSTEM',
+      },
+    });
+  }
   logger.info('Admin updated user identity', { userId, adminId, fields: Object.keys(data) });
   return updated;
 }

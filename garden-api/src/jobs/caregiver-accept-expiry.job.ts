@@ -18,6 +18,25 @@ import prisma from '../config/database.js';
 import { getNumericSetting } from '../utils/settings-cache.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
+import { staffUserIdsWithPermission } from '../modules/caregiver-staff/caregiver-staff.service.js';
+import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
+
+/**
+ * Plazo para aceptar, en horas. Una empresa con empleados que pueden aceptar reservas (función
+ * habilitada por el admin + al menos un empleado activo con el permiso) tiene el doble — antes el
+ * aviso al equipo se agregó pero la reserva igual vencía a las 3 h (auditoría 2026-10-10, H1).
+ */
+export async function acceptWindowHoursFor(caregiverProfileId: string): Promise<{ hours: number; team: boolean }> {
+  const base = await getNumericSetting('caregiverAcceptWindowHoras', 3);
+  const team = (await staffUserIdsWithPermission(caregiverProfileId, 'canManageBookings').catch(() => [])).length > 0;
+  return { hours: team ? base * 2 : base, team };
+}
+
+/** Cuándo empieza el servicio (hora de Bolivia), o null si no se puede saber. */
+function serviceStartMs(b: { serviceType: string; startDate: Date | null; walkDate: Date | null; startTime: string | null }): number | null {
+  if (b.serviceType === 'HOSPEDAJE') return b.startDate ? boliviaDateAndTimeToMs(b.startDate) : null;
+  return b.walkDate ? boliviaDateAndTimeToMs(b.walkDate, b.startTime ?? undefined) : null;
+}
 
 export function iniciarJobCaregiverAcceptExpiry() {
   cron.schedule('*/10 * * * *', async () => {
@@ -31,7 +50,7 @@ export async function procesarAceptacionesExpiradas() {
     const ventanaHoras = await getNumericSetting('caregiverAcceptWindowHoras', 3);
     const cutoff = new Date(Date.now() - ventanaHoras * 60 * 60 * 1000);
 
-    const candidatas = await prisma.booking.findMany({
+    const vencidasBase = await prisma.booking.findMany({
       where: {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
         updatedAt: { lt: cutoff },
@@ -42,8 +61,28 @@ export async function procesarAceptacionesExpiradas() {
         caregiverId: true,
         petName: true,
         totalAmount: true,
+        updatedAt: true,
+        serviceType: true,
+        startDate: true,
+        walkDate: true,
+        startTime: true,
       },
     });
+
+    // Empresas con equipo: plazo doble, pero nunca más allá del inicio del servicio.
+    const windowByCaregiver = new Map<string, number>();
+    const candidatas: typeof vencidasBase = [];
+    for (const b of vencidasBase) {
+      let hours = windowByCaregiver.get(b.caregiverId);
+      if (hours === undefined) {
+        hours = (await acceptWindowHoursFor(b.caregiverId)).hours;
+        windowByCaregiver.set(b.caregiverId, hours);
+      }
+      let deadline = b.updatedAt.getTime() + hours * 60 * 60 * 1000;
+      const start = serviceStartMs(b);
+      if (start !== null) deadline = Math.min(deadline, Math.max(start, b.updatedAt.getTime() + ventanaHoras * 60 * 60 * 1000));
+      if (Date.now() >= deadline) candidatas.push(b);
+    }
 
     if (candidatas.length === 0) return;
 

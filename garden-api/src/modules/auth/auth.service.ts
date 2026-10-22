@@ -1445,6 +1445,13 @@ export async function requestCaregiverAccountDeletion(
     },
   });
   logger.info('auth.service: caregiver requested account deletion', { userId, hasLocation: lat != null && lng != null });
+  // Antes nadie se enteraba hasta revisar el panel a mano (auditoría 2026-10-11, H2).
+  const { notifyAdmins } = await import('../../services/firebase.service.js');
+  notifyAdmins(
+    'Solicitud de baja de cuidador',
+    scope === 'CAREGIVER' ? 'Un cuidador pidió dejar de ser cuidador (sigue como dueño). Revísala en el panel.' : 'Un cuidador pidió eliminar su cuenta. Revísala en el panel.',
+    { type: 'ADMIN_CAREGIVER' }
+  ).catch(() => {});
 }
 
 /**
@@ -1469,6 +1476,16 @@ export async function finalizeAccountDeletion(userId: string): Promise<void> {
   // booking.service.ts:1548) y se usa el balance real devuelto por el update.
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${userId} FOR UPDATE`;
+    // Un retiro en curso tiene reservada parte de este saldo (el retiro no lo descuenta hasta que
+    // el admin lo completa): transferirlo a GARDEN dejaba el retiro varado y la plata del usuario
+    // perdida (auditoría 2026-10-11). Se revisa con la fila bloqueada: pedir un retiro también la
+    // bloquea, así que no puede colarse uno entre el chequeo y la transferencia.
+    const pendingWithdrawals = await tx.walletTransaction.count({
+      where: { userId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+    });
+    if (pendingWithdrawals > 0) {
+      throw new BadRequestError('Hay un retiro en curso. Debe completarse o cancelarse antes de eliminar la cuenta.', 'PENDING_WITHDRAWAL');
+    }
     const userWithBalance = await tx.user.findUnique({ where: { id: userId }, select: { balance: true } });
     const unifiedBalance = Number(userWithBalance?.balance ?? 0);
     if (unifiedBalance <= 0) return;

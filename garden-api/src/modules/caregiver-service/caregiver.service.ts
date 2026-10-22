@@ -668,8 +668,15 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({
       id: e.id,
       name: e.name,
-      // Un extra puede aplicar a varios servicios; se muestra con la comisión del primero.
+      // Compatibilidad con apps viejas: precio con la comisión del primer servicio de appliesTo.
       pricePerDay: applyMarkup(e.pricePerDay, rateFor(profile.id, ((e.appliesTo?.[0] as PricedService | undefined) ?? 'HOSPEDAJE'))),
+      // Precio por servicio, con la comisión de ESE servicio — la misma que se cobra al reservarlo
+      // (booking.service suma el extra al subtotal y aplica la comisión del servicio reservado).
+      // Antes un extra de varios servicios se mostraba con la comisión del primero y, si las tasas
+      // diferían, el cliente pagaba otro número (auditoría 2026-10-18, H1).
+      pricesByService: Object.fromEntries(
+        ((e.appliesTo ?? []) as PricedService[]).map((s) => [s, applyMarkup(e.pricePerDay, rateFor(profile.id, s))])
+      ),
       appliesTo: e.appliesTo,
     })),
     memberSince: profile.createdAt.toISOString(),

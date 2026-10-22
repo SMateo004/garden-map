@@ -570,6 +570,8 @@ async function createBookingInTx(
       );
     }
 
+    // Cupo serializado por cuidador antes de contarlo (auditorías 2026-10-10 H2 y 2026-10-18 H2).
+    await lockCaregiverCapacity(tx, body.caregiverId);
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate, petCount);
     } else if (body.serviceType === ServiceType.GUARDERIA) {
@@ -870,6 +872,19 @@ function isDayTypeAllowed(
 }
 
 /** Hospedaje: bloquea solo si hay fila explícita isAvailable=false o si se supera maxPets simultáneas (por total de mascotas). */
+/**
+ * Serializa todo lo que ocupa cupo de un cuidador (auditorías 2026-10-10 H2 y 2026-10-18 H2).
+ * Antes el chequeo de cupo contaba reservas sin lock: dos reservas a la vez (o un doble toque, o una
+ * reserva del marketplace contra un check-in de recepción) pasaban las dos y el cuidador quedaba con
+ * más mascotas que su máximo. Toma la misma fila que `lockProfile` de recepción
+ * (caregiver-crm.service.ts), así ambos caminos esperan al otro. `NO KEY UPDATE` choca con el
+ * `FOR UPDATE` de recepción y consigo mismo, pero no frena a quien solo referencia al cuidador
+ * (reseñas, mensajes). Se libera al terminar la transacción.
+ */
+async function lockCaregiverCapacity(tx: Prisma.TransactionClient, caregiverId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "caregiver_profiles" WHERE id = ${caregiverId} FOR NO KEY UPDATE`;
+}
+
 async function assertHospedajeAvailability(
   tx: Prisma.TransactionClient,
   caregiverId: string,
@@ -3429,6 +3444,7 @@ export async function confirmHospedajeExtensionQr(
 
     // Verificar que la nueva endDate no entra en conflicto con otra reserva del mismo cuidador,
     // con el lock de fila ya tomado y datos frescos.
+    await lockCaregiverCapacity(tx, booking.caregiverId);
     try {
       await assertHospedajeAvailability(
         tx,
@@ -5980,6 +5996,7 @@ export async function resolveSlotConflict(
       },
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
+    await lockCaregiverCapacity(tx, booking.caregiverId);
 
     let updateData: Record<string, unknown> = {
       status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
@@ -6091,7 +6108,11 @@ export async function getPendingRatingBooking(clientId: string) {
  * concluye el servicio (ver línea ~3283, concludeService).
  */
 export async function autoPayoutExpiredReviews() {
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  // Mismo plazo que el cron principal y que lo que ve el cliente (`autoReleasePaymentHoras`).
+  // Antes eran 48 h fijas: si el admin subía el setting por encima de 48 h, este respaldo liberaba
+  // el pago (y cerraba la calificación y la disputa) antes del plazo prometido (auditoría 2026-10-17).
+  const hours = await getNumericSetting('autoReleasePaymentHoras', 24);
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
   const expired = await prisma.booking.findMany({
     where: {
       status: BookingStatus.COMPLETED,

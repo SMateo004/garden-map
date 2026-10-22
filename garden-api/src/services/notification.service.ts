@@ -284,7 +284,9 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   const dates = dateRange(booking);
   // Mismo plazo que aplica caregiver-accept-expiry.job.ts (antes el aviso decía
   // 24h fijas y la reserva se cancelaba a las 3h).
-  const ventanaHoras = await getNumericSetting('caregiverAcceptWindowHoras', 3);
+  // Empresas con equipo que puede aceptar: el doble (acceptWindowHoursFor).
+  const { acceptWindowHoursFor } = await import('../jobs/caregiver-accept-expiry.job.js');
+  const ventanaHoras = (await acceptWindowHoursFor(booking.caregiver.id)).hours;
   const plazo = `${ventanaHoras} ${ventanaHoras === 1 ? 'hora' : 'horas'}`;
   // Al cuidador se le muestra lo que va a cobrar, no lo que pagó el cliente
   // (que incluye comisión e impuestos).

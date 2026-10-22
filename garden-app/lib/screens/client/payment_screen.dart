@@ -1071,15 +1071,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Cancel booking ──────────────────────────────────────────────────────────
 
-  Future<void> _cancelBooking() async {
-    if (_bookingId == null) return; // no booking created yet in params mode
+  /// Cancela la reserva. Devuelve null si quedó cancelada (o ya lo estaba) y, si no, el motivo —
+  /// cancelar puede devolver a la billetera lo que se pagó con saldo, así que quien sale de la
+  /// pantalla tiene que saber si de verdad pasó (auditoría 2026-10-19).
+  Future<String?> _cancelBooking() async {
+    if (_bookingId == null) return null; // no booking created yet in params mode
     try {
-      await http.post(
+      final res = await http.post(
         Uri.parse('$_baseUrl/bookings/$_bookingId/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
         body: jsonEncode({'reason': 'QR de pago expirado o cancelado por el usuario', 'source': 'QR_ABANDONED'}),
       );
-    } catch (_) {}
+      if (res.statusCode >= 200 && res.statusCode < 300) return null;
+      String? message;
+      try {
+        message = ((jsonDecode(res.body) as Map)['error'] as Map?)?['message'] as String?;
+      } catch (_) {}
+      if (message != null && message.contains('ya está cancelada')) return null;
+      return message ?? 'No pudimos cancelar la reserva. Intenta de nuevo.';
+    } catch (_) {
+      return 'No pudimos conectar para cancelar la reserva. Revisa tu internet e intenta de nuevo.';
+    }
   }
 
   // ── Back navigation ─────────────────────────────────────────────────────────
@@ -1129,8 +1141,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       if (confirm == true && mounted) {
         _stopPolling();
-        await _cancelBooking();
+        final error = await _cancelBooking();
         if (!mounted) return;
+        if (error != null) {
+          // La reserva sigue viva (y lo pagado con saldo, descontado): no salir como si se hubiera
+          // cancelado. Se queda en el QR para pagar o reintentar.
+          if (_qrResponse != null) _startPolling();
+          GardenErrorDialog.show(context, error);
+          return;
+        }
         // pop(true) en vez de go('/marketplace'): así (a) se vuelve a donde
         // el usuario realmente estaba (ej. "Mis Reservas"), no siempre al
         // marketplace, y (b) el resultado le avisa a esa pantalla que debe

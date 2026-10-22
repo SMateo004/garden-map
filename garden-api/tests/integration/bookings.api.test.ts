@@ -74,7 +74,7 @@ jest.mock('../../src/config/database', () => {
   const walkInVisit = { count: jest.fn().mockResolvedValue(0) };
   // Y las reservas walk-in hechas por recepción (ninguna en este test).
   const walkInReservation = { findMany: jest.fn().mockResolvedValue([]) };
-  const txModels = { walkInVisit, walkInReservation, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord };
+  const txModels = { walkInVisit, walkInReservation, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord, $queryRaw: jest.fn().mockResolvedValue([]) };
   const db = {
     walkInVisit,
     walkInReservation,

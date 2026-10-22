@@ -323,14 +323,17 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
 
   // Atomic: update booking + create audit log + create DB notification
   // (+ los demás días si es un paseo o guardería de varios días pagado en conjunto)
+  // Reclamo atómico (auditoría 2026-10-14, H2): si la aprobación automática u otro admin ya la
+  // aprobó entre la lectura y acá, no se repiten la auditoría, la notificación ni el push.
   const groupIds = await prisma.$transaction(async (tx) => {
-    await tx.booking.update({
-      where: { id },
+    const claimed = await tx.booking.updateMany({
+      where: { id, status: { in: ['PAYMENT_PENDING_APPROVAL', 'PENDING_PAYMENT'] } },
       data: {
         status: 'WAITING_CAREGIVER_APPROVAL',
         paidAt: new Date(),
       },
     });
+    if (claimed.count === 0) return null;
     const groupIds = await markGroupSiblingsPaid(tx, id);
 
     // Audit trail — every admin payment action must be logged
@@ -356,6 +359,9 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
     }
     return groupIds;
   });
+  if (groupIds === null) {
+    return res.status(409).json({ success: false, error: { code: 'ALREADY_APPROVED', message: 'Este pago ya fue aprobado o cambió de estado. Actualiza la reserva.' } });
+  }
 
   // Push notification (best-effort, outside transaction)
   if (caregiverProfile) {

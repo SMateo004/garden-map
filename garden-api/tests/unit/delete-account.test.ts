@@ -25,6 +25,12 @@ jest.mock('../../src/modules/auth/auth.service', () => ({
   finalizeAccountDeletion: (...a: unknown[]) => mockFinalize(...a),
 }));
 
+// Revisión de obligaciones (reservas, disputas, retiros) — probada en account-deletion-guard.test.ts.
+const mockGuard = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/modules/auth/account-deletion.guard', () => ({
+  assertNoDeletionBlockers: (...a: unknown[]) => mockGuard(...a),
+}));
+
 const mockVerifyToken = jest.fn();
 jest.mock('../../src/modules/auth/social-auth.controller', () => ({
   verifyFirebaseToken: (...a: unknown[]) => mockVerifyToken(...a),
@@ -88,6 +94,14 @@ describe('eliminar cuenta', () => {
     const { payload } = await call({ password: 'correcta' });
     expect(mockFinalize).toHaveBeenCalledWith('u1');
     expect(payload.data).toMatchObject({ deleted: true, pendingApproval: false });
+  });
+
+  it('la baja del dueño revisa reservas, disputas y retiros en curso antes de eliminar', async () => {
+    mockUserFind.mockResolvedValue(userOf('CLIENT'));
+    mockGuard.mockRejectedValueOnce(Object.assign(new Error('Tienes un retiro en curso.'), { code: 'PENDING_WITHDRAWAL', statusCode: 400 }));
+    await call({ password: 'correcta' }).catch(() => undefined);
+    expect(mockGuard).toHaveBeenCalledWith('u1', 'ALL');
+    expect(mockFinalize).not.toHaveBeenCalled();
   });
 
   it('dueño que entra con Google confirma con su idToken (no tiene contraseña)', async () => {

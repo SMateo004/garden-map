@@ -24,6 +24,7 @@ import { randomInt } from 'node:crypto';
 import { issuePinToken } from '../../middleware/require-pin.middleware.js';
 import { CAREGIVER_TERMS_VERSION } from '../legal/caregiver-terms.service.js';
 import * as phoneChange from './phone-change.service.js';
+import { assertNoDeletionBlockers } from './account-deletion.guard.js';
 
 /** GET /api/auth/me - Usuario actual (requiere Bearer). */
 export const me = asyncHandler(async (req: Request, res: Response) => {
@@ -649,6 +650,9 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
         data: { deleted: false, pendingApproval: false, scope, message: 'Tu perfil de dueño fue eliminado. Sigues como cuidador.' },
       });
     }
+    // Mismo control que al aprobarla: con una mascota a cargo, reservas, disputas o un retiro
+    // en curso la baja no procede (auditorías 2026-10-11/12). Avisar ahora, no al aprobar.
+    await assertNoDeletionBlockers(userId, scope === 'CAREGIVER' ? 'CAREGIVER' : 'ALL');
     await authService.requestCaregiverAccountDeletion(
       userId,
       typeof lat === 'number' ? lat : undefined,
@@ -704,6 +708,8 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
       error: { code: 'PENDING_DISPUTES', message: 'Tienes disputas abiertas. Debes esperar a que se resuelvan.' },
     });
   }
+  // Retiro en curso: antes no se miraba y el saldo reservado para el retiro se transfería a GARDEN.
+  await assertNoDeletionBlockers(userId, 'ALL');
 
   // 4-6. Transferencia de saldo + anonimización + liberar del marketplace —
   // lógica compartida con la aprobación admin de eliminación de cuidador

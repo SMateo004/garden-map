@@ -627,7 +627,10 @@ export function disputeAmounts(
   const total = Number(booking.totalAmount);
   if (verdict === 'CAREGIVER_WINS') return { verdict, caregiverAmount: net, clientAmount: 0 };
   if (verdict === 'CLIENT_WINS') return { verdict, caregiverAmount: 0, clientAmount: total };
-  return { verdict, caregiverAmount: Math.round(net * 80) / 100, clientAmount: Math.round(net * 20) / 100 };
+  // PARTIAL: el 20 % del dueño es un código de descuento de un solo uso, no plata en su billetera.
+  // El registro público dice solo lo que de verdad se acreditó (auditoría 2026-10-05): antes
+  // publicaba ese 20 % como si se le hubiera pagado.
+  return { verdict, caregiverAmount: Math.round(net * 80) / 100, clientAmount: 0 };
 }
 
 // ─── Comprobante para el usuario ────────────────────────────────────────────

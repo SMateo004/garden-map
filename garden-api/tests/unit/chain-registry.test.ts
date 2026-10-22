@@ -315,7 +315,8 @@ describe('disputeAmounts', () => {
   it('reparte igual que applyResolution', () => {
     expect(disputeAmounts('CAREGIVER_WINS', b)).toMatchObject({ caregiverAmount: 72, clientAmount: 0 });
     expect(disputeAmounts('CLIENT_WINS', b)).toMatchObject({ caregiverAmount: 0, clientAmount: 100 });
-    expect(disputeAmounts('PARTIAL', b)).toMatchObject({ caregiverAmount: 57.6, clientAmount: 14.4 });
+    // El 20 % del dueño es un código de descuento: no se publica como monto pagado.
+    expect(disputeAmounts('PARTIAL', b)).toMatchObject({ caregiverAmount: 57.6, clientAmount: 0 });
   });
 });
 

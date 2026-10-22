@@ -11,6 +11,7 @@ import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
 import { autoPayoutExpiredReviews, calcOvertimeMinutes } from '../modules/booking-service/booking.service.js';
+import { getNumericSetting } from '../utils/settings-cache.js';
 
 // Ventana alrededor de cada umbral (24h / 2h). Corre cada 15 min (ver
 // cron abajo) con una ventana de ±10 min: da precisión real ("el momento
@@ -277,42 +278,49 @@ async function procesarAvisosFinHospedaje() {
 // usuario ("debes ser insistente, solo así se le paga al cuidador"). Cada
 // oleada tiene su propia ventana (±2h) y solo se manda si ratingReminderCount
 // todavía no llegó a esa oleada — así nunca se duplica ni se salta ninguna.
+// Las oleadas van en fracciones del plazo real de liberación (`autoReleasePaymentHoras`): antes eran
+// horas fijas pensadas para 48 h y con el plazo de 24 h la última nunca llegaba (auditoría 2026-10-17).
+// Con 48 h quedan en 12/24/40, como antes.
 const RATING_REMINDER_WAVES: Array<{
-  hoursAfter: number;
+  fractionOfDeadline: number;
   title: string;
-  pushBody: (svcLabel: string, petName: string, caregiverName: string) => string;
-  notifBody: (svcLabel: string, petName: string, caregiverName: string) => string;
+  pushBody: (svcLabel: string, petName: string, caregiverName: string, deadlineHours: number) => string;
+  notifBody: (svcLabel: string, petName: string, caregiverName: string, deadlineHours: number) => string;
 }> = [
   {
-    hoursAfter: 12,
+    fractionOfDeadline: 0.25,
     title: '⭐ ¿Cómo estuvo el servicio?',
-    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Calificalo cuando puedas — libera su pago.`,
+    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Califícalo cuando puedas — libera su pago.`,
     notifBody: (svc, pet, cg) => `¿Cómo estuvo el ${svc} de ${pet} con ${cg}? Tu calificación libera el pago al cuidador.`,
   },
   {
-    hoursAfter: 24,
+    fractionOfDeadline: 0.5,
     title: '⭐ ¡No olvides calificar!',
-    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Calificalo para liberar su pago.`,
+    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Califícalo para liberar su pago.`,
     notifBody: (svc, pet, cg) => `Aún no has calificado el ${svc} de ${pet} con ${cg}. Tu calificación libera el pago al cuidador.`,
   },
   {
-    hoursAfter: 40,
+    fractionOfDeadline: 40 / 48,
     title: '⏰ Últimas horas para calificar',
-    pushBody: (svc, pet, cg) =>
-      `Si no calificás el ${svc} de ${pet} con ${cg} antes de las 48h, el pago se libera solo, sin tu calificación.`,
-    notifBody: (svc, pet, cg) =>
-      `Últimas horas: si no calificás el ${svc} de ${pet} con ${cg} antes de las 48h de completado, el pago se libera automáticamente sin tu calificación.`,
+    pushBody: (svc, pet, cg, h) =>
+      `Si no calificas el ${svc} de ${pet} con ${cg} antes de las ${h} h, el pago se libera solo, sin tu calificación.`,
+    notifBody: (svc, pet, cg, h) =>
+      `Últimas horas: si no calificas el ${svc} de ${pet} con ${cg} antes de las ${h} h de completado, el pago se libera automáticamente sin tu calificación.`,
   },
 ];
 const RATING_REMINDER_WINDOW_HOURS = 2;
 
 export async function procesarRecordatoriosCalificacion() {
   const now = new Date();
+  const deadlineHours = await getNumericSetting('autoReleasePaymentHoras', 24);
 
   for (let waveIndex = 0; waveIndex < RATING_REMINDER_WAVES.length; waveIndex++) {
     const wave = RATING_REMINDER_WAVES[waveIndex]!;
-    const windowStart = new Date(now.getTime() - (wave.hoursAfter + RATING_REMINDER_WINDOW_HOURS) * 60 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() - (wave.hoursAfter - RATING_REMINDER_WINDOW_HOURS) * 60 * 60 * 1000);
+    const hoursAfter = wave.fractionOfDeadline * deadlineHours;
+    // Ventana de ±2 h, más chica si el plazo es corto (nunca pasa del plazo real).
+    const margin = Math.min(RATING_REMINDER_WINDOW_HOURS, deadlineHours / 12);
+    const windowStart = new Date(now.getTime() - (hoursAfter + margin) * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() - (hoursAfter - margin) * 60 * 60 * 1000);
 
     const pendientes = await prisma.booking.findMany({
       where: {
@@ -344,7 +352,7 @@ export async function procesarRecordatoriosCalificacion() {
             userId: b.clientId,
             title: wave.title,
             bookingId: b.id,
-            message: wave.notifBody(svcLabel, b.petName ?? 'tu mascota', caregiverName),
+            message: wave.notifBody(svcLabel, b.petName ?? 'tu mascota', caregiverName, deadlineHours),
             type: 'SERVICE_COMPLETED',
           },
         });
@@ -355,7 +363,7 @@ export async function procesarRecordatoriosCalificacion() {
           sendPushToUser(
             b.clientId,
             wave.title,
-            wave.pushBody(svcLabel, b.petName ?? 'tu mascota', caregiverName)
+            wave.pushBody(svcLabel, b.petName ?? 'tu mascota', caregiverName, deadlineHours)
           ).catch(() => {});
         }
 
@@ -364,7 +372,7 @@ export async function procesarRecordatoriosCalificacion() {
           data: { ratingReminderSentAt: new Date(), ratingReminderCount: waveIndex + 1 },
         });
 
-        logger.info('[RATING-REMINDER] Oleada enviada', { bookingId: b.id, wave: waveIndex + 1, hoursAfter: wave.hoursAfter });
+        logger.info('[RATING-REMINDER] Oleada enviada', { bookingId: b.id, wave: waveIndex + 1, hoursAfter });
       } catch (err: any) {
         logger.error('[RATING-REMINDER] Error', { bookingId: b.id, wave: waveIndex + 1, err: err?.message });
       }

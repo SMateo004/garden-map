@@ -153,6 +153,11 @@ class _BookingScreenState extends State<BookingScreen> {
     return extras.where((e) {
       final appliesTo = (e['appliesTo'] as List?) ?? [];
       return appliesTo.contains(_selectedService);
+    }).map((e) {
+      // El precio con la comisión del servicio que se está reservando (la misma que cobra el
+      // backend); `pricePerDay` solo trae la del primer servicio del extra.
+      final byService = (e['pricesByService'] as Map?)?[_selectedService];
+      return byService is num ? {...e, 'pricePerDay': byService} : e;
     }).toList();
   }
 
