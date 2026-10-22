@@ -185,7 +185,7 @@ describe('reembolso al cancelar la reserva: el transporte se devuelve completo',
       {
         serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(325), transportAmount: decimal(25), transportTaxAmount: decimal(0),
         startDate: startIn(2), endDate: null, walkDate: null, timeSlot: null,
-        transportLegs: [{ status: 'EN_ROUTE', fee: 15, tax: 0 }, { status: 'SCHEDULED', fee: 10, tax: 0 }],
+        transportLegs: [{ status: 'EN_ROUTE', fee: 15, tax: 0, trackingData: [{ lat: 1, lng: 1 }] }, { status: 'SCHEDULED', fee: 10, tax: 0 }],
       } as any,
       new Date()
     );
@@ -197,12 +197,24 @@ describe('reembolso al cancelar la reserva: el transporte se devuelve completo',
       {
         serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(315), transportAmount: decimal(15), transportTaxAmount: decimal(0),
         startDate: startIn(2), endDate: null, walkDate: null, timeSlot: null,
-        transportLegs: [{ status: 'ARRIVED', fee: 15, tax: 0 }],
+        transportLegs: [{ status: 'ARRIVED', fee: 15, tax: 0, trackingData: [{ lat: 1, lng: 1 }] }],
       } as any,
       new Date()
     );
     expect(r.refundAmount).toBe(0);
     expect(r.refundStatus).toBe(RefundStatus.REJECTED);
+  });
+
+  it('"en camino" sin ningún GPS del viaje no cuenta: se le devuelve al dueño', async () => {
+    const r = await calculateRefund(
+      {
+        serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(325), transportAmount: decimal(25), transportTaxAmount: decimal(0),
+        startDate: startIn(2), endDate: null, walkDate: null, timeSlot: null,
+        transportLegs: [{ status: 'EN_ROUTE', fee: 15, tax: 0, trackingData: [] }, { status: 'ARRIVED', fee: 10, tax: 0 }],
+      } as any,
+      new Date()
+    );
+    expect(r.refundAmount).toBe(25);
   });
 
   it('nunca devuelve más que el total pagado', async () => {

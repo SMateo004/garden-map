@@ -59,6 +59,7 @@ import {
   markLegEnRoute,
   legScheduledMs,
   ARRIVE_OPENS_MIN,
+  legReallyStarted,
 } from '../transport/transport.service.js';
 import { combinedOccupancyByDay, firstFullDay, walkInPetsByDay } from '../caregiver-crm/walk-in-capacity.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
@@ -2380,7 +2381,7 @@ export async function calculateRefund(
     transportTaxAmount?: unknown;
     /** Viajes de la reserva (estado, precio e impuesto). Sin ellos, todo el transporte
      * cuenta como no empezado. */
-    transportLegs?: Array<{ status: string; fee: unknown; tax?: unknown }>;
+    transportLegs?: Array<{ status: string; fee: unknown; tax?: unknown; trackingData?: unknown }>;
   },
   cancellationDate: Date
 ): Promise<CalculateRefundResult> {
@@ -2396,7 +2397,7 @@ export async function calculateRefund(
   );
   const notStarted = booking.transportLegs
     ? booking.transportLegs
-        .filter((l) => l.status === LEG_STATUS.SCHEDULED)
+        .filter((l) => ACTIVE_LEG_STATUSES.includes(l.status) && !legReallyStarted(l))
         .reduce((s, l) => s + Number(l.fee) + Number(l.tax ?? 0), 0)
     : transport;
   const transportRefund = Math.min(notStarted, transport);
@@ -2513,7 +2514,8 @@ async function settleTransportOnCancel(
   if (legs.length === 0) return;
   let caregiverPay = 0;
   for (const leg of legs) {
-    const started = leg.status !== LEG_STATUS.SCHEDULED;
+    // Se le paga solo si el viaje de verdad empezó (en camino con GPS del viaje).
+    const started = legReallyStarted(leg);
     const res = await tx.bookingTransportLeg.updateMany({
       where: { id: leg.id, status: leg.status },
       data: {

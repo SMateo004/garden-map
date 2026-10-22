@@ -399,10 +399,10 @@ describe('cotización para el dueño (sin revelar dónde vive el cuidador)', () 
     db.clients!.push({ userId: 'client', address: 'x', addressLat: -17.757, addressLng: -63.1821 });
   });
 
-  it('dentro del área: distancia aproximada (medio km), no exacta', async () => {
+  it('dentro del área: disponible, pero sin ninguna distancia', async () => {
     const q = await transport.quoteForClient('client', 'cp', 'HOSPEDAJE');
     expect(q.available).toBe(true);
-    expect((q.distanceKm! * 2) % 1).toBe(0);
+    expect(q.distanceKm).toBeNull();
   });
 
   it('fuera del área: ninguna distancia', async () => {

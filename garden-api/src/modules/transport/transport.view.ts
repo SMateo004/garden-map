@@ -99,6 +99,16 @@ export function legView(leg: any, booking: ScheduleShape & { status?: string }) 
   };
 }
 
+/**
+ * Viaje que de verdad empezó (cuenta para pagárselo al cuidador si el dueño cancela):
+ * marcado en camino o en la puerta Y con al menos un punto GPS del viaje. Tocar "voy en
+ * camino" sin moverse no alcanza: sin GPS se le devuelve al dueño.
+ */
+export function legReallyStarted(leg: { status: string; trackingData?: unknown }): boolean {
+  if (leg.status !== LEG_STATUS.EN_ROUTE && leg.status !== LEG_STATUS.ARRIVED) return false;
+  return Array.isArray(leg.trackingData) && leg.trackingData.length > 0;
+}
+
 export function isLegLive(leg: { kind: string; status: string; doneAt?: Date | null; atBaseAt?: Date | null }, now = Date.now()): boolean {
   if (leg.status === LEG_STATUS.EN_ROUTE || leg.status === LEG_STATUS.ARRIVED) return true;
   return (

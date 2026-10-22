@@ -274,8 +274,9 @@ export async function quoteForClient(clientUserId: string, caregiverId: string, 
     available: a.available,
     code: a.available ? null : a.code,
     message: a.available ? null : a.message,
-    // Aproximada (de medio en medio km) y solo dentro del área.
-    distanceKm: a.available && a.distanceKm != null ? Math.max(0.5, Math.round(a.distanceKm * 2) / 2) : null,
+    // Nunca la distancia: ni exacta ni redondeada (permitiría triangular la casa del
+    // cuidador cambiando la dirección propia). Solo si está dentro del área o no.
+    distanceKm: null,
     maxKm: pub?.maxKm ?? null,
     pickupFee: pub?.pickupFee ?? null,
     dropoffFee: pub?.dropoffFee ?? null,
