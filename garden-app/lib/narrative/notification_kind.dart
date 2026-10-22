@@ -42,6 +42,7 @@ class NotificationKind {
     'TRANSPORT_REMINDER': NotificationKind(NotificationTopic.service, GIcon.alarma, StoryTone.info),
     'TRANSPORT_LATE': NotificationKind(NotificationTopic.service, GIcon.reloj, StoryTone.alert),
     'TRANSPORT_LEG_CANCELLED': NotificationKind(NotificationTopic.booking, GIcon.cancelado, StoryTone.waiting),
+    'TRANSPORT_EARNING': NotificationKind(NotificationTopic.money, GIcon.billetera, StoryTone.good),
     'SERVICE_STARTED': NotificationKind(NotificationTopic.service, GIcon.enVivo, StoryTone.live),
     'SERVICE_CHECKIN_PHOTO': NotificationKind(NotificationTopic.service, GIcon.foto, StoryTone.live),
     'LOCATION_PING_REQUEST': NotificationKind(NotificationTopic.service, GIcon.miUbicacion, StoryTone.info),

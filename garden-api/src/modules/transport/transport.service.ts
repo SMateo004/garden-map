@@ -229,9 +229,9 @@ export const TRANSPORT_CLIENT_SELECT = {
   addressStreet: true, addressNumber: true, addressApartment: true, addressCondominio: true,
 } as const;
 
-type Availability =
-  | { available: true; distanceKm: number }
-  | { available: false; code: string; message: string; distanceKm?: number };
+// Un solo tipo (no unión discriminada): el build de producción compila sin
+// strictNullChecks (tsconfig.build.json) y ahí no se estrecha `available`.
+type Availability = { available: boolean; distanceKm?: number; code?: string; message?: string };
 
 function availabilityFor(cg: CaregiverForTransport, client: ClientAddress | null, serviceType?: string): Availability {
   const pub = publicTransportOf(cg);
@@ -248,11 +248,12 @@ function availabilityFor(cg: CaregiverForTransport, client: ClientAddress | null
   }
   const distanceKm = round2(haversineKm({ lat: client.addressLat, lng: client.addressLng }, { lat: cg.addressLat!, lng: cg.addressLng! }));
   if (distanceKm > pub.maxKm) {
+    // Sin la distancia exacta: cambiando su dirección y consultando, alguien podría
+    // triangular dónde vive el cuidador.
     return {
       available: false,
       code: 'TRANSPORT_OUT_OF_RANGE',
-      distanceKm,
-      message: `Tu dirección está a ${distanceKm.toFixed(1)} km y este cuidador recoge hasta ${pub.maxKm} km.`,
+      message: `Tu dirección está fuera del área donde este cuidador recoge (hasta ${pub.maxKm} km).`,
     };
   }
   return { available: true, distanceKm };
@@ -260,7 +261,10 @@ function availabilityFor(cg: CaregiverForTransport, client: ClientAddress | null
 
 /** GET /api/caregivers/:id/transport-quote — lo que puede pedir este dueño a este cuidador. */
 export async function quoteForClient(clientUserId: string, caregiverId: string, serviceType?: string) {
-  const cg = await prisma.caregiverProfile.findUnique({ where: { id: caregiverId }, select: TRANSPORT_CAREGIVER_SELECT });
+  const cg = await prisma.caregiverProfile.findFirst({
+    where: { id: caregiverId, status: 'APPROVED', suspended: false },
+    select: TRANSPORT_CAREGIVER_SELECT,
+  });
   if (!cg) throw new NotFoundError('Cuidador no encontrado');
   const client = await prisma.clientProfile.findUnique({ where: { userId: clientUserId }, select: TRANSPORT_CLIENT_SELECT });
   const pub = publicTransportOf(cg);
@@ -270,7 +274,8 @@ export async function quoteForClient(clientUserId: string, caregiverId: string, 
     available: a.available,
     code: a.available ? null : a.code,
     message: a.available ? null : a.message,
-    distanceKm: a.distanceKm ?? null,
+    // Aproximada (de medio en medio km) y solo dentro del área.
+    distanceKm: a.available && a.distanceKm != null ? Math.max(0.5, Math.round(a.distanceKm * 2) / 2) : null,
     maxKm: pub?.maxKm ?? null,
     pickupFee: pub?.pickupFee ?? null,
     dropoffFee: pub?.dropoffFee ?? null,
@@ -320,7 +325,7 @@ export function planTransport(
     throw new BadRequestError('El recojo y la entrega son solo para guardería u hospedaje.', 'TRANSPORT_NOT_OFFERED');
   }
   const a = availabilityFor(ctx.caregiver, ctx.client, st);
-  if (!a.available) throw new BadRequestError(a.message, a.code);
+  if (!a.available) throw new BadRequestError(a.message ?? 'Recojo no disponible.', a.code);
   const client = ctx.client!;
   const now = ctx.nowMs ?? Date.now();
 
@@ -357,7 +362,7 @@ export function planTransport(
       addressLat: client.addressLat!,
       addressLng: client.addressLng!,
       addressReference: client.addressReference?.slice(0, 300) ?? null,
-      distanceKm: a.distanceKm,
+      distanceKm: a.distanceKm ?? 0,
     });
   }
   const pickup = legs.find((l) => l.kind === 'PICKUP');
@@ -558,7 +563,8 @@ export async function cancelLeg(
 
     const fee = Number(leg.fee);
     const feeTax = Number(leg.tax ?? 0);
-    const refund = round2(fee + feeTax);
+    // Nunca más de lo que queda pagado en la reserva (defensa ante descuentos raros).
+    const refund = Math.min(round2(fee + feeTax), Math.max(0, round2(Number(booking.totalAmount))));
     const now = new Date();
     const claimed = await tx.bookingTransportLeg.updateMany({
       where: { id: leg.id, status: { in: allowed } },

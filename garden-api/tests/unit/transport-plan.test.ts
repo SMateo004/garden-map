@@ -119,7 +119,7 @@ describe('planTransport — lo que se puede pedir al reservar', () => {
     ['paseo', { booking: { ...guarderia, serviceType: ServiceType.PASEO } }, /solo para guardería u hospedaje/],
     ['dueño sin dirección en el mapa', { client: { ...client(), addressLat: null } }, /dirección/],
     ['dueño sin perfil', { client: null }, /dirección/],
-    ['fuera del radio', { client: client(LEJOS) }, /recoge hasta 5 km/],
+    ['fuera del radio (sin revelar la distancia exacta)', { client: client(LEJOS) }, /fuera del área donde este cuidador recoge \(hasta 5 km\)/],
   ])('rechaza: %s', (_n, over, msg) => {
     expect(() => planTransport({ pickup: { time: '09:00' } }, ctx(over))).toThrow(msg as RegExp);
   });
@@ -178,6 +178,39 @@ describe('reembolso al cancelar la reserva: el transporte se devuelve completo',
       new Date()
     );
     expect(r.refundAmount).toBe(290);
+  });
+
+  it('si el cuidador ya salió a recogerlo, ese viaje NO se devuelve (se le paga a él)', async () => {
+    const r = await calculateRefund(
+      {
+        serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(325), transportAmount: decimal(25), transportTaxAmount: decimal(0),
+        startDate: startIn(2), endDate: null, walkDate: null, timeSlot: null,
+        transportLegs: [{ status: 'EN_ROUTE', fee: 15, tax: 0 }, { status: 'SCHEDULED', fee: 10, tax: 0 }],
+      } as any,
+      new Date()
+    );
+    expect(r.refundAmount).toBe(10); // solo la entrega, que no empezó
+  });
+
+  it('sin nada que devolver queda rechazado (no "aprobado por 0")', async () => {
+    const r = await calculateRefund(
+      {
+        serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(315), transportAmount: decimal(15), transportTaxAmount: decimal(0),
+        startDate: startIn(2), endDate: null, walkDate: null, timeSlot: null,
+        transportLegs: [{ status: 'ARRIVED', fee: 15, tax: 0 }],
+      } as any,
+      new Date()
+    );
+    expect(r.refundAmount).toBe(0);
+    expect(r.refundStatus).toBe(RefundStatus.REJECTED);
+  });
+
+  it('nunca devuelve más que el total pagado', async () => {
+    const r = await calculateRefund(
+      { serviceType: ServiceType.HOSPEDAJE, totalAmount: decimal(20), transportAmount: decimal(25), transportTaxAmount: decimal(0), startDate: startIn(24 * 6), endDate: null, walkDate: null, timeSlot: null } as any,
+      new Date()
+    );
+    expect(r.refundAmount).toBeLessThanOrEqual(20);
   });
 
   it('transportGrossOf = precios + su impuesto', () => {

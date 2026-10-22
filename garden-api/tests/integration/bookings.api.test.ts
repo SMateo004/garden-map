@@ -39,6 +39,8 @@ jest.mock('../../src/config/database', () => {
   const user = { findUnique: jest.fn() };
   const notification = { create: jest.fn().mockResolvedValue({}) };
   const walletTransaction = { create: jest.fn().mockResolvedValue({}) };
+  // Recojo / entrega a domicilio: cancelar lee y cierra los viajes de la reserva.
+  const bookingTransportLeg = { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn().mockResolvedValue({ count: 0 }) };
   const petData = { id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', name: 'Max', ownerId: 'user-client-1', species: 'DOG', breed: 'Labrador', animalType: 'DOGS', size: 'LARGE' };
   const pet = {
     findUnique: jest.fn().mockResolvedValue(petData),
@@ -74,7 +76,7 @@ jest.mock('../../src/config/database', () => {
   const walkInVisit = { count: jest.fn().mockResolvedValue(0) };
   // Y las reservas walk-in hechas por recepción (ninguna en este test).
   const walkInReservation = { findMany: jest.fn().mockResolvedValue([]) };
-  const txModels = { walkInVisit, walkInReservation, booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord, $queryRaw: jest.fn().mockResolvedValue([]) };
+  const txModels = { walkInVisit, walkInReservation, booking, caregiverProfile, availability, user, notification, walletTransaction, bookingTransportLeg, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification, blockchainRecord, $queryRaw: jest.fn().mockResolvedValue([]) };
   const db = {
     walkInVisit,
     walkInReservation,
@@ -84,6 +86,7 @@ jest.mock('../../src/config/database', () => {
     user,
     notification,
     walletTransaction,
+    bookingTransportLeg,
     pet,
     clientProfile,
     appSettings,

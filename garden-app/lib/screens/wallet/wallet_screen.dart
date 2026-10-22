@@ -658,7 +658,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     final type = t['type'] as String? ?? '';
     final isTipReceived = type == 'TIP_RECEIVED' ||
         (type == 'TIP' && (t['description'] as String? ?? '').startsWith('Propina recibida'));
-    return type == 'EARNING' || type == 'REFUND' || type == 'GIFT' || type == 'OVERTIME_EARNING' ||
+    return type == 'EARNING' || type == 'REFUND' || type == 'GIFT' || type == 'OVERTIME_EARNING' || type == 'TRANSPORT_EARNING' ||
         type == 'DEBT_RECOVERY' || type == 'REFERRAL_BONUS' || isTipReceived;
   }
 
@@ -1720,6 +1720,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         (type == 'TIP' && (t['description'] as String? ?? '').startsWith('Propina recibida'));
     final isPositive = type == 'EARNING' || type == 'REFUND' || type == 'GIFT'
         || type == 'OVERTIME_EARNING' // cuidador: ganancia por espera extra
+        || type == 'TRANSPORT_EARNING' // cuidador: viaje a domicilio ya hecho de una reserva cancelada
         || type == 'DEBT_RECOVERY'    // cliente: se zerifica deuda anterior
         || type == 'REFERRAL_BONUS'   // bono por referido (antes salía como gasto)
         || isTipReceived;
@@ -1740,6 +1741,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       // … o que llegó incompleto: se descuenta la diferencia.
       'PAYMENT_NOT_RECEIVED' || 'PAYMENT_INCOMPLETE' => (GIcon.advertencia, GardenColors.error),
       'OVERTIME_EARNING' => (GIcon.cronometro, GardenColors.successDark),
+      'TRANSPORT_EARNING' => (GIcon.auto, GardenColors.successDark),
       'DEBT_RECOVERY' => (GIcon.confirmado, GardenColors.info),
       'REFERRAL_BONUS' => (GIcon.regalo, GardenColors.successDark),
       'TIP_RECEIVED' => (GIcon.regalo, GardenColors.successDark),

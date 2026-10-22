@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { BadRequestError } from '../../shared/errors.js';
@@ -68,10 +69,19 @@ caregiverTransportRoutes.put(
 
 // ── /api/caregivers/:id/transport-quote (dueño, antes de reservar) ──
 export const transportQuoteRoutes = Router();
+const quoteLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req as Request).user?.userId ?? 'anon',
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Demasiadas consultas. Intenta en unos minutos.' } },
+});
 transportQuoteRoutes.get(
   '/:id/transport-quote',
   authMiddleware,
   requireRole('CLIENT'),
+  quoteLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const serviceType = typeof req.query.serviceType === 'string' ? req.query.serviceType.toUpperCase() : undefined;
     res.json({ success: true, data: await transport.quoteForClient(req.user!.userId, req.params.id!, serviceType) });

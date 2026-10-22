@@ -2375,20 +2375,38 @@ export async function calculateRefund(
   booking: Pick<
     Booking,
     'serviceType' | 'startDate' | 'endDate' | 'walkDate' | 'timeSlot' | 'totalAmount'
-  > & { transportAmount?: unknown; transportTaxAmount?: unknown },
+  > & {
+    transportAmount?: unknown;
+    transportTaxAmount?: unknown;
+    /** Viajes de la reserva (estado, precio e impuesto). Sin ellos, todo el transporte
+     * cuenta como no empezado. */
+    transportLegs?: Array<{ status: string; fee: unknown; tax?: unknown }>;
+  },
   cancellationDate: Date
 ): Promise<CalculateRefundResult> {
-  // El recojo / entrega a domicilio no se hizo (se cancela antes de empezar): se devuelve
-  // completo, aparte de la política por horas que aplica al servicio.
+  // Recojo / entrega: los viajes que no empezaron se devuelven completos, aparte de la
+  // política por horas del servicio. Uno ya en camino (o en la puerta) no se devuelve:
+  // ese viaje se le paga al cuidador (cancelBooking).
   const transport = transportGrossOf(booking);
   if (transport <= 0) return calculateServiceRefund(booking, cancellationDate);
+  const serviceTotal = Math.max(0, Number(booking.totalAmount) - transport);
   const service = await calculateServiceRefund(
-    { ...booking, totalAmount: new Prisma.Decimal(Math.max(0, Number(booking.totalAmount) - transport)) },
+    { ...booking, totalAmount: new Prisma.Decimal(serviceTotal) },
     cancellationDate
   );
+  const notStarted = booking.transportLegs
+    ? booking.transportLegs
+        .filter((l) => l.status === LEG_STATUS.SCHEDULED)
+        .reduce((s, l) => s + Number(l.fee) + Number(l.tax ?? 0), 0)
+    : transport;
+  const transportRefund = Math.min(notStarted, transport);
+  const refundAmount = Math.min(
+    Math.round((service.refundAmount + transportRefund) * 100) / 100,
+    Number(booking.totalAmount)
+  );
   return {
-    refundAmount: Math.round((service.refundAmount + transport) * 100) / 100,
-    refundStatus: RefundStatus.APPROVED,
+    refundAmount,
+    refundStatus: refundAmount > 0 ? RefundStatus.APPROVED : service.refundStatus,
     refundPercent: service.refundPercent,
   };
 }
@@ -2476,6 +2494,69 @@ async function calculateServiceRefund(
     };
   }
   return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
+}
+
+/**
+ * Al cancelar el dueño una reserva con recojo/entrega: cierra los viajes y, si uno ya
+ * estaba en camino o en la puerta, le paga ese viaje al cuidador (TRANSPORT_EARNING).
+ * Corre dentro de la transacción de cancelBooking, después del guard atómico.
+ */
+async function settleTransportOnCancel(
+  tx: Prisma.TransactionClient,
+  booking: { id: string; caregiverId: string; petName: string | null },
+  now: Date,
+  paid: boolean
+): Promise<void> {
+  const legs = await tx.bookingTransportLeg.findMany({
+    where: { bookingId: booking.id, status: { in: ACTIVE_LEG_STATUSES } },
+  });
+  if (legs.length === 0) return;
+  let caregiverPay = 0;
+  for (const leg of legs) {
+    const started = leg.status !== LEG_STATUS.SCHEDULED;
+    const res = await tx.bookingTransportLeg.updateMany({
+      where: { id: leg.id, status: leg.status },
+      data: {
+        status: LEG_STATUS.CANCELLED,
+        cancelledAt: now,
+        cancelledBy: 'CLIENT',
+        cancelReason: 'Reserva cancelada',
+        refundedAmount: new Prisma.Decimal(paid && !started ? Number(leg.fee) + Number(leg.tax ?? 0) : 0),
+      },
+    });
+    if (res.count > 0 && paid && started) caregiverPay += Number(leg.fee);
+  }
+  caregiverPay = Math.round(caregiverPay * 100) / 100;
+  if (caregiverPay <= 0) return;
+  const owner = await tx.caregiverProfile.findUnique({ where: { id: booking.caregiverId }, select: { userId: true } });
+  if (!owner) return;
+  await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${owner.userId} FOR UPDATE`;
+  const u = await tx.user.update({
+    where: { id: owner.userId },
+    data: { balance: { increment: caregiverPay } },
+    select: { balance: true },
+  });
+  await tx.walletTransaction.create({
+    data: {
+      userId: owner.userId,
+      type: 'TRANSPORT_EARNING',
+      amount: caregiverPay,
+      balance: Number(u.balance),
+      description: `Viaje a domicilio ya hecho — el dueño canceló la reserva (${booking.id.slice(0, 8)})`,
+      bookingId: booking.id,
+      status: 'COMPLETED',
+    },
+  });
+  await tx.notification.create({
+    data: {
+      userId: owner.userId,
+      bookingId: booking.id,
+      title: 'El dueño canceló, pero tu viaje se paga',
+      message: `Ya ibas en camino por ${booking.petName ?? 'la mascota'}: te acreditamos Bs ${caregiverPay.toFixed(2)} por el viaje.`,
+      type: 'TRANSPORT_EARNING',
+    },
+  });
+  logger.info('cancelBooking: viaje en curso pagado al cuidador', { bookingId: booking.id, caregiverPay });
 }
 
 /** Máximo de cancelaciones con motivo Clima que garantizan reembolso 100%
@@ -2603,7 +2684,11 @@ export async function cancelBooking(
     } else {
       // Apply tiered cancellation policy (hospedaje: 100%/>48h, 50%/24-48h, 0%/<24h;
       // paseo: 100%/>12h, 50%/6-12h, 0%/<6h) — configured via admin settings.
-      const refundCalc = await calculateRefund(booking, now);
+      // Bloqueo antes de leer los viajes: "voy en camino" (transport.service) toma el
+      // mismo bloqueo, así el estado de cada viaje no cambia hasta terminar acá.
+      await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+      const legsNow = await tx.bookingTransportLeg.findMany({ where: { bookingId } });
+      const refundCalc = await calculateRefund({ ...booking, transportLegs: legsNow }, now);
       refundAmount = refundCalc.refundAmount;
       refundStatus = refundCalc.refundStatus;
     }
@@ -2658,6 +2743,11 @@ export async function cancelBooking(
     if (!booking.paidAt) {
       await cancelUnpaidGroupSiblings(tx, bookingId, cancellationReason ?? null, cancellationSource ?? null);
     }
+
+    // Recojo / entrega: los viajes que no empezaron quedan cancelados (su dinero va en el
+    // reembolso de arriba); uno ya en camino o en la puerta se le paga al cuidador — fue
+    // hasta la casa del dueño. Sin comisión, como todo el transporte.
+    await settleTransportOnCancel(tx, booking, now, !!booking.paidAt);
 
     // Pago combinado sin terminar (billetera + QR): initPayment ya descontó la
     // parte de billetera y la guardó en walletPaymentAmount mientras el QR

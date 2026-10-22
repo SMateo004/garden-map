@@ -10,9 +10,9 @@
  */
 const LEGACY_TIP_RECEIVED = { type: 'TIP', description: { startsWith: 'Propina recibida' } };
 
-/** Lo que entra como ganancia: servicio, tiempo extra y propinas recibidas. */
+/** Lo que entra como ganancia: servicio, tiempo extra, viajes a domicilio de reservas canceladas y propinas recibidas. */
 export const EARNING_FILTERS = [
-  { type: { in: ['EARNING', 'OVERTIME_EARNING', 'TIP_RECEIVED'] } },
+  { type: { in: ['EARNING', 'OVERTIME_EARNING', 'TRANSPORT_EARNING', 'TIP_RECEIVED'] } },
   LEGACY_TIP_RECEIVED,
 ];
 

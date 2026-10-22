@@ -12,6 +12,7 @@ jest.mock('../../src/config/database', () => {
     booking: { findFirst: jest.fn(), findUnique: jest.fn(), count: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     user: { update: jest.fn() },
     walletTransaction: { create: jest.fn() },
+    bookingTransportLeg: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
     notification: { create: jest.fn() },
     caregiverProfile: { findUnique: jest.fn() },
     appSettings: { findUnique: jest.fn().mockResolvedValue(null) },

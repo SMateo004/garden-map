@@ -186,6 +186,13 @@ describe('cancelar un viaje', () => {
     expect(db.wallet).toHaveLength(1);
   });
 
+  it('nunca devuelve más de lo que queda pagado en la reserva', async () => {
+    booking().totalAmount = 8; // p. ej. un descuento viejo enorme
+    await transport.cancelLeg('b1', { userId: 'client', role: 'CLIENT' }, 'PICKUP');
+    expect(balance('client')).toBe(58);
+    expect(booking().totalAmount).toBe(0);
+  });
+
   it('un viaje gratis se cancela sin mover dinero', async () => {
     setup({ pickupInMin: 24 * 60, pickupFee: 0 });
     await transport.cancelLeg('b1', { userId: 'client', role: 'CLIENT' }, 'PICKUP');
@@ -378,6 +385,37 @@ describe('job: recordatorio, atraso y alerta a admins', () => {
     leg('DROPOFF').status = 'CANCELLED';
     expect((await transport.runTransportMaintenance()).closed).toBe(1);
     expect(leg('PICKUP').atBaseAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('cotización para el dueño (sin revelar dónde vive el cuidador)', () => {
+  const offer = {
+    servicesOffered: ['HOSPEDAJE'], addressLat: -17.7838, addressLng: -63.1821, status: 'APPROVED', suspended: false,
+    transportEnabled: true, transportPickupFee: 15, transportDropoffFee: 0, transportMaxKm: 5,
+  };
+  beforeEach(() => {
+    setup();
+    Object.assign(db.profiles![0]!, offer);
+    db.clients!.push({ userId: 'client', address: 'x', addressLat: -17.757, addressLng: -63.1821 });
+  });
+
+  it('dentro del área: distancia aproximada (medio km), no exacta', async () => {
+    const q = await transport.quoteForClient('client', 'cp', 'HOSPEDAJE');
+    expect(q.available).toBe(true);
+    expect((q.distanceKm! * 2) % 1).toBe(0);
+  });
+
+  it('fuera del área: ninguna distancia', async () => {
+    db.clients![0]!.addressLat = -17.6;
+    const q = await transport.quoteForClient('client', 'cp', 'HOSPEDAJE');
+    expect(q.available).toBe(false);
+    expect(q.distanceKm).toBeNull();
+    expect(q.message).not.toMatch(/\d+\.\d km/);
+  });
+
+  it('cuidador suspendido o no aprobado: como si no existiera', async () => {
+    db.profiles![0]!.suspended = true;
+    await expect(transport.quoteForClient('client', 'cp', 'HOSPEDAJE')).rejects.toThrow(/no encontrado/);
   });
 });
 

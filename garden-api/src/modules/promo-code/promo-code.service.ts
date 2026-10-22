@@ -52,7 +52,9 @@ export async function applyPromoCode(bookingId: string, clientId: string, code: 
     const rawDiscount = promo.discountType === 'PERCENT'
       ? Math.max(0, serviceAmount) * (Number(promo.discountValue) / 100)
       : Number(promo.discountValue);
-    const discount = Math.min(Math.round(rawDiscount * 100) / 100, totalAmount);
+    // Tope: el servicio (sin recojo/entrega). Si no, un descuento fijo grande dejaba el
+    // total por debajo del transporte y al cancelar un viaje se devolvía más de lo pagado.
+    const discount = Math.min(Math.round(rawDiscount * 100) / 100, Math.max(0, serviceAmount));
     const newTotal = Math.max(0, Math.round((totalAmount - discount) * 100) / 100);
 
     // El descuento sale del margen de Garden, NUNCA del cuidador — se

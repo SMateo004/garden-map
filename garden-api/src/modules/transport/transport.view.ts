@@ -83,7 +83,7 @@ export function legView(leg: any, booking: ScheduleShape & { status?: string }) 
     addressLat: exposeAddress ? leg.addressLat : null,
     addressLng: exposeAddress ? leg.addressLng : null,
     addressReference: exposeAddress ? leg.addressReference ?? null : null,
-    distanceKm: Number(leg.distanceKm),
+    distanceKm: exposeAddress ? Number(leg.distanceKm) : null,
     enRouteAt: leg.enRouteAt?.toISOString?.() ?? null,
     arrivedAt: leg.arrivedAt?.toISOString?.() ?? null,
     doneAt: leg.doneAt?.toISOString?.() ?? null,
