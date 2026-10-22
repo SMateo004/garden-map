@@ -51,6 +51,7 @@ import {
   type AllocationPeriod,
 } from './commission-allocation.service.js';
 import { stripTaxFromAllUnpaidBookings } from './taxes.service.js';
+import { SETTING_INVOICING_ENABLED, invalidateInvoicingSetting, isInvoicingEnabled } from './invoicing.service.js';
 
 const pct = (max: number) => z.number().min(0).max(max).multipleOf(0.01);
 
@@ -138,6 +139,7 @@ async function buildConfigResponse() {
     // efectiva (0 en pausa) haría que guardar comisiones borre el 16 % configurado.
     taxRatePct: cfg.configuredTaxRatePct,
     taxes: taxesStatus(cfg),
+    invoicing: { enabled: await isInvoicingEnabled() },
     services: Object.fromEntries(
       PRICED_SERVICES.map((svc) => [
         svc,
@@ -236,6 +238,34 @@ router.put(
     });
     const cfg = await getPricingConfig();
     res.json({ success: true, data: { taxes: taxesStatus(cfg), unpaidBookingsAdjusted: swept } });
+  })
+);
+
+/**
+ * Interruptor de facturación con NIT (invoicing.service.ts). Apagado: la app muestra "Pronto" en
+ * los datos de facturación y no pide NIT antes de pagar.
+ */
+router.put(
+  '/invoicing',
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = taxesBodySchema.parse(req.body);
+    const adminId = req.user?.userId;
+    const before = await isInvoicingEnabled();
+    await prisma.appSettings.upsert({
+      where: { key: SETTING_INVOICING_ENABLED },
+      update: { value: JSON.stringify(body.enabled), updatedBy: adminId },
+      create: { key: SETTING_INVOICING_ENABLED, value: JSON.stringify(body.enabled), updatedBy: adminId },
+    });
+    invalidateInvoicingSetting();
+    auditLog({
+      userId: adminId,
+      action: body.enabled ? 'INVOICING_ENABLED' : 'INVOICING_DISABLED',
+      entity: 'AppSettings',
+      entityId: SETTING_INVOICING_ENABLED,
+      details: { before: { enabled: before }, after: { enabled: body.enabled } },
+      ip: req.ip,
+    });
+    res.json({ success: true, data: { invoicing: { enabled: await isInvoicingEnabled() } } });
   })
 );
 

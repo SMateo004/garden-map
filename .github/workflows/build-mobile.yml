@@ -1,0 +1,197 @@
+name: Builds de Android e iOS
+
+# Compila y firma la app para las tiendas sin depender de la máquina de nadie. Se corre a mano
+# (Actions → "Builds de Android e iOS" → Run workflow). Android sube el AAB a Play (pista interna)
+# si hay cuenta de servicio, si no lo deja como artefacto. iOS sube a TestFlight.
+#
+# Número de build: 100 + número de corrida. Siempre crece y ya supera al último subido a mano
+# (38). Desde que se use este workflow, no volver a compilar a mano con un número menor.
+#
+# Secrets (Settings → Secrets and variables → Actions). Ver docs/BUILDS_MOVILES.md:
+#   Android: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD,
+#            PLAY_SERVICE_ACCOUNT_JSON (opcional: sin ella el AAB queda como artefacto)
+#   iOS:     APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_P8
+#   Ambos:   SENTRY_DSN (opcional)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Qué compilar'
+        type: choice
+        options: [android, ios, ambos]
+        default: ambos
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.44.6' # igual que ci.yml y deploy-flutter-web.yml
+  BUILD_NUMBER_OFFSET: '100'
+  # Huella de la llave de carga registrada en Play (docs/STAGING_Y_RESPALDOS.md).
+  UPLOAD_KEY_SHA1: '33:18:AC:FC:03:A4:A3:D7:73:E5:38:92:7B:C9:CE:52:27:21:2D:3A'
+
+jobs:
+  android:
+    name: Android (AAB firmado)
+    if: inputs.platform != 'ios'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: garden-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Llave de firma
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Faltan ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD"; exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/garden-upload-key.jks
+          {
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyAlias=upload"
+            echo "storeFile=garden-upload-key.jks"
+          } > android/key.properties
+
+      - name: Compilar AAB
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          set -euo pipefail
+          N=$((BUILD_NUMBER_OFFSET + GITHUB_RUN_NUMBER))
+          echo "Versión $(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//') ($N)"
+          flutter pub get
+          flutter build appbundle --release --build-number="$N" --dart-define=SENTRY_DSN="$SENTRY_DSN"
+
+      - name: Verificar la firma
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          SHA1=$(keytool -printcert -jarfile "$AAB" | grep -m1 'SHA1:' | awk '{print $2}')
+          echo "Firmado con $SHA1"
+          if [ "$SHA1" != "$UPLOAD_KEY_SHA1" ]; then
+            echo "::error::El AAB no está firmado con la llave de carga registrada en Play."; exit 1
+          fi
+
+      - name: Borrar la llave del runner
+        if: always()
+        run: rm -f android/garden-upload-key.jks android/key.properties
+
+      - name: ¿Hay cuenta de servicio de Play?
+        id: play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: echo "upload=$([ -n "$PLAY_SERVICE_ACCOUNT_JSON" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Subir a Play (pista interna)
+        if: steps.play.outputs.upload == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.garden.bolivia
+          releaseFiles: garden-app/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+      - name: Guardar el AAB (sin cuenta de servicio de Play)
+        if: steps.play.outputs.upload != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: garden-android-aab
+          path: garden-app/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 3
+
+  ios:
+    name: iOS (TestFlight)
+    if: inputs.platform != 'android'
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: garden-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ¿Hay llave de App Store Connect?
+        id: asc
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          if [ -z "$KEY_ID" ]; then
+            echo "::error::Faltan los secrets de App Store Connect (ver docs/BUILDS_MOVILES.md)."; exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Llave de la API de App Store Connect
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8"
+
+      - name: Preparar el proyecto
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          set -euo pipefail
+          N=$((BUILD_NUMBER_OFFSET + GITHUB_RUN_NUMBER))
+          echo "N=$N" >> "$GITHUB_ENV"
+          flutter pub get
+          flutter build ios --release --no-codesign --build-number="$N" --dart-define=SENTRY_DSN="$SENTRY_DSN"
+
+      - name: Archivar, firmar y subir a TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          KEY="$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            "${AUTH[@]}" archive | tail -n 40
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>884TXBM28J</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}" | tail -n 40
+          echo "Build $N subido a App Store Connect: aparece en TestFlight cuando Apple termina de procesarlo."
+
+      - name: Borrar la llave del runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

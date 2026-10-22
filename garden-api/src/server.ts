@@ -70,6 +70,8 @@ import { iniciarJobCaregiverWaitlist } from './jobs/caregiver-waitlist.job.js';
 import { iniciarJobBlockchainSync } from './jobs/blockchain-sync.job.js';
 import { iniciarJobPremium } from './jobs/premium.job.js';
 import { iniciarJobTransporte } from './jobs/transport.job.js';
+import { iniciarJobCaregiverOnboardingNudge } from './jobs/caregiver-onboarding-nudge.job.js';
+import { claimJobLease } from './jobs/job-lease.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -290,12 +292,15 @@ async function start() {
     iniciarJobBlockchainSync();
     iniciarJobPremium();
     iniciarJobTransporte();
+    iniciarJobCaregiverOnboardingNudge();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed
   // Hours window is configurable via 'autoReleasePaymentHoras' setting (default: 24h)
   // Runs every hour, processes any bookings past the window
   setInterval(async () => {
+    // Una sola instancia por período (jobs/job-lease.ts).
+    if (!(await claimJobLease('auto-release-payment', 3540000))) return;
     try {
       const { autoReleasePayment } = await import('./modules/booking-service/booking.service.js');
       const { getNumericSetting } = await import('./utils/settings-cache.js');
@@ -329,6 +334,8 @@ async function start() {
   // Configurable via 'onHoldSlaHoras' setting (default: 72h = 3 days).
   // Releases funds to caregiver without overriding the existing low rating.
   setInterval(async () => {
+    // Una sola instancia por período (jobs/job-lease.ts).
+    if (!(await claimJobLease('on-hold-sla', 21540000))) return;
     try {
       const { getNumericSetting } = await import('./utils/settings-cache.js');
       const slaHoras = await getNumericSetting('onHoldSlaHoras', 72);
@@ -420,6 +427,8 @@ async function start() {
   // propio prompt del juez de IA (dispute.routes.ts) advierte que NO es
   // evidencia de quién tiene razón.
   setInterval(async () => {
+    // Una sola instancia por período (jobs/job-lease.ts).
+    if (!(await claimJobLease('dispute-response-sla', 21540000))) return;
     try {
       const { getNumericSetting } = await import('./utils/settings-cache.js');
       const slaHoras = await getNumericSetting('disputeResponseSlaHoras', 72);
@@ -484,6 +493,8 @@ async function start() {
   // una suspensión manual o por rating bajo con otro texto nunca matchea acá,
   // así que sigue siendo indefinida hasta que un admin la levante, como antes).
   setInterval(async () => {
+    // Una sola instancia por período (jobs/job-lease.ts).
+    if (!(await claimJobLease('late-cancel-suspension-expiry', 21540000))) return;
     try {
       const { activateCaregiver, LATE_CANCELLATION_SUSPENSION_REASON } = await import('./modules/admin/admin.service.js');
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

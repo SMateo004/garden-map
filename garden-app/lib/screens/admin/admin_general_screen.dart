@@ -8,6 +8,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import '../../design/garden_icons.dart';
 import '../../narrative/booking_story.dart';
 import 'admin_taxes_switch_card.dart';
+import 'admin_invoicing_switch_card.dart';
 
 class AdminGeneralScreen extends StatefulWidget {
   final String adminToken;
@@ -662,6 +663,7 @@ class _FinancialTabState extends State<_FinancialTab>
           // Impuestos: mismo interruptor que Admin > Comisiones (en pausa hasta que el admin
           // los apruebe). Al cambiarlo se recargan las finanzas.
           AdminTaxesSwitchCard(adminToken: widget.adminToken, onChanged: _load),
+          AdminInvoicingSwitchCard(adminToken: widget.adminToken),
 
           // KPIs principales
           Row(

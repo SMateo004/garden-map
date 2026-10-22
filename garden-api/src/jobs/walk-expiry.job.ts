@@ -4,14 +4,14 @@
  * - Al vencer: notifica al cliente que el tiempo terminó.
  * Usa serviceEvents para no duplicar notificaciones.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import prisma from '../config/database.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
 import logger from '../shared/logger.js';
 
 export function iniciarJobWalkExpiry() {
-    cron.schedule('* * * * *', async () => {
+    scheduleExclusive('walk-expiry', '* * * * *', async () => {
         await procesarVencimientoPaseos();
     });
     logger.info('[WALK-EXPIRY JOB] Monitor de vencimiento de paseos activo.');

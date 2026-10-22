@@ -390,6 +390,10 @@ model CaregiverProfile {
   premiumUntil                    DateTime?
   /// Aviso "tu Premium vence en 3 días" ya enviado para el premiumUntil vigente.
   premiumReminderSentAt           DateTime?
+  /// Recordatorios de registro sin terminar (jobs/caregiver-onboarding-nudge.job.ts): cuántos se
+  /// mandaron (máx. 3: días 1, 3 y 7) y cuándo el último.
+  onboardingNudgeCount            Int                         @default(0)
+  onboardingNudgeAt               DateTime?
   /// Orden en el marketplace: 2 = Premium vigente, 1 = paga su comisión, 0 = resto.
   /// Se recalcula al activar/vencer Premium y al cambiar quién paga la comisión.
   listingBoost                    Int                         @default(0)
@@ -1485,6 +1489,16 @@ model Notification {
 }
 
 /// Key-value store for runtime app configuration (no server restart needed).
+/// Turno de una tarea programada (jobs/job-lease.ts): una sola instancia de la API la corre por vez.
+model JobLease {
+  name        String   @id @db.VarChar(80)
+  lockedUntil DateTime
+  owner       String   @db.VarChar(120)
+  updatedAt   DateTime @updatedAt
+
+  @@map("job_leases")
+}
+
 model AppSettings {
   key       String   @id
   value     String // JSON-stringified value

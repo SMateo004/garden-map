@@ -13,7 +13,7 @@
  *    `paymentReviewAlertHoras` (12 h por defecto, Admin > Técnica) vuelven a avisarse a los
  *    admins, y otra vez cada ese mismo plazo. Solo avisa: nunca cancela ni toca dinero.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus, Prisma } from '@prisma/client';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
@@ -27,10 +27,10 @@ export const ADMIN_NOTIFICATION_PAYMENT_AUTO_APPROVED = 'PAYMENT_AUTO_APPROVED';
 export const ADMIN_NOTIFICATION_PAYMENT_REVIEW_OVERDUE = 'PAYMENT_REVIEW_OVERDUE';
 
 export function iniciarJobPaymentReview() {
-  cron.schedule('* * * * *', async () => {
+  scheduleExclusive('payment-review:1', '* * * * *', async () => {
     await aprobarPagosDeclaradosVencidos();
   });
-  cron.schedule('*/10 * * * *', async () => {
+  scheduleExclusive('payment-review:2', '*/10 * * * *', async () => {
     await recordarPagosSinVerificar();
   });
   logger.info('[PAYMENT-REVIEW JOB] Aprobación automática de pagos declarados y recordatorios activos.');

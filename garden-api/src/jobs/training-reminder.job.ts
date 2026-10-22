@@ -8,14 +8,14 @@
  * Correo: solo la primera vez (trainingReminderEmailSentAt).
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { onTrainingReminder } from '../services/notification.service.js';
 import { TrainingAudience } from '@prisma/client';
 
 export function iniciarJobRecordatorioCapacitaciones() {
-  cron.schedule('0 10 * * *', async () => {
+  scheduleExclusive('training-reminder', '0 10 * * *', async () => {
     await enviarRecordatoriosCapacitaciones();
   });
   logger.info('[TRAINING-REMINDER JOB] Recordatorio diario de capacitaciones activo.');

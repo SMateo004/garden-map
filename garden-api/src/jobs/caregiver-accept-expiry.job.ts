@@ -12,7 +12,7 @@
  * respondió, no hubo servicio, se devuelve todo sin fricción para el cliente).
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import { getNumericSetting } from '../utils/settings-cache.js';
@@ -39,7 +39,7 @@ function serviceStartMs(b: { serviceType: string; startDate: Date | null; walkDa
 }
 
 export function iniciarJobCaregiverAcceptExpiry() {
-  cron.schedule('*/10 * * * *', async () => {
+  scheduleExclusive('caregiver-accept-expiry', '*/10 * * * *', async () => {
     await procesarAceptacionesExpiradas();
   });
   logger.info('[CAREGIVER-ACCEPT-EXPIRY JOB] Monitor de reservas sin aceptar por el cuidador activo.');

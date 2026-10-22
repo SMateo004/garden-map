@@ -12,12 +12,12 @@
  * salta SOLO esa ocurrencia — la serie sigue viva para la siguiente fecha.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import * as recurringBookingService from '../modules/recurring-booking/recurring-booking.service.js';
 
 export function iniciarJobRecurringBookingGeneration() {
-  cron.schedule('0 6 * * *', async () => {
+  scheduleExclusive('recurring-booking-generation', '0 6 * * *', async () => {
     await recurringBookingService.generateDueOccurrences();
   });
   logger.info('[RECURRING-BOOKING JOB] Generador de paseos recurrentes activo.');

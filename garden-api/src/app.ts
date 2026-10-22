@@ -47,6 +47,7 @@ import blockchainRoutes from './modules/blockchain/blockchain.routes.js';
 import { caregiverPremiumRoutes, adminPremiumRoutes } from './modules/premium/premium.routes.js';
 import { caregiverTransportRoutes, transportQuoteRoutes } from './modules/transport/transport.routes.js';
 import { getPricingConfig } from './modules/pricing/pricing.service.js';
+import { isInvoicingEnabled } from './modules/pricing/invoicing.service.js';
 
 const app = express();
 
@@ -417,7 +418,14 @@ app.get('/api/settings', async (_req, res) => {
     } catch {
       taxesActive = false;
     }
-    res.json({ success: true, data: { ...defaults, ...map, taxesActive } });
+    // Facturación con NIT (invoicing.service.ts): apagada, la app muestra "Pronto" y no pide NIT.
+    let invoicingActive = false;
+    try {
+      invoicingActive = await isInvoicingEnabled();
+    } catch {
+      invoicingActive = false;
+    }
+    res.json({ success: true, data: { ...defaults, ...map, taxesActive, invoicingActive } });
   } catch {
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading settings' } });
   }

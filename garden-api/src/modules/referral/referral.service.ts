@@ -36,23 +36,33 @@ async function getOrCreateReferralCode(userId: string): Promise<string> {
   throw new Error('No se pudo generar un código de referido único');
 }
 
+/** Servicios terminados de la persona, como dueño o como cuidador: el código solo vale antes del primero. */
+async function completedServicesOf(userId: string): Promise<number> {
+  const [asClient, asCaregiver] = await Promise.all([
+    prisma.booking.count({ where: { clientId: userId, status: 'COMPLETED' } }),
+    prisma.booking.count({ where: { status: 'COMPLETED', caregiver: { userId } } }),
+  ]);
+  return asClient + asCaregiver;
+}
+
 export async function getMyReferral(userId: string) {
   const code = await getOrCreateReferralCode(userId);
-  const [referredCount, rewardedCount, rewardBS, me] = await Promise.all([
+  const [referredCount, rewardedCount, rewardBS, caregiverRewardBS, me] = await Promise.all([
     prisma.user.count({ where: { referredByUserId: userId } }),
     // Invitados que ya completaron su primer servicio (bono pagado a ambos).
     prisma.user.count({ where: { referredByUserId: userId, referralRewardGiven: true } }),
     getNumericSetting('referralRewardBS', 20),
+    getNumericSetting('referralCaregiverRewardBS', 30),
     prisma.user.findUnique({ where: { id: userId }, select: { referredByUserId: true, referralRewardGiven: true } }),
   ]);
   // Solo se puede cargar un código ajeno si todavía no tiene uno propio
   // aplicado Y todavía no completó ningún servicio (anti-abuso retroactivo).
-  const completedCount = await prisma.booking.count({ where: { clientId: userId, status: 'COMPLETED' } });
+  const completedCount = await completedServicesOf(userId);
   const canApplyCode = !me?.referredByUserId && completedCount === 0;
   // Si a este usuario lo invitaron: si su propio bono está pendiente o ya se pagó.
   const myBonus = !me?.referredByUserId ? 'NONE' : me.referralRewardGiven ? 'REWARDED' : 'PENDING';
 
-  return { code, referredCount, rewardedCount, rewardBS, canApplyCode, myBonus };
+  return { code, referredCount, rewardedCount, rewardBS, caregiverRewardBS, canApplyCode, myBonus };
 }
 
 export async function applyReferralCode(userId: string, code: string) {
@@ -63,7 +73,7 @@ export async function applyReferralCode(userId: string, code: string) {
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { referredByUserId: true } });
   if (me?.referredByUserId) throw new BadRequestError('Ya aplicaste un código de invitación antes', 'REFERRAL_ALREADY_APPLIED');
 
-  const completedCount = await prisma.booking.count({ where: { clientId: userId, status: 'COMPLETED' } });
+  const completedCount = await completedServicesOf(userId);
   if (completedCount > 0) {
     throw new BadRequestError('Solo se puede cargar un código de invitación antes de tu primer servicio', 'REFERRAL_TOO_LATE');
   }
@@ -154,5 +164,67 @@ export async function grantReferralRewardIfEligible(clientId: string): Promise<v
     logger.info('Bono de referido acreditado', { clientId, rewardBS });
   } catch (e: any) {
     logger.error('Error acreditando bono de referido (no bloquea la conclusión del servicio)', { clientId, error: e?.message });
+  }
+}
+
+/**
+ * Referidos del lado del cuidador (oferta): si a un cuidador lo invitó alguien con su código,
+ * cuando termina su PRIMER servicio como cuidador los dos ganan `referralCaregiverRewardBS`
+ * (Bs 30 por defecto). Un mismo usuario cobra un solo bono de referido en total, como dueño o
+ * como cuidador (mismo flag referralRewardGiven). Se llama desde concludeService. No lanza.
+ */
+export async function grantCaregiverReferralRewardIfEligible(caregiverProfileId: string): Promise<void> {
+  try {
+    const profile = await prisma.caregiverProfile.findUnique({ where: { id: caregiverProfileId }, select: { userId: true } });
+    if (!profile) return;
+    const caregiverUserId = profile.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: caregiverUserId },
+      select: { referredByUserId: true, referralRewardGiven: true },
+    });
+    if (!user?.referredByUserId || user.referralRewardGiven) return;
+
+    const completedCount = await prisma.booking.count({ where: { caregiverId: caregiverProfileId, status: 'COMPLETED' } });
+    if (completedCount !== 1) return;
+
+    const rewardBS = await getNumericSetting('referralCaregiverRewardBS', 30);
+    if (rewardBS <= 0) return;
+    const referrerId = user.referredByUserId;
+
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.user.updateMany({
+        where: { id: caregiverUserId, referralRewardGiven: false },
+        data: { referralRewardGiven: true },
+      });
+      if (claimed.count === 0) return;
+
+      for (const [uid, description] of [
+        [caregiverUserId, 'Bono por tu primer servicio como cuidador con un código de invitación'],
+        [referrerId, 'Bono por invitar a un cuidador que completó su primer servicio'],
+      ] as const) {
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${uid} FOR UPDATE`;
+        const updated = await tx.user.update({
+          where: { id: uid },
+          data: { balance: { increment: rewardBS } },
+          select: { balance: true },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: uid, type: 'REFERRAL_BONUS', amount: rewardBS,
+            balance: Number(updated.balance), description, status: 'COMPLETED',
+          },
+        });
+      }
+    });
+
+    sendPushToUser(
+      referrerId,
+      '💚 Ganaste un bono por invitar',
+      `El cuidador que invitaste completó su primer servicio — recibiste Bs ${rewardBS.toFixed(2)}.`,
+      { type: 'REFERRAL_BONUS' }
+    ).catch(() => {});
+    logger.info('Bono de referido de cuidador acreditado', { caregiverProfileId, rewardBS });
+  } catch (e: any) {
+    logger.error('Error acreditando bono de referido de cuidador (no bloquea la conclusión)', { caregiverProfileId, error: e?.message });
   }
 }

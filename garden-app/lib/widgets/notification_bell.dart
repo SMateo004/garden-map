@@ -104,6 +104,8 @@ class AppNotification {
       return (label: 'Ver la guía del cuidador', route: '/guia-cuidador', extra: null, highlight: null);
     case 'TRAINING_REMINDER':
       return (label: 'Ir a capacitaciones', route: '/caregiver/trainings', extra: null, highlight: null);
+    case 'CAREGIVER_ONBOARDING':
+      return (label: 'Terminar mi registro', route: '/caregiver/onboarding', extra: null, highlight: null);
     case 'ZONE_NOW_AVAILABLE':
       return (label: 'Buscar cuidadores', route: '/marketplace', extra: null, highlight: null);
   }

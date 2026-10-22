@@ -23,6 +23,15 @@ router.get(
   bookingController.getMyBookings
 );
 
+/** GET /api/bookings/meet-greet-status/:caregiverId — ¿este dueño tiene que hacer el Meet & Greet?
+ * No, aunque el cuidador lo pida, si terminaron un servicio juntos en los últimos 3 meses. */
+router.get(
+  '/meet-greet-status/:caregiverId',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.getMeetAndGreetStatus
+);
+
 /** GET /api/bookings/pending-rating — primera reserva COMPLETED sin calificar del cliente. */
 router.get(
   '/pending-rating',

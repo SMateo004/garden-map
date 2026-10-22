@@ -11,7 +11,7 @@
  * Esto garantiza que nunca se cancele una reserva dejando el QR activo en el banco.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus, RefundStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import * as sipService from '../services/sip.service.js';
@@ -20,7 +20,7 @@ import logger from '../shared/logger.js';
 import { cancelUnpaidGroupSiblings } from '../modules/booking-service/booking-group.service.js';
 
 export function iniciarJobQrExpiry() {
-    cron.schedule('* * * * *', async () => {
+    scheduleExclusive('qr-expiry', '* * * * *', async () => {
         await procesarQrsExpirados();
     });
     logger.info('[QR-EXPIRY JOB] Monitor de expiración de QR activo.');

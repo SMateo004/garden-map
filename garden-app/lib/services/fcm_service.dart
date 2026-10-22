@@ -183,6 +183,10 @@ class FcmService {
         // reserva de forma prominente con los botones Aceptar/Rechazar.
         _router!.go('/caregiver/home');
         break;
+      case 'CAREGIVER_ONBOARDING':
+        // Recordatorio de registro sin terminar: abre el registro donde quedó.
+        _router!.go('/caregiver/onboarding');
+        break;
       case 'STAFF_BOOKING':
         // Empleado de empresa: reserva nueva por aceptar o reserva que le asignaron.
         _router!.go('/caregiver-staff/home');

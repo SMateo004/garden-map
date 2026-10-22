@@ -4,12 +4,12 @@
  * cuidador y al dueño a los 15 min, alerta a los admins a la hora, y cierre del mapa en
  * vivo del recojo si nadie marcó "ya llegamos".
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { runTransportMaintenance } from '../modules/transport/transport.service.js';
 
 export function iniciarJobTransporte() {
-  cron.schedule('*/5 * * * *', async () => {
+  scheduleExclusive('transport', '*/5 * * * *', async () => {
     try {
       const r = await runTransportMaintenance();
       if (r.reminded || r.late || r.alerted || r.closed) logger.info('[TRANSPORT JOB]', r);

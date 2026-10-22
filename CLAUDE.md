@@ -35,6 +35,9 @@ significa:
   basura y contaminó el saldo de las cuentas reviewer con bugs que se estaban probando).
 - Antes de un cambio grande, considerá si de verdad hace falta probar contra producción o si
   alcanza con revisar el código.
+- Entorno de pruebas y respaldo diario cifrado: preparados en `.github/workflows/db-backup.yml`
+  y `docs/STAGING_Y_RESPALDOS.md`. Hasta que se creen la base y la API de staging en Render y se
+  carguen los secrets, todo lo de arriba sigue vigente.
 
 ## Cómo se despliega (verificado con el historial real de GitHub Actions, no asumido)
 
@@ -65,8 +68,9 @@ flutter build ipa --release          # iOS, para App Store (requiere macOS + Xco
 - **Firma de Android**: `garden-app/android/garden-upload-key.jks` +
   `garden-app/android/key.properties` — ambos gitignorados, viven solo en la máquina donde se
   generaron. Las contraseñas están en un gestor de contraseñas (pedíselas a Sai si las
-  necesitás). **Si se pierden, no se puede volver a actualizar la app en Play Store con el mismo
-  listing.**
+  necesitás). Play App Signing está activo: si se pierden, se pide otra llave de carga en Play
+  Console → Firma de apps (48 h, ya se hizo en agosto 2026). Respaldo y verificación en
+  `docs/STAGING_Y_RESPALDOS.md`.
 - **Firma de iOS**: requiere cuenta de Apple Developer Program activa (certificados y
   provisioning profiles se gestionan desde Xcode/Developer Portal, no desde este repo).
 - Checklist completo de lo que falta para subir a las tiendas: pedile a Claude que lo regenere,

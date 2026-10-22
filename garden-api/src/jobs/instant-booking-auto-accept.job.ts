@@ -13,14 +13,14 @@
  * o no.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { acceptBooking } from '../modules/booking-service/booking.service.js';
 
 export function iniciarJobInstantBookingAutoAccept() {
-  cron.schedule('* * * * *', async () => {
+  scheduleExclusive('instant-booking-auto-accept', '* * * * *', async () => {
     await procesarReservasInstantaneas();
   });
   logger.info('[INSTANT-BOOKING JOB] Auto-aceptación de reserva instantánea activa.');

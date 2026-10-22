@@ -14,7 +14,7 @@
  * PENDING_MG es siempre anterior a cualquier intento de pago.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus, RefundStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
@@ -22,7 +22,7 @@ import logger from '../shared/logger.js';
 const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000; // 24h después de la fecha propuesta
 
 export function iniciarJobMgExpiry() {
-  cron.schedule('0 * * * *', async () => {
+  scheduleExclusive('mg-expiry', '0 * * * *', async () => {
     await procesarPendingMgExpirados();
   });
   logger.info('[MG-EXPIRY JOB] Monitor de reservas PENDING_MG sin resolver activo.');

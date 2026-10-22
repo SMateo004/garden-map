@@ -8,6 +8,7 @@ import '../../widgets/garden_loading_indicator.dart';
 import 'admin_commission_allocation_screen.dart';
 import 'admin_premium.dart';
 import 'admin_taxes_switch_card.dart';
+import 'admin_invoicing_switch_card.dart';
 
 /// Admin > Comisiones — ÚNICO lugar donde se configura la comisión de GARDEN.
 /// Pestaña "Tarifas" (esta) y pestaña "Distribución" (a dónde va la comisión,
@@ -326,6 +327,7 @@ class _AdminPricingScreenState extends State<AdminPricingScreen> {
           ]),
         ]),
         AdminTaxesSwitchCard(adminToken: widget.adminToken, onChanged: _load),
+        AdminInvoicingSwitchCard(adminToken: widget.adminToken),
         card([
           title('Tasa de impuestos (IVA 13 % + IT 3 %)',
               'Se aplica solo mientras los impuestos estén aprobados (interruptor de arriba). En pausa no se cobra ni se muestra.'),

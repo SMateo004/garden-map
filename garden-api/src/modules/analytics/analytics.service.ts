@@ -231,6 +231,7 @@ export async function getAdminSummary(rangeKey: string) {
       FROM bookings b WHERE b."createdAt" >= ${from} AND b."createdByAdmin" = false GROUP BY 1 ORDER BY 1`),
     q(Prisma.sql`SELECT count(*)::int AS created,
         count(*) FILTER (WHERE "paidAt" IS NOT NULL)::int AS paid,
+        count(*) FILTER (WHERE "paymentDeclaredAt" IS NOT NULL)::int AS declared,
         count(*) FILTER (WHERE status::text = 'COMPLETED')::int AS completed,
         count(*) FILTER (WHERE status::text IN ('CANCELLED', 'REJECTED_BY_CAREGIVER'))::int AS cancelled,
         coalesce(sum("totalAmount") FILTER (WHERE "paidAt" IS NOT NULL), 0)::float8 AS gmv,
@@ -386,6 +387,11 @@ export async function getAdminSummary(rangeKey: string) {
       { step: 'Abrieron un cuidador', n: evMap['caregiver_open'] ?? 0 },
       { step: 'Empezaron una reserva', n: evMap['booking_start'] ?? 0 },
       { step: 'Enviaron la reserva', n: evMap['booking_submit'] ?? 0 },
+      // Del envío al cobro: dónde se cae la gente en la pantalla de pago.
+      { step: 'Abrieron la pantalla de pago', n: evMap['payment_view'] ?? 0 },
+      { step: 'Tocaron pagar', n: evMap['payment_method'] ?? 0 },
+      { step: 'Vieron el QR', n: evMap['qr_shown'] ?? 0 },
+      { step: 'Avisaron que pagaron el QR', n: num(biz.declared) },
       { step: 'Reservas pagadas', n: paid },
     ],
     screens: screens.map((r) => ({
@@ -401,6 +407,88 @@ export async function getAdminSummary(rangeKey: string) {
       tables: storage.map((r) => ({ table: String(r.t), mb: round(num(r.bytes) / 1_048_576, 2), rows: num(r.n) })),
     },
   };
+}
+
+// ─────────────────────────────── Embudo del cuidador ───────────────────────────────
+
+/**
+ * Cuánto tarda un cuidador desde que se registra hasta su primer servicio, y dónde se queda.
+ * Todo el historial (hay pocos cuidadores; una ventana de 30 días no muestra nada). Pasos:
+ * registro → identidad verificada → perfil enviado → aprobado (visible) → primera reserva →
+ * primer servicio terminado. "Aprobado" sigue la misma regla que el marketplace en la práctica:
+ * verified o profileStatus APPROVED (status a veces queda en DRAFT en cuentas viejas).
+ */
+export async function getCaregiverFunnel() {
+  const rows = await q(Prisma.sql`
+    SELECT cp.id, u."firstName" || ' ' || left(u."lastName", 1) || '.' AS name,
+      cp."createdAt" AS registered,
+      (cp."identityVerificationStatus" = 'VERIFIED') AS identity,
+      cp."identityVerificationSubmittedAt" AS identity_at,
+      (cp.status::text <> 'DRAFT' OR coalesce(cp."profileStatus", 'INCOMPLETE') <> 'INCOMPLETE') AS submitted,
+      (cp.verified OR cp."profileStatus" = 'APPROVED') AS approved,
+      coalesce(cp."approvedAt", cp."verifiedAt") AS approved_at,
+      fb.first_booking, fc.first_completed, cp.suspended
+    FROM caregiver_profiles cp
+    JOIN users u ON u.id = cp."userId"
+    LEFT JOIN LATERAL (SELECT min(b."createdAt") AS first_booking FROM bookings b
+        WHERE b."caregiverId" = cp.id AND b."createdByAdmin" = false AND b."clientId" NOT IN ${TEST_USERS}) fb ON true
+    LEFT JOIN LATERAL (SELECT min(b."serviceEndedAt") AS first_completed FROM bookings b
+        WHERE b."caregiverId" = cp.id AND b.status::text = 'COMPLETED' AND b."createdByAdmin" = false
+          AND b."clientId" NOT IN ${TEST_USERS}) fc ON true
+    WHERE u."isDeleted" = false AND u.id NOT IN ${TEST_USERS}
+    ORDER BY cp."createdAt"`);
+
+  const hours = (from: unknown, to: unknown): number | null =>
+    from && to ? (new Date(to as string).getTime() - new Date(from as string).getTime()) / 3_600_000 : null;
+  const median = (xs: Array<number | null>): number | null => {
+    const v = xs.filter((x): x is number => x !== null && x >= 0).sort((a, b) => a - b);
+    if (!v.length) return null;
+    const m = Math.floor(v.length / 2);
+    return round(v.length % 2 ? v[m]! : (v[m - 1]! + v[m]!) / 2, 1);
+  };
+
+  const steps = [
+    { key: 'registered', step: 'Se registraron', reached: (r: Row) => true, at: (r: Row) => r.registered },
+    { key: 'identity', step: 'Verificaron su identidad', reached: (r: Row) => r.identity === true, at: (r: Row) => r.identity_at },
+    { key: 'submitted', step: 'Enviaron su perfil', reached: (r: Row) => r.submitted === true, at: () => null },
+    { key: 'approved', step: 'Aprobados (aparecen en el marketplace)', reached: (r: Row) => r.approved === true, at: (r: Row) => r.approved_at },
+    { key: 'first_booking', step: 'Recibieron su primera reserva', reached: (r: Row) => !!r.first_booking, at: (r: Row) => r.first_booking },
+    { key: 'first_completed', step: 'Terminaron su primer servicio', reached: (r: Row) => !!r.first_completed, at: (r: Row) => r.first_completed },
+  ];
+  const NEXT_ACTION: Record<string, string> = {
+    registered: 'Le falta verificar su identidad',
+    identity: 'Le falta completar y enviar su perfil',
+    submitted: 'Esperando la aprobación de un admin',
+    approved: 'Aprobado, pero todavía sin reservas',
+    first_booking: 'Tiene reservas, ninguna terminada todavía',
+  };
+
+  const funnel = steps.map((st) => ({
+    step: st.step,
+    n: rows.filter(st.reached).length,
+    medianHoursFromSignup: median(rows.filter(st.reached).map((r) => hours(r.registered, st.at(r)))),
+  }));
+
+  // Dónde está parado cada uno: el último paso alcanzado en orden (los pasos son acumulativos).
+  const stuck = rows
+    .map((r) => {
+      let last = 0;
+      for (let i = 1; i < steps.length; i++) {
+        if (steps[i]!.reached(r)) last = i; else break;
+      }
+      return { r, last };
+    })
+    .filter(({ r, last }) => last < steps.length - 1 && r.suspended !== true)
+    .map(({ r, last }) => ({
+      id: String(r.id),
+      name: String(r.name ?? '—'),
+      daysSinceSignup: Math.floor((Date.now() - new Date(r.registered as string).getTime()) / 86_400_000),
+      stage: steps[last]!.key,
+      nextAction: NEXT_ACTION[steps[last]!.key] ?? '',
+    }))
+    .sort((a, b) => b.daysSinceSignup - a.daysSinceSignup);
+
+  return { total: rows.length, funnel, stuck };
 }
 
 // ─────────────────────────────── Impacto del rediseño ───────────────────────────────

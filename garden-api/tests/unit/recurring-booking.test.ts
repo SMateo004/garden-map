@@ -7,6 +7,7 @@ jest.mock('../../src/config/database', () => ({
     caregiverProfile: { findFirst: jest.fn() },
     pet: { findMany: jest.fn() },
     recurringBookingSeries: { create: jest.fn().mockResolvedValue({ id: 'serie-1' }) },
+    booking: { findFirst: jest.fn().mockResolvedValue(null) },
   },
 }));
 jest.mock('../../src/services/firebase.service', () => ({ sendPushToUser: jest.fn() }));
@@ -49,6 +50,20 @@ describe('crear serie de paseos recurrentes', () => {
   it('no deja crear series con un cuidador que exige Meet & Greet', async () => {
     (prisma.caregiverProfile.findFirst as jest.Mock).mockResolvedValue(caregiver({ requireMeetAndGreet: true }));
     (prisma.pet.findMany as jest.Mock).mockResolvedValue([pet()]);
+    await expect(createSeries('dueño', body)).rejects.toMatchObject({ code: 'MEET_AND_GREET_REQUIRED' });
+  });
+
+  it('con Meet & Greet obligatorio, sí deja si terminaron un servicio juntos hace menos de 3 meses', async () => {
+    (prisma.caregiverProfile.findFirst as jest.Mock).mockResolvedValue(caregiver({ requireMeetAndGreet: true }));
+    (prisma.pet.findMany as jest.Mock).mockResolvedValue([pet()]);
+    ((prisma as any).booking.findFirst as jest.Mock).mockResolvedValueOnce({ serviceEndedAt: new Date(Date.now() - 20 * 86_400_000), updatedAt: new Date() });
+    await expect(createSeries('dueño', body)).resolves.toEqual({ id: 'serie-1' });
+  });
+
+  it('pasados 3 meses desde el último servicio, se vuelve a pedir', async () => {
+    (prisma.caregiverProfile.findFirst as jest.Mock).mockResolvedValue(caregiver({ requireMeetAndGreet: true }));
+    (prisma.pet.findMany as jest.Mock).mockResolvedValue([pet()]);
+    ((prisma as any).booking.findFirst as jest.Mock).mockResolvedValueOnce({ serviceEndedAt: new Date(Date.now() - 100 * 86_400_000), updatedAt: new Date() });
     await expect(createSeries('dueño', body)).rejects.toMatchObject({ code: 'MEET_AND_GREET_REQUIRED' });
   });
 });

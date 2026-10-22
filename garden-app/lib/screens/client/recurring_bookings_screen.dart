@@ -74,7 +74,43 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
   @override
   void initState() {
     super.initState();
+    _pets = _pets;
+    _caregiver = widget.caregiver;
     if (!_isCreateMode) _loadSeries();
+    // Abierta sin datos (ej. "Hacerlo fijo" desde Mis reservas): los busca ella misma.
+    if (_isCreateMode && _pets == null) _loadPets();
+    if (_isCreateMode && _caregiver == null) _loadCaregiver();
+  }
+
+  List<dynamic>? _pets;
+  Map<String, dynamic>? _caregiver;
+
+  Future<void> _loadPets() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/client/pets'), headers: {'Authorization': 'Bearer $_token'})
+          .timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        final pets = data['data'] as List? ?? [];
+        setState(() {
+          _pets = pets;
+          if (pets.length == 1 && pets.first is Map && pets.first['id'] != null) {
+            _selectedPetIds.add(pets.first['id'] as String);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _pets = const []);
+    }
+  }
+
+  Future<void> _loadCaregiver() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'))
+          .timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) setState(() => _caregiver = (data['data'] as Map).cast<String, dynamic>());
+    } catch (_) {}
   }
 
   Future<void> _loadSeries() async {
@@ -209,7 +245,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
   }
 
   Widget _buildCreateForm(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    final caregiverName = '${widget.caregiver?['firstName'] ?? ''} ${widget.caregiver?['lastName'] ?? ''}'.trim();
+    final caregiverName = '${_caregiver?['firstName'] ?? ''} ${_caregiver?['lastName'] ?? ''}'.trim();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -292,7 +328,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           const SizedBox(height: 10),
           // Sin mascotas no hay nada que elegir: antes la sección quedaba vacía
           // y el botón solo decía "Elige al menos una mascota".
-          if ((widget.pets ?? []).isEmpty)
+          if ((_pets ?? []).isEmpty)
             Row(
               children: [
                 Expanded(
@@ -308,7 +344,7 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: (widget.pets ?? []).map((p) {
+            children: (_pets ?? []).map((p) {
               final pet = p as Map<String, dynamic>;
               final id = pet['id'] as String;
               final name = pet['name'] as String? ?? 'Mascota';

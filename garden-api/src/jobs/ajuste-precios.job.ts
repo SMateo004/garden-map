@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import {
     calcularAjusteDinamico,
     calcularSugerenciaCuidador,
@@ -19,7 +19,7 @@ const PRICING_SERVICE_URL = process.env.PRICING_SERVICE_URL || 'http://localhost
 
 export function iniciarJobAjustePrecios() {
     // Corre todos los días a las 2am
-    cron.schedule('0 2 * * *', async () => {
+    scheduleExclusive('ajuste-precios', '0 2 * * *', async () => {
         logger.info('[PRICING JOB] Iniciando ajuste dinámico de precios...');
         await runPricingJob();
     });

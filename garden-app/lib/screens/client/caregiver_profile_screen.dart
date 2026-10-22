@@ -37,6 +37,21 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   bool _isLoading = true;
   bool _loadError = false;
   List<dynamic> _clientPets = [];
+  /// Meet & Greet que no hace falta repetir: terminaron un servicio juntos hace menos de 3 meses.
+  bool _mgWaived = false;
+
+  Future<void> _fetchMeetAndGreetStatus(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/meet-greet-status/${widget.caregiverId}'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true && data['data']?['caregiverRequires'] == true && data['data']?['required'] == false) {
+        setState(() => _mgWaived = true);
+      }
+    } catch (_) {}
+  }
   bool _petsLoading = true;
   String _authToken = '';
   bool _isFavorite = false;
@@ -67,6 +82,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       _fetchCaregiver(),
       if (token.isNotEmpty) _fetchClientPets(token),
       if (token.isNotEmpty) _fetchClientZoneStatus(token),
+      if (token.isNotEmpty && AuthState.effectiveRole != 'CAREGIVER') _fetchMeetAndGreetStatus(token),
     ]);
     if (mounted) setState(() => _isLoading = false);
     if (token.isNotEmpty) _fetchFavoriteStatus(token);
@@ -488,7 +504,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 // Con Meet & Greet obligatorio la serie no se puede crear (cada
                 // paseo se generaría sin conocerse): se explica en vez de abrir
                 // un formulario que el servidor va a rechazar.
-                if (_caregiver?['requireMeetAndGreet'] == true)
+                if (_caregiver?['requireMeetAndGreet'] == true && !_mgWaived)
                   _ServiceOption(icon: GIcon.repetir, label: 'Paseo recurrente', sublabel: 'Primero conócelo con una reserva normal', onTap: () {
                     Navigator.pop(sheetCtx);
                     GardenErrorDialog.show(context, 'Este cuidador pide conocerse primero (Meet & Greet). Haz una reserva normal de paseo con él y después programa los paseos recurrentes.');

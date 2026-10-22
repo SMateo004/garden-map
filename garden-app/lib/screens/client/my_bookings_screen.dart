@@ -1179,6 +1179,33 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                       ],
                     ]),
+                    // Paseo terminado: el momento de proponer que sea fijo (se reserva solo cada
+                    // semana con el mismo cuidador). Antes solo se llegaba desde el perfil.
+                    if (booking['serviceType'] == 'PASEO' && booking['caregiverId'] != null) ...[
+                      const SizedBox(height: 8),
+                      Material(
+                        color: GardenColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => context.push('/recurring-booking/${booking['caregiverId']}'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Row(children: [
+                              const GardenIcon(GIcon.repetir, size: GIconSize.sm, color: GardenColors.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text('Hazlo fijo: elige los días y se reserva solo cada semana con el mismo cuidador.',
+                                    style: TextStyle(fontSize: 12.5, color: textColor, height: 1.3)),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('Programar',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: GardenColors.primary)),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                   // Chat y "Ampliar tiempo" lado a lado: antes eran dos botones a
                   // todo el ancho apilados y la tarjeta en curso quedaba altísima.

@@ -17,7 +17,7 @@
  * a ambas partes.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus, RefundStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import { getNumericSetting } from '../utils/settings-cache.js';
@@ -26,7 +26,7 @@ import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 
 export function iniciarJobNoShowExpiry() {
-  cron.schedule('*/5 * * * *', async () => {
+  scheduleExclusive('no-show-expiry', '*/5 * * * *', async () => {
     await procesarNoShows();
   });
   logger.info('[NO-SHOW-EXPIRY JOB] Monitor de reservas no-show activo.');

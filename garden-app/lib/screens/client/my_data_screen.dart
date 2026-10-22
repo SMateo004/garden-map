@@ -18,6 +18,7 @@ import '../../design/garden_icons.dart';
 import '../../design/garden_profile.dart';
 import '../support/support_chat_screen.dart';
 import '../../design/garden_depth.dart';
+import '../../services/invoicing_state.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -298,8 +299,11 @@ class _MyDataScreenState extends State<MyDataScreen> {
     if (_dateOfBirth == null) missing.add('Fecha de nacimiento');
     if (_bioCtrl.text.trim().isEmpty) missing.add('Descripción');
     if (!_hasPhoto) missing.add('Foto de perfil');
-    if (_nitCtrl.text.trim().isEmpty) missing.add('NIT o Carnet');
-    if (_nitRazonSocialCtrl.text.trim().isEmpty) missing.add('Razón social');
+    // Con la facturación en "Pronto" (switch del admin) no falta nada de esto.
+    if (InvoicingState.active.value) {
+      if (_nitCtrl.text.trim().isEmpty) missing.add('NIT o Carnet');
+      if (_nitRazonSocialCtrl.text.trim().isEmpty) missing.add('Razón social');
+    }
     return missing;
   }
 
@@ -850,9 +854,15 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   'Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
                   style: TextStyle(color: subtextColor, fontSize: 11.5),
                 ),
+                if (!InvoicingState.active.value) ...[
+                  const SizedBox(height: 8),
+                  Text('Pronto: todavía no emitimos facturas. Te avisaremos cuando puedas pedirla.',
+                      style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                ],
                 const SizedBox(height: 10),
                 TextField(
                   controller: _nitCtrl,
+                  enabled: InvoicingState.active.value,
                   onChanged: (_) => setState(() {}),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -862,6 +872,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _nitRazonSocialCtrl,
+                  enabled: InvoicingState.active.value,
                   onChanged: (_) => setState(() {}),
                   style: TextStyle(color: textColor),
                   decoration: fieldDeco('Razón social', GIcon.documento, missing: _nitRazonSocialCtrl.text.trim().isEmpty),

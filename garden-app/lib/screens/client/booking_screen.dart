@@ -12,6 +12,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../services/taxes_state.dart';
+import '../../services/invoicing_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'my_data_screen.dart';
 
@@ -111,6 +112,30 @@ class _BookingScreenState extends State<BookingScreen> {
 
   // Meet & Greet opcional
   bool _includeMG = false;
+  /// El cuidador pide Meet & Greet, pero este dueño terminó un servicio con él en los últimos
+  /// 3 meses: no hace falta repetirlo (GET /bookings/meet-greet-status). Queda opcional.
+  bool _mgWaived = false;
+
+  Future<void> _applyMeetAndGreetWaiver() async {
+    if (_caregiver?['requireMeetAndGreet'] != true || AuthState.token.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/meet-greet-status/${widget.caregiverId}'),
+        headers: {'Authorization': 'Bearer ${AuthState.token}'},
+      ).timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body);
+      if (!mounted || data['success'] != true) return;
+      if (data['data']?['caregiverRequires'] == true && data['data']?['required'] == false) {
+        setState(() {
+          _caregiver = {...?_caregiver, 'requireMeetAndGreet': false};
+          _includeMG = false;
+          _mgWaived = true;
+        });
+      }
+    } catch (_) {
+      // Sin respuesta: se queda como el cuidador lo pide (lo seguro).
+    }
+  }
   DateTime? _mgDate;
   TimeOfDay? _mgTime;
   final _mgPlaceCtrl = TextEditingController();
@@ -319,6 +344,7 @@ class _BookingScreenState extends State<BookingScreen> {
       if (data['success'] == true && mounted) {
         // Mismo GET /settings: refresca si hoy se cobran impuestos (desglose de abajo).
         TaxesState.applySettings((data['data'] as Map?)?.cast<String, dynamic>());
+        InvoicingState.applySettings((data['data'] as Map?)?.cast<String, dynamic>());
         setState(() {});
         final raw = data['data']?['caregiverAcceptWindowHoras'];
         final parsed = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
@@ -366,6 +392,7 @@ class _BookingScreenState extends State<BookingScreen> {
         // desactivar — ver _buildMeetAndGreetSection.
         if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
       });
+      _applyMeetAndGreetWaiver();
       // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
       _loadMultiDayData();
       return;
@@ -406,6 +433,7 @@ class _BookingScreenState extends State<BookingScreen> {
              }
              if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
           });
+          _applyMeetAndGreetWaiver();
           // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
           _loadMultiDayData();
         }
@@ -3271,7 +3299,9 @@ class _BookingScreenState extends State<BookingScreen> {
                           ? 'Selecciona primero la fecha del servicio'
                           : mgRequired
                               ? 'Este cuidador exige conocerte antes del primer servicio'
-                              : 'Conoce al cuidador antes del servicio',
+                              : _mgWaived
+                                  ? 'Ya se conocen: no hace falta repetirlo (opcional)'
+                                  : 'Conoce al cuidador antes del servicio',
                       style: TextStyle(color: lockedText, fontSize: 12),
                     ),
                   ],

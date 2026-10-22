@@ -81,7 +81,9 @@ export async function createSeries(clientId: string, body: CreateRecurringSeries
   }
   // Cada paseo de la serie se crea sin Meet & Greet: con un cuidador que lo
   // exige, TODAS las fechas se saltaban sin que el dueño entendiera por qué.
-  if (caregiver.requireMeetAndGreet) {
+  // Si terminaron un servicio juntos en los últimos 3 meses ya se conocen (misma regla que una
+  // reserva normal, bookingService.meetAndGreetWaived).
+  if (caregiver.requireMeetAndGreet && !(await bookingService.meetAndGreetWaived(clientId, caregiver.id))) {
     throw new BadRequestError(
       'Este cuidador pide conocerse primero (Meet & Greet). Haz una reserva normal con él y después programa los paseos recurrentes.',
       'MEET_AND_GREET_REQUIRED'
@@ -188,9 +190,16 @@ export async function cancelSeries(clientId: string, seriesId: string) {
 // Llamado por recurring-booking-generation.job.ts (cron diario).
 export async function generateDueOccurrences(): Promise<{ generated: number; skipped: number; failed: number }> {
   const today = boliviaTodayDateOnly();
-  const due = await prisma.recurringBookingSeries.findMany({
-    where: { status: RecurringSeriesStatus.ACTIVE, nextRunDate: { lte: new Date(today + 'T23:59:59.999Z') } },
+  // Cada paseo se genera `generateDaysAheadDays` (2) días ANTES de su fecha. Antes se generaba el
+  // mismo día del paseo (cuando nextRunDate llegaba a hoy): a las 02:00 para un paseo de ese día no
+  // hay las 24 h de anticipación mínima (paseoMinAdvanceHoras), createBooking lo rechazaba y la
+  // fecha se saltaba — semana tras semana, ningún paseo fijo llegaba a crearse.
+  const candidates = await prisma.recurringBookingSeries.findMany({
+    where: { status: RecurringSeriesStatus.ACTIVE, nextRunDate: { lte: new Date(addDaysToDateOnly(today, 14) + 'T23:59:59.999Z') } },
   });
+  const due = candidates.filter(
+    (s) => s.nextRunDate.toISOString().slice(0, 10) <= addDaysToDateOnly(today, s.generateDaysAheadDays ?? DEFAULT_GENERATE_DAYS_AHEAD)
+  );
 
   let generated = 0;
   let skipped = 0;
@@ -198,6 +207,17 @@ export async function generateDueOccurrences(): Promise<{ generated: number; ski
 
   for (const series of due) {
     const walkDate = series.nextRunDate.toISOString().slice(0, 10);
+    // Una fecha que ya pasó (ej. el job no corrió ese día) no se puede reservar: se avanza sin
+    // avisar "no se pudo" por algo que no dependía del dueño.
+    if (walkDate < today) {
+      const next = computeInitialRunDate(series.daysOfWeek, series.generateDaysAheadDays ?? DEFAULT_GENERATE_DAYS_AHEAD);
+      await prisma.recurringBookingSeries.update({
+        where: { id: series.id },
+        data: { nextRunDate: new Date(next + 'T00:00:00.000Z'), lastRunAt: new Date() },
+      });
+      skipped++;
+      continue;
+    }
     try {
       // FIX (auditoría 2026-10-01, jobs — ajustado tras revisión de seguridad):
       // si el proceso se cae/reinicia justo después de que createBooking() crea

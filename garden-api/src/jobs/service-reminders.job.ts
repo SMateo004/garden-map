@@ -5,6 +5,7 @@
  * También monitorea hospedajes activos cuya endDate se acerca o ya pasó.
  */
 import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import prisma from '../config/database.js';
 import { onServiceReminder, getNotificationPrefs } from '../services/notification.service.js';
 import { sendPushToUser } from '../services/firebase.service.js';
@@ -527,7 +528,7 @@ async function procesarNotificacionesMasivasProgramadas() {
 
 export function iniciarJobServiceReminders() {
   // Notificaciones masivas programadas — cada minuto
-  cron.schedule('* * * * *', () => {
+  scheduleExclusive('service-reminders:1', '* * * * *', () => {
     procesarNotificacionesMasivasProgramadas().catch(err =>
       logger.error('[MASS-NOTIF] Job falló', { err })
     );
@@ -540,7 +541,7 @@ export function iniciarJobServiceReminders() {
   // ±30min chequeada una sola vez por hora. Ahora es seguro correrlo más seguido
   // porque cada función de este bloque tiene guard de idempotencia (ver
   // serviceEvents / ratingReminderSentAt / lastEndReminderAt).
-  cron.schedule('*/15 * * * *', async () => {
+  scheduleExclusive('service-reminders:2', '*/15 * * * *', async () => {
     await procesarRecordatoriosDeServicio();
     await procesarAvisosFinHospedaje().catch(err =>
       logger.error('[HOSPEDAJE-EXPIRY] Job falló', { err })
@@ -554,7 +555,7 @@ export function iniciarJobServiceReminders() {
   });
 
   // Auto-payout: cada 4 horas libera pagos de servicios completados hace +48h sin calificar
-  cron.schedule('0 */4 * * *', async () => {
+  scheduleExclusive('service-reminders:3', '0 */4 * * *', async () => {
     try {
       const count = await autoPayoutExpiredReviews();
       if (count > 0) logger.info(`[AutoPayout] ${count} desembolsos automáticos procesados`);

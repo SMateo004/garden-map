@@ -16,14 +16,14 @@
  * aviso enviado", el propio intervalo del cron ya da el espaciado.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import { sendPushToAdmins } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 
 export function iniciarJobSosRetry() {
-  cron.schedule('*/5 * * * *', async () => {
+  scheduleExclusive('sos-retry', '*/5 * * * *', async () => {
     await reintentarAvisosSosAbiertos();
   });
   logger.info('[SOS-RETRY JOB] Reintento de avisos de SOS sin resolver activo (cada 5 min).');

@@ -1,0 +1,154 @@
+name: Respaldo de la base y entorno de pruebas
+
+# Todos los días: copia completa de la base de producción, cifrada, a un bucket privado de S3
+# (el repo es público: el respaldo NUNCA va como artefacto de GitHub). Después la restaura en la
+# base de staging y la compara con producción — así el respaldo se prueba de verdad cada día, y
+# staging amanece con datos reales anonimizados (garden-api/scripts/staging/anonymize.sql).
+#
+# Secrets que usa (Settings > Secrets and variables > Actions):
+#   PROD_DATABASE_URL       URL externa de la base de producción (Render > base > Connect > External)
+#   BACKUP_PASSPHRASE       clave para cifrar el respaldo (guardarla también en el gestor de contraseñas)
+#   BACKUP_AWS_ACCESS_KEY_ID / BACKUP_AWS_SECRET_ACCESS_KEY / BACKUP_S3_BUCKET
+#   STAGING_DATABASE_URL    URL externa de la base de staging (opcional: sin ella no se restaura)
+# Ver docs/STAGING_Y_RESPALDOS.md.
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # 04:00 en Bolivia
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  PREFIX: db-backups
+  KEEP_DAYS: '30'
+
+jobs:
+  backup:
+    name: Respaldar producción
+    runs-on: ubuntu-24.04
+    outputs:
+      key: ${{ steps.upload.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cliente de PostgreSQL 16
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 >/dev/null
+          pg_dump --version
+
+      - name: Respaldo cifrado
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROD_DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Faltan los secrets PROD_DATABASE_URL o BACKUP_PASSPHRASE"; exit 1
+          fi
+          URL="$PROD_DATABASE_URL"
+          case "$URL" in *sslmode=*) ;; *\?*) URL="$URL&sslmode=require" ;; *) URL="$URL?sslmode=require" ;; esac
+          # Conteo de filas en el momento del respaldo: la prueba de restauración lo compara.
+          psql "$URL" -At -v ON_ERROR_STOP=1 -f garden-api/scripts/staging/row-counts.sql > counts.txt
+          pg_dump "$URL" --format=custom --no-owner --no-privileges --file=garden.dump
+          ls -lh garden.dump
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --output garden.dump.gpg garden.dump
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --output counts.txt.gpg counts.txt
+          rm -f garden.dump counts.txt
+
+      - name: Subir a S3
+        id: upload
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          KEY="$PREFIX/garden-$(date -u +%Y-%m-%dT%H%M)"
+          aws s3 cp garden.dump.gpg "s3://$BUCKET/$KEY.dump.gpg" --sse AES256 --only-show-errors
+          aws s3 cp counts.txt.gpg "s3://$BUCKET/$KEY.counts.gpg" --sse AES256 --only-show-errors
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Respaldo subido: $KEY"
+          # Retención: se borran los respaldos de más de KEEP_DAYS días.
+          CUTOFF=$(date -u -d "-$KEEP_DAYS days" +%Y-%m-%d)
+          aws s3 ls "s3://$BUCKET/$PREFIX/" | awk '{print $4}' | while read -r f; do
+            d=$(echo "$f" | sed -n 's/^garden-\([0-9-]\{10\}\)T.*/\1/p')
+            if [ -n "$d" ] && [[ "$d" < "$CUTOFF" ]]; then
+              aws s3 rm "s3://$BUCKET/$PREFIX/$f" --only-show-errors && echo "Borrado por antigüedad: $f"
+            fi
+          done
+
+  restore-test:
+    name: Restaurar en staging y verificar
+    needs: backup
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ¿Hay base de staging?
+        id: check
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          if [ -z "$STAGING_DATABASE_URL" ]; then
+            echo "::warning::Sin STAGING_DATABASE_URL: el respaldo se guardó, pero no se probó restaurarlo."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cliente de PostgreSQL 16
+        if: steps.check.outputs.run == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 >/dev/null
+
+      - name: Restaurar, comparar y anonimizar
+        if: steps.check.outputs.run == 'true'
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          KEY: ${{ needs.backup.outputs.key }}
+        run: |
+          set -euo pipefail
+          # Nunca contra producción: los hosts tienen que ser distintos.
+          host() { python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$1"; }
+          if [ "$(host "$PROD_DATABASE_URL")" = "$(host "$STAGING_DATABASE_URL")" ]; then
+            echo "::error::STAGING_DATABASE_URL apunta al mismo servidor que producción. No se restaura."; exit 1
+          fi
+          URL="$STAGING_DATABASE_URL"
+          case "$URL" in *sslmode=*) ;; *\?*) URL="$URL&sslmode=require" ;; *) URL="$URL?sslmode=require" ;; esac
+
+          aws s3 cp "s3://$BUCKET/$KEY.dump.gpg" garden.dump.gpg --only-show-errors
+          aws s3 cp "s3://$BUCKET/$KEY.counts.gpg" counts.txt.gpg --only-show-errors
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output garden.dump --decrypt garden.dump.gpg
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output prod-counts.txt --decrypt counts.txt.gpg
+
+          # Staging se reemplaza por el respaldo de hoy. Render no da superusuario: pg_restore puede
+          # avisar por extensiones o comentarios; lo que vale es el conteo de abajo.
+          pg_restore --dbname="$URL" --clean --if-exists --no-owner --no-privileges garden.dump             || echo "::warning::pg_restore terminó con avisos — se valida con el conteo de filas."
+
+          # La prueba del respaldo: las mismas filas que producción al respaldar.
+          psql "$URL" -At -v ON_ERROR_STOP=1 -f garden-api/scripts/staging/row-counts.sql > staging-counts.txt
+          python3 garden-api/scripts/staging/compare-counts.py prod-counts.txt staging-counts.txt
+
+          psql "$URL" -v ON_ERROR_STOP=1 -q -f garden-api/scripts/staging/anonymize.sql
+          LEFT=$(psql "$URL" -At -c "SELECT count(*) FROM users WHERE email NOT LIKE 'reviewer.%@gardenbo.com' AND email NOT LIKE '%@staging.gardenbo.test'")
+          if [ "$LEFT" != "0" ]; then
+            echo "::error::Quedaron $LEFT correos reales en staging."; exit 1
+          fi
+          echo "Staging actualizado y anonimizado."
+          rm -f garden.dump garden.dump.gpg counts.txt.gpg

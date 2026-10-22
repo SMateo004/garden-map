@@ -100,6 +100,8 @@ class NotificationKind {
     'ACCOUNT_SUSPENDED': NotificationKind(NotificationTopic.account, GIcon.bloqueado, StoryTone.alert),
     'ACCOUNT_ACTIVATED': NotificationKind(NotificationTopic.account, GIcon.desbloqueado, StoryTone.good),
     'TRAINING_REMINDER': NotificationKind(NotificationTopic.account, GIcon.capacitacion, StoryTone.waiting),
+    // Registro de cuidador sin terminar (caregiver-onboarding-nudge.job.ts).
+    'CAREGIVER_ONBOARDING': NotificationKind(NotificationTopic.account, GIcon.identidadVerificada, StoryTone.waiting),
     'STAFF_JOINED': NotificationKind(NotificationTopic.account, GIcon.equipo, StoryTone.good),
     // Empresas: reserva por aceptar o asignada a un empleado del equipo.
     'STAFF_BOOKING': NotificationKind(NotificationTopic.booking, GIcon.reservas, StoryTone.waiting),

@@ -3,12 +3,12 @@
  * QR sin pagar vencidos, pagos declarados que se aprueban solos al vencer el QR,
  * Premium que termina (baja en el marketplace) y aviso 3 días antes.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { runPremiumMaintenance } from '../modules/premium/premium.service.js';
 
 export function iniciarJobPremium() {
-  cron.schedule('*/5 * * * *', async () => {
+  scheduleExclusive('premium', '*/5 * * * *', async () => {
     try {
       const r = await runPremiumMaintenance();
       if (r.expired || r.autoApproved || r.ended || r.reminded) logger.info('[PREMIUM JOB]', r);

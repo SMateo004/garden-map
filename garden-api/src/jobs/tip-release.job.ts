@@ -3,12 +3,12 @@
  * tip-release.service.ts). El pago por QR/SIP las libera en el momento; este
  * barrido cubre cualquier otra forma de saldar (reembolso, ajuste de admin).
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { releaseAllPendingTips } from '../modules/booking-service/tip-release.service.js';
 
 export function iniciarJobLiberarPropinas() {
-  cron.schedule('*/30 * * * *', async () => {
+  scheduleExclusive('tip-release', '*/30 * * * *', async () => {
     try {
       await releaseAllPendingTips();
     } catch (err) {

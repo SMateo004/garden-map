@@ -174,21 +174,25 @@ class Analytics {
   }
 
   /// Pasos del embudo que se derivan de la ruta — sin tocar cada pantalla.
+  ///
+  /// GoRouter reporta el NOMBRE de la ruta ("caregiverProfile", "booking", "paymentNew") y solo
+  /// cae a la ruta concreta cuando no tiene nombre. Antes esto comparaba solo contra plantillas
+  /// ("/caregiver/:id") que nunca llegaban, y el embudo marcaba 0 en "Abrieron un cuidador" y
+  /// "Empezaron una reserva" aunque hubiera visitas. Ahora mira el nombre y la ruta real.
   void _milestone(String screen, String? path) {
-    switch (screen) {
-      case '/marketplace':
-        _add('marketplace_view');
-      case '/caregiver/:id':
-        final cid = RegExp(r'^/caregiver/([A-Za-z0-9-]{8,40})').firstMatch(path ?? '')?.group(1);
-        _add('caregiver_open', props: cid == null ? null : {'cid': cid});
-      case '/booking/:id':
-      case '/recurring-booking/:id':
-        _marks['booking_start'] = DateTime.now();
-        _add('booking_start');
-      case '/payment/:id':
-      case '/payment-new':
-        _marks['payment_view'] = DateTime.now();
-        _add('payment_view');
+    final p = path ?? '';
+    final cid = RegExp(r'^/caregiver/([0-9a-fA-F-]{36})').firstMatch(p)?.group(1);
+    if (screen == 'marketplace' || p == '/marketplace') {
+      _add('marketplace_view');
+    } else if (screen == 'caregiverProfile' || cid != null) {
+      _add('caregiver_open', props: cid == null ? null : {'cid': cid});
+    } else if (screen == 'booking' || screen == 'recurringBookingCreate' ||
+        p.startsWith('/booking/') || p.startsWith('/recurring-booking/')) {
+      _marks['booking_start'] = DateTime.now();
+      _add('booking_start');
+    } else if (screen == 'payment' || screen == 'paymentNew' || p.startsWith('/payment/') || p == '/payment-new') {
+      _marks['payment_view'] = DateTime.now();
+      _add('payment_view');
     }
   }
 

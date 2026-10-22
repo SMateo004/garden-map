@@ -443,6 +443,11 @@ export const reportBooking = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /** GET /api/bookings/pending-rating */
+export const getMeetAndGreetStatus = asyncHandler(async (req: Request, res: Response) => {
+  const data = await bookingService.getMeetAndGreetStatus(req.user!.userId, req.params.caregiverId!);
+  res.json({ success: true, data });
+});
+
 export const getPendingRating = asyncHandler(async (req: Request, res: Response) => {
   const clientId = req.user!.userId;
   const booking = await bookingService.getPendingRatingBooking(clientId);

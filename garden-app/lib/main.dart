@@ -76,6 +76,7 @@ import 'services/deep_link_service.dart';
 import 'services/garden_live_activity.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/taxes_state.dart';
+import 'services/invoicing_state.dart';
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
 import 'services/analytics_service.dart';
@@ -829,6 +830,8 @@ Future<void> _bootstrap() async {
 
   // ¿Se cobran impuestos? (switch del admin). Hasta saberlo, no se mencionan.
   unawaited(TaxesState.refresh());
+  // ¿Ya se factura con NIT? (switch del admin). Hasta saberlo, "Pronto".
+  unawaited(InvoicingState.refresh());
 
   // Cargar preferencia de tema guardada antes de mostrar nada
   await themeNotifier.init();

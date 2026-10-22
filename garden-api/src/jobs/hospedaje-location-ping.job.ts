@@ -13,14 +13,14 @@
  * disclosure correspondiente.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { BookingStatus, ServiceType } from '@prisma/client';
 import prisma from '../config/database.js';
 import { sendSilentDataPush } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 
 export function iniciarJobHospedajeLocationPing() {
-  cron.schedule('0 * * * *', async () => {
+  scheduleExclusive('hospedaje-location-ping', '0 * * * *', async () => {
     await enviarPingsDeUbicacion();
   });
   logger.info('[HOSPEDAJE-LOCATION-PING JOB] Ping horario de ubicación activo.');

@@ -37,6 +37,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   Map<String, dynamic>? _d;
   /// Impacto del rediseño (GET /admin/analytics/impact). No depende del rango.
   Map<String, dynamic>? _impact;
+  /// Embudo del cuidador (GET /admin/analytics/caregiver-funnel). Todo el historial.
+  Map<String, dynamic>? _cgFunnel;
 
   String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -55,6 +57,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         // Si el impacto falla, el resto del panel se muestra igual.
         http.get(Uri.parse('$_base/admin/analytics/impact'), headers: headers)
             .catchError((_) => http.Response('{}', 500)),
+        http.get(Uri.parse('$_base/admin/analytics/caregiver-funnel'), headers: headers)
+            .catchError((_) => http.Response('{}', 500)),
       ]).timeout(const Duration(seconds: 40));
       final r = responses[0];
       final body = jsonDecode(r.body);
@@ -64,7 +68,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         final ib = jsonDecode(responses[1].body);
         if (responses[1].statusCode == 200 && ib['success'] == true) impact = ib['data'] as Map<String, dynamic>;
       } catch (_) {}
-      if (mounted) setState(() { _d = body['data'] as Map<String, dynamic>; _impact = impact; _loading = false; });
+      Map<String, dynamic>? cgFunnel;
+      try {
+        final cb = jsonDecode(responses[2].body);
+        if (responses[2].statusCode == 200 && cb['success'] == true) cgFunnel = cb['data'] as Map<String, dynamic>;
+      } catch (_) {}
+      if (mounted) setState(() { _d = body['data'] as Map<String, dynamic>; _impact = impact; _cgFunnel = cgFunnel; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = 'No se pudo cargar la analítica ($e)'; _loading = false; });
     }
@@ -160,6 +169,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
       _title('Embudo de reserva', text),
       _funnel(_list(d['funnel']), card, text, sub),
+      if (_cgFunnel != null) ...[
+        _title('Embudo del cuidador', text),
+        _funnel(_list(_cgFunnel!['funnel']), card, text, sub,
+            footnote: 'Todo el historial (${_cgFunnel!['total']} cuidadores). El tiempo es la mediana desde que se registraron.'),
+        _stuckCaregivers(_list(_cgFunnel!['stuck']), card, text, sub),
+      ],
       _title('Retención', text),
       _retention(_list(us['retention']), card, text, sub),
 
@@ -289,8 +304,21 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     );
   }
 
-  Widget _funnel(List<Map<String, dynamic>> steps, Color card, Color text, Color sub) {
+  Widget _funnel(List<Map<String, dynamic>> steps, Color card, Color text, Color sub,
+      {String footnote = 'Los primeros pasos cuentan sesiones; el último cuenta reservas pagadas.'}) {
     final first = steps.isEmpty ? 0 : _n(steps.first['n']);
+    // El paso donde más gente se cae (respecto del anterior): ahí conviene mirar primero.
+    var worst = -1;
+    var worstRatio = 1.0;
+    for (var i = 1; i < steps.length; i++) {
+      final prev = _n(steps[i - 1]['n']);
+      if (prev < 3) continue; // con 1 o 2 personas no es una tendencia
+      final ratio = _n(steps[i]['n']) / prev;
+      if (ratio < worstRatio) {
+        worstRatio = ratio.toDouble();
+        worst = i;
+      }
+    }
     return _box(
       card,
       Column(children: [
@@ -299,19 +327,31 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             final n = _n(steps[i]['n']);
             final prev = i == 0 ? n : _n(steps[i - 1]['n']);
             final ofFirst = first > 0 ? n / first : 0.0;
-            final drop = prev > 0 && i > 0 ? '${(n / prev * 100).round()}% del paso anterior' : '';
+            final hours = steps[i]['medianHoursFromSignup'];
+            final drop = [
+              if (prev > 0 && i > 0) '${(n / prev * 100).round()}% del paso anterior',
+              if (hours is num) 'mediana ${_hours(hours)}',
+            ].join(' · ');
+            final isWorst = i == worst;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Expanded(child: Text('${steps[i]['step']}', style: TextStyle(color: text, fontSize: 13))),
+                  if (isWorst)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Text('Acá se cae más gente',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: GardenColors.warning)),
+                    ),
                   Text(_fmt(n), style: TextStyle(fontWeight: FontWeight.w800, color: text)),
                 ]),
                 const SizedBox(height: 4),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: LinearProgressIndicator(value: ofFirst.clamp(0, 1).toDouble(), minHeight: 8,
-                      color: GardenColors.primary, backgroundColor: sub.withValues(alpha: 0.15)),
+                      color: isWorst ? GardenColors.warning : GardenColors.primary,
+                      backgroundColor: sub.withValues(alpha: 0.15)),
                 ),
                 if (drop.isNotEmpty) Text(drop, style: TextStyle(fontSize: 11, color: sub)),
               ]),
@@ -320,9 +360,36 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         ],
         Align(
           alignment: Alignment.centerLeft,
-          child: Text('Los primeros pasos cuentan sesiones; el último cuenta reservas pagadas.',
-              style: TextStyle(fontSize: 11, color: sub)),
+          child: Text(footnote, style: TextStyle(fontSize: 11, color: sub)),
         ),
+      ]),
+    );
+  }
+
+  String _hours(num h) => h < 48 ? '${h.toStringAsFixed(h < 10 ? 1 : 0)} h' : '${(h / 24).round()} días';
+
+  /// Cuidadores que se quedaron a mitad de camino, del más antiguo al más nuevo: a quién llamar.
+  Widget _stuckCaregivers(List<Map<String, dynamic>> stuck, Color card, Color text, Color sub) {
+    if (stuck.isEmpty) return const SizedBox.shrink();
+    return _box(
+      card,
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Se quedaron a mitad de camino (${stuck.length})',
+            style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        for (final c in stuck.take(15))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${c['name']}', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text('${c['nextAction']}', style: TextStyle(color: sub, fontSize: 11.5)),
+                ]),
+              ),
+              Text('hace ${c['daysSinceSignup']} días', style: TextStyle(color: sub, fontSize: 11.5)),
+            ]),
+          ),
       ]),
     );
   }

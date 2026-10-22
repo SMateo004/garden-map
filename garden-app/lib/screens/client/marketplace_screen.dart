@@ -576,9 +576,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  String? _lastTrackedFilters;
+
   /// Preferencias del usuario para analítica: solo valores de catálogo
   /// (servicio, zona, tamaño…), nunca el texto de búsqueda.
   void _trackFilters() {
+    // Una vez por combinación: antes se mandaba en cada recarga de la lista (cada letra de la
+    // búsqueda), unas 27 veces por sesión, e inflaba "preferencias".
+    final signature = [_selectedService, _selectedZone, _selectedPetType, _selectedSizes.join(','), _searchQuery.isNotEmpty,
+      _filterVerifiedOnly, _filterAggressive, _filterPuppies, _filterSeniors, _minRating].join('|');
+    if (signature == _lastTrackedFilters) return;
+    _lastTrackedFilters = signature;
     final a = Analytics.instance;
     if (_selectedService != 'todos') a.filter('service', _selectedService);
     if (_selectedZone != null) a.filter('zone', _selectedZone!.toLowerCase());

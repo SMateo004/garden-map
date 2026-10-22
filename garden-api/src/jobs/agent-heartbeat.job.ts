@@ -6,7 +6,7 @@
  * un aviso por la app a los admins cuando baja del umbral de la red configurada
  * (BLOCKCHAIN_LOW_BALANCE_POL, o 3 POL en Polygon PoS / 0.05 en Amoy).
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import { blockchainService, networkInfo } from '../services/blockchain.service.js';
 import { logAgentCall } from '../shared/agent-logger.js';
 import { notifyAdmins } from '../services/firebase.service.js';
@@ -62,10 +62,10 @@ async function checkBlockchainBalance(): Promise<void> {
 
 export function iniciarJobAgentHeartbeat() {
   // Balance blockchain — cada hora
-  cron.schedule('0 * * * *', () => { checkBlockchainBalance().catch(() => {}); });
+  scheduleExclusive('agent-heartbeat:1', '0 * * * *', () => { checkBlockchainBalance().catch(() => {}); });
 
   // Cada 15 minutos
-  cron.schedule('*/15 * * * *', async () => {
+  scheduleExclusive('agent-heartbeat:2', '*/15 * * * *', async () => {
     const start = Date.now();
     try {
       const [totalBookings, activeBookings, pendingPayments, approvedCaregivers] = await Promise.all([

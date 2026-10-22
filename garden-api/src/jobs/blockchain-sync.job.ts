@@ -4,7 +4,7 @@
  * - Cada 10 minutos: reconcilia — encola reservas pagadas/terminadas sin su registro.
  * Ver services/chain-registry.service.ts.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { processQueue, reconcile } from '../services/chain-registry.service.js';
 
@@ -30,10 +30,10 @@ async function tick(): Promise<void> {
 }
 
 export function iniciarJobBlockchainSync(): void {
-  cron.schedule('* * * * *', () => {
+  scheduleExclusive('blockchain-sync:1', '* * * * *', () => {
     tick().catch((err) => logger.error('[Blockchain] Error en el ciclo de la cola', { error: err?.message ?? err }));
   });
-  cron.schedule('*/10 * * * *', () => {
+  scheduleExclusive('blockchain-sync:2', '*/10 * * * *', () => {
     reconcile().catch((err) => logger.error('[Blockchain] Error en la reconciliación', { error: err?.message ?? err }));
   });
   // Al arrancar: reconciliar una vez (cubre lo que pasó con el servidor caído).

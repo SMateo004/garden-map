@@ -7,12 +7,12 @@
  * próximos 7 días, con cooldown de 3 días para no spamear.
  */
 
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { checkWaitlistsAndNotify } from '../modules/caregiver-service/waitlist.service.js';
 
 export function iniciarJobCaregiverWaitlist() {
-  cron.schedule('0 7 * * *', async () => {
+  scheduleExclusive('caregiver-waitlist', '0 7 * * *', async () => {
     await checkWaitlistsAndNotify();
   });
   logger.info('[WAITLIST JOB] Lista de espera de cuidadores activa.');

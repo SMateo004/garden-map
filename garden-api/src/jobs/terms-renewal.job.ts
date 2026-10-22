@@ -7,7 +7,7 @@
  * 3 días mientras siga pendiente (no a diario, para no saturar); no respeta la preferencia de
  * recordatorios porque es un aviso legal que condiciona su visibilidad.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { sendPushToUser } from '../services/firebase.service.js';
@@ -30,7 +30,7 @@ export function esHoraDeAvisar(now: Date = new Date()): boolean {
 
 export function iniciarJobRenovacionTerminos() {
   // 13:30 UTC = 09:30 en Bolivia.
-  cron.schedule('30 13 * * *', async () => {
+  scheduleExclusive('terms-renewal', '30 13 * * *', async () => {
     await enviarRecordatoriosTerminos();
   });
 

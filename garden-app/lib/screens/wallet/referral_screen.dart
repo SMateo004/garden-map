@@ -32,6 +32,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
   int _referredCount = 0;
   int _rewardedCount = 0;
   double _rewardBS = 20;
+  /// Bono si el invitado se registra como cuidador (referral.service.ts, lado de la oferta).
+  double _caregiverRewardBS = 30;
   bool _canApplyCode = false;
 
   /// NONE | PENDING | REWARDED — el bono propio, si a este usuario lo invitaron.
@@ -42,7 +44,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   String get _token => AuthState.token;
-  String get _reward => 'Bs ${_rewardBS.toStringAsFixed(_rewardBS % 1 == 0 ? 0 : 2).replaceAll('.', ',')}';
+  String _bs(double v) => 'Bs ${v.toStringAsFixed(v % 1 == 0 ? 0 : 2).replaceAll('.', ',')}';
+  String get _reward => _bs(_rewardBS);
   String get _link => 'https://gardenbo.com/register?ref=$_code';
 
   @override
@@ -74,6 +77,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         _referredCount = (d['referredCount'] as num?)?.toInt() ?? 0;
         _rewardedCount = (d['rewardedCount'] as num?)?.toInt() ?? 0;
         _rewardBS = (d['rewardBS'] as num?)?.toDouble() ?? 20;
+        _caregiverRewardBS = (d['caregiverRewardBS'] as num?)?.toDouble() ?? 30;
         _canApplyCode = d['canApplyCode'] == true;
         _myBonus = d['myBonus'] as String? ?? 'NONE';
         if (_canApplyCode && prefill != null && _applyController.text.isEmpty) _applyController.text = prefill;
@@ -272,6 +276,19 @@ class _ReferralScreenState extends State<ReferralScreen> {
         step(1, 'Comparte tu enlace por WhatsApp.'),
         step(2, 'Tu amigo se registra con él (el código se carga solo).'),
         step(3, 'Cuando complete su primer servicio, $_reward para cada uno en la billetera.'),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(GardenRadius.md),
+          ),
+          child: Text(
+            '¿Conoces a alguien que cuida mascotas? Si se registra como cuidador con tu enlace, '
+            'ganan ${_bs(_caregiverRewardBS)} cada uno cuando termine su primer servicio.',
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700, height: 1.35),
+          ),
+        ),
       ]),
     );
   }

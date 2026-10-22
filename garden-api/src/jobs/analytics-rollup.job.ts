@@ -3,7 +3,7 @@
  * Cada hora recalcula hoy y ayer (idempotente); a las 03:40 además poda
  * eventos (>90d) y sesiones (>400d) para que la base no crezca sin límite.
  */
-import cron from 'node-cron';
+import { scheduleExclusive } from './job-lease.js';
 import logger from '../shared/logger.js';
 import { rollupDay, purgeOld } from '../modules/analytics/analytics.service.js';
 
@@ -22,8 +22,8 @@ export async function ejecutarRollupAnalytics(): Promise<void> {
 }
 
 export function iniciarJobAnalyticsRollup() {
-  cron.schedule('5 * * * *', () => { void ejecutarRollupAnalytics(); });
-  cron.schedule('40 3 * * *', async () => {
+  scheduleExclusive('analytics-rollup:1', '5 * * * *', () => { void ejecutarRollupAnalytics(); });
+  scheduleExclusive('analytics-rollup:2', '40 3 * * *', async () => {
     try {
       const r = await purgeOld();
       logger.info('[ANALYTICS ROLLUP] poda', r);

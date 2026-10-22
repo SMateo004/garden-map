@@ -32,8 +32,7 @@ jest.mock('../../src/services/blockchain.service', () => ({ blockchainService: {
 jest.mock('../../src/services/chain-registry.service', () => ({ enqueueSafely: jest.fn() }));
 jest.mock('../../src/shared/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../src/modules/referral/referral.service', () => ({
-  grantReferralRewardIfEligible: jest.fn().mockResolvedValue(undefined),
-}));
+  grantReferralRewardIfEligible: jest.fn().mockResolvedValue(undefined), grantCaregiverReferralRewardIfEligible: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as {
   caregiverProfile: { findFirst: jest.Mock };

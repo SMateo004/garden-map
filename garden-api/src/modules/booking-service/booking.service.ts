@@ -64,7 +64,7 @@ import {
 import { combinedOccupancyByDay, firstFullDay, walkInPetsByDay } from '../caregiver-crm/walk-in-capacity.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
-import { grantReferralRewardIfEligible } from '../referral/referral.service.js';
+import { grantCaregiverReferralRewardIfEligible, grantReferralRewardIfEligible } from '../referral/referral.service.js';
 import {
   cancelUnpaidGroupSiblings,
   getGroupSummary,
@@ -91,6 +91,7 @@ const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
 const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
 import { getNumericSetting } from '../../utils/settings-cache.js';
+import { isInvoicingEnabled } from '../pricing/invoicing.service.js';
 import { termsGateWhere } from '../legal/caregiver-terms.service.js';
 import { getCommissionRate, getTaxRate, computeClientCharge, caregiverUnitFromPriced, caregiverNetOf, getPricingConfig, walk30BasePrice, normalizePayer, clientPaidCommission } from '../pricing/pricing.service.js';
 import { stripTaxFromUnpaidBooking } from '../pricing/taxes.service.js';
@@ -492,7 +493,7 @@ async function createBookingInTx(
     // Meet & Greet obligatorio: si el cuidador lo exige, la reserva debe
     // incluir mgData (propuesta de M&G) — no se puede crear una reserva
     // "directa" saltándose ese paso.
-    if (caregiver.requireMeetAndGreet && !mgData) {
+    if (caregiver.requireMeetAndGreet && !mgData && !(await meetAndGreetWaived(clientId, caregiver.id))) {
       throw new BadRequestError(
         'Este cuidador requiere completar un Meet & Greet antes de confirmar el servicio. Actívalo para continuar con la reserva.',
         'MEET_AND_GREET_REQUIRED',
@@ -941,6 +942,38 @@ function isDayTypeAllowed(
  * `FOR UPDATE` de recepción y consigo mismo, pero no frena a quien solo referencia al cuidador
  * (reseñas, mensajes). Se libera al terminar la transacción.
  */
+/** Cuántos días vale haber hecho un servicio juntos para no repetir el Meet & Greet. */
+export const MEET_AND_GREET_WAIVER_DAYS = 90;
+
+/**
+ * Meet & Greet que el cuidador exige pero que no hace falta repetir: el dueño ya terminó un servicio
+ * con él en los últimos 3 meses (ya se conocen). Pasado ese tiempo, se vuelve a pedir. Devuelve hasta
+ * cuándo vale la excepción, o null si hoy hay que hacerlo.
+ */
+export async function meetAndGreetWaiverUntil(clientId: string, caregiverId: string): Promise<Date | null> {
+  const last = await prisma.booking.findFirst({
+    where: { clientId, caregiverId, status: BookingStatus.COMPLETED },
+    orderBy: [{ serviceEndedAt: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
+    select: { serviceEndedAt: true, updatedAt: true },
+  });
+  const endedAt = last?.serviceEndedAt ?? last?.updatedAt;
+  if (!endedAt) return null;
+  const until = new Date(endedAt.getTime() + MEET_AND_GREET_WAIVER_DAYS * 24 * 60 * 60 * 1000);
+  return until > new Date() ? until : null;
+}
+
+export async function meetAndGreetWaived(clientId: string, caregiverId: string): Promise<boolean> {
+  return (await meetAndGreetWaiverUntil(clientId, caregiverId)) !== null;
+}
+
+/** GET /bookings/meet-greet-status/:caregiverId — para que la app sepa si este dueño debe hacer el M&G. */
+export async function getMeetAndGreetStatus(clientId: string, caregiverId: string) {
+  const caregiver = await prisma.caregiverProfile.findUnique({ where: { id: caregiverId }, select: { requireMeetAndGreet: true } });
+  if (!caregiver?.requireMeetAndGreet) return { caregiverRequires: false, required: false, waivedUntil: null };
+  const until = await meetAndGreetWaiverUntil(clientId, caregiverId);
+  return { caregiverRequires: true, required: until === null, waivedUntil: until?.toISOString() ?? null };
+}
+
 async function lockCaregiverCapacity(tx: Prisma.TransactionClient, caregiverId: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM "caregiver_profiles" WHERE id = ${caregiverId} FOR NO KEY UPDATE`;
 }
@@ -1689,8 +1722,10 @@ export async function initPayment(
     // debe quedar guardado desde ya). Si el cliente sí cargó algo, además
     // actualiza su default guardado en ClientProfile para pre-cargarlo en su
     // próximo servicio — un envío vacío NO borra ese default ya guardado.
-    const trimmedNit = nit?.trim();
-    const trimmedRazonSocial = nitRazonSocial?.trim();
+    // Facturación en "Pronto" (invoicing.service.ts): no se toma el NIT que llegue.
+    const invoicing = await isInvoicingEnabled();
+    const trimmedNit = invoicing ? nit?.trim() : undefined;
+    const trimmedRazonSocial = invoicing ? nitRazonSocial?.trim() : undefined;
     await tx.booking.updateMany({
       where: { id: { in: memberIds } },
       data: {
@@ -5462,7 +5497,7 @@ export async function concludeService(
       details: { serviceType: booking.serviceType, gpsDistance, overtimeMins, overtimeFeeGross },
     });
 
-    return { response: bookingToResponse(updated), clientId: booking.clientId };
+    return { response: bookingToResponse(updated), clientId: booking.clientId, caregiverId: booking.caregiverId };
   });
 
   // Fuera de la transacción a propósito — abre su propia transacción
@@ -5472,6 +5507,7 @@ export async function concludeService(
   // transacción externa todavía no liberó. Nunca debe tumbar la
   // conclusión real del servicio, que ya quedó confirmada arriba.
   grantReferralRewardIfEligible(result.clientId).catch(() => {});
+  grantCaregiverReferralRewardIfEligible(result.caregiverId).catch(() => {});
 
   return result.response;
 }

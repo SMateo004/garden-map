@@ -25,6 +25,7 @@ import '../../utils/qr_saver.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/card_payment_widgets.dart';
 import '../../widgets/payment_help_sheet.dart';
+import '../../services/invoicing_state.dart';
 
 enum _BrowserBackGuardMode { none, confirmCancel, redirectHome }
 
@@ -153,6 +154,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _loadData();
     _loadCardPaymentInfo();
     _loadBillingInfo();
+    // El admin pudo prender o apagar la facturación desde que abrió la app.
+    InvoicingState.refresh();
   }
 
   /// Precarga el NIT/razón social guardados del perfil del cliente, si los
@@ -670,9 +673,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     // y no hay billetera cubriendo el 100%, no hay nada que de verdad se
     // pueda procesar por ese método. Se comunica claro en vez de intentar
     // algo roto.
-    if (_selectedMethod == 'card' && !_walletCoversAll) {
+    // Embudo: "tocaron pagar" (antes solo se medía cuando elegían tarjeta, por un if mal ubicado).
     Analytics.instance.track('payment_method', sinceMark: 'payment_view',
         props: {'m': _selectedMethod, 'wallet': _walletBalance > 0 ? 'yes' : 'no'});
+    if (_selectedMethod == 'card' && !_walletCoversAll) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('El pago con tarjeta aún no está disponible para procesar. Elige QR bancario por ahora.'),
         backgroundColor: GardenColors.warning,
@@ -718,8 +722,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
       // Se manda siempre que haya algo cargado — si se deja vacío, el
       // backend guarda "0" en el snapshot de la reserva sin bloquear el pago.
-      if (nit.isNotEmpty) body['nit'] = nit;
-      if (razonSocial.isNotEmpty) body['nitRazonSocial'] = razonSocial;
+      // Con la facturación en "Pronto" (switch del admin) no se manda.
+      if (InvoicingState.active.value) {
+        if (nit.isNotEmpty) body['nit'] = nit;
+        if (razonSocial.isNotEmpty) body['nitRazonSocial'] = razonSocial;
+      }
 
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$_bookingId/payment'),
@@ -752,6 +759,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 double.tryParse(responseData['walletDeducted'].toString()) ?? 0.0;
           }
           setState(() => _qrResponse = responseData);
+          Analytics.instance.track('qr_shown', sinceMark: 'payment_view');
           // Auto-start polling as soon as QR is shown
           _startPolling();
         }
@@ -1471,6 +1479,60 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // pagar, para que una edición se sienta guardada en el momento en vez de
   // depender de completar el pago.
   Widget _buildBillingSummaryTile(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: InvoicingState.active,
+      builder: (context, active, _) => active
+          ? _buildBillingTileActive(textColor, subtextColor, surface, borderColor)
+          : _buildBillingTileSoon(textColor, subtextColor, surface, borderColor),
+    );
+  }
+
+  /// Facturación todavía no habilitada por el admin: se ve, pero desactivada y con "Pronto".
+  Widget _buildBillingTileSoon(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return Opacity(
+      opacity: 0.6,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            GardenIcon(GIcon.recibo, size: GIconSize.sm, color: subtextColor),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Datos de facturación',
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  const SizedBox(height: 2),
+                  Text('Muy pronto podrás pedir tu factura con NIT o Carnet.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: subtextColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('Pronto',
+                  style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBillingTileActive(Color textColor, Color subtextColor, Color surface, Color borderColor) {
     final nit = _nitCtrl.text.trim();
     final razonSocial = _razonSocialCtrl.text.trim();
     final hasData = nit.isNotEmpty || razonSocial.isNotEmpty;
