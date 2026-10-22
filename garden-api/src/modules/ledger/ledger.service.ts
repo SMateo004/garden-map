@@ -115,7 +115,8 @@ export async function regenerateAutoEntriesForMonth(year: number, month: number)
   // ── AUTO_PREMIUM — compra de Premium pagada (QR o presencial): entra plata real y es
   // ingreso de GARDEN (no pasa por billeteras). Las quitadas (REVOKED) no cuentan.
   const premiumPaid = await prisma.premiumPurchase.findMany({
-    where: { status: 'PAID', paidAt: { gte: start, lt: end } },
+    // Las aprobadas solas cuentan recién cuando el admin verifica que el dinero llegó.
+    where: { status: 'PAID', paidAt: { gte: start, lt: end }, OR: [{ autoApprovedAt: null }, { reviewOutcome: 'CONFIRMED' }] },
     select: { id: true, amount: true, weeks: true, paidAt: true, method: true },
   });
   for (const pp of premiumPaid) {

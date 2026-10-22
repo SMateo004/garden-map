@@ -384,6 +384,27 @@ export async function startPurchase(userId: string, weeks: unknown) {
     if (declared > 0) {
       throw new BadRequestError('Ya avisaste un pago que estamos revisando. Espera a que se confirme.', 'PREMIUM_PAYMENT_IN_REVIEW');
     }
+    // La aprobación automática confía en el "ya pagué". Para que no se pueda encadenar
+    // Premium gratis: (1) mientras una aprobada sola no fue verificada no se compra otra;
+    // (2) quien ya tuvo un pago "no recibido" solo puede activarlo con un admin.
+    const unverified = await tx.premiumPurchase.count({
+      where: { caregiverId: profile.id, status: PREMIUM_STATUS.PAID, autoApprovedAt: { not: null }, reviewedAt: null },
+    });
+    if (unverified > 0) {
+      throw new BadRequestError(
+        'Estamos verificando tu último pago de Premium. Podrás comprar más apenas se confirme.',
+        'PREMIUM_PAYMENT_IN_REVIEW'
+      );
+    }
+    const notReceived = await tx.premiumPurchase.count({
+      where: { caregiverId: profile.id, reviewOutcome: 'NOT_RECEIVED' },
+    });
+    if (notReceived > 0) {
+      throw new ForbiddenError(
+        'Un pago anterior de Premium no nos llegó. Escríbenos a soporte para activarlo.',
+        'PREMIUM_MANUAL_ONLY'
+      );
+    }
     await tx.premiumPurchase.updateMany({
       where: { caregiverId: profile.id, status: PREMIUM_STATUS.PENDING_PAYMENT },
       data: { status: PREMIUM_STATUS.CANCELLED },

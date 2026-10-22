@@ -300,6 +300,20 @@ describe('aprobación automática, no recibido y quitar', () => {
     expect(profile().listingBoost).toBe(0);
     expect(db.purchases.find((p) => p.id === a.id)!.status).toBe('REVOKED');
     await expect(premium.reviewAutoApproved(a.id, 'admin', 'CONFIRMED')).rejects.toThrow();
+    // Quien declaró un pago que no llegó ya no compra por QR (solo con un admin).
+    await expect(premium.startPurchase('u1', 1)).rejects.toThrow(/soporte/);
+    const r2 = await premium.activateManually('cp1', 'admin', { weeks: 1, paymentKind: 'CASH', adminPassword: 'ok' });
+    expect(r2.success).toBe(true);
+  });
+
+  it('no se encadena Premium "fiado": con una aprobada sola sin verificar no compra otra', async () => {
+    const a = await premium.startPurchase('u1', 1);
+    await premium.declarePayment('u1', a.id);
+    db.purchases.find((p) => p.id === a.id)!.qrExpiresAt = new Date(Date.now() - 1000);
+    await premium.runPremiumMaintenance();
+    await expect(premium.startPurchase('u1', 4)).rejects.toThrow(/verificando/);
+    await premium.reviewAutoApproved(a.id, 'admin', 'CONFIRMED');
+    await expect(premium.startPurchase('u1', 4)).resolves.toMatchObject({ weeks: 4 });
   });
 
   it('QR sin "ya pagué" vence (con margen) y queda EXPIRED', async () => {
