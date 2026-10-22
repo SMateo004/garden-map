@@ -48,7 +48,7 @@ it('con equipo a las 4 h todavía no vence (plazo 6 h)', async () => {
 
 it('con equipo vence igual si el servicio ya empezó', async () => {
   (staffUserIdsWithPermission as jest.Mock).mockResolvedValue(['staff1']);
-  db.booking.findMany.mockResolvedValue([booking({ startDate: new Date(Date.now() - 30 * 60 * 1000) })]);
+  db.booking.findMany.mockResolvedValue([booking({ startDate: new Date(Date.now() - 2 * 24 * H) })]);
   await procesarAceptacionesExpiradas();
   expect(db.booking.updateMany).toHaveBeenCalledTimes(1);
 });
