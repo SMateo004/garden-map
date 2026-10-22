@@ -818,6 +818,8 @@ async function createBookingInTx(
 
     const booking = await tx.booking.create({
       data: bookingData,
+      // Los viajes vuelven en la respuesta: la pantalla de pago separa "Recojo y entrega".
+      include: { transportLegs: true },
     });
 
     // Create one BookingPet row per pet
