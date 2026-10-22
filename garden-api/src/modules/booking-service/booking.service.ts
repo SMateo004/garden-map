@@ -2506,7 +2506,9 @@ async function settleTransportOnCancel(
   tx: Prisma.TransactionClient,
   booking: { id: string; caregiverId: string; petName: string | null },
   now: Date,
-  paid: boolean
+  paid: boolean,
+  /** Decididos en cancelBooking con la misma lectura que el reembolso. */
+  startedLegIds: Set<string>
 ): Promise<void> {
   const legs = await tx.bookingTransportLeg.findMany({
     where: { bookingId: booking.id, status: { in: ACTIVE_LEG_STATUSES } },
@@ -2514,8 +2516,9 @@ async function settleTransportOnCancel(
   if (legs.length === 0) return;
   let caregiverPay = 0;
   for (const leg of legs) {
-    // Se le paga solo si el viaje de verdad empezó (en camino con GPS del viaje).
-    const started = legReallyStarted(leg);
+    // Se le paga solo si el viaje de verdad empezó (en camino con GPS del viaje), según
+    // la misma lectura con la que se calculó el reembolso.
+    const started = startedLegIds.has(leg.id);
     const res = await tx.bookingTransportLeg.updateMany({
       where: { id: leg.id, status: leg.status },
       data: {
@@ -2662,6 +2665,9 @@ export async function cancelBooking(
     const now = new Date();
     let refundAmount: number;
     let refundStatus: RefundStatus;
+    /** Viajes que de verdad empezaron, decididos UNA vez con la misma foto que usa el
+     * reembolso: un punto GPS que llegue en medio no puede devolver y pagar a la vez. */
+    let startedLegIds = new Set<string>();
 
     // FIX (auditoría 2026-09-28, C1): antes esta rama "sin reembolso" solo
     // aplicaba si el status era PENDING_PAYMENT/PAYMENT_PENDING_APPROVAL — una
@@ -2690,6 +2696,7 @@ export async function cancelBooking(
       // mismo bloqueo, así el estado de cada viaje no cambia hasta terminar acá.
       await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
       const legsNow = await tx.bookingTransportLeg.findMany({ where: { bookingId } });
+      startedLegIds = new Set(legsNow.filter((l) => legReallyStarted(l)).map((l) => l.id));
       const refundCalc = await calculateRefund({ ...booking, transportLegs: legsNow }, now);
       refundAmount = refundCalc.refundAmount;
       refundStatus = refundCalc.refundStatus;
@@ -2749,7 +2756,7 @@ export async function cancelBooking(
     // Recojo / entrega: los viajes que no empezaron quedan cancelados (su dinero va en el
     // reembolso de arriba); uno ya en camino o en la puerta se le paga al cuidador — fue
     // hasta la casa del dueño. Sin comisión, como todo el transporte.
-    await settleTransportOnCancel(tx, booking, now, !!booking.paidAt);
+    await settleTransportOnCancel(tx, booking, now, !!booking.paidAt, startedLegIds);
 
     // Pago combinado sin terminar (billetera + QR): initPayment ya descontó la
     // parte de billetera y la guardó en walletPaymentAmount mientras el QR
