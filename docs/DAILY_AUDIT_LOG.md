@@ -4234,3 +4234,92 @@ limpio salvo esta actualización del log.
   últimos cuatro ya llevan entre 16 y 27 días sin una decisión.
 
 ---
+
+## 2026-10-22 — Premium (perfiles destacados) y "quién paga la comisión" — feature nueva de
+## ayer, nunca auditada; comentarios de reembolso desactualizados por ese mismo cambio
+
+**Commit de referencia al iniciar la auditoría:** `6ab7f54` (fix: prueba del plazo de aceptación
+no depende de la hora en que corre). `git status` limpio al empezar.
+
+**Contexto importante:** entre la corrida de ayer y esta, el dueño del proyecto (con otra sesión
+de Claude) ya resolvió los 11 hallazgos de alto riesgo que esta auditoría tenía acumulados y sin
+decidir (commit `67a477c`): cupo recepción+marketplace sin lock simétrico, ventana de aceptación
+de 3h para empresas con equipo, baja de cuenta sin chequear retiros pendientes, divergencia de
+precio en extras multi-servicio, los dos relojes de auto-liberación de pago, cancelación
+silenciosa en `payment_screen.dart`, antecedentes/NIT sin guard de estado, corrección de identidad
+de un cuidador verificado sin exigir `checkedAgainstId`, y el monto 0 del dueño en el veredicto
+`PARTIAL` de disputas en blockchain. Todos verificados en el diff de ese commit — se sacan de la
+lista de pendientes de abajo. Además se agregó Premium (`d42520e`) y un fix same-day sobre esa
+misma feature (`c229e3f`, impide encadenar Premium gratis con pagos declarados sin verificar).
+
+**Área elegida para hoy:** con la lista de pendientes ya mucho más corta, se priorizó Premium +
+"quién paga la comisión" (`commissionPaidBy`) — es la única pieza grande de dinero/comisión que
+se tocó ayer y que esta auditoría nunca había revisado (ejes (b) dinero y (c) coherencia del
+CLAUDE.md). Se revisó a fondo: `garden-api/src/modules/premium/premium.service.ts` (907 líneas),
+`premium.pricing.ts` (interpolación de precios), `premium.routes.ts` (permisos), el impacto de
+`commissionPaidBy` en `pricing.service.ts` y en cada punto de `booking.service.ts` que lo usa
+(creación, extensión de paseo/hospedaje, cambio de fechas, confirmación SIP, reembolso de
+`reportBooking`), el asiento contable de Premium en `ledger.service.ts`, y el lado Flutter
+(`premium_screen.dart`, `commission_payer_screen.dart`, `admin_premium.dart`,
+`garden_caregiver_card.dart`, `caregiver_profile_screen.dart`).
+
+### Verificado sin hallazgo nuevo
+
+- Encadenado de períodos (`activatePurchase`/`rechainAndRefresh`), bloqueo `FOR UPDATE` del
+  perfil y `updateMany` condicionado al estado en cada escritura de Premium: doble toque, dos
+  admins o banco+admin a la vez no activan ni quitan dos veces — confirmado leyendo cada
+  transacción, no solo el comentario. Incluye el candado de `startPurchase` que ya agregó
+  `c229e3f` ayer (no se puede encadenar Premium gratis con pagos declarados sin verificar).
+- Cada lugar donde se restaba `commissionAmount` de `totalAmount` para un reembolso usa
+  `clientPaidCommission()` (0 si el cuidador absorbe la comisión) — se grepeó **todo** el uso de
+  `commissionAmount` en `garden-api/src/` buscando un resto que no hubiera migrado a esa función
+  tras el cambio de ayer; no se encontró ninguno (los jobs de reembolso 100% por timeout/no-show
+  usan `totalAmount` completo, no restan comisión, así que no aplica; la política escalonada de
+  cancelación en `calculateRefund` tampoco resta comisión — es 100%/50% de `totalAmount` menos una
+  tarifa fija en Hospedaje, no se ve afectada por `commissionPaidBy`).
+- El asiento contable de Premium (`AUTO_PREMIUM`, cuenta 4200) solo cuenta compras `PAID` con
+  `autoApprovedAt: null` O `reviewOutcome: 'CONFIRMED'` — las aprobadas-solas sin verificar no
+  entran al libro hasta que un admin confirma que llegó el dinero, tal como describe el commit
+  `c229e3f` de ayer. `confirmByBank` es idempotente ante un callback SIP duplicado. El orden del
+  marketplace (`listingBoost`: 2 Premium, 1 paga su comisión, 0 el resto) y la insignia "Destacado"
+  mantienen bien separada la lógica (ver el punto siguiente).
+- La insignia "Destacado" (`isFeatured`, visible al cliente) se calcula solo con `premiumUntil`
+  vigente, nunca con `listingBoost` directamente — confirmado que quien paga la comisión (boost
+  1, "como premio apareces antes, sin ninguna marca") nunca muestra la insignia por error, en
+  backend y en los 3 lugares de `garden-app` que la pintan.
+- Matemática de interpolación de precios (`premium.pricing.ts` y su espejo Dart
+  `premium_price.dart`) y las 93+400+73 líneas de tests de Premium/comisión/precios pasan.
+
+### Bajo riesgo — aplicado, commiteado y pusheado
+
+Dos comentarios de código en `garden-api/src/modules/booking-service/booking.service.ts` (función
+`reportBooking`, línea ~5679) y su controller (`booking.controller.ts`, línea ~434) describían el
+reembolso por no-show del cuidador como "totalAmount − commissionAmount" a secas — la fórmula de
+antes de que existiera `commissionPaidBy` (2026-10-21). El código real ya usa
+`clientPaidCommission()` desde ayer (devuelve 0 si el cuidador absorbe la comisión), pero el
+comentario se quedó con la fórmula vieja y podía confundir a quien lo use de referencia para
+tocar este flujo más adelante. Se corrigieron ambos comentarios para que coincidan con el código.
+Sin cambios de comportamiento — commit `757434d`.
+
+### Verificación
+
+`garden-api`: `npm ci` (no había `node_modules`) + `npx tsc --noEmit` → 0 errores (no los 2-3
+preexistentes que advierte CLAUDE.md; parecen ya resueltos) + `npm run test:unit` → **68 suites,
+667 tests, todos verdes**. No se tocó `garden-app` — no aplica `flutter analyze`. `git status`
+limpio después de pushear. No se probó nada en vivo contra producción (no hizo falta: los
+cambios de hoy son solo de comentarios).
+
+### Pendiente de decisión del dueño del proyecto
+
+Nada nuevo de alto riesgo hoy (Premium/comisión no tuvo hallazgos). Queda, sin cambios desde que
+se reportó:
+- Textos de notificación desactualizados (2026-10-21): emails/push de cancelación y rechazo de
+  reserva prometen un reembolso manual demorado con "equipo de soporte" en vez de decir que ya es
+  automático e instantáneo; email de bienvenida al cuidador hardcodea comisión 10% y retiro
+  mínimo Bs 50 en vez de leerlos de `AppSettings`.
+- TOCTOU de `startPhoneChange`, revisión legal pendiente del texto de comisión+impuestos, Meet &
+  Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA — estos cuatro llevan
+  entre 17 y 28 días sin una decisión (ya no incluye la lista de cupo/baja de cuenta/extras/QR
+  abandonado/relojes de auto-liberación/veredicto PARTIAL, resuelta ayer por el dueño en `67a477c`).
+
+---
