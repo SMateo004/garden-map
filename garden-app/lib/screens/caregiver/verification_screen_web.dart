@@ -89,9 +89,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       if (data['success'] == true) {
         final token = data['data']['token'] as String;
-        // Rutas limpias (sin "#"): Vercel sirve la app en /mobile-verify.
+        // Token tras el "#": no viaja al servidor; web/app.html lo pasa a ?token=.
         final origin = html.window.location.origin;
-        final url = '$origin/mobile-verify?token=${Uri.encodeComponent(token)}';
+        final url = '$origin/mobile-verify#token=${Uri.encodeComponent(token)}';
         debugPrint('[VerifyWeb] QR URL generada: $url');
         setState(() {
           _qrUrl = url;

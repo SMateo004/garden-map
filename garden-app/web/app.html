@@ -118,12 +118,21 @@
     (function () {
       var h = window.location.hash;
       // Enlaces viejos que ya circulan (correos, QR, notificaciones, marcadores):
-      // /app.html#/marketplace?x=1 → /marketplace?x=1, sin recargar.
+      // /app.html#/marketplace?x=1 → /marketplace?x=1, sin recargar. Solo rutas de este sitio.
       if (h && h.indexOf('#/') === 0) {
         var target = h.slice(1);
-        if (target === '/' || target === '') { window.location.replace('/'); return; }
-        history.replaceState(null, '', target);
+        if (target === '/' || target === '' || target.charAt(1) === '/' || target.charAt(1) === '\\') {
+          window.location.replace('/');
+          return;
+        }
+        try { history.replaceState(null, '', target); } catch (e) { window.location.replace('/'); }
         return;
+      }
+      // Datos sensibles (token de verificación) viajan tras el "#": el navegador nunca los
+      // manda al servidor ni quedan en los registros. Acá se pasan a la ruta para Flutter.
+      // /mobile-verify#token=… → /mobile-verify?token=…
+      if (h && h.indexOf('#token=') === 0) {
+        try { history.replaceState(null, '', window.location.pathname + '?' + h.slice(1)); } catch (e) {}
       }
       // /app.html sin ruta (o la raíz) → la landing.
       var p = window.location.pathname;

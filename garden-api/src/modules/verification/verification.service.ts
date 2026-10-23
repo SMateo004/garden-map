@@ -60,8 +60,9 @@ export async function generateLink(userId: string): Promise<{ url: string; token
   };
   const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: JWT_EXPIRY } as jwt.SignOptions);
   const baseUrl = env.FRONTEND_URL || 'http://localhost:5173';
-  // Rutas limpias de la app web (gardenbo.com/mobile-verify, sin "#").
-  const url = `${baseUrl.replace(/\/$/, '')}/mobile-verify?token=${encodeURIComponent(token)}`;
+  // Ruta limpia, con el token tras el "#": el navegador no lo manda al servidor (no queda en
+  // registros de Vercel); web/app.html lo pasa a ?token= antes de arrancar la app.
+  const url = `${baseUrl.replace(/\/$/, '')}/mobile-verify#token=${encodeURIComponent(token)}`;
   logger.info('Verification link generated', { verificationId: session.id, userId });
   return { url, token, expiresIn: JWT_EXPIRY };
 }
