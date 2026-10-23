@@ -2546,16 +2546,21 @@ async function settleTransportOnCancel(
   paid: boolean,
   /** Decididos en cancelBooking con la misma lectura que el reembolso. */
   startedLegIds: Set<string>
-): Promise<void> {
+): Promise<{ refundedFee: number; refundedTax: number }> {
   const legs = await tx.bookingTransportLeg.findMany({
     where: { bookingId: booking.id, status: { in: ACTIVE_LEG_STATUSES } },
   });
-  if (legs.length === 0) return;
+  if (legs.length === 0) return { refundedFee: 0, refundedTax: 0 };
   let caregiverPay = 0;
+  let refundedFee = 0;
+  let refundedTax = 0;
   for (const leg of legs) {
     // Se le paga solo si el viaje de verdad empezó (en camino con GPS del viaje), según
     // la misma lectura con la que se calculó el reembolso.
     const started = startedLegIds.has(leg.id);
+    const fee = Number(leg.fee);
+    const feeTax = Number(leg.tax ?? 0);
+    const refunds = paid && !started;
     const res = await tx.bookingTransportLeg.updateMany({
       where: { id: leg.id, status: leg.status },
       data: {
@@ -2563,42 +2568,67 @@ async function settleTransportOnCancel(
         cancelledAt: now,
         cancelledBy: 'CLIENT',
         cancelReason: 'Reserva cancelada',
-        refundedAmount: new Prisma.Decimal(paid && !started ? Number(leg.fee) + Number(leg.tax ?? 0) : 0),
+        refundedAmount: new Prisma.Decimal(refunds ? fee + feeTax : 0),
       },
     });
-    if (res.count > 0 && paid && started) caregiverPay += Number(leg.fee);
+    if (res.count === 0) continue;
+    if (paid && started) caregiverPay += fee;
+    if (refunds) {
+      refundedFee += fee;
+      refundedTax += feeTax;
+    }
+  }
+  refundedFee = Math.round(refundedFee * 100) / 100;
+  refundedTax = Math.round(refundedTax * 100) / 100;
+  // FIX (auditoría 2026-10-23): sin esto, `booking.transportAmount/transportTaxAmount/
+  // transportRefundAmount` seguían con el monto original tras cancelar toda la reserva —
+  // el dinero se devolvía bien (va en el refundAmount único de cancelBooking), pero el
+  // resumen de pago (historial, admin) seguía mostrando el viaje como "incluido" sin
+  // reflejar la devolución. Mismo patrón que ya usa cancelLeg() en transport.service.ts.
+  if (refundedFee > 0 || refundedTax > 0) {
+    await tx.booking.update({
+      where: { id: booking.id },
+      data: {
+        transportAmount: { decrement: refundedFee },
+        transportTaxAmount: { decrement: refundedTax },
+        transportRefundAmount: { increment: Math.round((refundedFee + refundedTax) * 100) / 100 },
+      },
+    });
   }
   caregiverPay = Math.round(caregiverPay * 100) / 100;
-  if (caregiverPay <= 0) return;
-  const owner = await tx.caregiverProfile.findUnique({ where: { id: booking.caregiverId }, select: { userId: true } });
-  if (!owner) return;
-  await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${owner.userId} FOR UPDATE`;
-  const u = await tx.user.update({
-    where: { id: owner.userId },
-    data: { balance: { increment: caregiverPay } },
-    select: { balance: true },
-  });
-  await tx.walletTransaction.create({
-    data: {
-      userId: owner.userId,
-      type: 'TRANSPORT_EARNING',
-      amount: caregiverPay,
-      balance: Number(u.balance),
-      description: `Viaje a domicilio ya hecho — el dueño canceló la reserva (${booking.id.slice(0, 8)})`,
-      bookingId: booking.id,
-      status: 'COMPLETED',
-    },
-  });
-  await tx.notification.create({
-    data: {
-      userId: owner.userId,
-      bookingId: booking.id,
-      title: 'El dueño canceló, pero tu viaje se paga',
-      message: `Ya ibas en camino por ${booking.petName ?? 'la mascota'}: te acreditamos Bs ${caregiverPay.toFixed(2)} por el viaje.`,
-      type: 'TRANSPORT_EARNING',
-    },
-  });
-  logger.info('cancelBooking: viaje en curso pagado al cuidador', { bookingId: booking.id, caregiverPay });
+  if (caregiverPay > 0) {
+    const owner = await tx.caregiverProfile.findUnique({ where: { id: booking.caregiverId }, select: { userId: true } });
+    if (owner) {
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${owner.userId} FOR UPDATE`;
+      const u = await tx.user.update({
+        where: { id: owner.userId },
+        data: { balance: { increment: caregiverPay } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: owner.userId,
+          type: 'TRANSPORT_EARNING',
+          amount: caregiverPay,
+          balance: Number(u.balance),
+          description: `Viaje a domicilio ya hecho — el dueño canceló la reserva (${booking.id.slice(0, 8)})`,
+          bookingId: booking.id,
+          status: 'COMPLETED',
+        },
+      });
+      await tx.notification.create({
+        data: {
+          userId: owner.userId,
+          bookingId: booking.id,
+          title: 'El dueño canceló, pero tu viaje se paga',
+          message: `Ya ibas en camino por ${booking.petName ?? 'la mascota'}: te acreditamos Bs ${caregiverPay.toFixed(2)} por el viaje.`,
+          type: 'TRANSPORT_EARNING',
+        },
+      });
+      logger.info('cancelBooking: viaje en curso pagado al cuidador', { bookingId: booking.id, caregiverPay });
+    }
+  }
+  return { refundedFee, refundedTax };
 }
 
 /** Máximo de cancelaciones con motivo Clima que garantizan reembolso 100%
@@ -2793,7 +2823,7 @@ export async function cancelBooking(
     // Recojo / entrega: los viajes que no empezaron quedan cancelados (su dinero va en el
     // reembolso de arriba); uno ya en camino o en la puerta se le paga al cuidador — fue
     // hasta la casa del dueño. Sin comisión, como todo el transporte.
-    await settleTransportOnCancel(tx, booking, now, !!booking.paidAt, startedLegIds);
+    const transportSettled = await settleTransportOnCancel(tx, booking, now, !!booking.paidAt, startedLegIds);
 
     // Pago combinado sin terminar (billetera + QR): initPayment ya descontó la
     // parte de billetera y la guardó en walletPaymentAmount mientras el QR
@@ -2836,6 +2866,18 @@ export async function cancelBooking(
       cancellationReasonCode: cancellationReasonCode ?? null,
       refundAmount: new Prisma.Decimal(refundAmount),
       refundStatus,
+      // settleTransportOnCancel ya descontó esto en la fila real — se refleja también acá
+      // para que la respuesta de este mismo request (sin recargar) muestre el viaje como
+      // devuelto y no como "incluido" (auditoría 2026-10-23).
+      ...(transportSettled.refundedFee > 0 || transportSettled.refundedTax > 0
+        ? {
+            transportAmount: new Prisma.Decimal(Math.max(0, Number(booking.transportAmount ?? 0) - transportSettled.refundedFee)),
+            transportTaxAmount: new Prisma.Decimal(Math.max(0, Number(booking.transportTaxAmount ?? 0) - transportSettled.refundedTax)),
+            transportRefundAmount: new Prisma.Decimal(
+              Number(booking.transportRefundAmount ?? 0) + transportSettled.refundedFee + transportSettled.refundedTax
+            ),
+          }
+        : {}),
       ...(unpaidWalletRefund > 0 ? { walletPaymentAmount: new Prisma.Decimal(0) } : {}),
     };
 

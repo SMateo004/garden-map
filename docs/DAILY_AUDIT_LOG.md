@@ -4424,13 +4424,33 @@ vivo contra producción. `git status` sigue limpio salvo esta actualización del
 
 ### Pendiente de decisión del dueño del proyecto
 
-- **Nuevo de hoy:** `booking.transportRefundAmount` no se actualiza al cancelar toda la reserva
-  con un viaje de recojo/entrega sin empezar — ver detalle y propuesta de fix arriba.
 - Sigue acumulada, sin cambios desde que se reportó: textos de notificación desactualizados
   (cancelación/rechazo de reserva prometiendo reembolso manual cuando ya es automático; email de
   bienvenida al cuidador con comisión/retiro mínimo hardcodeados en vez de leer `AppSettings`),
   TOCTOU de `startPhoneChange`, revisión legal pendiente del texto de comisión+impuestos, Meet &
   Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA — estos cuatro últimos ya
   llevan entre 18 y 29 días sin una decisión.
+
+### Resuelto el mismo día, por pedido explícito del dueño
+
+El dueño pidió en el chat aplicar el hallazgo de arriba (no fue esta rutina sola). Se implementó
+la propuesta completa: `settleTransportOnCancel` ahora acumula `refundedFee`/`refundedTax` de los
+viajes que no habían empezado y, al final de la función, hace un solo
+`tx.booking.update({ transportAmount: { decrement }, transportTaxAmount: { decrement },
+transportRefundAmount: { increment } })` — mismo patrón atómico que ya usaba `cancelLeg`. También
+decrementa `transportAmount`/`transportTaxAmount` (no solo el campo de refund): se confirmó que el
+riesgo que había señalado (una segunda cancelación viendo esos campos en 0 y cambiando de rama en
+`calculateRefund`) no aplica, porque el guard atómico de `cancelBooking` ya impide que
+`settleTransportOnCancel` corra dos veces para la misma reserva. La función devuelve
+`{refundedFee, refundedTax}` y `cancelBooking` los usa para que la respuesta del mismo request
+(sin recargar) también muestre el viaje como devuelto.
+
+Se agregaron 2 tests nuevos (`tests/unit/cancel-transport-refund.test.ts`): uno confirma el
+descuento/acredito correcto cuando el viaje no había empezado, y otro confirma que un viaje que sí
+empezó (con GPS) sigue pagándosele al cuidador y NO toca `transportRefundAmount` (para no
+regresionar la carrera que ya había cerrado `27a8db5`). `npx tsc --noEmit` → 0 errores. `npm run
+test:unit` → 76 suites, 759 tests, todos verdes (757 previos + 2 nuevos). No se probó en vivo
+contra producción — el cambio es puramente de cálculo dentro de una transacción ya existente, sin
+tocar el flujo de pago en sí.
 
 ---
