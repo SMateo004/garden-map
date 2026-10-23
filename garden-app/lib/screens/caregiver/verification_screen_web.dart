@@ -89,11 +89,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       if (data['success'] == true) {
         final token = data['data']['token'] as String;
-        // Hash routing (#/) — GoRouter lee window.location.hash, no pathname.
-        // Sin el # el token carga la landing page en vez de /mobile-verify.
+        // Rutas limpias (sin "#"): Vercel sirve la app en /mobile-verify.
         final origin = html.window.location.origin;
-        final url = '$origin/#/mobile-verify?token=${Uri.encodeComponent(token)}';
-        debugPrint('[VerifyWeb] QR URL generada (hash routing): $url');
+        final url = '$origin/mobile-verify?token=${Uri.encodeComponent(token)}';
+        debugPrint('[VerifyWeb] QR URL generada: $url');
         setState(() {
           _qrUrl = url;
           _step = 1;

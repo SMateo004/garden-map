@@ -14,17 +14,11 @@
       regs.forEach(function (r) { r.unregister(); });
     });
   }
-  // Fallback: si alguien llega directo a /login, /marketplace, etc. redirigir a Flutter
-  var p = window.location.pathname;
-  var flutterRoutes = ['/login', '/register', '/marketplace', '/become-caregiver', '/booking', '/profile', '/admin', '/track'];
-  if (flutterRoutes.some(function(r){ return p === r || p.startsWith(r + '/'); })) {
-    window.location.replace('/app.html#' + p + window.location.search);
-  }
-  // Hash-based Flutter routes: /#/mobile-verify, /#/verify → redirigir a app.html
+  // Enlaces viejos con "#" (gardenbo.com/#/mobile-verify?token=…, QR ya impresos o enviados):
+  // la app ahora usa rutas limpias → /mobile-verify?token=…
   var h = window.location.hash;
-  var flutterHashRoutes = ['/mobile-verify', '/verify'];
-  if (h && flutterHashRoutes.some(function(r){ return h === '#' + r || h.startsWith('#' + r + '?') || h.startsWith('#' + r + '/'); })) {
-    window.location.replace('/app.html' + h);
+  if (h && h.indexOf('#/') === 0 && h.length > 2) {
+    window.location.replace(h.slice(1));
   }
 })();
 </script>
@@ -178,11 +172,11 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.garden
 // públicos, sin auth: GET /cities y GET /cities/:cityId/zones.
 const API_BASE = 'https://api.gardenbo.com/api';
 
-// Flutter usa hash URL strategy → todas las rutas van a app.html#/ruta
-const FLUTTER = '/app.html';
+// La app (Flutter) usa rutas limpias: gardenbo.com/marketplace, /login… (Vercel sirve
+// app.html para cualquier ruta que no sea un archivo).
 const flutterUrl = (route, params) => {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  return FLUTTER + '#' + route + qs;
+  return route + qs;
 };
 
 // ─── App store badges ──────────────────────────────────────

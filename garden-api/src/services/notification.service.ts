@@ -652,7 +652,7 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
   }
 
   const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
-  const guideUrl = 'https://gardenbo.com/app.html#/guia-cuidador';
+  const guideUrl = 'https://gardenbo.com/guia-cuidador';
 
   const html = gardenEmail(
     `¡Bienvenido a GARDEN, ${caregiverName}! 🌿`,
@@ -754,7 +754,7 @@ export async function onTrainingReminder(userId: string, pendingTitles: string[]
   }
 
   const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
-  const trainingsUrl = 'https://gardenbo.com/app.html#/caregiver/trainings';
+  const trainingsUrl = 'https://gardenbo.com/caregiver/trainings';
   const list = pendingTitles.map((t) => `<li>${t}</li>`).join('');
   const firstPending = pendingTitles[0];
   const title = pendingTitles.length === 1

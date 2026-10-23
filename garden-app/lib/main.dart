@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
@@ -906,6 +907,10 @@ Future<void> _initNotificationsInBackground() async {
 }
 
 void main() async {
+  // Web: URLs limpias (gardenbo.com/marketplace) en vez de gardenbo.com/app.html#/marketplace.
+  // Vercel sirve app.html para cualquier ruta que no sea un archivo; los enlaces viejos con
+  // "#" se convierten en web/app.html antes de que arranque Flutter. En iOS/Android no hace nada.
+  usePathUrlStrategy();
   // Injects GlobalHttpClient as the default client used by every top-level
   // http.get/post/... call in the app (235+ call sites, none of which need
   // to change). Lets us detect mid-session maintenance mode and network

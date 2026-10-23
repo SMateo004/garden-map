@@ -213,5 +213,5 @@ export const notifyAdmins = sendPushToAdmins;
 /** Al tocar el push en el navegador, abre el panel admin. */
 function adminPanelLink(): string | undefined {
   const base = process.env.FRONTEND_URL ?? '';
-  return base.startsWith('https://') ? `${base.replace(/\/$/, '')}/app.html#/admin` : undefined;
+  return base.startsWith('https://') ? `${base.replace(/\/$/, '')}/admin` : undefined;
 }

@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # usePathUrlStrategy(): URLs limpias en la web (gardenbo.com/marketplace, sin "#").
+  flutter_web_plugins:
+    sdk: flutter
   http: ^1.2.0
   youtube_player_iframe: ^5.2.0
   go_router: ^13.0.0

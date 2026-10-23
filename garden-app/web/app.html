@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base href="$FLUTTER_BASE_HREF">
+  <!-- Absoluta: con rutas limpias (/booking/123) los recursos se piden siempre desde la raíz. -->
+  <base href="/">
 
   <!-- Kill switch: elimina Service Workers viejos (offline-first) ANTES de
        que flutter_bootstrap.js pida main.dart.js, y fuerza un único reload
@@ -112,10 +113,21 @@
   </div>
 
   <script>
-    // Si no hay ruta Flutter específica → redirigir al landing React
+    // Rutas limpias (gardenbo.com/marketplace). Vercel sirve este archivo para cualquier
+    // ruta que no sea un archivo; la landing vive en "/" (index.html).
     (function () {
       var h = window.location.hash;
-      if (!h || h === '#' || h === '#/') {
+      // Enlaces viejos que ya circulan (correos, QR, notificaciones, marcadores):
+      // /app.html#/marketplace?x=1 → /marketplace?x=1, sin recargar.
+      if (h && h.indexOf('#/') === 0) {
+        var target = h.slice(1);
+        if (target === '/' || target === '') { window.location.replace('/'); return; }
+        history.replaceState(null, '', target);
+        return;
+      }
+      // /app.html sin ruta (o la raíz) → la landing.
+      var p = window.location.pathname;
+      if (p === '/app.html' || p === '/app' || p === '/') {
         window.location.replace('/');
         return;
       }
@@ -124,10 +136,9 @@
       if (r) history.replaceState(null, '', r);
     })();
 
-    // Botón atrás que regresa a #/ → volver al landing React
+    // Botón atrás hasta "/" → la landing (es otra página, no una pantalla de Flutter).
     window.addEventListener('popstate', function () {
-      var h = window.location.hash;
-      if (!h || h === '#' || h === '#/') {
+      if (window.location.pathname === '/') {
         setTimeout(function () { window.location.replace('/'); }, 0);
       }
     });
