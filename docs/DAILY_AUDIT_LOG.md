@@ -4323,3 +4323,114 @@ se reportó:
   abandonado/relojes de auto-liberación/veredicto PARTIAL, resuelta ayer por el dueño en `67a477c`).
 
 ---
+
+## 2026-10-23 — Recojo y entrega a domicilio (feature de ayer): reembolso de viaje no
+## reflejado en el resumen de pago cuando se cancela toda la reserva
+
+**Commit de referencia al iniciar la auditoría:** `cd42c9e` (fix: URLs limpias sin redirección a
+otros sitios y con el token fuera del servidor). `git status` limpio al empezar.
+
+**Contexto:** desde la auditoría de ayer (`e9b1bf5`) se agregó una feature grande —recojo y
+entrega a domicilio para guardería/hospedaje (`a948d34`)— que el propio dueño ya revisó en vivo y
+corrigió varias veces el mismo día (`fc60810`, `633d826`, `27a8db5`, `ca0aca5`): tres huecos de
+dinero/privacidad en la cotización y el código promocional, y una carrera entre el reembolso al
+cancelar la reserva y el pago al cuidador por un viaje ya iniciado. Además se tocaron las URLs de
+la web (`88b42de`, `cd42c9e`) para rutas limpias, con un fix de seguridad el mismo día (open
+redirect en la conversión de enlaces viejos, y el token de verificación de identidad viajando
+tras el "#" para no quedar en los logs de Vercel).
+
+**Área elegida para hoy:** con una feature de dinero tan nueva y ya con varias rondas de bugs
+reales encontrados en pruebas en vivo, era la candidata obvia a profundizar (eje (b) del CLAUDE.md)
+antes que nada más. De paso se repasó el fix de URLs limpias por ser el otro cambio sin auditar y
+tocar seguridad (eje (a)).
+
+### Verificado sin hallazgo nuevo
+
+- La carrera que cerró `27a8db5` (un punto GPS llegando a mitad de la cancelación podía devolver
+  el viaje al dueño Y pagárselo al cuidador) queda bien cerrada: confirmé que `cancelBooking`
+  bloquea la reserva (`FOR UPDATE`) antes de leer los viajes, calcula `startedLegIds` una sola vez
+  con `legReallyStarted()` sobre esa lectura, y tanto `calculateRefund` (cuánto se devuelve) como
+  `settleTransportOnCancel` (a quién se le paga) usan exactamente ese mismo set — no hay una
+  segunda lectura que pueda divergir.
+- `quoteForClient` (cotización previa a reservar) ya no devuelve ninguna distancia, ni siquiera
+  aproximada (volvió a cambiar en `633d826` después del fix a medio km de `fc60810`) — confirmé
+  que `availabilityFor` y `legView` también ocultan la distancia salvo con la reserva confirmada/en
+  curso, y que la cotización exige `status: 'APPROVED', suspended: false`.
+- `applyPromoCode` topea el descuento al monto del servicio (`Math.max(0, serviceAmount)`), nunca
+  al total con transporte incluido — revisé que no quede ningún camino que reste el descuento del
+  total completo.
+- `cancelLeg` nunca devuelve más de lo que queda pagado en la reserva (`Math.min(fee+tax,
+  totalAmount)`) y toma el mismo lock (`FOR UPDATE` sobre `bookings`) tanto para dueño como para
+  cuidador/admin antes de leer el estado del viaje.
+- `concludeService`: el `dropoffLeg` que fuerza `overtimeMins = 0` ("con entrega a domicilio no
+  hay cargo por tiempo extra") se busca con `status: { in: ACTIVE_LEG_STATUSES }` — si el dueño
+  canceló la entrega antes de terminar el servicio, el overtime se cobra normal. Correcto.
+- URLs limpias (`cd42c9e`): revisé `web/app.html`, `web/index.html`, `web/landing.html` y
+  `verification.service.ts` — el open-redirect queda cerrado (se valida `charAt(1) !== '/' && !==
+  '\\'` y además se usa `new URL()` con chequeo de `origin` antes de redirigir en index/landing;
+  `app.html` cae a `try/catch` con `window.location.replace('/')` si `history.replaceState`
+  rechaza una ruta rara), y el token de verificación ya viaja tras el `#` tanto en el backend
+  (`generateLink`) como en el QR que genera el cuidador desde la web (`verification_screen_web.dart`).
+
+### Hallazgo nuevo — ALTO RIESGO, sin aplicar (toca campos de reembolso de la reserva)
+
+`booking.transportRefundAmount` —el campo agregado que alimenta `transportGrossOf`/`transportRefunded`
+en el resumen de pago del historial (`booking-history.service.ts`), el detalle de admin
+(`admin.service.ts` → `transport.refunded`) y la línea "Viajes cancelados (devuelto)" que ve el
+dueño/cuidador en `booking_history_detail.dart`— solo se actualiza en un camino de los dos que
+devuelven dinero de transporte:
+
+- **Cancelar un viaje suelto** (`cancelLeg`, `transport.service.ts:590`): sí lo incrementa, junto
+  con decrementar `totalAmount`/`taxAmount`/`transportAmount`/`transportTaxAmount`. Correcto.
+- **Cancelar la reserva entera con un viaje que no había empezado** (`settleTransportOnCancel`,
+  `booking.service.ts:2542`, llamado desde `cancelBooking`): el dinero del viaje SÍ se le devuelve
+  al dueño —va incluido en el único `refundAmount`/`REFUND` que `cancelBooking` acredita a la
+  billetera, y queda bien reflejado en el campo `refundAmount` de la reserva y en
+  `leg.refundedAmount` de cada viaje individual— pero el agregado `booking.transportRefundAmount`
+  nunca se toca. Tampoco se decrementan `transportAmount`/`transportTaxAmount`.
+
+**Consecuencia (no es pérdida de dinero, es un reporte inconsistente sobre dinero):** después de
+cancelar toda la reserva, el resumen de pago sigue mostrando "Recojo y entrega: Bs X" como si
+siguiera incluido en el total, y la línea "Viajes cancelados (devuelto)" se queda en Bs 0 —aunque
+la línea "Reembolso" de más abajo sí trae el monto combinado correcto (servicio + transporte no
+iniciado). El admin tiene cómo reconstruir el dato real mirando cada `leg.refundedAmount` en el
+detalle de la reserva, pero el campo resumen que debería ahorrarle ese trabajo queda mal. Lo mismo
+le pasaría a un dueño o cuidador leyendo su propio historial: puede parecer que el viaje sigue
+"cobrado" cuando en realidad se devolvió como parte del reembolso total.
+
+**Por qué no lo aplico yo:** el fix toca directamente los campos de reembolso/monto de una
+reserva (`transportRefundAmount`, posiblemente `transportAmount`/`transportTaxAmount`), que es
+justo el tipo de cambio que esta rutina tiene instrucción de solo reportar. Además decrementar
+`transportAmount`/`transportTaxAmount` ahí mismo tiene un efecto secundario a revisar con cuidado:
+esos mismos campos alimentan `transportGrossOf()` dentro de `calculateRefund()` — si se cancelara
+la reserva dos veces (no debería poder pasar por el guard atómico de `cancelBooking`, pero quiero
+que el dueño del proyecto lo confirme) con esos campos ya en 0, el cálculo cambia de rama
+(`transport <= 0 → calculateServiceRefund` directo, sin la lógica de viajes). Prefiero que el
+dueño decida el alcance exacto del fix antes de tocarlo.
+
+**Propuesta concreta:** en `settleTransportOnCancel`, dentro del `for (const leg of legs)`, acumular
+`refundedTotal += (paid && !started) ? fee + tax : 0` (ya se calcula ese mismo valor por leg para
+`refundedAmount`) y, al final de la función —junto al bloque que paga al cuidador—, hacer un solo
+`tx.booking.update({ where: { id: booking.id }, data: { transportRefundAmount: { increment:
+refundedTotal } } })` cuando `refundedTotal > 0`. Mismo patrón atómico que ya usa `cancelLeg`. Dejar
+a criterio del dueño si también conviene decrementar `transportAmount`/`transportTaxAmount` ahí
+(replicando el resto del patrón de `cancelLeg`) o si alcanza con el campo de refund para no tocar
+el camino de `calculateRefund`.
+
+### Verificación
+
+Solo lectura de código hoy — no se aplicó ningún cambio, así que no corrí `tsc`/tests ni probé en
+vivo contra producción. `git status` sigue limpio salvo esta actualización del log.
+
+### Pendiente de decisión del dueño del proyecto
+
+- **Nuevo de hoy:** `booking.transportRefundAmount` no se actualiza al cancelar toda la reserva
+  con un viaje de recojo/entrega sin empezar — ver detalle y propuesta de fix arriba.
+- Sigue acumulada, sin cambios desde que se reportó: textos de notificación desactualizados
+  (cancelación/rechazo de reserva prometiendo reembolso manual cuando ya es automático; email de
+  bienvenida al cuidador con comisión/retiro mínimo hardcodeados en vez de leer `AppSettings`),
+  TOCTOU de `startPhoneChange`, revisión legal pendiente del texto de comisión+impuestos, Meet &
+  Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA — estos cuatro últimos ya
+  llevan entre 18 y 29 días sin una decisión.
+
+---
