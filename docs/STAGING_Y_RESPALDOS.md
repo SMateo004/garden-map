@@ -1,8 +1,7 @@
 # Entorno de pruebas (staging) y respaldos de la base
 
-Estado: el código está listo (`.github/workflows/db-backup.yml`, `garden-api/scripts/staging/`).
-Falta crear los recursos en Render y AWS y cargar los secrets de GitHub. Son pasos de dashboard:
-nadie más que el dueño de las cuentas puede hacerlos.
+Estado: **funcionando desde el 2026-10-23** (primera corrida en verde: 73 tablas restauradas en
+staging con las mismas filas que producción). La base de staging está en Render, región Virginia.
 
 ## Cómo funciona
 
@@ -81,10 +80,11 @@ dañada sin antes guardar una copia.
 
 ## Respaldos propios de Render
 
-Render también guarda copias según el plan de la base (en el dashboard: base → **Recovery**).
-Conviene confirmar ahí cuántos días de recuperación a un momento dado (point-in-time) incluye el
-plan actual. El respaldo de este workflow es independiente: sirve aunque se pierda el acceso a
-Render o se borre la base entera.
+La base de producción (`garden-db`, plan Basic-256mb) tiene **Point-in-Time Recovery de 3 días**
+(verificado el 2026-10-23 en Render → garden-db → Recovery): se puede volver a cualquier momento
+de los últimos 3 días con **Restore database**, que crea una base nueva. Con un workspace Pro sube
+a 7 días. Para algo que se rompió hace más de 3 días, o si se pierde el acceso a Render, está el
+respaldo diario de este workflow (30 días en S3).
 
 ## Llave de firma de Android
 

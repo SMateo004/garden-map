@@ -35,9 +35,11 @@ significa:
   basura y contaminó el saldo de las cuentas reviewer con bugs que se estaban probando).
 - Antes de un cambio grande, considerá si de verdad hace falta probar contra producción o si
   alcanza con revisar el código.
-- Entorno de pruebas y respaldo diario cifrado: preparados en `.github/workflows/db-backup.yml`
-  y `docs/STAGING_Y_RESPALDOS.md`. Hasta que se creen la base y la API de staging en Render y se
-  carguen los secrets, todo lo de arriba sigue vigente.
+- **Desde 2026-10-23 hay staging y respaldo diario** (`.github/workflows/db-backup.yml`,
+  `docs/STAGING_Y_RESPALDOS.md`): cada día a las 04:00 se respalda producción cifrada a S3 (30 días)
+  y se restaura anonimizada en la base de staging (API de staging = rama `staging` en Render). Para
+  probar algo riesgoso, súbelo primero a `staging`. Además, Render guarda 3 días de recuperación a
+  un momento dado (garden-db → Recovery). `garden-api/.env` local sigue apuntando a producción.
 
 ## Cómo se despliega (verificado con el historial real de GitHub Actions, no asumido)
 
