@@ -4454,3 +4454,109 @@ contra producción — el cambio es puramente de cálculo dentro de una transacc
 tocar el flujo de pago en sí.
 
 ---
+
+## 2026-10-24 — UI/Flutter de las dos features de dinero más nuevas (recojo/entrega y
+## Premium): nunca se habían auditado desde el lado de la pantalla, solo el backend
+
+**Commit de referencia al iniciar la auditoría:** `071b898` (fix: cancelar toda la reserva
+también refleja el reembolso del recojo/entrega), que ya incluía el fix de `transportRefundAmount`
+que el dueño pidió aplicar el mismo día tras el hallazgo de ayer. `git status` limpio al empezar
+(aunque la rama local `main` estaba desactualizada respecto a `origin/main` — ver nota al final).
+
+**Área elegida para hoy:** las auditorías de los últimos tres días (`d42520e` Premium, `a948d34`+
+`fc60810`+`633d826` recojo/entrega) se concentraron en la lógica de dinero del backend
+(`premium.service.ts`, `transport.service.ts`, locks, comisión) y encontraron y corrigieron varios
+bugs reales ahí. Pero ninguna auditoría había mirado las pantallas Flutter que agregan esas dos
+features desde la óptica de UI (eje (d) del CLAUDE.md): `transport_settings_screen.dart`,
+`booking_screen.dart` (+255 líneas nuevas), `staff_home_screen.dart`,
+`admin_reservation_detail_screen.dart`, `premium_screen.dart`, `commission_payer_screen.dart`,
+`admin_premium.dart` y `garden_caregiver_card.dart`. Con dos features de dinero tan grandes y
+recientes, revisar si la UI promete o valida algo distinto de lo que hace el backend era la
+candidata obvia a profundizar antes de repetir una tercera vuelta sobre la misma lógica de
+backend ya revisada tres veces.
+
+### Hallazgo — BAJO RIESGO, aplicado, commiteado y pusheado
+
+`garden-app/lib/screens/service/transport_leg_card.dart` (`_TransportLegCardState._cancel()`,
+líneas ~139-154): el diálogo de confirmación al cancelar un viaje de recojo/entrega mostraba un
+monto exacto ("Se devuelven Bs X a la billetera...") calculado solo con `leg['fee']`. Pero lo que
+el backend realmente devuelve en `cancelLeg` (`transport.service.ts:590`) es `fee + feeTax`, y
+`legView()` (`transport.view.ts`) **no manda el campo de impuesto al frontend**, solo `fee` — con
+lo cual el frontend no tiene cómo calcular la cifra correcta. Hoy no se nota porque los impuestos
+están en pausa (tasa efectiva 0 según CLAUDE.md), pero en cuanto el admin los active desde
+Admin > Comisiones, el diálogo prometería menos dinero del que realmente se devuelve a la
+billetera. Se cambió el texto en los 3 lugares (cuidador y dueño, recojo y entrega) para no
+comprometerse con una cifra ("se devuelve/te devolvemos lo que pagaste por este viaje...") en vez
+de mostrar un monto que puede quedar mal. Cambio puramente de texto, no toca ningún cálculo —
+commit `dd6511b`.
+
+### Hallazgo — ALTO RIESGO, sin aplicar (toca un archivo de la cadena de pagos de transporte)
+
+Causa raíz del punto anterior: `garden-api/src/modules/transport/transport.view.ts`, función
+`legView()` (línea ~73), no incluye el campo `tax` de cada leg en el objeto que devuelve al
+frontend, solo `fee`. **Propuesta concreta:** agregar `tax: Number(leg.tax ?? 0),` al objeto que
+devuelve `legView()` — es un campo puramente aditivo y de solo lectura, no cambia ningún cálculo
+existente en el backend (nada lee ese campo nuevo para decidir un monto a pagar), solo permite que
+el frontend muestre el monto exacto de devolución incluyendo impuesto cuando `tax` deje de ser 0.
+No se aplicó porque toca un archivo de la cadena de pagos de transporte, que es justo el tipo de
+cambio que esta rutina tiene instrucción de solo reportar — queda a criterio del dueño del
+proyecto aplicarlo (es de bajo riesgo real una vez que decida, pero prefiero que lo confirme antes
+dado que está en la zona de dinero).
+
+### Verificado sin hallazgo nuevo
+
+- `transport_settings_screen.dart`: los límites de precio/km que valida la UI (`maxFee`, `minKm`,
+  `maxKm`) se cargan del propio backend y coinciden exactamente con `MAX_TRANSPORT_FEE=500`,
+  `MIN_TRANSPORT_KM=1`, `MAX_TRANSPORT_KM=30` de `transport.service.ts` — no hay un límite
+  hardcodeado en Flutter que pueda desalinearse si el backend cambia.
+- `transport_leg_card.dart`: la lógica de `canCancel` (quién puede cancelar un viaje y en qué
+  estado de leg/reserva) coincide exactamente con las reglas de `cancelLeg`/`markLegEnRoute`/
+  `markLegArrived` del backend, tanto para CLIENT como CAREGIVER y para PICKUP/DROPOFF.
+- `booking_screen.dart`: la ventana horaria de recojo/entrega en hospedaje (06:00–21:00, pasos de
+  30 min) coincide con las constantes del backend; en guardería multi-día, cada día crea su propia
+  reserva (`createDayGroup`) con su propia cotización de transporte, así que multiplicar el precio
+  mostrado por la cantidad de días es correcto y no es un doble cobro.
+- `commission_payer_screen.dart`: la matemática del ejemplo (dueño paga la comisión / cuidador la
+  paga) coincide exactamente con `computeClientCharge()` del backend.
+- `premium_screen.dart`: se descartó la sospecha de que una compra Premium auto-aprobada (`PAID`
+  sin revisar) pudiera mostrarse como "pendiente de pagar de nuevo" — `getMyPremium()` solo
+  devuelve como compra abierta las que están `DECLARED` o `PENDING_PAYMENT` sin vencer, nunca una
+  ya `PAID`. Las etiquetas de historial coinciden con los valores reales de `premium.service.ts`.
+- `admin_premium.dart` / sección de transporte de `admin_reservation_detail_screen.dart`: nombres
+  de campo y permisos para cancelar un viaje desde el panel admin coinciden con el backend.
+- `garden_caregiver_card.dart`: la insignia "Destacado" (`isFeatured`) se usa de forma consistente
+  en las 3 ubicaciones donde aparece.
+- Encontrado pero descartado como hallazgo de hoy por estar fuera de alcance: `staff_home_screen.dart`
+  muestra el estado crudo de la reserva en una fila de texto en vez de `BookingStory.of(status,
+  ctx)` (la convención obligatoria del CLAUDE.md para pintar `BookingStatus`) — pero esa línea es
+  del 2026-10-12, anterior a las dos features de esta auditoría, no algo que rompieran. Queda
+  anotado para una futura pasada de UI general, no se reporta como hallazgo nuevo de hoy.
+
+### Verificación
+
+No se tocó `garden-api` hoy — no aplica `tsc`/`npm run test:unit`. El único cambio fue de texto en
+`garden-app`; este entorno de auditoría automatizada no tiene el toolchain de Flutter instalado
+(`flutter analyze` no se pudo correr), así que se verificó manualmente que el archivo quedó
+sintácticamente válido (llaves/paréntesis balanceados, mismo tipo de literal de texto que ya
+existía) — recomiendo que el dueño corra `flutter analyze` y `flutter test test/design_system_test.dart`
+en su máquina antes de considerar esto totalmente verificado, ya que esta rutina no pudo hacerlo.
+No se probó nada en vivo contra producción (no hizo falta: cambio de texto puro).
+
+**Nota operativa:** al empezar esta corrida, la rama local `main` de este contenedor estaba
+desactualizada respecto a `origin/main` (apuntaba a `a5b2e4e`, un commit atrás del real
+`071b898`) y el checkout inicial estaba en HEAD separado sobre `071b898`. Se corrigió moviendo
+`main` a la punta real antes de pushear, sin perder ningún commit — no afecta el historial del
+repo, solo el estado local de este contenedor efímero.
+
+### Pendiente de decisión del dueño del proyecto
+
+- Nuevo hoy: `legView()` sin el campo `tax` (ver arriba) — de bajo riesgo real una vez decidido,
+  pero en zona de dinero.
+- Sigue acumulado, sin cambios desde que se reportó: textos de notificación desactualizados
+  (cancelación/rechazo de reserva prometiendo reembolso manual cuando ya es automático; email de
+  bienvenida al cuidador con comisión/retiro mínimo hardcodeados en vez de leer `AppSettings`),
+  TOCTOU de `startPhoneChange`, revisión legal pendiente del texto de comisión+impuestos, Meet &
+  Greet sin reembolso, y auto-aprobación de antecedentes por una sola IA — estos cuatro últimos ya
+  llevan entre 19 y 30 días sin una decisión.
+
+---
