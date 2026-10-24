@@ -60,6 +60,7 @@ import {
   legScheduledMs,
   ARRIVE_OPENS_MIN,
   legReallyStarted,
+  TRANSPORT_CANCEL_REASON_BOOKING,
 } from '../transport/transport.service.js';
 import { combinedOccupancyByDay, firstFullDay, walkInPetsByDay } from '../caregiver-crm/walk-in-capacity.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS, dayTypeUnavailableMessage } from '../../shared/availability-utils.js';
@@ -2567,7 +2568,7 @@ async function settleTransportOnCancel(
         status: LEG_STATUS.CANCELLED,
         cancelledAt: now,
         cancelledBy: 'CLIENT',
-        cancelReason: 'Reserva cancelada',
+        cancelReason: TRANSPORT_CANCEL_REASON_BOOKING,
         refundedAmount: new Prisma.Decimal(refunds ? fee + feeTax : 0),
       },
     });

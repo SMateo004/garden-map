@@ -236,6 +236,9 @@ class _BookingHistoryDetailState extends State<BookingHistoryDetail> {
           if (((pay['transportAmount'] as num?) ?? 0) > 0) line('Recojo y entrega', _bs(pay['transportAmount'] as num)),
           if (((pay['transportRefunded'] as num?) ?? 0) > 0)
             line(isClient ? 'Viajes cancelados (devuelto)' : 'Viajes cancelados', _bs(pay['transportRefunded'] as num)),
+          // Devuelto junto con la reserva: ya está dentro de "Reembolso", no es aparte.
+          if (((pay['transportRefundedInRefund'] as num?) ?? 0) > 0)
+            line('Recojo y entrega (incluido en el reembolso)', _bs(pay['transportRefundedInRefund'] as num)),
           if (donation > 0) line('Donación', _bs(donation)),
           if (tip > 0) line(isClient ? 'Propina' : 'Propina recibida', _bs(tip)),
           if (!isClient && pay['caregiverNetAmount'] != null) ...[

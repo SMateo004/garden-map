@@ -1,4 +1,5 @@
 import prisma from '../../config/database.js';
+import { TRANSPORT_CANCEL_REASON_BOOKING } from '../transport/transport.view.js';
 import { BookingNotFoundError, ForbiddenError } from '../../shared/errors.js';
 import { getBookingChainProof, type BookingChainProof } from '../../services/chain-registry.service.js';
 
@@ -54,8 +55,11 @@ export interface BookingHistory {
     taxAmount?: number;
     /** Recojo / entrega a domicilio incluidos en el total (con impuesto). */
     transportAmount: number;
-    /** Devuelto por viajes de recojo / entrega cancelados. */
+    /** Devuelto por viajes de recojo / entrega cancelados sueltos (su propia devolución). */
     transportRefunded: number;
+    /** Viajes que se devolvieron DENTRO del reembolso al cancelar toda la reserva (ya
+     * están sumados en refundAmount: no es una devolución aparte). */
+    transportRefundedInRefund: number;
   };
   timeline: HistoryEvent[];
   movements: Array<{
@@ -211,7 +215,18 @@ export async function getBookingHistory(
     // Recojo / entrega a domicilio incluidos en el total (con su impuesto) y lo devuelto
     // por viajes cancelados.
     transportAmount: Math.round((Number(booking.transportAmount ?? 0) + Number(booking.transportTaxAmount ?? 0)) * 100) / 100,
-    transportRefunded: Number(booking.transportRefundAmount ?? 0),
+    // Cancelar toda la reserva devuelve los viajes en el reembolso único; cancelar un viaje
+    // suelto los devuelve aparte. Se separan para que el resumen no parezca devolver dos veces.
+    ...(() => {
+      const total = Number(booking.transportRefundAmount ?? 0);
+      const inRefund = Math.round((booking.transportLegs ?? [])
+        .filter((l) => l.cancelReason === TRANSPORT_CANCEL_REASON_BOOKING)
+        .reduce((s, l) => s + Number(l.refundedAmount ?? 0), 0) * 100) / 100;
+      return {
+        transportRefunded: Math.max(0, Math.round((total - inRefund) * 100) / 100),
+        transportRefundedInRefund: Math.min(inRefund, total),
+      };
+    })(),
   };
   if (seesCaregiverSide) {
     payment.caregiverNetAmount = total - commission - tax;

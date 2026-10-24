@@ -7,6 +7,10 @@ import { boliviaDateAndTimeToMs } from '../../utils/bolivia-time.js';
 
 export type LegKind = 'PICKUP' | 'DROPOFF';
 
+/** Motivo de los viajes que se cierran al cancelar toda la reserva (su devolución va dentro
+ * del reembolso de la reserva, no aparte). */
+export const TRANSPORT_CANCEL_REASON_BOOKING = 'Reserva cancelada';
+
 export const LEG_STATUS = {
   SCHEDULED: 'SCHEDULED',
   EN_ROUTE: 'EN_ROUTE',
