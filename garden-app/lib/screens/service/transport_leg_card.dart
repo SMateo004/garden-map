@@ -136,7 +136,9 @@ class _TransportLegCardState extends State<TransportLegCard> {
   Future<void> _cancel() async {
     final fee = (leg['fee'] as num?) ?? 0;
     final reasonCtl = TextEditingController();
-    final money = fee > 0 ? ' Se devuelven ${TransportLegs.feeLabel(fee)} a la billetera Garden del dueño.' : '';
+    // Sin el monto exacto: lo que se devuelve es fee + su impuesto (si aplica), y el
+    // impuesto no viaja en el viaje que recibe el cliente (ver transport.view.ts).
+    final money = fee > 0 ? ' Se devuelve lo que pagó por este viaje a la billetera Garden del dueño.' : '';
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -150,8 +152,8 @@ class _TransportLegCardState extends State<TransportLegCard> {
                     ? 'El dueño tendrá que llevar a $_pet a $_place. Avísale también por el chat.$money'
                     : 'El dueño tendrá que recoger a $_pet en $_place. Avísale también por el chat.$money')
                 : (_isPickup
-                    ? 'Se cancela el recojo y tú llevas a $_pet a $_place.${fee > 0 ? ' Te devolvemos ${TransportLegs.feeLabel(fee)} a tu billetera Garden.' : ''}'
-                    : 'Se cancela la entrega y tú recoges a $_pet en $_place.${fee > 0 ? ' Te devolvemos ${TransportLegs.feeLabel(fee)} a tu billetera Garden.' : ''}'),
+                    ? 'Se cancela el recojo y tú llevas a $_pet a $_place.${fee > 0 ? ' Te devolvemos lo que pagaste por este viaje a tu billetera Garden.' : ''}'
+                    : 'Se cancela la entrega y tú recoges a $_pet en $_place.${fee > 0 ? ' Te devolvemos lo que pagaste por este viaje a tu billetera Garden.' : ''}'),
             style: const TextStyle(fontSize: 13.5, height: 1.4),
           ),
           if (_isCaregiver) ...[
